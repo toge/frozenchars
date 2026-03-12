@@ -1,0 +1,26 @@
+[
+{
+  "directory": "/home/runner/work/frozenchars/frozenchars/build/test",
+  "command": "/usr/bin/c++  -I/home/runner/work/frozenchars/frozenchars/. -I/home/runner/work/frozenchars/frozenchars/test -I/home/runner/work/frozenchars/frozenchars -isystem /usr/local/share/vcpkg/packages/catch2_x64-linux/include  -Wall -Wextra -pedantic -g3 -O3 -march=native -O3 -DNDEBUG -std=c++23 -flto=auto -fno-fat-lto-objects -o CMakeFiles/all_test.dir/main.cpp.o -c /home/runner/work/frozenchars/frozenchars/test/main.cpp",
+  "file": "/home/runner/work/frozenchars/frozenchars/test/main.cpp",
+  "output": "test/CMakeFiles/all_test.dir/main.cpp.o"
+},
+{
+  "directory": "/home/runner/work/frozenchars/frozenchars/build/test",
+  "command": "/usr/bin/c++  -I/home/runner/work/frozenchars/frozenchars/. -I/home/runner/work/frozenchars/frozenchars/test -I/home/runner/work/frozenchars/frozenchars -isystem /usr/local/share/vcpkg/packages/catch2_x64-linux/include  -Wall -Wextra -pedantic -g3 -O3 -march=native -O3 -DNDEBUG -std=c++23 -flto=auto -fno-fat-lto-objects -o CMakeFiles/all_test.dir/test_complex.cpp.o -c /home/runner/work/frozenchars/frozenchars/test/test_complex.cpp",
+  "file": "/home/runner/work/frozenchars/frozenchars/test/test_complex.cpp",
+  "output": "test/CMakeFiles/all_test.dir/test_complex.cpp.o"
+},
+{
+  "directory": "/home/runner/work/frozenchars/frozenchars/build/test",
+  "command": "/usr/bin/c++  -I/home/runner/work/frozenchars/frozenchars/. -I/home/runner/work/frozenchars/frozenchars/test -I/home/runner/work/frozenchars/frozenchars -isystem /usr/local/share/vcpkg/packages/catch2_x64-linux/include  -Wall -Wextra -pedantic -g3 -O3 -march=native -O3 -DNDEBUG -std=c++23 -flto=auto -fno-fat-lto-objects -o CMakeFiles/all_test.dir/test_runtime.cpp.o -c /home/runner/work/frozenchars/frozenchars/test/test_runtime.cpp",
+  "file": "/home/runner/work/frozenchars/frozenchars/test/test_runtime.cpp",
+  "output": "test/CMakeFiles/all_test.dir/test_runtime.cpp.o"
+},
+{
+  "directory": "/home/runner/work/frozenchars/frozenchars/build/test",
+  "command": "/usr/bin/c++  -I/home/runner/work/frozenchars/frozenchars/. -I/home/runner/work/frozenchars/frozenchars/test -I/home/runner/work/frozenchars/frozenchars -isystem /usr/local/share/vcpkg/packages/catch2_x64-linux/include  -Wall -Wextra -pedantic -g3 -O3 -march=native -O3 -DNDEBUG -std=c++23 -flto=auto -fno-fat-lto-objects -o CMakeFiles/all_test.dir/test_simple.cpp.o -c /home/runner/work/frozenchars/frozenchars/test/test_simple.cpp",
+  "file": "/home/runner/work/frozenchars/frozenchars/test/test_simple.cpp",
+  "output": "test/CMakeFiles/all_test.dir/test_simple.cpp.o"
+}
+]
