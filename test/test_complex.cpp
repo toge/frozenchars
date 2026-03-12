@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+using namespace frozenchars;
+
 TEST_CASE("complex string") {
   // repeat<回数>(StaticString) で結合
   auto constexpr banner = "!"_ss + repeat<5>("=-"_ss) + "!";
