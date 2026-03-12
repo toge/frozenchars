@@ -30,8 +30,10 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 | `span`                      | `std::span<char/signed char/unsigned char/std::byte>`（const 含む）            | `make_static(std::span{buf})`     | ⚠️ 条件付き可（`span` と参照先が定数評価可能）    | 値 `0` までを文字列化                |
 | `array`                     | `std::array<char/signed char/unsigned char/std::byte, N>`                      | `make_static(arr)`                | ✅ 可（`constexpr std::array` の場合）              | `span` 版へ委譲                      |
 | `vector`                    | `std::vector<char/signed char/unsigned char/std::byte>`                        | `make_static(vec)`                | ❌ ランタイム向け                                   | `span` 版へ委譲                      |
+| 数値（2進）                 | `Bin`                                                                          | `make_static(Bin(255))`           | ✅ 可                                               | `"11111111"`                             |
+| 数値（8進）                 | `Oct`                                                                          | `make_static(Oct(255))`           | ✅ 可                                               | `"377"`                             |
 | 数値（10進）                | 整数型 (`Integral`)                                                            | `make_static(42)`                 | ✅ 可                                               | `"42"`                               |
-| 数値（16進）                | `Hex`                                                                          | `make_static(Hex(255))`           | ✅ 可                                               | `"0xff"`                             |
+| 数値（16進）                | `Hex`                                                                          | `make_static(Hex(255))`           | ✅ 可                                               | `"ff"`                               |
 | 浮動小数点                  | `Precision`, `FloatingPoint`                                                   | `make_static(Precision(3.14, 2))` | ✅ 可                                               | `FloatingPoint` はデフォルト精度 `2` |
 | 文字列ビュー変換可能型      | `std::is_convertible_v<T, std::string_view>` を満たす型                        | `make_static(std::string("abc"))` | ⚠️ 条件付き可（変換元が定数評価可能な場合）       | 上記の専用オーバーロードが優先       |
 
@@ -39,13 +41,15 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 
 ### 早見表（入力型 → 生成される最大文字数）
 
-| 入力カテゴリ                                                                                     | 返却型              | 最大文字数（終端を除く） | 終端規則                     | `constexpr` のまま実現可否                |
-| ------------------------------------------------------------------------------------------------ | ------------------- | -----------------------: | ---------------------------- | ----------------------------------------- |
-| 文字列リテラル `char const (&)[N]`                                                               | `StaticString<N>`   |                  `N - 1` | 配列長ベース（`N` から決定） | ✅ 可                                      |
-| ポインタ / `span` / `array` / `vector`（`char` / `signed char` / `unsigned char` / `std::byte`） | `StaticString<257>` |                    `256` | 先頭から `0` 値まで          | ⚠️ 条件付き可（`vector` は実質ランタイム） |
-| 整数型 (`Integral`)                                                                              | `StaticString<21>`  |                     `20` | 数値変換結果の長さ           | ✅ 可                                      |
-| `Hex`                                                                                            | `StaticString<19>`  |                     `18` | 数値変換結果の長さ           | ✅ 可                                      |
-| `Precision` / `FloatingPoint`                                                                    | `StaticString<49>`  |                     `48` | 数値変換結果の長さ           | ✅ 可                                      |
+| 入力カテゴリ                                                                                     | 返却型              | 最大文字数（終端を除く） | 終端規則                     | `constexpr` のまま実現可否                    |
+| ------------------------------------------------------------------------------------------------ | ------------------- | -----------------------: | ---------------------------- | --------------------------------------------- |
+| 文字列リテラル `char const (&)[N]`                                                               | `StaticString<N>`   |                  `N - 1` | 配列長ベース（`N` から決定） | ✅ 可                                         |
+| ポインタ / `span` / `array` / `vector`（`char` / `signed char` / `unsigned char` / `std::byte`） | `StaticString<257>` |                    `256` | 先頭から `0` 値まで          | ⚠️ 条件付き可（`vector` は実質ランタイム）  |
+| 整数型 (`Integral`)                                                                              | `StaticString<21>`  |                     `20` | 数値変換結果の長さ           | ✅ 可                                         |
+| `Bin`                                                                                            | `StaticString<65>`  |                     `64` | 数値変換結果の長さ           | ✅ 可                                         |
+| `Oct`                                                                                            | `StaticString<23>`  |                     `22` | 数値変換結果の長さ           | ✅ 可                                         |
+| `Hex`                                                                                            | `StaticString<17>`  |                     `16` | 数値変換結果の長さ           | ✅ 可                                         |
+| `Precision` / `FloatingPoint`                                                                    | `StaticString<49>`  |                     `48` | 数値変換結果の長さ           | ✅ 可                                         |
 | `std::string_view` 変換可能型（汎用オーバーロード）                                              | `StaticString<257>` |                    `256` | `string_view::size()` ベース | ⚠️ 条件付き可（変換元が定数評価可能な場合） |
 
 > 補足: 文字列系（ポインタ / `span` / `array` / `vector`）は、先頭から `0` 値までを文字列として扱います。
@@ -55,8 +59,10 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 | 入力コード                                              | 出力（`sv()`）         | メモ                          |
 | ------------------------------------------------------- | ---------------------- | ----------------------------- |
 | `make_static("abc")`                                    | `"abc"`                | 文字列リテラル                |
+| `make_static(Bin(255))`                                 | `"11111111"`           | 16進タグ                      |
+| `make_static(Oct(255))`                                 | `"377"`                | 16進タグ                      |
 | `make_static(42)`                                       | `"42"`                 | 整数（10進）                  |
-| `make_static(Hex(255))`                                 | `"0xff"`               | 16進タグ                      |
+| `make_static(Hex(255))`                                 | `"ff"`                 | 16進タグ                      |
 | `make_static(Precision(3.14159, 2))`                    | `"3.14"`               | 精度指定                      |
 | `make_static(std::string("hello"))`                     | `"hello"`              | `string_view` 変換可能型      |
 | `make_static(std::array<char,5>{'a','b','\0','x','x'})` | `"ab"`                 | 0値で終端                     |

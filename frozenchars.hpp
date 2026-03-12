@@ -604,23 +604,6 @@ auto constexpr make_static(decltype(nullptr)) noexcept = delete;
 \*/
 
 /**
- * @brief Hex タグを受け取って整数を16進数表現の文字列に変換する
- *
- * @param arg 変換する整数を含む Hex タグ
- * @return auto constexpr 変換後の静的文字列
- */
-auto constexpr make_static(Hex const& arg) noexcept {
-  auto const p = detail::to_hex_chars(arg.value);
-  auto res = StaticString<17>{};
-  for (auto i = 0uz; i < p.second; ++i) {
-    res.buffer[i] = p.first[i];
-  }
-  res.buffer[p.second] = '\0';
-  res.length = p.second;
-  return res;
-}
-
-/**
  * @brief Bin タグを受け取って整数を2進数表現の文字列に変換する
  *
  * @param arg 変換する整数を含む Bin タグ
@@ -646,6 +629,23 @@ auto constexpr make_static(Bin const& arg) noexcept {
 auto constexpr make_static(Oct const& arg) noexcept {
   auto const p = detail::to_oct_chars(arg.value);
   auto res = StaticString<23>{};
+  for (auto i = 0uz; i < p.second; ++i) {
+    res.buffer[i] = p.first[i];
+  }
+  res.buffer[p.second] = '\0';
+  res.length = p.second;
+  return res;
+}
+
+/**
+ * @brief Hex タグを受け取って整数を16進数表現の文字列に変換する
+ *
+ * @param arg 変換する整数を含む Hex タグ
+ * @return auto constexpr 変換後の静的文字列
+ */
+auto constexpr make_static(Hex const& arg) noexcept {
+  auto const p = detail::to_hex_chars(arg.value);
+  auto res = StaticString<17>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
