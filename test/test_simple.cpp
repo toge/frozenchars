@@ -51,32 +51,32 @@ TEST_CASE("make_static with integers") {
 
 TEST_CASE("make_static with Hex") {
   auto constexpr hex255 = make_static(Hex(255));
-  static_assert(hex255.sv() == "0xff");
-  REQUIRE(hex255.sv() == "0xff");
+  static_assert(hex255.sv() == "ff");
+  REQUIRE(hex255.sv() == "ff");
 
   auto constexpr hex0 = make_static(Hex(0));
-  static_assert(hex0.sv() == "0x0");
-  REQUIRE(hex0.sv() == "0x0");
+  static_assert(hex0.sv() == "0");
+  REQUIRE(hex0.sv() == "0");
 }
 
 TEST_CASE("make_static with Bin") {
   auto constexpr bin255 = make_static(Bin(255));
-  static_assert(bin255.sv() == "0b11111111");
-  REQUIRE(bin255.sv() == "0b11111111");
+  static_assert(bin255.sv() == "11111111");
+  REQUIRE(bin255.sv() == "11111111");
 
   auto constexpr bin0 = make_static(Bin(0));
-  static_assert(bin0.sv() == "0b0");
-  REQUIRE(bin0.sv() == "0b0");
+  static_assert(bin0.sv() == "0");
+  REQUIRE(bin0.sv() == "0");
 }
 
 TEST_CASE("make_static with Oct") {
   auto constexpr oct255 = make_static(Oct(255));
-  static_assert(oct255.sv() == "0o377");
-  REQUIRE(oct255.sv() == "0o377");
+  static_assert(oct255.sv() == "377");
+  REQUIRE(oct255.sv() == "377");
 
   auto constexpr oct0 = make_static(Oct(0));
-  static_assert(oct0.sv() == "0o0");
-  REQUIRE(oct0.sv() == "0o0");
+  static_assert(oct0.sv() == "0");
+  REQUIRE(oct0.sv() == "0");
 }
 
 TEST_CASE("make_static with Precision") {

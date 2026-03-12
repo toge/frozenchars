@@ -264,19 +264,19 @@ namespace detail {
    * @return auto constexpr 変換された文字列とその長さのペア
    */
   auto constexpr to_hex_chars(long long value) noexcept {
-    auto buffer = std::array<char, 19>{'0', 'x'};
+    auto buffer = std::array<char, 17>{};
     auto v = static_cast<unsigned long long>(value);
     if (v == 0) {
-      buffer[2] = '0';
-      return std::pair{buffer, 3uz};
+      buffer[0] = '0';
+      return std::pair{buffer, 1uz};
     }
-    auto i = 2uz;
+    auto i = 0uz;
     auto constexpr digits = "0123456789abcdef";
     while (v > 0) {
       buffer[i++] = digits[v % 16]; v /= 16;
     }
-    for (auto const j : std::views::iota(0uz, (i - 2) / 2)) {
-      std::swap(buffer[j + 2], buffer[i - j - 1]);
+    for (auto const j : std::views::iota(0uz, i / 2)) {
+      std::swap(buffer[j], buffer[i - j - 1]);
     }
     return std::pair{buffer, i};
   }
@@ -288,18 +288,18 @@ namespace detail {
    * @return auto constexpr 変換された文字列とその長さのペア
    */
   auto constexpr to_bin_chars(long long value) noexcept {
-    auto buffer = std::array<char, 67>{'0', 'b'};
+    auto buffer = std::array<char, 65>{};
     auto v = static_cast<unsigned long long>(value);
     if (v == 0) {
-      buffer[2] = '0';
-      return std::pair{buffer, 3uz};
+      buffer[0] = '0';
+      return std::pair{buffer, 1uz};
     }
-    auto i = 2uz;
+    auto i = 0uz;
     while (v > 0) {
       buffer[i++] = '0' + static_cast<char>(v % 2); v /= 2;
     }
-    for (auto const j : std::views::iota(0uz, (i - 2) / 2)) {
-      std::swap(buffer[j + 2], buffer[i - j - 1]);
+    for (auto const j : std::views::iota(0uz, i / 2)) {
+      std::swap(buffer[j], buffer[i - j - 1]);
     }
     return std::pair{buffer, i};
   }
@@ -311,18 +311,18 @@ namespace detail {
    * @return auto constexpr 変換された文字列とその長さのペア
    */
   auto constexpr to_oct_chars(long long value) noexcept {
-    auto buffer = std::array<char, 25>{'0', 'o'};
+    auto buffer = std::array<char, 23>{};
     auto v = static_cast<unsigned long long>(value);
     if (v == 0) {
-      buffer[2] = '0';
-      return std::pair{buffer, 3uz};
+      buffer[0] = '0';
+      return std::pair{buffer, 1uz};
     }
-    auto i = 2uz;
+    auto i = 0uz;
     while (v > 0) {
       buffer[i++] = '0' + static_cast<char>(v % 8); v /= 8;
     }
-    for (auto const j : std::views::iota(0uz, (i - 2) / 2)) {
-      std::swap(buffer[j + 2], buffer[i - j - 1]);
+    for (auto const j : std::views::iota(0uz, i / 2)) {
+      std::swap(buffer[j], buffer[i - j - 1]);
     }
     return std::pair{buffer, i};
   }
@@ -611,7 +611,7 @@ auto constexpr make_static(decltype(nullptr)) noexcept = delete;
  */
 auto constexpr make_static(Hex const& arg) noexcept {
   auto const p = detail::to_hex_chars(arg.value);
-  auto res = StaticString<19>{};
+  auto res = StaticString<17>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -628,7 +628,7 @@ auto constexpr make_static(Hex const& arg) noexcept {
  */
 auto constexpr make_static(Bin const& arg) noexcept {
   auto const p = detail::to_bin_chars(arg.value);
-  auto res = StaticString<67>{};
+  auto res = StaticString<65>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -645,7 +645,7 @@ auto constexpr make_static(Bin const& arg) noexcept {
  */
 auto constexpr make_static(Oct const& arg) noexcept {
   auto const p = detail::to_oct_chars(arg.value);
-  auto res = StaticString<25>{};
+  auto res = StaticString<23>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
