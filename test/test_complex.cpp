@@ -35,16 +35,16 @@ TEST_CASE("concat with mixed types") {
   REQUIRE(mixed.sv() == "The answer is: 42");
 
   auto constexpr hex_msg = concat("0x", Hex(255), " in decimal");
-  static_assert(hex_msg.sv() == "0x0xff in decimal");
-  REQUIRE(hex_msg.sv() == "0x0xff in decimal");
+  static_assert(hex_msg.sv() == "0xff in decimal");
+  REQUIRE(hex_msg.sv() == "0xff in decimal");
 
   auto constexpr bin_msg = concat("bin=", Bin(10));
-  static_assert(bin_msg.sv() == "bin=0b1010");
-  REQUIRE(bin_msg.sv() == "bin=0b1010");
+  static_assert(bin_msg.sv() == "bin=1010");
+  REQUIRE(bin_msg.sv() == "bin=1010");
 
   auto constexpr oct_msg = concat("oct=", Oct(8));
-  static_assert(oct_msg.sv() == "oct=0o10");
-  REQUIRE(oct_msg.sv() == "oct=0o10");
+  static_assert(oct_msg.sv() == "oct=10");
+  REQUIRE(oct_msg.sv() == "oct=10");
 
   auto constexpr pi_msg = concat("Pi approx: ", Precision(3.14159265, 2));
   static_assert(pi_msg.sv() == "Pi approx: 3.14");
