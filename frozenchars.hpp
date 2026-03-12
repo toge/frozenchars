@@ -1,12 +1,11 @@
 #ifndef __FROZEN_CHARS_H__
 #define __FROZEN_CHARS_H__
 
-#include <array>
 #include <cstddef>
+#include <array>
 #include <span>
 #include <vector>
 #include <string_view>
-#include <ranges>
 #include <algorithm>
 #include <concepts>
 #include <type_traits>
@@ -17,32 +16,31 @@ namespace frozenchars {
  * ユーティリティ
 \*===============================================================================*/
 
+/**
+ * @brief 整数型を文字列化するためのタグ
+ *
+ * @tparam T 対象となる型
+ */
 template <typename T>
 concept Integral = std::is_integral_v<T>;
 
+/**
+ * @brief 浮動小数点型を文字列化するためのタグ
+ *
+ * @tparam T 対象となる型
+ */
 template <typename T>
 concept FloatingPoint = std::is_floating_point_v<T>;
 
-template <size_t N>
-struct FixedString {
-  char data[N]{};
-  constexpr FixedString(char const (&str)[N]) noexcept {
-    for (auto const i : std::views::iota(0uz, N)) {
-      data[i] = str[i];
-    }
-  }
-  auto constexpr sv() const noexcept {
-    return std::string_view{data, N - 1};
-  }
-};
-
 /**
- * @brief 16進数表現用のタグ
+ * @brief 整数値を16進数表現するためのタグ
  *
  */
 struct Hex {
   long long value;
-  constexpr Hex(Integral auto v) : value(v) {}
+  constexpr Hex(Integral auto v)
+  : value(v)
+  {}
 };
 
 /**
@@ -57,17 +55,38 @@ struct Precision {
   {}
 };
 
-// --- StaticString 本体 ---
+/**
+ * @brief 固定長文字列を表す構造体
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ */
+template <size_t N>
+struct FixedString {
+  char data[N]{};
+  constexpr FixedString(char const (&str)[N]) noexcept {
+    for (auto i = 0uz; i < N; ++i) {
+      data[i] = str[i];
+    }
+  }
+  auto constexpr sv() const noexcept {
+    return std::string_view{data, N - 1};
+  }
+};
 
+/**
+ * @brief 静的文字列を表す構造体
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ */
 template <size_t N>
 struct StaticString {
   std::array<char, N> buffer{};
   size_t length{N > 0 ? N - 1 : 0};
 
   constexpr StaticString() noexcept = default;
-
-  constexpr StaticString(char const (&str)[N]) noexcept : length{N > 0 ? N - 1 : 0} {
-    for (auto const i : std::views::iota(0uz, N)) {
+  constexpr StaticString(char const (&str)[N]) noexcept
+  : length{N > 0 ? N - 1 : 0} {
+    for (auto i = 0uz; i < N; ++i) {
       buffer[i] = str[i];
     }
   }
@@ -76,19 +95,23 @@ struct StaticString {
     return std::string_view{buffer.data(), length};
   }
 
-  // 1. StaticString + StaticString
+  // StaticString同士の結合
   template <size_t M>
   auto constexpr operator+(StaticString<M> const& other) const noexcept {
     StaticString<N + M - 1> res{};
     auto offset = 0uz;
-    for (auto const c : this->sv()) res.buffer[offset++] = c;
-    for (auto const c : other.sv()) res.buffer[offset++] = c;
+    for (auto const c : this->sv()) {
+      res.buffer[offset++] = c;
+    }
+    for (auto const c : other.sv()) {
+      res.buffer[offset++] = c;
+    }
     res.buffer[offset] = '\0';
     res.length = offset;
     return res;
   }
 
-  // 2. StaticString + 文字列リテラル
+  // 文字列リテラルとの結合
   template <size_t M>
   auto constexpr operator+(char const (&rhs)[M]) const noexcept {
     return *this + StaticString<M>{rhs};
@@ -96,53 +119,81 @@ struct StaticString {
 };
 
 /**
- * 繰り返しのための非メンバ関数テンプレート
- * StaticString<N> * Constant<3> のような形にするか、
- * サイズを計算するために count をテンプレート引数で受け取ります
+ * @brief 文字列を指定回数繰り返した静的文字列を生成する関数
+ *
+ * @tparam Count 繰り返し回数
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 繰り返す文字列
+ * @return auto constexpr 繰り返された静的文字列
  */
 template <size_t Count, size_t N>
 auto constexpr repeat(StaticString<N> const& str) noexcept {
-  auto constexpr unit_len = N > 0 ? N - 1 : 0;
-  auto constexpr new_size = unit_len * Count + 1;
+  auto constexpr UNIT_LEN = N > 0 ? N - 1 : 0;
+  auto constexpr NEW_SIZE = UNIT_LEN * Count + 1;
 
-  StaticString<new_size> res{};
+  auto res = StaticString<NEW_SIZE>{};
   auto offset = 0uz;
   auto const src = str.sv();
 
-  for (auto const _ : std::views::iota(0uz, Count)) {
+  for (auto i = 0uz; i < Count; ++i) {
     for (auto const c : src) {
       res.buffer[offset++] = c;
     }
   }
-  if constexpr (new_size > 0) {
-    res.buffer[new_size - 1] = '\0';
+  if constexpr (NEW_SIZE > 0) {
+    res.buffer[NEW_SIZE - 1] = '\0';
   }
   return res;
 }
 
+/**
+ * @brief 文字列リテラルを繰り返した文字列を生成する関数
+ *
+ * @tparam Count 繰り返し回数
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 繰り返す文字列リテラル
+ * @return auto constexpr 繰り返された静的文字列
+ */
 template <size_t Count, size_t N>
-auto constexpr repeat(char const (&rhs)[N]) noexcept {
-  return repeat<Count>(StaticString<N>{rhs});
+auto constexpr repeat(char const (&str)[N]) noexcept {
+  return repeat<Count>(StaticString{str});
 }
 
-// リテラル演算子 _ss
+namespace literals {
+
+/**
+ * @brief 文字列リテラルを StaticString に変換するリテラル演算子
+ *
+ * @tparam FS 固定長文字列
+ * @return auto constexpr StaticString に変換された文字列
+ */
 template <FixedString FS>
 auto constexpr operator""_ss() noexcept {
   auto res = StaticString<FS.sv().size() + 1>{};
   auto const s = FS.sv();
-  for (auto const i : std::views::iota(0uz, s.size())) {
+  for (auto i = 0uz; i < s.size(); ++i) {
     res.buffer[i] = s[i];
   }
   res.buffer[s.size()] = '\0';
   return res;
 }
 
-// 左辺リテラル + StaticString
+}
+
+/**
+ * @brief 文字列リテラルと StaticString を結合する演算子
+ * StaticString + 文字列リテラルについては、StaticString内で定義されている
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @tparam M StaticString の長さ (終端文字'\0'を含む)
+ * @param rhs 結合する StaticString
+ * @return auto constexpr 結合された StaticString
+ */
 template <size_t N, size_t M>
 auto constexpr operator+(char const (&lhs)[N], StaticString<M> const& rhs) noexcept {
   auto res = StaticString<N + M - 1>{};
   auto offset = 0uz;
-  for (auto const i : std::views::iota(0uz, N - 1)) {
+  for (auto i = 0uz; i < N - 1; ++i) {
     res.buffer[offset++] = lhs[i];
   }
   for (auto const c : rhs.sv()) {
@@ -153,10 +204,14 @@ auto constexpr operator+(char const (&lhs)[N], StaticString<M> const& rhs) noexc
   return res;
 }
 
-// --- 数値変換エンジン ---
-
 namespace detail {
-  // 10進数整数変換
+
+  /**
+   * @brief 10進数整数を文字列に変換する関数
+   *
+   * @param v 変換する整数
+   * @return auto constexpr 変換された文字列とその長さのペア
+   */
   auto constexpr to_dec_chars(long long v) noexcept {
     auto buffer = std::array<char, 21>{};
     if (v == 0) {
@@ -179,7 +234,12 @@ namespace detail {
     return std::pair{buffer, i};
   }
 
-  // 16進数変換
+  /**
+   * @brief 16進数整数を文字列に変換する関数
+   *
+   * @param value 変換する整数
+   * @return auto constexpr 変換された文字列とその長さのペア
+   */
   auto constexpr to_hex_chars(long long value) noexcept {
     auto buffer = std::array<char, 19>{'0', 'x'};
     auto v = static_cast<unsigned long long>(value);
@@ -198,7 +258,13 @@ namespace detail {
     return std::pair{buffer, i};
   }
 
-  // 浮動小数点数（簡易固定小数点）変換
+  /**
+   * @brief 浮動小数点数を文字列に変換する関数（簡易固定小数点）
+   *
+   * @param value 変換する浮動小数点数
+   * @param precision 小数点以下の桁数
+   * @return auto constexpr 変換された文字列とその長さのペア
+   */
   auto constexpr to_float_chars(double value, int precision) noexcept {
     auto buffer = std::array<char, 48>{};
     auto i = 0uz;
@@ -229,8 +295,15 @@ namespace detail {
     return std::pair{buffer, i};
   }
 
-  // 1要素を 0..255 の値として扱うための共通変換。
-  // std::byte は to_integer、それ以外は unsigned char へキャストする。
+  /**
+   * @brief 1要素を 0..255 の値として扱うための共通変換関数
+   * - std::byte は std::to_integer<unsigned char> を使用
+   * - それ以外は unsigned char へキャスト
+   *
+   * @tparam T 変換する要素の型
+   * @param v 変換する要素
+   * @return auto constexpr 変換された 0..255 の値
+   */
   template <typename T>
   auto constexpr to_u8(T const v) noexcept {
     if constexpr (std::same_as<std::remove_cv_t<T>, std::byte>) {
@@ -240,9 +313,15 @@ namespace detail {
     }
   }
 
-  // ヌル終端ポインタを StaticString<257> に変換する。
-  // - nullptr は空文字
-  // - '\0' もしくは 256 文字で打ち切り
+  /**
+   * @brief ヌル終端ポインタを StaticString<257> に変換する関数
+   * - nullptr は空文字とする
+   * - '\0' もしくは 256 文字で打ち切り
+   *
+   * @tparam Elem 変換する要素の型
+   * @param arg 変換するヌル終端ポインタ
+   * @return auto constexpr 変換された StaticString<257>
+   */
   template <typename Elem>
   auto constexpr make_static_from_ptr(Elem const* arg) noexcept {
     auto res = StaticString<257>{};
@@ -265,9 +344,16 @@ namespace detail {
     return res;
   }
 
-  // span を StaticString<257> に変換する。
-  // - 先頭から 0 値までを文字列として扱う
-  // - 0 がなくても最大 256 文字までコピー
+  /**
+   * @brief span を StaticString<257> に変換する関数
+   * - 先頭から 0 値までを文字列として扱う
+   * - 0 がなくても最大 256 文字までコピー
+   *
+   * @tparam Elem 変換する要素の型
+   * @tparam Extent span の長さ
+   * @param arg 変換する span
+   * @return auto constexpr 変換された StaticString<257>
+   */
   template <typename Elem, size_t Extent>
   auto constexpr make_static_from_span(std::span<Elem const, Extent> arg) noexcept {
     auto res = StaticString<257>{};
@@ -285,11 +371,18 @@ namespace detail {
     return res;
   }
 
-  // string_view を StaticString<257> に変換する（終端は長さベース）。
+  /**
+   * @brief string_view を StaticString<257> に変換する関数
+   * - 終端は長さベース
+   * - 最大 256 文字までコピー
+   *
+   * @param s 変換する string_view
+   * @return auto constexpr 変換された StaticString<257>
+   */
   auto constexpr make_static_from_sv(std::string_view s) noexcept {
     auto res = StaticString<257>{};
     auto const len = std::min(s.size(), res.buffer.size() - 1);
-    for (auto const i : std::views::iota(0uz, len)) {
+    for (auto i = 0uz; i < len; ++i) {
       res.buffer[i] = s[i];
     }
     res.buffer[len] = '\0';
@@ -298,154 +391,159 @@ namespace detail {
   }
 }
 
-// --- ファクトリ ---
+/*===============================================================================*\
+ * 各種データ型に対応したmake_static関数の定義
+\*===============================================================================*/
 
-// 文字列リテラル
+/*-------------------------------------------------------------------------------*\
+ * StaticString自体の場合はそのまま返す
+\*/
+template <size_t N>
+auto constexpr make_static(StaticString<N> const& arg) noexcept {
+  return arg;
+}
 
+/*-------------------------------------------------------------------------------*\
+ * 文字列リテラル
+\*/
 template <size_t N>
 auto constexpr make_static(char const (&arg)[N]) noexcept {
   return StaticString<N>{arg};
 }
 
-// C文字列ポインタ
-
+/*-------------------------------------------------------------------------------*\
+ * 各種C文字列ポインタ
+\*/
 auto constexpr make_static(char const* arg) noexcept {
   return detail::make_static_from_ptr(arg);
 }
-
 auto constexpr make_static(char* arg) noexcept {
   return make_static(static_cast<char const*>(arg));
 }
-
 auto constexpr make_static(signed char const* arg) noexcept {
   return detail::make_static_from_ptr(arg);
 }
-
 auto constexpr make_static(signed char* arg) noexcept {
   return make_static(static_cast<signed char const*>(arg));
 }
-
 auto constexpr make_static(unsigned char const* arg) noexcept {
   return detail::make_static_from_ptr(arg);
 }
-
 auto constexpr make_static(unsigned char* arg) noexcept {
   return make_static(static_cast<unsigned char const*>(arg));
 }
 
-// span / array 系
-
+/*-------------------------------------------------------------------------------*\
+ * 各種char型のspan
+\*/
 template <size_t Extent>
 auto constexpr make_static(std::span<char const, Extent> arg) noexcept {
   return detail::make_static_from_span(arg);
 }
-
 template <size_t Extent>
 auto constexpr make_static(std::span<char, Extent> arg) noexcept {
   return make_static(std::span<char const, Extent>{arg});
 }
-
-template <size_t N>
-auto constexpr make_static(std::array<char, N> const& arg) noexcept {
-  return make_static(std::span<char const, N>{arg});
-}
-
 template <size_t Extent>
 auto constexpr make_static(std::span<signed char const, Extent> arg) noexcept {
   return detail::make_static_from_span(arg);
 }
-
 template <size_t Extent>
 auto constexpr make_static(std::span<signed char, Extent> arg) noexcept {
   return make_static(std::span<signed char const, Extent>{arg});
 }
-
-template <size_t N>
-auto constexpr make_static(std::array<signed char, N> const& arg) noexcept {
-  return make_static(std::span<signed char const, N>{arg});
-}
-
 template <size_t Extent>
 auto constexpr make_static(std::span<unsigned char const, Extent> arg) noexcept {
   return detail::make_static_from_span(arg);
 }
-
 template <size_t Extent>
 auto constexpr make_static(std::span<unsigned char, Extent> arg) noexcept {
   return make_static(std::span<unsigned char const, Extent>{arg});
 }
-
-template <size_t N>
-auto constexpr make_static(std::array<unsigned char, N> const& arg) noexcept {
-  return make_static(std::span<unsigned char const, N>{arg});
-}
-
 template <size_t Extent>
 auto constexpr make_static(std::span<std::byte const, Extent> arg) noexcept {
   return detail::make_static_from_span(arg);
 }
-
 template <size_t Extent>
 auto constexpr make_static(std::span<std::byte, Extent> arg) noexcept {
   return make_static(std::span<std::byte const, Extent>{arg});
 }
 
+/*-------------------------------------------------------------------------------*\
+ * 各種char型のarray
+\*/
+template <size_t N>
+auto constexpr make_static(std::array<char, N> const& arg) noexcept {
+  return make_static(std::span<char const, N>{arg});
+}
+template <size_t N>
+auto constexpr make_static(std::array<signed char, N> const& arg) noexcept {
+  return make_static(std::span<signed char const, N>{arg});
+}
+template <size_t N>
+auto constexpr make_static(std::array<unsigned char, N> const& arg) noexcept {
+  return make_static(std::span<unsigned char const, N>{arg});
+}
 template <size_t N>
 auto constexpr make_static(std::array<std::byte, N> const& arg) noexcept {
   return make_static(std::span<std::byte const, N>{arg});
 }
 
-// vector 系
-
+/*-------------------------------------------------------------------------------*\
+ * 各種char型のvector
+\*/
 template <typename Alloc>
 auto constexpr make_static(std::vector<char, Alloc>& arg) noexcept {
   return make_static(std::span<char>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<char, Alloc> const& arg) noexcept {
   return make_static(std::span<char const>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<signed char, Alloc>& arg) noexcept {
   return make_static(std::span<signed char>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<signed char, Alloc> const& arg) noexcept {
   return make_static(std::span<signed char const>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<unsigned char, Alloc>& arg) noexcept {
   return make_static(std::span<unsigned char>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<unsigned char, Alloc> const& arg) noexcept {
   return make_static(std::span<unsigned char const>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<std::byte, Alloc>& arg) noexcept {
   return make_static(std::span<std::byte>{arg.data(), arg.size()});
 }
-
 template <typename Alloc>
 auto constexpr make_static(std::vector<std::byte, Alloc> const& arg) noexcept {
   return make_static(std::span<std::byte const>{arg.data(), arg.size()});
 }
 
-// 無効入力
+/*-------------------------------------------------------------------------------*\
+ * nullptrは非対応とする
+\*/
 auto constexpr make_static(decltype(nullptr)) noexcept = delete;
 
-// 数値フォーマット
+/*-------------------------------------------------------------------------------*\
+ * 数値対応
+\*/
 
+/**
+ * @brief Hex タグを受け取って整数を16進数表現の文字列に変換する
+ *
+ * @param arg 変換する整数を含む Hex タグ
+ * @return auto constexpr 変換後の静的文字列
+ */
 auto constexpr make_static(Hex const& arg) noexcept {
   auto const p = detail::to_hex_chars(arg.value);
   auto res = StaticString<19>{};
-  for (auto const i : std::views::iota(0uz, p.second)) {
+  for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
   res.buffer[p.second] = '\0';
@@ -453,10 +551,16 @@ auto constexpr make_static(Hex const& arg) noexcept {
   return res;
 }
 
+/**
+ * @brief Precision タグを受け取って浮動小数点数を指定精度の文字列に変換する
+ *
+ * @param arg 変換する浮動小数点数を含む Precision タグ
+ * @return auto constexpr 変換後の静的文字列
+ */
 auto constexpr make_static(Precision const& arg) noexcept {
   auto const p = detail::to_float_chars(arg.value, arg.precision);
   auto res = StaticString<49>{};
-  for (auto const i : std::views::iota(0uz, p.second)) {
+  for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
   res.buffer[p.second] = '\0';
@@ -464,11 +568,18 @@ auto constexpr make_static(Precision const& arg) noexcept {
   return res;
 }
 
+/**
+ * @brief 整数型を受け取って10進数表現の文字列に変換する
+ *
+ * @tparam T 整数型
+ * @param arg 変換する整数
+ * @return auto constexpr 変換後の静的文字列
+ */
 template <Integral T>
 auto constexpr make_static(T const& arg) noexcept {
   auto const p = detail::to_dec_chars(static_cast<long long>(arg));
   auto res = StaticString<21>{};
-  for (auto const i : std::views::iota(0uz, p.second)) {
+  for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
   res.buffer[p.second] = '\0';
@@ -481,8 +592,9 @@ auto constexpr make_static(T const& arg) noexcept {
   return make_static(Precision(arg, 2)); // デフォルト精度2
 }
 
-// string_view 変換可能型
-
+/*-------------------------------------------------------------------------------*\
+ * string_view 変換可能型
+\*/
 template <typename T>
   requires (std::is_convertible_v<T, std::string_view>
             && !Integral<std::remove_cvref_t<T>>
@@ -494,12 +606,18 @@ auto constexpr make_static(T const& arg) noexcept {
   return detail::make_static_from_sv(s);
 }
 
-// フォールバック（未対応型はコンパイルエラー）
+/*-------------------------------------------------------------------------------*\
+ * 未対応型はコンパイルエラー
+\*/
 template <typename T>
 auto constexpr make_static(T const&) noexcept = delete;
 
 /**
- * 一括で文字列と数値を結合する
+ * @brief 引数で渡された値をすべて StaticString に変換し結合する
+ *
+ * @tparam Args 可変引数の型
+ * @param args 結合する引数
+ * @return auto constexpr 結合後の静的文字列
  */
 template <typename... Args>
 auto constexpr concat(Args const&... args) noexcept {
