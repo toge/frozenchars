@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <concepts>
 #include <type_traits>
+#include <ranges>
 
 namespace frozenchars {
 
@@ -39,6 +40,28 @@ concept FloatingPoint = std::is_floating_point_v<T>;
 struct Hex {
   long long value;
   constexpr Hex(Integral auto v)
+  : value(v)
+  {}
+};
+
+/**
+ * @brief 整数値を2進数表現するためのタグ
+ *
+ */
+struct Bin {
+  long long value;
+  constexpr Bin(Integral auto v)
+  : value(v)
+  {}
+};
+
+/**
+ * @brief 整数値を8進数表現するためのタグ
+ *
+ */
+struct Oct {
+  long long value;
+  constexpr Oct(Integral auto v)
   : value(v)
   {}
 };
@@ -251,6 +274,52 @@ namespace detail {
     auto constexpr digits = "0123456789abcdef";
     while (v > 0) {
       buffer[i++] = digits[v % 16]; v /= 16;
+    }
+    for (auto const j : std::views::iota(0uz, (i - 2) / 2)) {
+      std::swap(buffer[j + 2], buffer[i - j - 1]);
+    }
+    return std::pair{buffer, i};
+  }
+
+  /**
+   * @brief 2進数整数を文字列に変換する関数
+   *
+   * @param value 変換する整数
+   * @return auto constexpr 変換された文字列とその長さのペア
+   */
+  auto constexpr to_bin_chars(long long value) noexcept {
+    auto buffer = std::array<char, 67>{'0', 'b'};
+    auto v = static_cast<unsigned long long>(value);
+    if (v == 0) {
+      buffer[2] = '0';
+      return std::pair{buffer, 3uz};
+    }
+    auto i = 2uz;
+    while (v > 0) {
+      buffer[i++] = '0' + static_cast<char>(v % 2); v /= 2;
+    }
+    for (auto const j : std::views::iota(0uz, (i - 2) / 2)) {
+      std::swap(buffer[j + 2], buffer[i - j - 1]);
+    }
+    return std::pair{buffer, i};
+  }
+
+  /**
+   * @brief 8進数整数を文字列に変換する関数
+   *
+   * @param value 変換する整数
+   * @return auto constexpr 変換された文字列とその長さのペア
+   */
+  auto constexpr to_oct_chars(long long value) noexcept {
+    auto buffer = std::array<char, 25>{'0', 'o'};
+    auto v = static_cast<unsigned long long>(value);
+    if (v == 0) {
+      buffer[2] = '0';
+      return std::pair{buffer, 3uz};
+    }
+    auto i = 2uz;
+    while (v > 0) {
+      buffer[i++] = '0' + static_cast<char>(v % 8); v /= 8;
     }
     for (auto const j : std::views::iota(0uz, (i - 2) / 2)) {
       std::swap(buffer[j + 2], buffer[i - j - 1]);
@@ -543,6 +612,40 @@ auto constexpr make_static(decltype(nullptr)) noexcept = delete;
 auto constexpr make_static(Hex const& arg) noexcept {
   auto const p = detail::to_hex_chars(arg.value);
   auto res = StaticString<19>{};
+  for (auto i = 0uz; i < p.second; ++i) {
+    res.buffer[i] = p.first[i];
+  }
+  res.buffer[p.second] = '\0';
+  res.length = p.second;
+  return res;
+}
+
+/**
+ * @brief Bin タグを受け取って整数を2進数表現の文字列に変換する
+ *
+ * @param arg 変換する整数を含む Bin タグ
+ * @return auto constexpr 変換後の静的文字列
+ */
+auto constexpr make_static(Bin const& arg) noexcept {
+  auto const p = detail::to_bin_chars(arg.value);
+  auto res = StaticString<67>{};
+  for (auto i = 0uz; i < p.second; ++i) {
+    res.buffer[i] = p.first[i];
+  }
+  res.buffer[p.second] = '\0';
+  res.length = p.second;
+  return res;
+}
+
+/**
+ * @brief Oct タグを受け取って整数を8進数表現の文字列に変換する
+ *
+ * @param arg 変換する整数を含む Oct タグ
+ * @return auto constexpr 変換後の静的文字列
+ */
+auto constexpr make_static(Oct const& arg) noexcept {
+  auto const p = detail::to_oct_chars(arg.value);
+  auto res = StaticString<25>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
