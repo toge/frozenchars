@@ -6,7 +6,7 @@
 
 ```cpp
 #include "frozenchars.hpp"
-auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=", frozenchars::Hex(255));
+auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars::Hex(255));
 // msg.sv() == "answer=42, hex=0xff"
 ```
 
@@ -104,4 +104,3 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 ## ライセンス
 
 MIT License
-
