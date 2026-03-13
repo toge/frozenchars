@@ -26,7 +26,7 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 #include "frozenchars.hpp"
 using namespace frozenchars;
 using namespace frozenchars::literals;
-auto constexpr r1 = repeat<3>("abc"_ss);  // "abcabcabc"
+auto constexpr r1 = repeat<3>("abc"_fs);  // "abcabcabc"
 auto constexpr r2 = repeat<2>("xyz");     // "xyzxyz"
 ```
 
@@ -45,10 +45,10 @@ auto constexpr r2 = repeat<2>("xyz");     // "xyzxyz"
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto constexpr r1 = right<8>("abc"_ss);      // "     abc"
+auto constexpr r1 = right<8>("abc"_fs);      // "     abc"
 auto constexpr r2 = right<8, '.'>("abc");    // ".....abc"
 
-auto constexpr c1 = center<7>("abc"_ss);     // "  abc  "
+auto constexpr c1 = center<7>("abc"_fs);     // "  abc  "
 auto constexpr c2 = center<8, '-'>("abc");   // "--abc---"
 
 static_assert(r1.sv() == "     abc");

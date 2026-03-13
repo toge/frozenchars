@@ -282,7 +282,7 @@ namespace literals {
  * @return auto constexpr FrozenString に変換された文字列
  */
 template <FixedString FS>
-auto constexpr operator""_ss() noexcept {
+auto constexpr operator""_fs() noexcept {
   auto res = FrozenString<FS.sv().size() + 1>{};
   auto const s = FS.sv();
   for (auto i = 0uz; i < s.size(); ++i) {

@@ -7,7 +7,7 @@ using namespace frozenchars::literals;
 
 TEST_CASE("complex string") {
   // repeat<回数>(FrozenString) で結合
-  auto constexpr banner = "!"_ss + repeat<5>("=-"_ss) + "!";
+  auto constexpr banner = "!"_fs + repeat<5>("=-"_fs) + "!";
 
   static_assert(banner.sv() == "!=-=-=-=-=-!");
   REQUIRE(banner.sv() == "!=-=-=-=-=-!");
@@ -15,7 +15,7 @@ TEST_CASE("complex string") {
 
 TEST_CASE("complex string2") {
   // repeat<回数>(FrozenString) で結合
-  auto constexpr banner = "!" + repeat<5>("=-"_ss) + "!";
+  auto constexpr banner = "!" + repeat<5>("=-"_fs) + "!";
 
   static_assert(banner.sv() == "!=-=-=-=-=-!");
   REQUIRE(banner.sv() == "!=-=-=-=-=-!");
@@ -52,8 +52,8 @@ TEST_CASE("concat with mixed types") {
 }
 
 TEST_CASE("concat named constexpr strings") {
-  auto constexpr hello = "Hello, "_ss;
-  auto constexpr world = "world!"_ss;
+  auto constexpr hello = "Hello, "_fs;
+  auto constexpr world = "world!"_fs;
   auto constexpr message = concat(hello, world);
 
   static_assert(message.sv() == "Hello, world!");

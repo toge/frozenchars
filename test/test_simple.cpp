@@ -6,21 +6,21 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 
 TEST_CASE("simple string") {
-  auto constexpr star = "*"_ss;
+  auto constexpr star = "*"_fs;
 
   static_assert(star.sv() == "*");
   REQUIRE(star.sv() == "*");
 }
 
 TEST_CASE("simple repeat") {
-  auto constexpr starline = repeat<10>("*"_ss);
+  auto constexpr starline = repeat<10>("*"_fs);
   static_assert(starline.sv() == "**********");
   REQUIRE(starline.sv() == "**********");
 }
 
 TEST_CASE("simple concat") {
-  auto constexpr hello   = "Hello, "_ss;
-  auto constexpr world   = "world!"_ss;
+  auto constexpr hello   = "Hello, "_fs;
+  auto constexpr world   = "world!"_fs;
   auto constexpr message = hello + world;
 
   static_assert(message.sv() == "Hello, world!");
@@ -28,7 +28,7 @@ TEST_CASE("simple concat") {
 }
 
 TEST_CASE("simple concat with literal rhs") {
-  auto constexpr hello   = "Hello, "_ss;
+  auto constexpr hello   = "Hello, "_fs;
   auto constexpr message = hello + "world!";
 
   static_assert(message.sv() == "Hello, world!");
@@ -36,37 +36,37 @@ TEST_CASE("simple concat with literal rhs") {
 }
 
 TEST_CASE("simple right align") {
-  auto constexpr s1 = right<5>("abc"_ss);
+  auto constexpr s1 = right<5>("abc"_fs);
   static_assert(s1.sv() == "  abc");
   REQUIRE(s1.sv() == "  abc");
 
-  auto constexpr s2 = right<6, '.'>("abc"_ss);
+  auto constexpr s2 = right<6, '.'>("abc"_fs);
   static_assert(s2.sv() == "...abc");
   REQUIRE(s2.sv() == "...abc");
 
-  auto constexpr s3 = right<3>("abcdef"_ss);
+  auto constexpr s3 = right<3>("abcdef"_fs);
   static_assert(s3.sv() == "abcdef");
   REQUIRE(s3.sv() == "abcdef");
 
-  auto constexpr s4 = right<5>("abc");
+  auto constexpr s4 = right<5>("abc"_fs);
   static_assert(s4.sv() == "  abc");
   REQUIRE(s4.sv() == "  abc");
 }
 
 TEST_CASE("simple center align") {
-  auto constexpr s1 = center<7>("abc"_ss);
+  auto constexpr s1 = center<7>("abc"_fs);
   static_assert(s1.sv() == "  abc  ");
   REQUIRE(s1.sv() == "  abc  ");
 
-  auto constexpr s2 = center<8, '-'>("abc"_ss);
+  auto constexpr s2 = center<8, '-'>("abc"_fs);
   static_assert(s2.sv() == "--abc---");
   REQUIRE(s2.sv() == "--abc---");
 
-  auto constexpr s3 = center<3>("abcdef"_ss);
+  auto constexpr s3 = center<3>("abcdef"_fs);
   static_assert(s3.sv() == "abcdef");
   REQUIRE(s3.sv() == "abcdef");
 
-  auto constexpr s4 = center<7>("abc");
+  auto constexpr s4 = center<7>("abc"_fs);
   static_assert(s4.sv() == "  abc  ");
   REQUIRE(s4.sv() == "  abc  ");
 }
