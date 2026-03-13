@@ -118,7 +118,7 @@ struct FrozenString {
     return std::string_view{buffer.data(), length};
   }
 
-  // StaticString同士の結合
+  // FrozenString同士の結合
   template <size_t M>
   auto constexpr operator+(FrozenString<M> const& other) const noexcept {
     FrozenString<N + M - 1> res{};
@@ -185,10 +185,10 @@ auto constexpr repeat(char const (&str)[N]) noexcept {
 namespace literals {
 
 /**
- * @brief 文字列リテラルを StaticString に変換するリテラル演算子
+ * @brief 文字列リテラルを FrozenString に変換するリテラル演算子
  *
  * @tparam FS 固定長文字列
- * @return auto constexpr StaticString に変換された文字列
+ * @return auto constexpr FrozenString に変換された文字列
  */
 template <FixedString FS>
 auto constexpr operator""_ss() noexcept {
@@ -204,13 +204,13 @@ auto constexpr operator""_ss() noexcept {
 }
 
 /**
- * @brief 文字列リテラルと StaticString を結合する演算子
- * StaticString + 文字列リテラルについては、StaticString内で定義されている
+ * @brief 文字列リテラルと FrozenString を結合する演算子
+ * FrozenString + 文字列リテラルについては、FrozenString内で定義されている
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
- * @tparam M StaticString の長さ (終端文字'\0'を含む)
- * @param rhs 結合する StaticString
- * @return auto constexpr 結合された StaticString
+ * @tparam M FrozenString の長さ (終端文字'\0'を含む)
+ * @param rhs 結合する FrozenString
+ * @return auto constexpr 結合された FrozenString
  */
 template <size_t N, size_t M>
 auto constexpr operator+(char const (&lhs)[N], FrozenString<M> const& rhs) noexcept {
@@ -383,13 +383,13 @@ namespace detail {
   }
 
   /**
-   * @brief ヌル終端ポインタを StaticString<257> に変換する関数
+   * @brief ヌル終端ポインタを FrozenString<257> に変換する関数
    * - nullptr は空文字とする
    * - '\0' もしくは 256 文字で打ち切り
    *
    * @tparam Elem 変換する要素の型
    * @param arg 変換するヌル終端ポインタ
-   * @return auto constexpr 変換された StaticString<257>
+   * @return auto constexpr 変換された FrozenString<257>
    */
   template <typename Elem>
   auto constexpr freeze_from_ptr(Elem const* arg) noexcept {
@@ -414,14 +414,14 @@ namespace detail {
   }
 
   /**
-   * @brief span を StaticString<257> に変換する関数
+   * @brief span を FrozenString<257> に変換する関数
    * - 先頭から 0 値までを文字列として扱う
    * - 0 がなくても最大 256 文字までコピー
    *
    * @tparam Elem 変換する要素の型
    * @tparam Extent span の長さ
    * @param arg 変換する span
-   * @return auto constexpr 変換された StaticString<257>
+   * @return auto constexpr 変換された FrozenString<257>
    */
   template <typename Elem, size_t Extent>
   auto constexpr freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
@@ -441,12 +441,12 @@ namespace detail {
   }
 
   /**
-   * @brief string_view を StaticString<257> に変換する関数
+   * @brief string_view を FrozenString<257> に変換する関数
    * - 終端は長さベース
    * - 最大 256 文字までコピー
    *
    * @param s 変換する string_view
-   * @return auto constexpr 変換された StaticString<257>
+   * @return auto constexpr 変換された FrozenString<257>
    */
   auto constexpr freeze_from_sv(std::string_view s) noexcept {
     auto res = FrozenString<257>{};
@@ -465,7 +465,7 @@ namespace detail {
 \*===============================================================================*/
 
 /*-------------------------------------------------------------------------------*\
- * StaticString自体の場合はそのまま返す
+ * FrozenString自体の場合はそのまま返す
 \*/
 template <size_t N>
 auto constexpr freeze(FrozenString<N> const& arg) noexcept {
@@ -716,7 +716,7 @@ template <typename T>
 auto constexpr freeze(T const&) noexcept = delete;
 
 /**
- * @brief 引数で渡された値をすべて StaticString に変換し結合する
+ * @brief 引数で渡された値をすべて FrozenString に変換し結合する
  *
  * @tparam Args 可変引数の型
  * @param args 結合する引数

@@ -6,7 +6,7 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 
 TEST_CASE("complex string") {
-  // repeat<回数>(StaticString) で結合
+  // repeat<回数>(FrozenString) で結合
   auto constexpr banner = "!"_ss + repeat<5>("=-"_ss) + "!";
 
   static_assert(banner.sv() == "!=-=-=-=-=-!");
@@ -14,7 +14,7 @@ TEST_CASE("complex string") {
 }
 
 TEST_CASE("complex string2") {
-  // repeat<回数>(StaticString) で結合
+  // repeat<回数>(FrozenString) で結合
   auto constexpr banner = "!" + repeat<5>("=-"_ss) + "!";
 
   static_assert(banner.sv() == "!=-=-=-=-=-!");
@@ -22,7 +22,7 @@ TEST_CASE("complex string2") {
 }
 
 TEST_CASE("complex string3") {
-  // repeat<回数>(StaticString) で結合
+  // repeat<回数>(FrozenString) で結合
   auto constexpr banner = "!" + repeat<5>("=-") + "!";
 
   static_assert(banner.sv() == "!=-=-=-=-=-!");
