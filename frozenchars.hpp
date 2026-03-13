@@ -102,12 +102,12 @@ struct FixedString {
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  */
 template <size_t N>
-struct StaticString {
+struct FrozenString {
   std::array<char, N> buffer{};
   size_t length{N > 0 ? N - 1 : 0};
 
-  constexpr StaticString() noexcept = default;
-  constexpr StaticString(char const (&str)[N]) noexcept
+  constexpr FrozenString() noexcept = default;
+  constexpr FrozenString(char const (&str)[N]) noexcept
   : length{N > 0 ? N - 1 : 0} {
     for (auto i = 0uz; i < N; ++i) {
       buffer[i] = str[i];
@@ -120,8 +120,8 @@ struct StaticString {
 
   // StaticString同士の結合
   template <size_t M>
-  auto constexpr operator+(StaticString<M> const& other) const noexcept {
-    StaticString<N + M - 1> res{};
+  auto constexpr operator+(FrozenString<M> const& other) const noexcept {
+    FrozenString<N + M - 1> res{};
     auto offset = 0uz;
     for (auto const c : this->sv()) {
       res.buffer[offset++] = c;
@@ -137,7 +137,7 @@ struct StaticString {
   // 文字列リテラルとの結合
   template <size_t M>
   auto constexpr operator+(char const (&rhs)[M]) const noexcept {
-    return *this + StaticString<M>{rhs};
+    return *this + FrozenString<M>{rhs};
   }
 };
 
@@ -150,11 +150,11 @@ struct StaticString {
  * @return auto constexpr 繰り返された静的文字列
  */
 template <size_t Count, size_t N>
-auto constexpr repeat(StaticString<N> const& str) noexcept {
+auto constexpr repeat(FrozenString<N> const& str) noexcept {
   auto constexpr UNIT_LEN = N > 0 ? N - 1 : 0;
   auto constexpr NEW_SIZE = UNIT_LEN * Count + 1;
 
-  auto res = StaticString<NEW_SIZE>{};
+  auto res = FrozenString<NEW_SIZE>{};
   auto offset = 0uz;
   auto const src = str.sv();
 
@@ -179,7 +179,7 @@ auto constexpr repeat(StaticString<N> const& str) noexcept {
  */
 template <size_t Count, size_t N>
 auto constexpr repeat(char const (&str)[N]) noexcept {
-  return repeat<Count>(StaticString{str});
+  return repeat<Count>(FrozenString{str});
 }
 
 namespace literals {
@@ -192,7 +192,7 @@ namespace literals {
  */
 template <FixedString FS>
 auto constexpr operator""_ss() noexcept {
-  auto res = StaticString<FS.sv().size() + 1>{};
+  auto res = FrozenString<FS.sv().size() + 1>{};
   auto const s = FS.sv();
   for (auto i = 0uz; i < s.size(); ++i) {
     res.buffer[i] = s[i];
@@ -213,8 +213,8 @@ auto constexpr operator""_ss() noexcept {
  * @return auto constexpr 結合された StaticString
  */
 template <size_t N, size_t M>
-auto constexpr operator+(char const (&lhs)[N], StaticString<M> const& rhs) noexcept {
-  auto res = StaticString<N + M - 1>{};
+auto constexpr operator+(char const (&lhs)[N], FrozenString<M> const& rhs) noexcept {
+  auto res = FrozenString<N + M - 1>{};
   auto offset = 0uz;
   for (auto i = 0uz; i < N - 1; ++i) {
     res.buffer[offset++] = lhs[i];
@@ -392,8 +392,8 @@ namespace detail {
    * @return auto constexpr 変換された StaticString<257>
    */
   template <typename Elem>
-  auto constexpr make_static_from_ptr(Elem const* arg) noexcept {
-    auto res = StaticString<257>{};
+  auto constexpr freeze_from_ptr(Elem const* arg) noexcept {
+    auto res = FrozenString<257>{};
     if (arg == nullptr) {
       res.buffer[0] = '\0';
       res.length = 0;
@@ -424,8 +424,8 @@ namespace detail {
    * @return auto constexpr 変換された StaticString<257>
    */
   template <typename Elem, size_t Extent>
-  auto constexpr make_static_from_span(std::span<Elem const, Extent> arg) noexcept {
-    auto res = StaticString<257>{};
+  auto constexpr freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
+    auto res = FrozenString<257>{};
     auto const max_len = std::min(arg.size(), res.buffer.size() - 1);
     auto len = 0uz;
     for (; len < max_len; ++len) {
@@ -448,8 +448,8 @@ namespace detail {
    * @param s 変換する string_view
    * @return auto constexpr 変換された StaticString<257>
    */
-  auto constexpr make_static_from_sv(std::string_view s) noexcept {
-    auto res = StaticString<257>{};
+  auto constexpr freeze_from_sv(std::string_view s) noexcept {
+    auto res = FrozenString<257>{};
     auto const len = std::min(s.size(), res.buffer.size() - 1);
     for (auto i = 0uz; i < len; ++i) {
       res.buffer[i] = s[i];
@@ -461,14 +461,14 @@ namespace detail {
 }
 
 /*===============================================================================*\
- * 各種データ型に対応したmake_static関数の定義
+ * 各種データ型に対応したfreeze関数の定義
 \*===============================================================================*/
 
 /*-------------------------------------------------------------------------------*\
  * StaticString自体の場合はそのまま返す
 \*/
 template <size_t N>
-auto constexpr make_static(StaticString<N> const& arg) noexcept {
+auto constexpr freeze(FrozenString<N> const& arg) noexcept {
   return arg;
 }
 
@@ -476,128 +476,128 @@ auto constexpr make_static(StaticString<N> const& arg) noexcept {
  * 文字列リテラル
 \*/
 template <size_t N>
-auto constexpr make_static(char const (&arg)[N]) noexcept {
-  return StaticString<N>{arg};
+auto constexpr freeze(char const (&arg)[N]) noexcept {
+  return FrozenString<N>{arg};
 }
 
 /*-------------------------------------------------------------------------------*\
  * 各種C文字列ポインタ
 \*/
-auto constexpr make_static(char const* arg) noexcept {
-  return detail::make_static_from_ptr(arg);
+auto constexpr freeze(char const* arg) noexcept {
+  return detail::freeze_from_ptr(arg);
 }
-auto constexpr make_static(char* arg) noexcept {
-  return make_static(static_cast<char const*>(arg));
+auto constexpr freeze(char* arg) noexcept {
+  return freeze(static_cast<char const*>(arg));
 }
-auto constexpr make_static(signed char const* arg) noexcept {
-  return detail::make_static_from_ptr(arg);
+auto constexpr freeze(signed char const* arg) noexcept {
+  return detail::freeze_from_ptr(arg);
 }
-auto constexpr make_static(signed char* arg) noexcept {
-  return make_static(static_cast<signed char const*>(arg));
+auto constexpr freeze(signed char* arg) noexcept {
+  return freeze(static_cast<signed char const*>(arg));
 }
-auto constexpr make_static(unsigned char const* arg) noexcept {
-  return detail::make_static_from_ptr(arg);
+auto constexpr freeze(unsigned char const* arg) noexcept {
+  return detail::freeze_from_ptr(arg);
 }
-auto constexpr make_static(unsigned char* arg) noexcept {
-  return make_static(static_cast<unsigned char const*>(arg));
+auto constexpr freeze(unsigned char* arg) noexcept {
+  return freeze(static_cast<unsigned char const*>(arg));
 }
 
 /*-------------------------------------------------------------------------------*\
  * 各種char型のspan
 \*/
 template <size_t Extent>
-auto constexpr make_static(std::span<char const, Extent> arg) noexcept {
-  return detail::make_static_from_span(arg);
+auto constexpr freeze(std::span<char const, Extent> arg) noexcept {
+  return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<char, Extent> arg) noexcept {
-  return make_static(std::span<char const, Extent>{arg});
+auto constexpr freeze(std::span<char, Extent> arg) noexcept {
+  return freeze(std::span<char const, Extent>{arg});
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<signed char const, Extent> arg) noexcept {
-  return detail::make_static_from_span(arg);
+auto constexpr freeze(std::span<signed char const, Extent> arg) noexcept {
+  return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<signed char, Extent> arg) noexcept {
-  return make_static(std::span<signed char const, Extent>{arg});
+auto constexpr freeze(std::span<signed char, Extent> arg) noexcept {
+  return freeze(std::span<signed char const, Extent>{arg});
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<unsigned char const, Extent> arg) noexcept {
-  return detail::make_static_from_span(arg);
+auto constexpr freeze(std::span<unsigned char const, Extent> arg) noexcept {
+  return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<unsigned char, Extent> arg) noexcept {
-  return make_static(std::span<unsigned char const, Extent>{arg});
+auto constexpr freeze(std::span<unsigned char, Extent> arg) noexcept {
+  return freeze(std::span<unsigned char const, Extent>{arg});
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<std::byte const, Extent> arg) noexcept {
-  return detail::make_static_from_span(arg);
+auto constexpr freeze(std::span<std::byte const, Extent> arg) noexcept {
+  return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-auto constexpr make_static(std::span<std::byte, Extent> arg) noexcept {
-  return make_static(std::span<std::byte const, Extent>{arg});
+auto constexpr freeze(std::span<std::byte, Extent> arg) noexcept {
+  return freeze(std::span<std::byte const, Extent>{arg});
 }
 
 /*-------------------------------------------------------------------------------*\
  * 各種char型のarray
 \*/
 template <size_t N>
-auto constexpr make_static(std::array<char, N> const& arg) noexcept {
-  return make_static(std::span<char const, N>{arg});
+auto constexpr freeze(std::array<char, N> const& arg) noexcept {
+  return freeze(std::span<char const, N>{arg});
 }
 template <size_t N>
-auto constexpr make_static(std::array<signed char, N> const& arg) noexcept {
-  return make_static(std::span<signed char const, N>{arg});
+auto constexpr freeze(std::array<signed char, N> const& arg) noexcept {
+  return freeze(std::span<signed char const, N>{arg});
 }
 template <size_t N>
-auto constexpr make_static(std::array<unsigned char, N> const& arg) noexcept {
-  return make_static(std::span<unsigned char const, N>{arg});
+auto constexpr freeze(std::array<unsigned char, N> const& arg) noexcept {
+  return freeze(std::span<unsigned char const, N>{arg});
 }
 template <size_t N>
-auto constexpr make_static(std::array<std::byte, N> const& arg) noexcept {
-  return make_static(std::span<std::byte const, N>{arg});
+auto constexpr freeze(std::array<std::byte, N> const& arg) noexcept {
+  return freeze(std::span<std::byte const, N>{arg});
 }
 
 /*-------------------------------------------------------------------------------*\
  * 各種char型のvector
 \*/
 template <typename Alloc>
-auto constexpr make_static(std::vector<char, Alloc>& arg) noexcept {
-  return make_static(std::span<char>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<char, Alloc>& arg) noexcept {
+  return freeze(std::span<char>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<char, Alloc> const& arg) noexcept {
-  return make_static(std::span<char const>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<char, Alloc> const& arg) noexcept {
+  return freeze(std::span<char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<signed char, Alloc>& arg) noexcept {
-  return make_static(std::span<signed char>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<signed char, Alloc>& arg) noexcept {
+  return freeze(std::span<signed char>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<signed char, Alloc> const& arg) noexcept {
-  return make_static(std::span<signed char const>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<signed char, Alloc> const& arg) noexcept {
+  return freeze(std::span<signed char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<unsigned char, Alloc>& arg) noexcept {
-  return make_static(std::span<unsigned char>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<unsigned char, Alloc>& arg) noexcept {
+  return freeze(std::span<unsigned char>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<unsigned char, Alloc> const& arg) noexcept {
-  return make_static(std::span<unsigned char const>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<unsigned char, Alloc> const& arg) noexcept {
+  return freeze(std::span<unsigned char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<std::byte, Alloc>& arg) noexcept {
-  return make_static(std::span<std::byte>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<std::byte, Alloc>& arg) noexcept {
+  return freeze(std::span<std::byte>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto constexpr make_static(std::vector<std::byte, Alloc> const& arg) noexcept {
-  return make_static(std::span<std::byte const>{arg.data(), arg.size()});
+auto constexpr freeze(std::vector<std::byte, Alloc> const& arg) noexcept {
+  return freeze(std::span<std::byte const>{arg.data(), arg.size()});
 }
 
 /*-------------------------------------------------------------------------------*\
  * nullptrは非対応とする
 \*/
-auto constexpr make_static(decltype(nullptr)) noexcept = delete;
+auto constexpr freeze(decltype(nullptr)) noexcept = delete;
 
 /*-------------------------------------------------------------------------------*\
  * 数値対応
@@ -609,9 +609,9 @@ auto constexpr make_static(decltype(nullptr)) noexcept = delete;
  * @param arg 変換する整数を含む Bin タグ
  * @return auto constexpr 変換後の静的文字列
  */
-auto constexpr make_static(Bin const& arg) noexcept {
+auto constexpr freeze(Bin const& arg) noexcept {
   auto const p = detail::to_bin_chars(arg.value);
-  auto res = StaticString<65>{};
+  auto res = FrozenString<65>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -626,9 +626,9 @@ auto constexpr make_static(Bin const& arg) noexcept {
  * @param arg 変換する整数を含む Oct タグ
  * @return auto constexpr 変換後の静的文字列
  */
-auto constexpr make_static(Oct const& arg) noexcept {
+auto constexpr freeze(Oct const& arg) noexcept {
   auto const p = detail::to_oct_chars(arg.value);
-  auto res = StaticString<23>{};
+  auto res = FrozenString<23>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -643,9 +643,9 @@ auto constexpr make_static(Oct const& arg) noexcept {
  * @param arg 変換する整数を含む Hex タグ
  * @return auto constexpr 変換後の静的文字列
  */
-auto constexpr make_static(Hex const& arg) noexcept {
+auto constexpr freeze(Hex const& arg) noexcept {
   auto const p = detail::to_hex_chars(arg.value);
-  auto res = StaticString<17>{};
+  auto res = FrozenString<17>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -660,9 +660,9 @@ auto constexpr make_static(Hex const& arg) noexcept {
  * @param arg 変換する浮動小数点数を含む Precision タグ
  * @return auto constexpr 変換後の静的文字列
  */
-auto constexpr make_static(Precision const& arg) noexcept {
+auto constexpr freeze(Precision const& arg) noexcept {
   auto const p = detail::to_float_chars(arg.value, arg.precision);
-  auto res = StaticString<49>{};
+  auto res = FrozenString<49>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -679,9 +679,9 @@ auto constexpr make_static(Precision const& arg) noexcept {
  * @return auto constexpr 変換後の静的文字列
  */
 template <Integral T>
-auto constexpr make_static(T const& arg) noexcept {
+auto constexpr freeze(T const& arg) noexcept {
   auto const p = detail::to_dec_chars(static_cast<long long>(arg));
-  auto res = StaticString<21>{};
+  auto res = FrozenString<21>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];
   }
@@ -691,8 +691,8 @@ auto constexpr make_static(T const& arg) noexcept {
 }
 
 template <FloatingPoint T>
-auto constexpr make_static(T const& arg) noexcept {
-  return make_static(Precision(arg, 2)); // デフォルト精度2
+auto constexpr freeze(T const& arg) noexcept {
+  return freeze(Precision(arg, 2)); // デフォルト精度2
 }
 
 /*-------------------------------------------------------------------------------*\
@@ -704,16 +704,16 @@ template <typename T>
             && !FloatingPoint<std::remove_cvref_t<T>>
             && !std::same_as<std::remove_cvref_t<T>, Hex>
             && !std::same_as<std::remove_cvref_t<T>, Precision>)
-auto constexpr make_static(T const& arg) noexcept {
+auto constexpr freeze(T const& arg) noexcept {
   auto const s = std::string_view{arg};
-  return detail::make_static_from_sv(s);
+  return detail::freeze_from_sv(s);
 }
 
 /*-------------------------------------------------------------------------------*\
  * 未対応型はコンパイルエラー
 \*/
 template <typename T>
-auto constexpr make_static(T const&) noexcept = delete;
+auto constexpr freeze(T const&) noexcept = delete;
 
 /**
  * @brief 引数で渡された値をすべて StaticString に変換し結合する
@@ -724,7 +724,7 @@ auto constexpr make_static(T const&) noexcept = delete;
  */
 template <typename... Args>
 auto constexpr concat(Args const&... args) noexcept {
-  return (make_static(args) + ...);
+  return (freeze(args) + ...);
 }
 
 }

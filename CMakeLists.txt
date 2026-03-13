@@ -47,31 +47,10 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Ox")
 endif()
 
-
-## static option
-option(STATIC "static binary" OFF)
-if (CMAKE_COMPILER_IS_GNUCXX)
-    if(STATIC)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static -static-libstdc++ -static-libgcc")
-    endif()
-endif()
-
-## add LTO flag
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ipo_supported OUTPUT error)
-if(ipo_supported)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-endif()
-
 ## other flag
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-## google perf tools
-# HEAPPROFILE=heap CPUPROFILE=test.prof xxx
-# pprof --text xxx yyy.prof
-#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lprofiler -ltcmalloc")
 
 include_directories(.)
 

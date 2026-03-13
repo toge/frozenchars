@@ -35,118 +35,118 @@ TEST_CASE("simple concat with literal rhs") {
   REQUIRE(message.sv() == "Hello, world!");
 }
 
-TEST_CASE("make_static with integers") {
-  auto constexpr num42 = make_static(42);
+TEST_CASE("freeze with integers") {
+  auto constexpr num42 = freeze(42);
   static_assert(num42.sv() == "42");
   REQUIRE(num42.sv() == "42");
 
-  auto constexpr num0 = make_static(0);
+  auto constexpr num0 = freeze(0);
   static_assert(num0.sv() == "0");
   REQUIRE(num0.sv() == "0");
 
-  auto constexpr numneg = make_static(-123);
+  auto constexpr numneg = freeze(-123);
   static_assert(numneg.sv() == "-123");
   REQUIRE(numneg.sv() == "-123");
 }
 
-TEST_CASE("make_static with Hex") {
-  auto constexpr hex255 = make_static(Hex(255));
+TEST_CASE("freeze with Hex") {
+  auto constexpr hex255 = freeze(Hex(255));
   static_assert(hex255.sv() == "ff");
   REQUIRE(hex255.sv() == "ff");
 
-  auto constexpr hex0 = make_static(Hex(0));
+  auto constexpr hex0 = freeze(Hex(0));
   static_assert(hex0.sv() == "0");
   REQUIRE(hex0.sv() == "0");
 }
 
-TEST_CASE("make_static with Bin") {
-  auto constexpr bin255 = make_static(Bin(255));
+TEST_CASE("freeze with Bin") {
+  auto constexpr bin255 = freeze(Bin(255));
   static_assert(bin255.sv() == "11111111");
   REQUIRE(bin255.sv() == "11111111");
 
-  auto constexpr bin0 = make_static(Bin(0));
+  auto constexpr bin0 = freeze(Bin(0));
   static_assert(bin0.sv() == "0");
   REQUIRE(bin0.sv() == "0");
 }
 
-TEST_CASE("make_static with Oct") {
-  auto constexpr oct255 = make_static(Oct(255));
+TEST_CASE("freeze with Oct") {
+  auto constexpr oct255 = freeze(Oct(255));
   static_assert(oct255.sv() == "377");
   REQUIRE(oct255.sv() == "377");
 
-  auto constexpr oct0 = make_static(Oct(0));
+  auto constexpr oct0 = freeze(Oct(0));
   static_assert(oct0.sv() == "0");
   REQUIRE(oct0.sv() == "0");
 }
 
-TEST_CASE("make_static with Precision") {
-  auto constexpr pi_2 = make_static(Precision(3.14159265, 2));
+TEST_CASE("freeze with Precision") {
+  auto constexpr pi_2 = freeze(Precision(3.14159265, 2));
   static_assert(pi_2.sv() == "3.14");
   REQUIRE(pi_2.sv() == "3.14");
 
-  auto constexpr pi_4 = make_static(Precision(3.14159265, 4));
+  auto constexpr pi_4 = freeze(Precision(3.14159265, 4));
   static_assert(pi_4.sv() == "3.1415");
   REQUIRE(pi_4.sv() == "3.1415");
 
-  auto constexpr frac = make_static(Precision(0.5, 1));
+  auto constexpr frac = freeze(Precision(0.5, 1));
   static_assert(frac.sv() == "0.5");
   REQUIRE(frac.sv() == "0.5");
 }
 
-TEST_CASE("make_static with constexpr std::array<char, N>") {
+TEST_CASE("freeze with constexpr std::array<char, N>") {
   auto constexpr arr1 = std::array<char, 8>{'a', 'r', 'r', 'a', 'y', '\0', 'x', 'x'};
-  auto constexpr s1   = make_static(arr1);
+  auto constexpr s1   = freeze(arr1);
   static_assert(s1.sv() == "array");
   REQUIRE(s1.sv() == "array");
 
   auto constexpr arr2 = std::array<char, 4>{'a', 'b', 'c', 'd'};
-  auto constexpr s2   = make_static(arr2);
+  auto constexpr s2   = freeze(arr2);
   static_assert(s2.sv() == "abcd");
   REQUIRE(s2.sv() == "abcd");
 }
 
-TEST_CASE("make_static with constexpr std::span<char>") {
+TEST_CASE("freeze with constexpr std::span<char>") {
   auto constexpr buf1 = std::array<char, 8>{'s', 'p', 'a', 'n', '\0', 'x', 'x', 'x'};
-  auto constexpr s1   = make_static(std::span<char const>{buf1});
+  auto constexpr s1   = freeze(std::span<char const>{buf1});
   static_assert(s1.sv() == "span");
   REQUIRE(s1.sv() == "span");
 
   auto constexpr buf2 = std::array<char, 5>{'h', 'e', 'l', 'l', 'o'};
-  auto constexpr s2   = make_static(std::span<char const>{buf2});
+  auto constexpr s2   = freeze(std::span<char const>{buf2});
   static_assert(s2.sv() == "hello");
   REQUIRE(s2.sv() == "hello");
 }
 
-TEST_CASE("make_static with constexpr signed char buffers") {
+TEST_CASE("freeze with constexpr signed char buffers") {
   auto constexpr arr = std::array<signed char, 6>{'s', '8', '\0', 'x', 'x', 'x'};
-  auto constexpr s1  = make_static(arr);
+  auto constexpr s1  = freeze(arr);
   static_assert(s1.sv() == "s8");
   REQUIRE(s1.sv() == "s8");
 
-  auto constexpr s3 = make_static(std::span<signed char const>{arr});
+  auto constexpr s3 = freeze(std::span<signed char const>{arr});
   static_assert(s3.sv() == "s8");
   REQUIRE(s3.sv() == "s8");
 }
 
-TEST_CASE("make_static with constexpr unsigned char buffers") {
+TEST_CASE("freeze with constexpr unsigned char buffers") {
   auto constexpr arr = std::array<unsigned char, 6>{'u', '8', '\0', 'x', 'x', 'x'};
-  auto constexpr s1  = make_static(arr);
+  auto constexpr s1  = freeze(arr);
   static_assert(s1.sv() == "u8");
   REQUIRE(s1.sv() == "u8");
 
-  auto constexpr s3 = make_static(std::span<unsigned char const>{arr});
+  auto constexpr s3 = freeze(std::span<unsigned char const>{arr});
   static_assert(s3.sv() == "u8");
   REQUIRE(s3.sv() == "u8");
 }
 
-TEST_CASE("make_static with constexpr std::byte buffers") {
+TEST_CASE("freeze with constexpr std::byte buffers") {
   auto const to_b = [](char c) { return std::byte{static_cast<unsigned char>(c)}; };
 
   auto constexpr arr = std::array<std::byte, 7>{to_b('b'), to_b('y'), to_b('t'), to_b('e'), std::byte{0}, to_b('x'), to_b('x')};
-  auto constexpr s1  = make_static(arr);
+  auto constexpr s1  = freeze(arr);
   REQUIRE(s1.sv() == "byte");
 
-  auto constexpr s3 = make_static(std::span<std::byte const>{arr});
+  auto constexpr s3 = freeze(std::span<std::byte const>{arr});
   static_assert(s3.sv() == "byte");
   REQUIRE(s3.sv() == "byte");
 }
