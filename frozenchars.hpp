@@ -182,6 +182,97 @@ auto constexpr repeat(char const (&str)[N]) noexcept {
   return repeat<Count>(FrozenString{str});
 }
 
+/**
+ * @brief 文字列を指定幅で右寄せした静的文字列を生成する関数
+ *
+ * @tparam Width 右寄せ後の幅
+ * @tparam Fill 埋める文字（デフォルト: 半角スペース）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 右寄せされた静的文字列
+ */
+template <size_t Width, char Fill = ' ', size_t N>
+auto constexpr right(FrozenString<N> const& str) noexcept {
+  auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
+  auto res = FrozenString<OUT_CAP>{};
+
+  auto const out_len = std::max(str.length, Width);
+  auto const left_pad = out_len - str.length;
+
+  for (auto i = 0uz; i < left_pad; ++i) {
+    res.buffer[i] = Fill;
+  }
+  for (auto i = 0uz; i < str.length; ++i) {
+    res.buffer[left_pad + i] = str.buffer[i];
+  }
+
+  res.buffer[out_len] = '\0';
+  res.length = out_len;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを指定幅で右寄せした静的文字列を生成する関数
+ *
+ * @tparam Width 右寄せ後の幅
+ * @tparam Fill 埋める文字（デフォルト: 半角スペース）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 右寄せされた静的文字列
+ */
+template <size_t Width, char Fill = ' ', size_t N>
+auto constexpr right(char const (&str)[N]) noexcept {
+  return right<Width, Fill>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を指定幅で中央寄せした静的文字列を生成する関数
+ *
+ * @tparam Width 中央寄せ後の幅
+ * @tparam Fill 埋める文字（デフォルト: 半角スペース）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 中央寄せされた静的文字列
+ */
+template <size_t Width, char Fill = ' ', size_t N>
+auto constexpr center(FrozenString<N> const& str) noexcept {
+  auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
+  auto res = FrozenString<OUT_CAP>{};
+
+  auto const out_len = std::max(str.length, Width);
+  auto const total_pad = out_len - str.length;
+  auto const left_pad = total_pad / 2;
+  auto const right_pad = total_pad - left_pad;
+
+  for (auto i = 0uz; i < left_pad; ++i) {
+    res.buffer[i] = Fill;
+  }
+  for (auto i = 0uz; i < str.length; ++i) {
+    res.buffer[left_pad + i] = str.buffer[i];
+  }
+  for (auto i = 0uz; i < right_pad; ++i) {
+    res.buffer[left_pad + str.length + i] = Fill;
+  }
+
+  res.buffer[out_len] = '\0';
+  res.length = out_len;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを指定幅で中央寄せした静的文字列を生成する関数
+ *
+ * @tparam Width 中央寄せ後の幅
+ * @tparam Fill 埋める文字（デフォルト: 半角スペース）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 中央寄せされた静的文字列
+ */
+template <size_t Width, char Fill = ' ', size_t N>
+auto constexpr center(char const (&str)[N]) noexcept {
+  return center<Width, Fill>(FrozenString{str});
+}
+
 namespace literals {
 
 /**

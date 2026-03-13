@@ -18,6 +18,45 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 ```
 
+## `repeat`（繰り返し）
+
+`repeat<N>(...)` は、指定した回数だけ文字列を繰り返すスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+auto constexpr r1 = repeat<3>("abc"_ss);  // "abcabcabc"
+auto constexpr r2 = repeat<2>("xyz");     // "xyzxyz"
+```
+
+## `right` / `center`（幅寄せ）
+
+`repeat` と同じく、`FrozenString` と文字列リテラルの両方を受け取るスタンドアロン関数です。
+
+- `right<Width, Fill = ' '>(...)`
+- `center<Width, Fill = ' '>(...)`
+
+`Fill` は省略時に半角スペース（`' '`）になります。
+`Width` が元文字列長より小さい場合は、切り詰めず元文字列をそのまま返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr r1 = right<8>("abc"_ss);      // "     abc"
+auto constexpr r2 = right<8, '.'>("abc");    // ".....abc"
+
+auto constexpr c1 = center<7>("abc"_ss);     // "  abc  "
+auto constexpr c2 = center<8, '-'>("abc");   // "--abc---"
+
+static_assert(r1.sv() == "     abc");
+static_assert(r2.sv() == ".....abc");
+static_assert(c1.sv() == "  abc  ");
+static_assert(c2.sv() == "--abc---");
+```
+
 ## `freeze` 対応型一覧
 
 `freeze` はオーバーロードで入力型ごとに処理されます。主な対応は以下です。
