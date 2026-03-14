@@ -273,6 +273,253 @@ auto constexpr center(char const (&str)[N]) noexcept {
   return center<Width, Fill>(FrozenString{str});
 }
 
+/**
+ * @brief 文字列をすべて大文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 大文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr toupper(FrozenString<N> const& str) noexcept {
+  auto res = str;
+  for (auto i = 0uz; i < res.length; ++i) {
+    auto const c = res.buffer[i];
+    if (c >= 'a' && c <= 'z') {
+      res.buffer[i] = static_cast<char>(c - ('a' - 'A'));
+    }
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをすべて大文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 大文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr toupper(char const (&str)[N]) noexcept {
+  return toupper(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をすべて小文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 小文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr tolower(FrozenString<N> const& str) noexcept {
+  auto res = str;
+  for (auto i = 0uz; i < res.length; ++i) {
+    auto const c = res.buffer[i];
+    if (c >= 'A' && c <= 'Z') {
+      res.buffer[i] = static_cast<char>(c + ('a' - 'A'));
+    }
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをすべて小文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 小文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr tolower(char const (&str)[N]) noexcept {
+  return tolower(FrozenString{str});
+}
+
+/**
+ * @brief 文字列の部分文字列を生成する関数
+ *
+ * @tparam Pos 開始位置
+ * @tparam Len 文字数
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 部分文字列
+ */
+template <size_t Pos, size_t Len, size_t N>
+auto constexpr substr(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<Len + 1>{};
+  auto const actual_len = Pos < str.length ? std::min(Len, str.length - Pos) : 0uz;
+  for (auto i = 0uz; i < actual_len; ++i) {
+    res.buffer[i] = str.buffer[Pos + i];
+  }
+  res.buffer[actual_len] = '\0';
+  res.length = actual_len;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルの部分文字列を生成する関数
+ *
+ * @tparam Pos 開始位置
+ * @tparam Len 文字数
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 部分文字列
+ */
+template <size_t Pos, size_t Len, size_t N>
+auto constexpr substr(char const (&str)[N]) noexcept {
+  return substr<Pos, Len>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列の先頭を大文字に、残りを小文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 先頭大文字・残り小文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr capitalize(FrozenString<N> const& str) noexcept {
+  auto res = tolower(str);
+  if (res.length > 0) {
+    auto const c = res.buffer[0];
+    if (c >= 'a' && c <= 'z') {
+      res.buffer[0] = static_cast<char>(c - ('a' - 'A'));
+    }
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルの先頭を大文字に、残りを小文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 先頭大文字・残り小文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr capitalize(char const (&str)[N]) noexcept {
+  return capitalize(FrozenString{str});
+}
+
+/**
+ * @brief camelCase/PascalCase文字列をsnake_caseに変換した静的文字列を生成する関数
+ * 大文字の前にアンダースコアを挿入し、すべての文字を小文字に変換する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr snake_caseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_snake_case(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 2 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    if (c >= 'A' && c <= 'Z' && i > 0) {
+      res.buffer[offset++] = '_';
+    }
+    res.buffer[offset++] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief camelCase/PascalCase文字列リテラルをsnake_caseに変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr snake_caseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_snake_case(char const (&str)[N]) noexcept {
+  return to_snake_case(FrozenString{str});
+}
+
+/**
+ * @brief snake_case文字列をcamelCaseに変換した静的文字列を生成する関数
+ * アンダースコアを除去し、アンダースコアに続く文字を大文字に変換する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr camelCaseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_camel_case(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto next_upper = false;
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    if (c == '_') {
+      next_upper = true;
+    } else if (next_upper) {
+      res.buffer[offset++] = (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
+      next_upper = false;
+    } else {
+      res.buffer[offset++] = c;
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief snake_case文字列リテラルをcamelCaseに変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr camelCaseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_camel_case(char const (&str)[N]) noexcept {
+  return to_camel_case(FrozenString{str});
+}
+
+/**
+ * @brief snake_case文字列をPascalCaseに変換した静的文字列を生成する関数
+ * アンダースコアを除去し、アンダースコアに続く文字および先頭の文字を大文字に変換する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr PascalCaseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_pascal_case(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto next_upper = true;
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    if (c == '_') {
+      next_upper = true;
+    } else if (next_upper) {
+      res.buffer[offset++] = (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
+      next_upper = false;
+    } else {
+      res.buffer[offset++] = c;
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief snake_case文字列リテラルをPascalCaseに変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr PascalCaseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_pascal_case(char const (&str)[N]) noexcept {
+  return to_pascal_case(FrozenString{str});
+}
+
 namespace literals {
 
 /**

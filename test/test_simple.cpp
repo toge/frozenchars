@@ -186,3 +186,135 @@ TEST_CASE("freeze with constexpr std::byte buffers") {
   static_assert(s3.sv() == "byte");
   REQUIRE(s3.sv() == "byte");
 }
+
+TEST_CASE("toupper") {
+  auto constexpr s1 = toupper("hello"_fs);
+  static_assert(s1.sv() == "HELLO");
+  REQUIRE(s1.sv() == "HELLO");
+
+  auto constexpr s2 = toupper("Hello, World!");
+  static_assert(s2.sv() == "HELLO, WORLD!");
+  REQUIRE(s2.sv() == "HELLO, WORLD!");
+
+  auto constexpr s3 = toupper("ALREADY"_fs);
+  static_assert(s3.sv() == "ALREADY");
+  REQUIRE(s3.sv() == "ALREADY");
+
+  auto constexpr s4 = toupper("abc123xyz"_fs);
+  static_assert(s4.sv() == "ABC123XYZ");
+  REQUIRE(s4.sv() == "ABC123XYZ");
+}
+
+TEST_CASE("tolower") {
+  auto constexpr s1 = tolower("HELLO"_fs);
+  static_assert(s1.sv() == "hello");
+  REQUIRE(s1.sv() == "hello");
+
+  auto constexpr s2 = tolower("Hello, World!");
+  static_assert(s2.sv() == "hello, world!");
+  REQUIRE(s2.sv() == "hello, world!");
+
+  auto constexpr s3 = tolower("already"_fs);
+  static_assert(s3.sv() == "already");
+  REQUIRE(s3.sv() == "already");
+
+  auto constexpr s4 = tolower("ABC123XYZ"_fs);
+  static_assert(s4.sv() == "abc123xyz");
+  REQUIRE(s4.sv() == "abc123xyz");
+}
+
+TEST_CASE("substr") {
+  auto constexpr s1 = substr<0, 5>("Hello, World!"_fs);
+  static_assert(s1.sv() == "Hello");
+  REQUIRE(s1.sv() == "Hello");
+
+  auto constexpr s2 = substr<7, 5>("Hello, World!"_fs);
+  static_assert(s2.sv() == "World");
+  REQUIRE(s2.sv() == "World");
+
+  auto constexpr s3 = substr<0, 5>("Hello, World!");
+  static_assert(s3.sv() == "Hello");
+  REQUIRE(s3.sv() == "Hello");
+
+  // Pos beyond length returns empty
+  auto constexpr s4 = substr<20, 5>("Hello"_fs);
+  static_assert(s4.sv() == "");
+  REQUIRE(s4.sv() == "");
+
+  // Len extends beyond end: truncate to available
+  auto constexpr s5 = substr<3, 10>("Hello"_fs);
+  static_assert(s5.sv() == "lo");
+  REQUIRE(s5.sv() == "lo");
+}
+
+TEST_CASE("capitalize") {
+  auto constexpr s1 = capitalize("hello"_fs);
+  static_assert(s1.sv() == "Hello");
+  REQUIRE(s1.sv() == "Hello");
+
+  auto constexpr s2 = capitalize("hELLO wORLD");
+  static_assert(s2.sv() == "Hello world");
+  REQUIRE(s2.sv() == "Hello world");
+
+  auto constexpr s3 = capitalize("ALREADY"_fs);
+  static_assert(s3.sv() == "Already");
+  REQUIRE(s3.sv() == "Already");
+
+  auto constexpr s4 = capitalize("123abc"_fs);
+  static_assert(s4.sv() == "123abc");
+  REQUIRE(s4.sv() == "123abc");
+}
+
+TEST_CASE("to_snake_case") {
+  auto constexpr s1 = to_snake_case("helloWorld"_fs);
+  static_assert(s1.sv() == "hello_world");
+  REQUIRE(s1.sv() == "hello_world");
+
+  auto constexpr s2 = to_snake_case("HelloWorld");
+  static_assert(s2.sv() == "hello_world");
+  REQUIRE(s2.sv() == "hello_world");
+
+  auto constexpr s3 = to_snake_case("myVariableName"_fs);
+  static_assert(s3.sv() == "my_variable_name");
+  REQUIRE(s3.sv() == "my_variable_name");
+
+  auto constexpr s4 = to_snake_case("already_snake"_fs);
+  static_assert(s4.sv() == "already_snake");
+  REQUIRE(s4.sv() == "already_snake");
+}
+
+TEST_CASE("to_camel_case") {
+  auto constexpr s1 = to_camel_case("hello_world"_fs);
+  static_assert(s1.sv() == "helloWorld");
+  REQUIRE(s1.sv() == "helloWorld");
+
+  auto constexpr s2 = to_camel_case("my_variable_name");
+  static_assert(s2.sv() == "myVariableName");
+  REQUIRE(s2.sv() == "myVariableName");
+
+  auto constexpr s3 = to_camel_case("already"_fs);
+  static_assert(s3.sv() == "already");
+  REQUIRE(s3.sv() == "already");
+
+  auto constexpr s4 = to_camel_case("hello__world"_fs);
+  static_assert(s4.sv() == "helloWorld");
+  REQUIRE(s4.sv() == "helloWorld");
+}
+
+TEST_CASE("to_pascal_case") {
+  auto constexpr s1 = to_pascal_case("hello_world"_fs);
+  static_assert(s1.sv() == "HelloWorld");
+  REQUIRE(s1.sv() == "HelloWorld");
+
+  auto constexpr s2 = to_pascal_case("my_variable_name");
+  static_assert(s2.sv() == "MyVariableName");
+  REQUIRE(s2.sv() == "MyVariableName");
+
+  auto constexpr s3 = to_pascal_case("already"_fs);
+  static_assert(s3.sv() == "Already");
+  REQUIRE(s3.sv() == "Already");
+
+  auto constexpr s4 = to_pascal_case("hello__world"_fs);
+  static_assert(s4.sv() == "HelloWorld");
+  REQUIRE(s4.sv() == "HelloWorld");
+}

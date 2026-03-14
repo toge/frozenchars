@@ -57,6 +57,99 @@ static_assert(c1.sv() == "  abc  ");
 static_assert(c2.sv() == "--abc---");
 ```
 
+## `toupper` / `tolower`（大文字・小文字変換）
+
+ASCII の英字を大文字／小文字に変換するスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr u = toupper("Hello, World!"_fs);  // "HELLO, WORLD!"
+auto constexpr l = tolower("Hello, World!");      // "hello, world!"
+
+static_assert(u.sv() == "HELLO, WORLD!");
+static_assert(l.sv() == "hello, world!");
+```
+
+## `substr`（部分文字列）
+
+`substr<Pos, Len>(...)` は、位置 `Pos` から最大 `Len` 文字を取り出します。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+- `Pos >= length` の場合は空文字列を返します
+- `Pos + Len` が文字列長を超える場合は、末尾まで取り出して返します
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr s1 = substr<7, 5>("Hello, World!"_fs);  // "World"
+auto constexpr s2 = substr<0, 5>("Hello, World!");     // "Hello"
+
+static_assert(s1.sv() == "World");
+static_assert(s2.sv() == "Hello");
+```
+
+## `capitalize`（先頭大文字化）
+
+先頭の文字を大文字、残りを小文字に変換します。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr c = capitalize("hELLO wORLD"_fs);  // "Hello world"
+
+static_assert(c.sv() == "Hello world");
+```
+
+## `to_snake_case`（スネークケース変換）
+
+camelCase または PascalCase をスネークケース（snake_case）に変換します。各大文字の前に `_` を挿入し、すべての文字を小文字にします。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr s1 = to_snake_case("helloWorld"_fs);   // "hello_world"
+auto constexpr s2 = to_snake_case("HelloWorld");      // "hello_world"
+
+static_assert(s1.sv() == "hello_world");
+static_assert(s2.sv() == "hello_world");
+```
+
+## `to_camel_case`（キャメルケース変換）
+
+snake_case をキャメルケース（camelCase）に変換します。`_` を除去し、その直後の文字を大文字にします。先頭は小文字のままです。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr c = to_camel_case("hello_world"_fs);  // "helloWorld"
+
+static_assert(c.sv() == "helloWorld");
+```
+
+## `to_pascal_case`（パスカルケース変換）
+
+snake_case をパスカルケース（PascalCase）に変換します。`_` を除去し、その直後の文字および先頭の文字を大文字にします。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr p = to_pascal_case("hello_world"_fs);  // "HelloWorld"
+
+static_assert(p.sv() == "HelloWorld");
+```
+
 ## `freeze` 対応型一覧
 
 `freeze` はオーバーロードで入力型ごとに処理されます。主な対応は以下です。
