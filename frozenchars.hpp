@@ -273,6 +273,103 @@ auto constexpr center(char const (&str)[N]) noexcept {
   return center<Width, Fill>(FrozenString{str});
 }
 
+/**
+ * @brief 文字列をすべて大文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 大文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr toupper(FrozenString<N> const& str) noexcept {
+  auto res = str;
+  for (auto i = 0uz; i < res.length; ++i) {
+    auto const c = res.buffer[i];
+    if (c >= 'a' && c <= 'z') {
+      res.buffer[i] = static_cast<char>(c - ('a' - 'A'));
+    }
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをすべて大文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 大文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr toupper(char const (&str)[N]) noexcept {
+  return toupper(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をすべて小文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 小文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr tolower(FrozenString<N> const& str) noexcept {
+  auto res = str;
+  for (auto i = 0uz; i < res.length; ++i) {
+    auto const c = res.buffer[i];
+    if (c >= 'A' && c <= 'Z') {
+      res.buffer[i] = static_cast<char>(c + ('a' - 'A'));
+    }
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをすべて小文字に変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 小文字に変換された静的文字列
+ */
+template <size_t N>
+auto constexpr tolower(char const (&str)[N]) noexcept {
+  return tolower(FrozenString{str});
+}
+
+/**
+ * @brief 文字列の部分文字列を生成する関数
+ *
+ * @tparam Pos 開始位置
+ * @tparam Len 文字数
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 部分文字列
+ */
+template <size_t Pos, size_t Len, size_t N>
+auto constexpr substr(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<Len + 1>{};
+  auto const actual_len = Pos < str.length ? std::min(Len, str.length - Pos) : 0uz;
+  for (auto i = 0uz; i < actual_len; ++i) {
+    res.buffer[i] = str.buffer[Pos + i];
+  }
+  res.buffer[actual_len] = '\0';
+  res.length = actual_len;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルの部分文字列を生成する関数
+ *
+ * @tparam Pos 開始位置
+ * @tparam Len 文字数
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 部分文字列
+ */
+template <size_t Pos, size_t Len, size_t N>
+auto constexpr substr(char const (&str)[N]) noexcept {
+  return substr<Pos, Len>(FrozenString{str});
+}
+
 namespace literals {
 
 /**

@@ -186,3 +186,63 @@ TEST_CASE("freeze with constexpr std::byte buffers") {
   static_assert(s3.sv() == "byte");
   REQUIRE(s3.sv() == "byte");
 }
+
+TEST_CASE("toupper") {
+  auto constexpr s1 = toupper("hello"_fs);
+  static_assert(s1.sv() == "HELLO");
+  REQUIRE(s1.sv() == "HELLO");
+
+  auto constexpr s2 = toupper("Hello, World!");
+  static_assert(s2.sv() == "HELLO, WORLD!");
+  REQUIRE(s2.sv() == "HELLO, WORLD!");
+
+  auto constexpr s3 = toupper("ALREADY"_fs);
+  static_assert(s3.sv() == "ALREADY");
+  REQUIRE(s3.sv() == "ALREADY");
+
+  auto constexpr s4 = toupper("abc123xyz"_fs);
+  static_assert(s4.sv() == "ABC123XYZ");
+  REQUIRE(s4.sv() == "ABC123XYZ");
+}
+
+TEST_CASE("tolower") {
+  auto constexpr s1 = tolower("HELLO"_fs);
+  static_assert(s1.sv() == "hello");
+  REQUIRE(s1.sv() == "hello");
+
+  auto constexpr s2 = tolower("Hello, World!");
+  static_assert(s2.sv() == "hello, world!");
+  REQUIRE(s2.sv() == "hello, world!");
+
+  auto constexpr s3 = tolower("already"_fs);
+  static_assert(s3.sv() == "already");
+  REQUIRE(s3.sv() == "already");
+
+  auto constexpr s4 = tolower("ABC123XYZ"_fs);
+  static_assert(s4.sv() == "abc123xyz");
+  REQUIRE(s4.sv() == "abc123xyz");
+}
+
+TEST_CASE("substr") {
+  auto constexpr s1 = substr<0, 5>("Hello, World!"_fs);
+  static_assert(s1.sv() == "Hello");
+  REQUIRE(s1.sv() == "Hello");
+
+  auto constexpr s2 = substr<7, 5>("Hello, World!"_fs);
+  static_assert(s2.sv() == "World");
+  REQUIRE(s2.sv() == "World");
+
+  auto constexpr s3 = substr<0, 5>("Hello, World!");
+  static_assert(s3.sv() == "Hello");
+  REQUIRE(s3.sv() == "Hello");
+
+  // Pos beyond length returns empty
+  auto constexpr s4 = substr<20, 5>("Hello"_fs);
+  static_assert(s4.sv() == "");
+  REQUIRE(s4.sv() == "");
+
+  // Len extends beyond end: truncate to available
+  auto constexpr s5 = substr<3, 10>("Hello"_fs);
+  static_assert(s5.sv() == "lo");
+  REQUIRE(s5.sv() == "lo");
+}
