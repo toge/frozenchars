@@ -300,3 +300,21 @@ TEST_CASE("to_camel_case") {
   static_assert(s4.sv() == "helloWorld");
   REQUIRE(s4.sv() == "helloWorld");
 }
+
+TEST_CASE("to_pascal_case") {
+  auto constexpr s1 = to_pascal_case("hello_world"_fs);
+  static_assert(s1.sv() == "HelloWorld");
+  REQUIRE(s1.sv() == "HelloWorld");
+
+  auto constexpr s2 = to_pascal_case("my_variable_name");
+  static_assert(s2.sv() == "MyVariableName");
+  REQUIRE(s2.sv() == "MyVariableName");
+
+  auto constexpr s3 = to_pascal_case("already"_fs);
+  static_assert(s3.sv() == "Already");
+  REQUIRE(s3.sv() == "Already");
+
+  auto constexpr s4 = to_pascal_case("hello__world"_fs);
+  static_assert(s4.sv() == "HelloWorld");
+  REQUIRE(s4.sv() == "HelloWorld");
+}

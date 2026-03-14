@@ -479,6 +479,47 @@ auto constexpr to_camel_case(char const (&str)[N]) noexcept {
   return to_camel_case(FrozenString{str});
 }
 
+/**
+ * @brief snake_case文字列をPascalCaseに変換した静的文字列を生成する関数
+ * アンダースコアを除去し、アンダースコアに続く文字および先頭の文字を大文字に変換する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr PascalCaseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_pascal_case(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto next_upper = true;
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    if (c == '_') {
+      next_upper = true;
+    } else if (next_upper) {
+      res.buffer[offset++] = (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
+      next_upper = false;
+    } else {
+      res.buffer[offset++] = c;
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief snake_case文字列リテラルをPascalCaseに変換した静的文字列を生成する関数
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr PascalCaseに変換された静的文字列
+ */
+template <size_t N>
+auto constexpr to_pascal_case(char const (&str)[N]) noexcept {
+  return to_pascal_case(FrozenString{str});
+}
+
 namespace literals {
 
 /**
