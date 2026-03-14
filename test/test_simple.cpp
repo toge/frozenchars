@@ -246,3 +246,57 @@ TEST_CASE("substr") {
   static_assert(s5.sv() == "lo");
   REQUIRE(s5.sv() == "lo");
 }
+
+TEST_CASE("capitalize") {
+  auto constexpr s1 = capitalize("hello"_fs);
+  static_assert(s1.sv() == "Hello");
+  REQUIRE(s1.sv() == "Hello");
+
+  auto constexpr s2 = capitalize("hELLO wORLD");
+  static_assert(s2.sv() == "Hello world");
+  REQUIRE(s2.sv() == "Hello world");
+
+  auto constexpr s3 = capitalize("ALREADY"_fs);
+  static_assert(s3.sv() == "Already");
+  REQUIRE(s3.sv() == "Already");
+
+  auto constexpr s4 = capitalize("123abc"_fs);
+  static_assert(s4.sv() == "123abc");
+  REQUIRE(s4.sv() == "123abc");
+}
+
+TEST_CASE("to_snake_case") {
+  auto constexpr s1 = to_snake_case("helloWorld"_fs);
+  static_assert(s1.sv() == "hello_world");
+  REQUIRE(s1.sv() == "hello_world");
+
+  auto constexpr s2 = to_snake_case("HelloWorld");
+  static_assert(s2.sv() == "hello_world");
+  REQUIRE(s2.sv() == "hello_world");
+
+  auto constexpr s3 = to_snake_case("myVariableName"_fs);
+  static_assert(s3.sv() == "my_variable_name");
+  REQUIRE(s3.sv() == "my_variable_name");
+
+  auto constexpr s4 = to_snake_case("already_snake"_fs);
+  static_assert(s4.sv() == "already_snake");
+  REQUIRE(s4.sv() == "already_snake");
+}
+
+TEST_CASE("to_camel_case") {
+  auto constexpr s1 = to_camel_case("hello_world"_fs);
+  static_assert(s1.sv() == "helloWorld");
+  REQUIRE(s1.sv() == "helloWorld");
+
+  auto constexpr s2 = to_camel_case("my_variable_name");
+  static_assert(s2.sv() == "myVariableName");
+  REQUIRE(s2.sv() == "myVariableName");
+
+  auto constexpr s3 = to_camel_case("already"_fs);
+  static_assert(s3.sv() == "already");
+  REQUIRE(s3.sv() == "already");
+
+  auto constexpr s4 = to_camel_case("hello__world"_fs);
+  static_assert(s4.sv() == "helloWorld");
+  REQUIRE(s4.sv() == "helloWorld");
+}
