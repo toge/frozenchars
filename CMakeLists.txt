@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(template_cpp LANGUAGES CXX)
 
+set(FROZENCHARS_VERSION "0.1.0")
+
 ## add stdc++ compiler flag
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++26" COMPILER_SUPPORTS_CXX26)
@@ -52,7 +54,50 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include_directories(.)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+add_library(frozenchars INTERFACE)
+add_library(frozenchars::frozenchars ALIAS frozenchars)
+
+target_compile_features(frozenchars INTERFACE ${STD_CPP})
+target_include_directories(frozenchars
+    INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+install(TARGETS frozenchars
+    EXPORT frozencharsTargets
+)
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/frozenchars.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/frozencharsConfigVersion.cmake"
+    VERSION ${FROZENCHARS_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/frozencharsConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/frozencharsConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/frozencharsConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/frozencharsConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
+)
+
+install(EXPORT frozencharsTargets
+    FILE frozencharsTargets.cmake
+    NAMESPACE frozenchars::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
+)
 
 enable_testing()
 add_subdirectory(test)

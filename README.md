@@ -233,6 +233,16 @@ static_assert(p.sv() == "HelloWorld");
 - `build.sh`
 - `test.sh`
 
+## インストール / パッケージ生成
+
+`CMake` の `install`に対応しています。
+
+```
+cmake --install build --prefix ./install
+```
+
+インストール先のディレクトリには `frozenchars.hpp` と `find_package(frozenchars CONFIG)` 用の CMake 設定が含まれます。
+
 ## ライセンス
 
 MIT License
