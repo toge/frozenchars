@@ -75,10 +75,12 @@ static_assert(l.sv() == "hello, world!");
 
 ## `substr`（部分文字列）
 
-`substr<Pos, Len>(...)` は、位置 `Pos` から最大 `Len` 文字を取り出します。`FrozenString` と文字列リテラルの両方を受け取ります。
+`substr<Pos, Len>(...)` は部分文字列を取り出します。`FrozenString` と文字列リテラルの両方を受け取ります。
 
 - `Pos >= length` の場合は空文字列を返します
-- `Pos + Len` が文字列長を超える場合は、末尾まで取り出して返します
+- `Len > 0` の場合は、位置 `Pos` から右へ最大 `Len` 文字を返します
+- `Len < 0` の場合は、位置 `Pos` の直前から左へ最大 `abs(Len)` 文字を返します
+- 取り出し範囲が文字列長をはみ出す場合は、利用可能な範囲に切り詰めます
 
 ```cpp
 #include "frozenchars.hpp"
@@ -87,9 +89,68 @@ using namespace frozenchars::literals;
 
 auto constexpr s1 = substr<7, 5>("Hello, World!"_fs);  // "World"
 auto constexpr s2 = substr<0, 5>("Hello, World!");     // "Hello"
+auto constexpr s3 = substr<5, -5>("Hello, World!");    // "Hello"
 
 static_assert(s1.sv() == "World");
 static_assert(s2.sv() == "Hello");
+static_assert(s3.sv() == "Hello");
+```
+
+## `split`（区切りで分割）
+
+`split(...)` は内部で `split_count(...)` を呼び出し、トークン数に合わせた `std::vector<FrozenString<...>>` を返します。1回の呼び出しで分割まで完了します。
+
+従来どおり `split<Count>(...)` も使え、こちらは `std::array<FrozenString<...>, Count>` を返します（`Count` が大きい場合の余りは空文字列）。
+
+区切り文字の判定はデフォルトで ASCII whitespace（半角スペース、タブ、改行など）ですが、`split<is_delim>(...)` のようにテンプレート引数で判定関数を渡せます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto const parts = split("  alpha  beta\tgamma\n");
+
+constexpr bool is_comma(char c) noexcept { return c == ','; }
+auto const csv_parts = split<is_comma>("alpha,,beta,gamma");
+
+auto constexpr count = split_count("  alpha  beta\tgamma\n");
+auto constexpr fixed = split<count>("  alpha  beta\tgamma\n"_fs);
+
+static_assert(count == 3);
+static_assert(fixed[0].sv() == "alpha");
+static_assert(fixed[1].sv() == "beta");
+static_assert(fixed[2].sv() == "gamma");
+
+// parts.size() == 3, csv_parts.size() == 3
+```
+
+## `split_ints`（区切りで `int` 列へ変換）
+
+`split_ints(...)` は内部で `split_count(...)` を呼び出し、`std::vector<int>` を返します。1回の呼び出しで分割と数値変換が完了します。
+
+`split_ints<Count>(...)` も引き続き利用可能で、こちらは `std::array<int, Count>` を返します（余りは `0`）。
+
+区切り文字の判定は `split_ints<is_delim>(...)` のようにテンプレート引数で変更できます。数値でないトークンや `int` 範囲外の値は、ランタイムでは例外となり、定数評価ではエラーになります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto const values = split_ints("10 -20 +30");
+
+constexpr bool is_semicolon(char c) noexcept { return c == ';'; }
+auto const values2 = split_ints<is_semicolon>("10;;-20;+30");
+
+auto constexpr count = split_count("10 -20 +30");
+auto constexpr fixed = split_ints<count>("10 -20 +30"_fs);
+
+static_assert(fixed[0] == 10);
+static_assert(fixed[1] == -20);
+static_assert(fixed[2] == 30);
+
+// values.size() == 3, values2.size() == 3
 ```
 
 ## `capitalize`（先頭大文字化）

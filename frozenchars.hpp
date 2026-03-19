@@ -8,6 +8,8 @@
 #include <string_view>
 #include <algorithm>
 #include <concepts>
+#include <limits>
+#include <stdexcept>
 #include <type_traits>
 #include <ranges>
 
@@ -339,17 +341,28 @@ auto constexpr tolower(char const (&str)[N]) noexcept {
  * @brief 文字列の部分文字列を生成する関数
  *
  * @tparam Pos 開始位置
- * @tparam Len 文字数
+ * @tparam Len 文字数。負の場合は Pos の左側から abs(Len) 文字
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @return auto constexpr 部分文字列
  */
-template <size_t Pos, size_t Len, size_t N>
+template <size_t Pos, std::ptrdiff_t Len, size_t N>
 auto constexpr substr(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<Len + 1>{};
-  auto const actual_len = Pos < str.length ? std::min(Len, str.length - Pos) : 0uz;
+  auto constexpr REQUESTED_LEN = Len >= 0 ? static_cast<size_t>(Len) : static_cast<size_t>(-Len);
+  auto res = FrozenString<REQUESTED_LEN + 1>{};
+  auto const anchor = std::min(Pos, str.length);
+  auto start = anchor;
+  auto actual_len = 0uz;
+
+  if constexpr (Len >= 0) {
+    actual_len = anchor < str.length ? std::min(REQUESTED_LEN, str.length - anchor) : 0uz;
+  } else {
+    start = anchor > REQUESTED_LEN ? anchor - REQUESTED_LEN : 0uz;
+    actual_len = anchor - start;
+  }
+
   for (auto i = 0uz; i < actual_len; ++i) {
-    res.buffer[i] = str.buffer[Pos + i];
+    res.buffer[i] = str.buffer[start + i];
   }
   res.buffer[actual_len] = '\0';
   res.length = actual_len;
@@ -360,14 +373,324 @@ auto constexpr substr(FrozenString<N> const& str) noexcept {
  * @brief 文字列リテラルの部分文字列を生成する関数
  *
  * @tparam Pos 開始位置
- * @tparam Len 文字数
+ * @tparam Len 文字数。負の場合は Pos の左側から abs(Len) 文字
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
  * @return auto constexpr 部分文字列
  */
-template <size_t Pos, size_t Len, size_t N>
+template <size_t Pos, std::ptrdiff_t Len, size_t N>
 auto constexpr substr(char const (&str)[N]) noexcept {
   return substr<Pos, Len>(FrozenString{str});
+}
+
+namespace detail {
+
+  /**
+   * @brief ASCII 空白文字かどうかを判定する関数
+   *
+   * @param c 判定する文字
+   * @return auto constexpr 空白なら true
+   */
+  auto constexpr is_whitespace(char c) noexcept {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+  }
+
+  /**
+   * @brief 区切り判定関数でトークン数を数える関数
+   *
+   * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+   * @tparam N 文字列の長さ (終端文字'\0'を含む)
+   * @param str 対象文字列
+   * @return auto constexpr トークン数
+   */
+  template <auto IsDelimiter = is_whitespace, size_t N>
+    requires std::predicate<decltype(IsDelimiter), char>
+  auto constexpr split_count_impl(FrozenString<N> const& str) noexcept {
+    auto count = 0uz;
+    auto in_token = false;
+    for (auto i = 0uz; i < str.length; ++i) {
+      if (IsDelimiter(str.buffer[i])) {
+        in_token = false;
+      } else if (!in_token) {
+        in_token = true;
+        ++count;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * @brief 整数字句を int に変換する関数
+   *
+   * @tparam N 文字列の長さ (終端文字'\0'を含む)
+   * @param token 変換するトークン
+   * @return auto constexpr 変換結果
+   */
+  template <size_t N>
+  auto constexpr parse_int_token(FrozenString<N> const& token) {
+    if (token.length == 0) {
+      throw std::invalid_argument("split_ints: empty token");
+    }
+
+    auto pos = 0uz;
+    auto negative = false;
+    if (token.buffer[pos] == '+' || token.buffer[pos] == '-') {
+      negative = token.buffer[pos] == '-';
+      ++pos;
+    }
+    if (pos == token.length) {
+      throw std::invalid_argument("split_ints: sign without digits");
+    }
+
+    auto value = 0ULL;
+    auto constexpr MAX_INT = static_cast<unsigned long long>(std::numeric_limits<int>::max());
+    auto constexpr NEGATIVE_LIMIT = MAX_INT + 1ULL;
+    auto const limit = negative ? NEGATIVE_LIMIT : MAX_INT;
+
+    for (; pos < token.length; ++pos) {
+      auto const c = token.buffer[pos];
+      if (c < '0' || c > '9') {
+        throw std::invalid_argument("split_ints: non-numeric token");
+      }
+
+      auto const digit = static_cast<unsigned long long>(c - '0');
+      if (value > (limit - digit) / 10ULL) {
+        throw std::out_of_range("split_ints: integer out of range");
+      }
+      value = value * 10ULL + digit;
+    }
+
+    if (negative) {
+      if (value == NEGATIVE_LIMIT) {
+        return std::numeric_limits<int>::min();
+      }
+      return -static_cast<int>(value);
+    }
+
+    return static_cast<int>(value);
+  }
+
+}
+
+/**
+ * @brief 文字列を区切り判定関数で分割したときのトークン数を返す関数
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr トークン数
+ */
+template <auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split_count(FrozenString<N> const& str) noexcept {
+  return detail::split_count_impl<IsDelimiter>(str);
+}
+
+/**
+ * @brief 文字列リテラルを区切り判定関数で分割したときのトークン数を返す関数
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr トークン数
+ */
+template <auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split_count(char const (&str)[N]) noexcept {
+  return split_count<IsDelimiter>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を区切り判定関数で分割して std::array に変換する関数
+ * `Count` より多いトークンは切り捨て、足りない要素は空文字列のまま残る
+ *
+ * @tparam Count 返却する配列の要素数
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 分割結果の配列
+ */
+template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split(FrozenString<N> const& str) noexcept {
+  auto res = std::array<FrozenString<N>, Count>{};
+  for (auto& token : res) {
+    token.length = 0;
+  }
+  auto const token_count = split_count<IsDelimiter>(str);
+  auto const token_limit = std::min(Count, token_count);
+  auto src = 0uz;
+  auto dst = 0uz;
+
+  while (src < str.length && dst < token_limit) {
+    while (src < str.length && IsDelimiter(str.buffer[src])) {
+      ++src;
+    }
+    if (src >= str.length) {
+      break;
+    }
+
+    auto token_len = 0uz;
+    while (src < str.length && !IsDelimiter(str.buffer[src])) {
+      res[dst].buffer[token_len++] = str.buffer[src++];
+    }
+    res[dst].buffer[token_len] = '\0';
+    res[dst].length = token_len;
+    ++dst;
+  }
+
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを区切り判定関数で分割して std::array に変換する関数
+ * `Count` より多いトークンは切り捨て、足りない要素は空文字列のまま残る
+ *
+ * @tparam Count 返却する配列の要素数
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 分割結果の配列
+ */
+template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split(char const (&str)[N]) noexcept {
+  return split<Count, IsDelimiter>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで結果を返す関数
+ * split_count(...) を内部で呼び出して、必要分までトークンを格納する
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 分割結果の配列（未使用要素は空文字）
+ */
+template <auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split(FrozenString<N> const& str) noexcept {
+  auto res = std::array<FrozenString<N>, N>{};
+  for (auto& token : res) {
+    token.length = 0;
+  }
+
+  auto const token_count = split_count<IsDelimiter>(str);
+  auto src = 0uz;
+  auto dst = 0uz;
+
+  while (src < str.length && dst < token_count) {
+    while (src < str.length && IsDelimiter(str.buffer[src])) {
+      ++src;
+    }
+    if (src >= str.length) {
+      break;
+    }
+
+    auto token_len = 0uz;
+    while (src < str.length && !IsDelimiter(str.buffer[src])) {
+      res[dst].buffer[token_len++] = str.buffer[src++];
+    }
+    res[dst].buffer[token_len] = '\0';
+    res[dst].length = token_len;
+    ++dst;
+  }
+
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを区切り判定関数で分割し、1回の呼び出しで結果を返す関数
+ * split_count(...) を内部で呼び出して、必要分までトークンを格納する
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 分割結果の配列（未使用要素は空文字）
+ */
+template <auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split(char const (&str)[N]) noexcept {
+  return split<IsDelimiter>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を区切り判定関数で分割して std::array<int, Count> に変換する関数
+ * `Count` より多いトークンは切り捨て、足りない要素は 0 のまま残る
+ *
+ * @tparam Count 返却する配列の要素数
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 分割・数値変換結果の配列
+ */
+template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split_ints(FrozenString<N> const& str) {
+  auto res = std::array<int, Count>{};
+  auto const tokens = split<Count, IsDelimiter>(str);
+  for (auto i = 0uz; i < Count; ++i) {
+    if (tokens[i].length == 0) {
+      continue;
+    }
+    res[i] = detail::parse_int_token(tokens[i]);
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを区切り判定関数で分割して std::array<int, Count> に変換する関数
+ * `Count` より多いトークンは切り捨て、足りない要素は 0 のまま残る
+ *
+ * @tparam Count 返却する配列の要素数
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 分割・数値変換結果の配列
+ */
+template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split_ints(char const (&str)[N]) {
+  return split_ints<Count, IsDelimiter>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで int 配列へ変換する関数
+ * split_count(...) を内部で呼び出して、必要分まで数値変換する
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 分割・数値変換結果の配列（未使用要素は0）
+ */
+template <auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split_ints(FrozenString<N> const& str) {
+  auto res = std::array<int, N>{};
+  auto const tokens = split<IsDelimiter>(str);
+  auto const token_count = split_count<IsDelimiter>(str);
+  for (auto i = 0uz; i < token_count; ++i) {
+    if (tokens[i].length == 0) {
+      continue;
+    }
+    res[i] = detail::parse_int_token(tokens[i]);
+  }
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを区切り判定関数で分割し、1回の呼び出しで int 配列へ変換する関数
+ * split_count(...) を内部で呼び出して、必要分まで数値変換する
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 分割・数値変換結果の配列（未使用要素は0）
+ */
+template <auto IsDelimiter = detail::is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto constexpr split_ints(char const (&str)[N]) {
+  return split_ints<IsDelimiter>(FrozenString{str});
 }
 
 /**

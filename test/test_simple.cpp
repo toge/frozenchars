@@ -5,6 +5,18 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+namespace {
+
+constexpr bool is_comma(char c) noexcept {
+  return c == ',';
+}
+
+constexpr bool is_semicolon(char c) noexcept {
+  return c == ';';
+}
+
+}
+
 TEST_CASE("simple string") {
   auto constexpr star = "*"_fs;
 
@@ -245,6 +257,122 @@ TEST_CASE("substr") {
   auto constexpr s5 = substr<3, 10>("Hello"_fs);
   static_assert(s5.sv() == "lo");
   REQUIRE(s5.sv() == "lo");
+
+  // Negative Len extracts to the left of Pos
+  auto constexpr s6 = substr<5, -5>("Hello, World!"_fs);
+  static_assert(s6.sv() == "Hello");
+  REQUIRE(s6.sv() == "Hello");
+
+  auto constexpr s7 = substr<7, -2>("Hello, World!");
+  static_assert(s7.sv() == ", ");
+  REQUIRE(s7.sv() == ", ");
+
+  auto constexpr s8 = substr<3, -10>("Hello"_fs);
+  static_assert(s8.sv() == "Hel");
+  REQUIRE(s8.sv() == "Hel");
+}
+
+TEST_CASE("split") {
+  auto constexpr count = split_count("  alpha  beta\tgamma\n");
+  static_assert(count == 3);
+  REQUIRE(count == 3);
+
+  auto constexpr parts = split<count>("  alpha  beta\tgamma\n"_fs);
+  static_assert(parts[0].sv() == "alpha");
+  static_assert(parts[1].sv() == "beta");
+  static_assert(parts[2].sv() == "gamma");
+  REQUIRE(parts[0].sv() == "alpha");
+  REQUIRE(parts[1].sv() == "beta");
+  REQUIRE(parts[2].sv() == "gamma");
+
+  auto constexpr padded = split<4>("one two");
+  static_assert(padded[0].sv() == "one");
+  static_assert(padded[1].sv() == "two");
+  static_assert(padded[2].sv() == "");
+  static_assert(padded[3].sv() == "");
+  REQUIRE(padded[0].sv() == "one");
+  REQUIRE(padded[1].sv() == "two");
+  REQUIRE(padded[2].sv() == "");
+  REQUIRE(padded[3].sv() == "");
+
+  auto constexpr empty_count = split_count(""_fs);
+  static_assert(empty_count == 0);
+  REQUIRE(empty_count == 0);
+
+  auto constexpr empty = split<0>(""_fs);
+  static_assert(empty.size() == 0);
+  REQUIRE(empty.size() == 0);
+}
+
+TEST_CASE("split with custom delimiter predicate") {
+  auto constexpr count = split_count<is_comma>("alpha,,beta,gamma");
+  static_assert(count == 3);
+  REQUIRE(count == 3);
+
+  auto constexpr parts = split<count, is_comma>("alpha,,beta,gamma"_fs);
+  static_assert(parts[0].sv() == "alpha");
+  static_assert(parts[1].sv() == "beta");
+  static_assert(parts[2].sv() == "gamma");
+  REQUIRE(parts[0].sv() == "alpha");
+  REQUIRE(parts[1].sv() == "beta");
+  REQUIRE(parts[2].sv() == "gamma");
+
+  auto constexpr padded = split<4, is_comma>("a,b");
+  static_assert(padded[0].sv() == "a");
+  static_assert(padded[1].sv() == "b");
+  static_assert(padded[2].sv() == "");
+  static_assert(padded[3].sv() == "");
+  REQUIRE(padded[0].sv() == "a");
+  REQUIRE(padded[1].sv() == "b");
+  REQUIRE(padded[2].sv() == "");
+  REQUIRE(padded[3].sv() == "");
+}
+
+TEST_CASE("split_ints") {
+  auto constexpr count = split_count("  10  -20\t+30\n");
+  static_assert(count == 3);
+  REQUIRE(count == 3);
+
+  auto constexpr values = split_ints("  10  -20\t+30\n"_fs);
+  static_assert(values[0] == 10);
+  static_assert(values[1] == -20);
+  static_assert(values[2] == 30);
+  REQUIRE(values[0] == 10);
+  REQUIRE(values[1] == -20);
+  REQUIRE(values[2] == 30);
+
+  auto constexpr padded = split_ints("1 2");
+  static_assert(padded[0] == 1);
+  static_assert(padded[1] == 2);
+  REQUIRE(padded[0] == 1);
+  REQUIRE(padded[1] == 2);
+
+  auto constexpr min_value = split_ints("-2147483648");
+  static_assert(min_value[0] == std::numeric_limits<int>::min());
+  REQUIRE(min_value[0] == std::numeric_limits<int>::min());
+
+  REQUIRE_THROWS_AS(split_ints("abc"), std::invalid_argument);
+  REQUIRE_THROWS_AS(split_ints("2147483648"), std::out_of_range);
+}
+
+TEST_CASE("split_ints with custom delimiter predicate") {
+  auto constexpr values = split_ints<is_semicolon>("10;;-20;+30");
+  static_assert(values[0] == 10);
+  static_assert(values[1] == -20);
+  static_assert(values[2] == 30);
+  static_assert(values[3] == 0);
+  REQUIRE(values[0] == 10);
+  REQUIRE(values[1] == -20);
+  REQUIRE(values[2] == 30);
+  REQUIRE(values[3] == 0);
+
+  auto constexpr csv = split_ints<is_comma>("1,-2,+3");
+  static_assert(csv[0] == 1);
+  static_assert(csv[1] == -2);
+  static_assert(csv[2] == 3);
+  REQUIRE(csv[0] == 1);
+  REQUIRE(csv[1] == -2);
+  REQUIRE(csv[2] == 3);
 }
 
 TEST_CASE("capitalize") {
