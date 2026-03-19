@@ -543,22 +543,6 @@ auto constexpr split(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルを区切り判定関数で分割して std::array に変換する関数
- * `Count` より多いトークンは切り捨て、足りない要素は空文字列のまま残る
- *
- * @tparam Count 返却する配列の要素数
- * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
- * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
- * @param str 対象文字列リテラル
- * @return auto constexpr 分割結果の配列
- */
-template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
-  requires std::predicate<decltype(IsDelimiter), char>
-auto constexpr split(char const (&str)[N]) noexcept {
-  return split<Count, IsDelimiter>(FrozenString{str});
-}
-
-/**
  * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで結果を返す関数
  * split_count(...) を内部で呼び出して、必要分までトークンを格納する
  *
@@ -612,46 +596,6 @@ template <auto IsDelimiter = detail::is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
 auto constexpr split(char const (&str)[N]) noexcept {
   return split<IsDelimiter>(FrozenString{str});
-}
-
-/**
- * @brief 文字列を区切り判定関数で分割して std::array<int, Count> に変換する関数
- * `Count` より多いトークンは切り捨て、足りない要素は 0 のまま残る
- *
- * @tparam Count 返却する配列の要素数
- * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
- * @tparam N 文字列の長さ (終端文字'\0'を含む)
- * @param str 対象文字列
- * @return auto constexpr 分割・数値変換結果の配列
- */
-template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
-  requires std::predicate<decltype(IsDelimiter), char>
-auto constexpr split_ints(FrozenString<N> const& str) {
-  auto res = std::array<int, Count>{};
-  auto const tokens = split<Count, IsDelimiter>(str);
-  for (auto i = 0uz; i < Count; ++i) {
-    if (tokens[i].length == 0) {
-      continue;
-    }
-    res[i] = detail::parse_int_token(tokens[i]);
-  }
-  return res;
-}
-
-/**
- * @brief 文字列リテラルを区切り判定関数で分割して std::array<int, Count> に変換する関数
- * `Count` より多いトークンは切り捨て、足りない要素は 0 のまま残る
- *
- * @tparam Count 返却する配列の要素数
- * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
- * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
- * @param str 対象文字列リテラル
- * @return auto constexpr 分割・数値変換結果の配列
- */
-template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
-  requires std::predicate<decltype(IsDelimiter), char>
-auto constexpr split_ints(char const (&str)[N]) {
-  return split_ints<Count, IsDelimiter>(FrozenString{str});
 }
 
 /**

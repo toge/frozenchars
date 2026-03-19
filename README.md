@@ -109,20 +109,16 @@ static_assert(s3.sv() == "Hello");
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto const parts = split("  alpha  beta\tgamma\n");
-
-constexpr bool is_comma(char c) noexcept { return c == ','; }
-auto const csv_parts = split<is_comma>("alpha,,beta,gamma");
-
 auto constexpr count = split_count("  alpha  beta\tgamma\n");
-auto constexpr fixed = split<count>("  alpha  beta\tgamma\n"_fs);
-
 static_assert(count == 3);
+
+auto constexpr fixed = split("  alpha  beta\tgamma\n"_fs);
 static_assert(fixed[0].sv() == "alpha");
 static_assert(fixed[1].sv() == "beta");
 static_assert(fixed[2].sv() == "gamma");
 
-// parts.size() == 3, csv_parts.size() == 3
+constexpr bool is_comma(char c) noexcept { return c == ','; }
+auto const values = split<is_comma>("alpha,,beta,gamma");
 ```
 
 ## `split_ints`（区切りで `int` 列へ変換）
@@ -138,19 +134,16 @@ static_assert(fixed[2].sv() == "gamma");
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto const values = split_ints("10 -20 +30");
-
-constexpr bool is_semicolon(char c) noexcept { return c == ';'; }
-auto const values2 = split_ints<is_semicolon>("10;;-20;+30");
-
 auto constexpr count = split_count("10 -20 +30");
-auto constexpr fixed = split_ints<count>("10 -20 +30"_fs);
+static_assert(count == 3);
 
+auto constexpr fixed = split_ints("10 -20 +30"_fs);
 static_assert(fixed[0] == 10);
 static_assert(fixed[1] == -20);
 static_assert(fixed[2] == 30);
 
-// values.size() == 3, values2.size() == 3
+constexpr bool is_semicolon(char c) noexcept { return c == ';'; }
+auto const values = split_ints<is_semicolon>("10;;-20;+30");
 ```
 
 ## `capitalize`（先頭大文字化）

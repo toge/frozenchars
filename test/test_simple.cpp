@@ -277,7 +277,7 @@ TEST_CASE("split") {
   static_assert(count == 3);
   REQUIRE(count == 3);
 
-  auto constexpr parts = split<count>("  alpha  beta\tgamma\n"_fs);
+  auto constexpr parts = split("  alpha  beta\tgamma\n"_fs);
   static_assert(parts[0].sv() == "alpha");
   static_assert(parts[1].sv() == "beta");
   static_assert(parts[2].sv() == "gamma");
@@ -285,15 +285,11 @@ TEST_CASE("split") {
   REQUIRE(parts[1].sv() == "beta");
   REQUIRE(parts[2].sv() == "gamma");
 
-  auto constexpr padded = split<4>("one two");
+  auto constexpr padded = split("one two");
   static_assert(padded[0].sv() == "one");
   static_assert(padded[1].sv() == "two");
-  static_assert(padded[2].sv() == "");
-  static_assert(padded[3].sv() == "");
   REQUIRE(padded[0].sv() == "one");
   REQUIRE(padded[1].sv() == "two");
-  REQUIRE(padded[2].sv() == "");
-  REQUIRE(padded[3].sv() == "");
 
   auto constexpr empty_count = split_count(""_fs);
   static_assert(empty_count == 0);
@@ -302,30 +298,6 @@ TEST_CASE("split") {
   auto constexpr empty = split<0>(""_fs);
   static_assert(empty.size() == 0);
   REQUIRE(empty.size() == 0);
-}
-
-TEST_CASE("split with custom delimiter predicate") {
-  auto constexpr count = split_count<is_comma>("alpha,,beta,gamma");
-  static_assert(count == 3);
-  REQUIRE(count == 3);
-
-  auto constexpr parts = split<count, is_comma>("alpha,,beta,gamma"_fs);
-  static_assert(parts[0].sv() == "alpha");
-  static_assert(parts[1].sv() == "beta");
-  static_assert(parts[2].sv() == "gamma");
-  REQUIRE(parts[0].sv() == "alpha");
-  REQUIRE(parts[1].sv() == "beta");
-  REQUIRE(parts[2].sv() == "gamma");
-
-  auto constexpr padded = split<4, is_comma>("a,b");
-  static_assert(padded[0].sv() == "a");
-  static_assert(padded[1].sv() == "b");
-  static_assert(padded[2].sv() == "");
-  static_assert(padded[3].sv() == "");
-  REQUIRE(padded[0].sv() == "a");
-  REQUIRE(padded[1].sv() == "b");
-  REQUIRE(padded[2].sv() == "");
-  REQUIRE(padded[3].sv() == "");
 }
 
 TEST_CASE("split_ints") {
