@@ -121,16 +121,18 @@ constexpr bool is_comma(char c) noexcept { return c == ','; }
 auto const values = split<is_comma>("alpha,,beta,gamma");
 ```
 
-## `split_ints`（区切りで整数列へ変換）
+## `split_numbers`（区切りで数値列へ変換）
 
-`split_ints(...)` は内部で `split_count(...)` を呼び出し、`std::array<整数型, N>` を返します（未使用要素は `0`）。
+`split_numbers(...)` は内部で `split_count(...)` を呼び出し、`std::array<数値型, N>` を返します（未使用要素は `0`）。
+
+`Int` には整数型だけでなく `float` / `double` も指定できます。
 
 区切り文字判定関数と数値型はテンプレート引数で指定できます。
 
-- `split_ints(str)` : 既定（空白区切り + `int`）
-- `split_ints<Int>(str)` : 空白区切り + 指定整数型
-- `split_ints<is_delim>(str)` : 指定区切り + `int`
-- `split_ints<is_delim, Int>(str)` : 指定区切り + 指定整数型
+- `split_numbers(str)` : 既定（空白区切り + `int`）
+- `split_numbers<Int>(str)` : 空白区切り + 指定数値型
+- `split_numbers<is_delim>(str)` : 指定区切り + `int`
+- `split_numbers<is_delim, Int>(str)` : 指定区切り + 指定数値型
 
 数値でないトークンや、指定した整数型の範囲外の値は、ランタイムでは例外となり、定数評価ではエラーになります。
 
@@ -142,23 +144,33 @@ using namespace frozenchars::literals;
 auto constexpr count = split_count("10 -20 +30");
 static_assert(count == 3);
 
-auto constexpr fixed = split_ints("10 -20 +30"_fs);
+auto constexpr fixed = split_numbers("10 -20 +30"_fs);
 static_assert(fixed[0] == 10);
 static_assert(fixed[1] == -20);
 static_assert(fixed[2] == 30);
 
-auto constexpr i64_values = split_ints<long long>("9223372036854775807 -9223372036854775808");
+auto constexpr i64_values = split_numbers<long long>("9223372036854775807 -9223372036854775808");
 static_assert(i64_values[0] == std::numeric_limits<long long>::max());
 static_assert(i64_values[1] == std::numeric_limits<long long>::min());
 
+auto constexpr fvalues = split_numbers<float>("1.5 -2.25 +3.0");
+static_assert(fvalues[0] == 1.5f);
+static_assert(fvalues[1] == -2.25f);
+static_assert(fvalues[2] == 3.0f);
+
 constexpr bool is_semicolon(char c) noexcept { return c == ';'; }
-auto const values = split_ints<is_semicolon>("10;;-20;+30");
+auto const values = split_numbers<is_semicolon>("10;;-20;+30");
 
 constexpr bool is_comma(char c) noexcept { return c == ','; }
-auto constexpr uvalues = split_ints<is_comma, unsigned long>("1,2,3");
+auto constexpr uvalues = split_numbers<is_comma, unsigned long>("1,2,3");
 static_assert(uvalues[0] == 1ul);
 static_assert(uvalues[1] == 2ul);
 static_assert(uvalues[2] == 3ul);
+
+auto constexpr dvalues = split_numbers<is_comma, double>("1e2,-2.5e1,3.125");
+static_assert(dvalues[0] == 100.0);
+static_assert(dvalues[1] == -25.0);
+static_assert(dvalues[2] == 3.125);
 ```
 
 ## `capitalize`（先頭大文字化）

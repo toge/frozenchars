@@ -300,12 +300,12 @@ TEST_CASE("split") {
   REQUIRE(empty.size() == 0);
 }
 
-TEST_CASE("split_ints") {
+TEST_CASE("split_numbers") {
   auto constexpr count = split_count("  10  -20\t+30\n");
   static_assert(count == 3);
   REQUIRE(count == 3);
 
-  auto constexpr values = split_ints("  10  -20\t+30\n"_fs);
+  auto constexpr values = split_numbers("  10  -20\t+30\n"_fs);
   static_assert(values[0] == 10);
   static_assert(values[1] == -20);
   static_assert(values[2] == 30);
@@ -313,22 +313,22 @@ TEST_CASE("split_ints") {
   REQUIRE(values[1] == -20);
   REQUIRE(values[2] == 30);
 
-  auto constexpr padded = split_ints("1 2");
+  auto constexpr padded = split_numbers("1 2");
   static_assert(padded[0] == 1);
   static_assert(padded[1] == 2);
   REQUIRE(padded[0] == 1);
   REQUIRE(padded[1] == 2);
 
-  auto constexpr min_value = split_ints("-2147483648");
+  auto constexpr min_value = split_numbers("-2147483648");
   static_assert(min_value[0] == std::numeric_limits<int>::min());
   REQUIRE(min_value[0] == std::numeric_limits<int>::min());
 
-  REQUIRE_THROWS_AS(split_ints("abc"), std::invalid_argument);
-  REQUIRE_THROWS_AS(split_ints("2147483648"), std::out_of_range);
+  REQUIRE_THROWS_AS(split_numbers("abc"), std::invalid_argument);
+  REQUIRE_THROWS_AS(split_numbers("2147483648"), std::out_of_range);
 }
 
-TEST_CASE("split_ints with custom delimiter predicate") {
-  auto constexpr values = split_ints<is_semicolon>("10;;-20;+30");
+TEST_CASE("split_numbers with custom delimiter predicate") {
+  auto constexpr values = split_numbers<is_semicolon>("10;;-20;+30");
   static_assert(values[0] == 10);
   static_assert(values[1] == -20);
   static_assert(values[2] == 30);
@@ -338,7 +338,7 @@ TEST_CASE("split_ints with custom delimiter predicate") {
   REQUIRE(values[2] == 30);
   REQUIRE(values[3] == 0);
 
-  auto constexpr csv = split_ints<is_comma>("1,-2,+3");
+  auto constexpr csv = split_numbers<is_comma>("1,-2,+3");
   static_assert(csv[0] == 1);
   static_assert(csv[1] == -2);
   static_assert(csv[2] == 3);
@@ -347,14 +347,14 @@ TEST_CASE("split_ints with custom delimiter predicate") {
   REQUIRE(csv[2] == 3);
 }
 
-TEST_CASE("split_ints with explicit integer type") {
-  auto constexpr signed_values = split_ints<long long>("9223372036854775807 -9223372036854775808");
+TEST_CASE("split_numbers with explicit integer type") {
+  auto constexpr signed_values = split_numbers<long long>("9223372036854775807 -9223372036854775808");
   static_assert(signed_values[0] == std::numeric_limits<long long>::max());
   static_assert(signed_values[1] == std::numeric_limits<long long>::min());
   REQUIRE(signed_values[0] == std::numeric_limits<long long>::max());
   REQUIRE(signed_values[1] == std::numeric_limits<long long>::min());
 
-  auto constexpr unsigned_values = split_ints<unsigned int>("1 +2 3");
+  auto constexpr unsigned_values = split_numbers<unsigned int>("1 +2 3");
   static_assert(unsigned_values[0] == 1u);
   static_assert(unsigned_values[1] == 2u);
   static_assert(unsigned_values[2] == 3u);
@@ -362,7 +362,7 @@ TEST_CASE("split_ints with explicit integer type") {
   REQUIRE(unsigned_values[1] == 2u);
   REQUIRE(unsigned_values[2] == 3u);
 
-  auto constexpr csv = split_ints<is_comma, unsigned long>("10,20,30");
+  auto constexpr csv = split_numbers<is_comma, unsigned long>("10,20,30");
   static_assert(csv[0] == 10ul);
   static_assert(csv[1] == 20ul);
   static_assert(csv[2] == 30ul);
@@ -370,7 +370,29 @@ TEST_CASE("split_ints with explicit integer type") {
   REQUIRE(csv[1] == 20ul);
   REQUIRE(csv[2] == 30ul);
 
-  REQUIRE_THROWS_AS(split_ints<unsigned int>("-1"), std::out_of_range);
+  REQUIRE_THROWS_AS(split_numbers<unsigned int>("-1"), std::out_of_range);
+}
+
+TEST_CASE("split_numbers with floating-point type") {
+  auto constexpr values = split_numbers<float>("1.5 -2.25 +3.0");
+  static_assert(values[0] == 1.5f);
+  static_assert(values[1] == -2.25f);
+  static_assert(values[2] == 3.0f);
+  REQUIRE(values[0] == 1.5f);
+  REQUIRE(values[1] == -2.25f);
+  REQUIRE(values[2] == 3.0f);
+
+  auto constexpr exp_values = split_numbers<is_comma, double>("1e2,-2.5e1,3.125");
+  static_assert(exp_values[0] == 100.0);
+  static_assert(exp_values[1] == -25.0);
+  static_assert(exp_values[2] == 3.125);
+  REQUIRE(exp_values[0] == 100.0);
+  REQUIRE(exp_values[1] == -25.0);
+  REQUIRE(exp_values[2] == 3.125);
+
+  REQUIRE_THROWS_AS(split_numbers<float>("1.0.0"), std::invalid_argument);
+  REQUIRE_THROWS_AS(split_numbers<float>("1e"), std::invalid_argument);
+  REQUIRE_THROWS_AS(split_numbers<float>("1e999"), std::out_of_range);
 }
 
 TEST_CASE("capitalize") {
