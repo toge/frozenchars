@@ -121,13 +121,18 @@ constexpr bool is_comma(char c) noexcept { return c == ','; }
 auto const values = split<is_comma>("alpha,,beta,gamma");
 ```
 
-## `split_ints`（区切りで `int` 列へ変換）
+## `split_ints`（区切りで整数列へ変換）
 
-`split_ints(...)` は内部で `split_count(...)` を呼び出し、`std::vector<int>` を返します。1回の呼び出しで分割と数値変換が完了します。
+`split_ints(...)` は内部で `split_count(...)` を呼び出し、`std::array<整数型, N>` を返します（未使用要素は `0`）。
 
-`split_ints<Count>(...)` も引き続き利用可能で、こちらは `std::array<int, Count>` を返します（余りは `0`）。
+区切り文字判定関数と数値型はテンプレート引数で指定できます。
 
-区切り文字の判定は `split_ints<is_delim>(...)` のようにテンプレート引数で変更できます。数値でないトークンや `int` 範囲外の値は、ランタイムでは例外となり、定数評価ではエラーになります。
+- `split_ints(str)` : 既定（空白区切り + `int`）
+- `split_ints<Int>(str)` : 空白区切り + 指定整数型
+- `split_ints<is_delim>(str)` : 指定区切り + `int`
+- `split_ints<is_delim, Int>(str)` : 指定区切り + 指定整数型
+
+数値でないトークンや、指定した整数型の範囲外の値は、ランタイムでは例外となり、定数評価ではエラーになります。
 
 ```cpp
 #include "frozenchars.hpp"
@@ -142,8 +147,18 @@ static_assert(fixed[0] == 10);
 static_assert(fixed[1] == -20);
 static_assert(fixed[2] == 30);
 
+auto constexpr i64_values = split_ints<long long>("9223372036854775807 -9223372036854775808");
+static_assert(i64_values[0] == std::numeric_limits<long long>::max());
+static_assert(i64_values[1] == std::numeric_limits<long long>::min());
+
 constexpr bool is_semicolon(char c) noexcept { return c == ';'; }
 auto const values = split_ints<is_semicolon>("10;;-20;+30");
+
+constexpr bool is_comma(char c) noexcept { return c == ','; }
+auto constexpr uvalues = split_ints<is_comma, unsigned long>("1,2,3");
+static_assert(uvalues[0] == 1ul);
+static_assert(uvalues[1] == 2ul);
+static_assert(uvalues[2] == 3ul);
 ```
 
 ## `capitalize`（先頭大文字化）

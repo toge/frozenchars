@@ -347,6 +347,32 @@ TEST_CASE("split_ints with custom delimiter predicate") {
   REQUIRE(csv[2] == 3);
 }
 
+TEST_CASE("split_ints with explicit integer type") {
+  auto constexpr signed_values = split_ints<long long>("9223372036854775807 -9223372036854775808");
+  static_assert(signed_values[0] == std::numeric_limits<long long>::max());
+  static_assert(signed_values[1] == std::numeric_limits<long long>::min());
+  REQUIRE(signed_values[0] == std::numeric_limits<long long>::max());
+  REQUIRE(signed_values[1] == std::numeric_limits<long long>::min());
+
+  auto constexpr unsigned_values = split_ints<unsigned int>("1 +2 3");
+  static_assert(unsigned_values[0] == 1u);
+  static_assert(unsigned_values[1] == 2u);
+  static_assert(unsigned_values[2] == 3u);
+  REQUIRE(unsigned_values[0] == 1u);
+  REQUIRE(unsigned_values[1] == 2u);
+  REQUIRE(unsigned_values[2] == 3u);
+
+  auto constexpr csv = split_ints<is_comma, unsigned long>("10,20,30");
+  static_assert(csv[0] == 10ul);
+  static_assert(csv[1] == 20ul);
+  static_assert(csv[2] == 30ul);
+  REQUIRE(csv[0] == 10ul);
+  REQUIRE(csv[1] == 20ul);
+  REQUIRE(csv[2] == 30ul);
+
+  REQUIRE_THROWS_AS(split_ints<unsigned int>("-1"), std::out_of_range);
+}
+
 TEST_CASE("capitalize") {
   auto constexpr s1 = capitalize("hello"_fs);
   static_assert(s1.sv() == "Hello");

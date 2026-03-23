@@ -420,14 +420,19 @@ namespace detail {
   }
 
   /**
-   * @brief 整数字句を int に変換する関数
+   * @brief 整数字句を指定整数型に変換する関数
    *
+   * @tparam Int 変換先の整数型
    * @tparam N 文字列の長さ (終端文字'\0'を含む)
    * @param token 変換するトークン
    * @return auto constexpr 変換結果
    */
-  template <size_t N>
+  template <Integral Int = int, size_t N>
+    requires (!std::same_as<std::remove_cv_t<Int>, bool>)
   auto constexpr parse_int_token(FrozenString<N> const& token) {
+    using Result = std::remove_cv_t<Int>;
+    using Unsigned = std::make_unsigned_t<Result>;
+
     if (token.length == 0) {
       throw std::invalid_argument("split_ints: empty token");
     }
@@ -442,10 +447,17 @@ namespace detail {
       throw std::invalid_argument("split_ints: sign without digits");
     }
 
-    auto value = 0ULL;
-    auto constexpr MAX_INT = static_cast<unsigned long long>(std::numeric_limits<int>::max());
-    auto constexpr NEGATIVE_LIMIT = MAX_INT + 1ULL;
-    auto const limit = negative ? NEGATIVE_LIMIT : MAX_INT;
+    auto value = Unsigned{0};
+    auto constexpr IS_SIGNED = std::numeric_limits<Result>::is_signed;
+    auto constexpr MAX_POSITIVE = static_cast<Unsigned>(std::numeric_limits<Result>::max());
+    auto const limit = [&]() constexpr {
+      if constexpr (IS_SIGNED) {
+        auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
+        return negative ? NEGATIVE_LIMIT : MAX_POSITIVE;
+      } else {
+        return MAX_POSITIVE;
+      }
+    }();
 
     for (; pos < token.length; ++pos) {
       auto const c = token.buffer[pos];
@@ -453,21 +465,26 @@ namespace detail {
         throw std::invalid_argument("split_ints: non-numeric token");
       }
 
-      auto const digit = static_cast<unsigned long long>(c - '0');
-      if (value > (limit - digit) / 10ULL) {
+      auto const digit = static_cast<Unsigned>(c - '0');
+      if (value > (limit - digit) / 10u) {
         throw std::out_of_range("split_ints: integer out of range");
       }
-      value = value * 10ULL + digit;
+      value = static_cast<Unsigned>(value * 10u + digit);
     }
 
     if (negative) {
-      if (value == NEGATIVE_LIMIT) {
-        return std::numeric_limits<int>::min();
+      if constexpr (!IS_SIGNED) {
+        throw std::out_of_range("split_ints: negative token for unsigned type");
+      } else {
+        auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
+        if (value == NEGATIVE_LIMIT) {
+          return std::numeric_limits<Result>::min();
+        }
+        return static_cast<Result>(-static_cast<Result>(value));
       }
-      return -static_cast<int>(value);
     }
 
-    return static_cast<int>(value);
+    return static_cast<Result>(value);
   }
 
 }
@@ -599,42 +616,75 @@ auto constexpr split(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで int 配列へ変換する関数
+ * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで整数配列へ変換する関数
  * split_count(...) を内部で呼び出して、必要分まで数値変換する
  *
+ * @tparam Int 解析する数値型（デフォルト: int）
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @return auto constexpr 分割・数値変換結果の配列（未使用要素は0）
  */
-template <auto IsDelimiter = detail::is_whitespace, size_t N>
-  requires std::predicate<decltype(IsDelimiter), char>
+template <auto IsDelimiter = detail::is_whitespace, Integral Int = int, size_t N>
+  requires (std::predicate<decltype(IsDelimiter), char>
+            && !std::same_as<std::remove_cv_t<Int>, bool>)
 auto constexpr split_ints(FrozenString<N> const& str) {
-  auto res = std::array<int, N>{};
+  using Result = std::remove_cv_t<Int>;
+  auto res = std::array<Result, N>{};
   auto const tokens = split<IsDelimiter>(str);
   auto const token_count = split_count<IsDelimiter>(str);
   for (auto i = 0uz; i < token_count; ++i) {
     if (tokens[i].length == 0) {
       continue;
     }
-    res[i] = detail::parse_int_token(tokens[i]);
+    res[i] = detail::parse_int_token<Result>(tokens[i]);
   }
   return res;
 }
 
 /**
- * @brief 文字列リテラルを区切り判定関数で分割し、1回の呼び出しで int 配列へ変換する関数
+ * @brief 文字列を空白区切りで分割し、1回の呼び出しで指定整数型配列へ変換する関数
+ *
+ * @tparam Int 解析する数値型
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto constexpr 分割・数値変換結果の配列（未使用要素は0）
+ */
+template <Integral Int, size_t N>
+  requires (!std::same_as<std::remove_cv_t<Int>, bool>)
+auto constexpr split_ints(FrozenString<N> const& str) {
+  return split_ints<detail::is_whitespace, Int>(str);
+}
+
+/**
+ * @brief 文字列リテラルを区切り判定関数で分割し、1回の呼び出しで整数配列へ変換する関数
  * split_count(...) を内部で呼び出して、必要分まで数値変換する
  *
+ * @tparam Int 解析する数値型（デフォルト: int）
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
  * @return auto constexpr 分割・数値変換結果の配列（未使用要素は0）
  */
-template <auto IsDelimiter = detail::is_whitespace, size_t N>
-  requires std::predicate<decltype(IsDelimiter), char>
+template <auto IsDelimiter = detail::is_whitespace, Integral Int = int, size_t N>
+  requires (std::predicate<decltype(IsDelimiter), char>
+            && !std::same_as<std::remove_cv_t<Int>, bool>)
 auto constexpr split_ints(char const (&str)[N]) {
-  return split_ints<IsDelimiter>(FrozenString{str});
+  return split_ints<IsDelimiter, Int>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列リテラルを空白区切りで分割し、1回の呼び出しで指定整数型配列へ変換する関数
+ *
+ * @tparam Int 解析する数値型
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr 分割・数値変換結果の配列（未使用要素は0）
+ */
+template <Integral Int, size_t N>
+  requires (!std::same_as<std::remove_cv_t<Int>, bool>)
+auto constexpr split_ints(char const (&str)[N]) {
+  return split_ints<detail::is_whitespace, Int>(FrozenString{str});
 }
 
 /**
