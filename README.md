@@ -173,6 +173,158 @@ static_assert(dvalues[1] == -25.0);
 static_assert(dvalues[2] == 3.125);
 ```
 
+## `parse_hex_rgb` / `parse_hex_rgba`（hex color → RGB/RGBAタプル）
+
+`parse_hex_rgb(...)` は RGB 色文字列を、
+`parse_hex_rgba(...)` は RGBA 色文字列を、
+それぞれ `std::tuple` に変換します。
+
+- `parse_hex_rgb(...)` は **`#RGB` / `#RRGGBB`**
+- `parse_hex_rgba(...)` は **`#RGBA` / `#RRGGBBAA`**
+- `to_bgr(...)` は `(r, g, b)` を `(b, g, r)` に並び替えます
+- `to_bgra(...)` は `(r, g, b, a)` を `(b, g, r, a)` に並び替えます
+- `to_abgr(...)` は `(r, g, b, a)` を `(a, b, g, r)` に並び替えます
+- 短縮形は CSS と同じく各 nibble を複製します
+  - `#532` → `#553322`
+  - `#5a3c` → `#55aa33cc`
+- 返り値はそれぞれ `(r, g, b)`、`(r, g, b, a)` の順
+- 不正な入力は、ランタイムでは `std::invalid_argument`、定数評価ではエラーになります
+
+```cpp
+#include "frozenchars.hpp"
+#include <tuple>
+
+using namespace frozenchars;
+
+auto constexpr rgb = parse_hex_rgb("#335577");
+auto constexpr short_rgb = parse_hex_rgb("#532");
+auto constexpr rgba = parse_hex_rgba("#5a3c");
+auto constexpr bgr = to_bgr(rgb);
+auto constexpr bgra = to_bgra(rgba);
+auto constexpr abgr = to_abgr(rgba);
+
+auto constexpr [r, g, b] = rgb;
+auto constexpr [sr, sg, sb] = short_rgb;
+auto constexpr [rr, rg, rb, ra] = rgba;
+auto constexpr [blue, green, red] = bgr;
+auto constexpr [bb, bg, br, ba] = bgra;
+auto constexpr [aa, ab, ag, ar] = abgr;
+
+static_assert(r == 0x33);
+static_assert(g == 0x55);
+static_assert(b == 0x77);
+static_assert(sr == 0x55);
+static_assert(sg == 0x33);
+static_assert(sb == 0x22);
+static_assert(rr == 0x55);
+static_assert(rg == 0xaa);
+static_assert(rb == 0x33);
+static_assert(ra == 0xcc);
+static_assert(blue == 0x77);
+static_assert(green == 0x55);
+static_assert(red == 0x33);
+static_assert(bb == 0x33);
+static_assert(bg == 0xaa);
+static_assert(br == 0x55);
+static_assert(ba == 0xcc);
+static_assert(aa == 0xcc);
+static_assert(ab == 0x33);
+static_assert(ag == 0xaa);
+static_assert(ar == 0x55);
+```
+
+集成体や任意のクラスへの初期化にも使えます。
+
+```cpp
+#include "frozenchars.hpp"
+#include <tuple>
+
+using namespace frozenchars;
+
+struct AggregateColor {
+  std::uint8_t r;
+  std::uint8_t g;
+  std::uint8_t b;
+};
+
+struct AggregateColorA {
+  std::uint8_t r;
+  std::uint8_t g;
+  std::uint8_t b;
+  std::uint8_t a;
+};
+
+struct AggregateColorBgr {
+  std::uint8_t b;
+  std::uint8_t g;
+  std::uint8_t r;
+};
+
+struct LibraryColor {
+  std::uint8_t r;
+  std::uint8_t g;
+  std::uint8_t b;
+
+  constexpr LibraryColor(std::uint8_t red, std::uint8_t green, std::uint8_t blue)
+  : r(red), g(green), b(blue)
+  {}
+};
+
+struct LibraryColorA {
+  std::uint8_t r;
+  std::uint8_t g;
+  std::uint8_t b;
+  std::uint8_t a;
+
+  constexpr LibraryColorA(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha)
+  : r(red), g(green), b(blue), a(alpha)
+  {}
+};
+
+struct LibraryColorAbgr {
+  std::uint8_t a;
+  std::uint8_t b;
+  std::uint8_t g;
+  std::uint8_t r;
+
+  constexpr LibraryColorAbgr(std::uint8_t alpha, std::uint8_t blue, std::uint8_t green, std::uint8_t red)
+  : a(alpha), b(blue), g(green), r(red)
+  {}
+};
+
+auto constexpr aggregate = std::apply(
+  [](auto... channels) constexpr {
+    return AggregateColor{channels...};
+  },
+  parse_hex_rgb("#123")
+);
+
+auto constexpr aggregate_a = std::apply(
+  [](auto... channels) constexpr {
+    return AggregateColorA{channels...};
+  },
+  parse_hex_rgba("#1234")
+);
+
+auto constexpr aggregate_bgr = std::apply(
+  [](auto... channels) constexpr {
+    return AggregateColorBgr{channels...};
+  },
+  to_bgr(parse_hex_rgb("#abcdef"))
+);
+
+auto constexpr color = std::make_from_tuple<LibraryColor>(parse_hex_rgb("#abcdef"));
+auto constexpr color_a = std::make_from_tuple<LibraryColorA>(parse_hex_rgba("#abcdef99"));
+auto constexpr color_abgr = std::make_from_tuple<LibraryColorAbgr>(to_abgr(parse_hex_rgba("#12345678")));
+
+static_assert(aggregate.r == 0x11);
+static_assert(color.g == 0xcd);
+static_assert(aggregate_a.a == 0x44);
+static_assert(color_a.a == 0x99);
+static_assert(aggregate_bgr.b == 0xef);
+static_assert(color_abgr.a == 0x78);
+```
+
 ## `capitalize`（先頭大文字化）
 
 先頭の文字を大文字、残りを小文字に変換します。`FrozenString` と文字列リテラルの両方を受け取ります。

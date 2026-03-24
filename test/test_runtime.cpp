@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+#include <tuple>
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
@@ -132,4 +134,71 @@ TEST_CASE("freeze truncates long std::vector<std::byte>") {
   auto const s = freeze(big);
   REQUIRE(s.sv().size() == 256);
   REQUIRE(std::all_of(s.sv().begin(), s.sv().end(), [](char c) { return c == 'z'; }));
+}
+
+TEST_CASE("parse_hex_rgb parses runtime values") {
+  auto const rgb = parse_hex_rgb("#335577");
+  REQUIRE(std::get<0>(rgb) == 0x33);
+  REQUIRE(std::get<1>(rgb) == 0x55);
+  REQUIRE(std::get<2>(rgb) == 0x77);
+
+  auto const short_rgb = parse_hex_rgb("#532");
+  REQUIRE(std::get<0>(short_rgb) == 0x55);
+  REQUIRE(std::get<1>(short_rgb) == 0x33);
+  REQUIRE(std::get<2>(short_rgb) == 0x22);
+}
+
+TEST_CASE("parse_hex_rgb rejects invalid length at runtime") {
+  REQUIRE_THROWS_AS(parse_hex_rgb("#33557"), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_hex_rgb("335577"), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_hex_rgb("#33557cc"), std::invalid_argument);
+}
+
+TEST_CASE("parse_hex_rgb rejects invalid digits at runtime") {
+  REQUIRE_THROWS_AS(parse_hex_rgb("#33GG77"), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_hex_rgb("#5g2"), std::invalid_argument);
+}
+
+TEST_CASE("parse_hex_rgba parses runtime values") {
+  auto const rgba = parse_hex_rgba("#335577cc");
+  REQUIRE(std::get<0>(rgba) == 0x33);
+  REQUIRE(std::get<1>(rgba) == 0x55);
+  REQUIRE(std::get<2>(rgba) == 0x77);
+  REQUIRE(std::get<3>(rgba) == 0xcc);
+
+  auto const short_rgba = parse_hex_rgba("#5a3c");
+  REQUIRE(std::get<0>(short_rgba) == 0x55);
+  REQUIRE(std::get<1>(short_rgba) == 0xaa);
+  REQUIRE(std::get<2>(short_rgba) == 0x33);
+  REQUIRE(std::get<3>(short_rgba) == 0xcc);
+}
+
+TEST_CASE("parse_hex_rgba rejects invalid length at runtime") {
+  REQUIRE_THROWS_AS(parse_hex_rgba("#335577"), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_hex_rgba("#335577c"), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_hex_rgba("335577cc"), std::invalid_argument);
+}
+
+TEST_CASE("parse_hex_rgba rejects invalid digits at runtime") {
+  REQUIRE_THROWS_AS(parse_hex_rgba("#33GG77cc"), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_hex_rgba("#5a3z"), std::invalid_argument);
+}
+
+TEST_CASE("tuple channel reorder helpers reorder runtime tuples") {
+  auto const bgr = to_bgr(parse_hex_rgb("#123456"));
+  REQUIRE(std::get<0>(bgr) == 0x56);
+  REQUIRE(std::get<1>(bgr) == 0x34);
+  REQUIRE(std::get<2>(bgr) == 0x12);
+
+  auto const bgra = to_bgra(parse_hex_rgba("#12345678"));
+  REQUIRE(std::get<0>(bgra) == 0x56);
+  REQUIRE(std::get<1>(bgra) == 0x34);
+  REQUIRE(std::get<2>(bgra) == 0x12);
+  REQUIRE(std::get<3>(bgra) == 0x78);
+
+  auto const abgr = to_abgr(parse_hex_rgba("#12345678"));
+  REQUIRE(std::get<0>(abgr) == 0x78);
+  REQUIRE(std::get<1>(abgr) == 0x56);
+  REQUIRE(std::get<2>(abgr) == 0x34);
+  REQUIRE(std::get<3>(abgr) == 0x12);
 }
