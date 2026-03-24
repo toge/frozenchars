@@ -1,17 +1,19 @@
 #ifndef __FROZEN_CHARS_H__
 #define __FROZEN_CHARS_H__
 
-#include <cstddef>
 #include <array>
-#include <span>
-#include <vector>
-#include <string_view>
 #include <algorithm>
 #include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
-#include <stdexcept>
-#include <type_traits>
 #include <ranges>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <type_traits>
+#include <tuple>
+#include <vector>
 
 namespace frozenchars {
 
@@ -404,6 +406,62 @@ namespace detail {
   }
 
   /**
+   * @brief ASCII の16進数字かどうかを判定する関数
+   *
+   * @param c 判定する文字
+   * @return auto constexpr 16進数字なら true
+   */
+  auto constexpr is_hex_digit(char c) noexcept {
+    return (c >= '0' && c <= '9')
+      || (c >= 'a' && c <= 'f')
+      || (c >= 'A' && c <= 'F');
+  }
+
+  /**
+   * @brief 16進数字1文字を 0..15 に変換する関数
+   *
+   * @param c 変換する16進数字
+   * @return auto constexpr 変換結果
+   */
+  auto constexpr hex_digit_to_value(char c) {
+    if (c >= '0' && c <= '9') {
+      return static_cast<std::uint8_t>(c - '0');
+    }
+    if (c >= 'a' && c <= 'f') {
+      return static_cast<std::uint8_t>(10 + (c - 'a'));
+    }
+    if (c >= 'A' && c <= 'F') {
+      return static_cast<std::uint8_t>(10 + (c - 'A'));
+    }
+    throw std::invalid_argument("parse_hex_color: invalid hex digit");
+  }
+
+  /**
+   * @brief 16進数字2文字を 1byte に変換する関数
+   *
+   * @param hi 上位4bitを表す16進数字
+   * @param lo 下位4bitを表す16進数字
+   * @return auto constexpr 変換結果
+   */
+  auto constexpr parse_hex_byte(char hi, char lo) {
+    if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
+      throw std::invalid_argument("parse_hex_color: invalid hex digit");
+    }
+    return static_cast<std::uint8_t>((hex_digit_to_value(hi) << 4u) | hex_digit_to_value(lo));
+  }
+
+  /**
+   * @brief 16進数字1文字を nibble 複製して 1byte に変換する関数
+   *
+   * @param c 変換する16進数字
+   * @return auto constexpr 変換結果
+   */
+  auto constexpr parse_hex_shorthand_byte(char c) {
+    auto const value = hex_digit_to_value(c);
+    return static_cast<std::uint8_t>((value << 4u) | value);
+  }
+
+  /**
    * @brief 区切り判定関数でトークン数を数える関数
    *
    * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
@@ -783,6 +841,128 @@ template <Numeric Int, size_t N>
   requires (!std::same_as<std::remove_cv_t<Int>, bool>)
 auto constexpr split_numbers(char const (&str)[N]) {
   return split_numbers<detail::is_whitespace, Int>(FrozenString{str});
+}
+
+/**
+ * @brief `#RGB` / `#RRGGBB` 形式の色文字列を RGB タプルへ変換する関数
+ *
+ * @param str 対象文字列
+ * @return auto constexpr `(r, g, b)` の順に並んだタプル
+ */
+auto constexpr parse_hex_rgb(std::string_view str) {
+  if (str.empty() || str[0] != '#' || (str.size() != 4 && str.size() != 7)) {
+    throw std::invalid_argument("parse_hex_rgb: expected #RGB or #RRGGBB");
+  }
+
+  if (str.size() == 4) {
+    return std::tuple{
+      detail::parse_hex_shorthand_byte(str[1]),
+      detail::parse_hex_shorthand_byte(str[2]),
+      detail::parse_hex_shorthand_byte(str[3])
+    };
+  }
+
+  return std::tuple{
+    detail::parse_hex_byte(str[1], str[2]),
+    detail::parse_hex_byte(str[3], str[4]),
+    detail::parse_hex_byte(str[5], str[6])
+  };
+}
+
+/**
+ * @brief 文字列リテラル版の `#RGB` / `#RRGGBB` パーサ
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr `(r, g, b)` の順に並んだタプル
+ */
+template <size_t N>
+auto constexpr parse_hex_rgb(char const (&str)[N]) {
+  return parse_hex_rgb(std::string_view{str, N - 1});
+}
+
+/**
+ * @brief `#RGBA` / `#RRGGBBAA` 形式の色文字列を RGBA タプルへ変換する関数
+ *
+ * @param str 対象文字列
+ * @return auto constexpr `(r, g, b, a)` の順に並んだタプル
+ */
+auto constexpr parse_hex_rgba(std::string_view str) {
+  if (str.empty() || str[0] != '#' || (str.size() != 5 && str.size() != 9)) {
+    throw std::invalid_argument("parse_hex_rgba: expected #RGBA or #RRGGBBAA");
+  }
+
+  if (str.size() == 5) {
+    return std::tuple{
+      detail::parse_hex_shorthand_byte(str[1]),
+      detail::parse_hex_shorthand_byte(str[2]),
+      detail::parse_hex_shorthand_byte(str[3]),
+      detail::parse_hex_shorthand_byte(str[4])
+    };
+  }
+
+  return std::tuple{
+    detail::parse_hex_byte(str[1], str[2]),
+    detail::parse_hex_byte(str[3], str[4]),
+    detail::parse_hex_byte(str[5], str[6]),
+    detail::parse_hex_byte(str[7], str[8])
+  };
+}
+
+/**
+ * @brief 文字列リテラル版の `#RGBA` / `#RRGGBBAA` パーサ
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto constexpr `(r, g, b, a)` の順に並んだタプル
+ */
+template <size_t N>
+auto constexpr parse_hex_rgba(char const (&str)[N]) {
+  return parse_hex_rgba(std::string_view{str, N - 1});
+}
+
+/**
+ * @brief RGB タプルを BGR タプルへ並び替える関数
+ *
+ * @tparam R 赤チャネル型
+ * @tparam G 緑チャネル型
+ * @tparam B 青チャネル型
+ * @param rgb `(r, g, b)` の順のタプル
+ * @return auto constexpr `(b, g, r)` の順のタプル
+ */
+template <typename R, typename G, typename B>
+auto constexpr to_bgr(std::tuple<R, G, B> const& rgb) {
+  return std::tuple<B, G, R>{std::get<2>(rgb), std::get<1>(rgb), std::get<0>(rgb)};
+}
+
+/**
+ * @brief RGBA タプルを BGRA タプルへ並び替える関数
+ *
+ * @tparam R 赤チャネル型
+ * @tparam G 緑チャネル型
+ * @tparam B 青チャネル型
+ * @tparam A アルファチャネル型
+ * @param rgba `(r, g, b, a)` の順のタプル
+ * @return auto constexpr `(b, g, r, a)` の順のタプル
+ */
+template <typename R, typename G, typename B, typename A>
+auto constexpr to_bgra(std::tuple<R, G, B, A> const& rgba) {
+  return std::tuple<B, G, R, A>{std::get<2>(rgba), std::get<1>(rgba), std::get<0>(rgba), std::get<3>(rgba)};
+}
+
+/**
+ * @brief RGBA タプルを ABGR タプルへ並び替える関数
+ *
+ * @tparam R 赤チャネル型
+ * @tparam G 緑チャネル型
+ * @tparam B 青チャネル型
+ * @tparam A アルファチャネル型
+ * @param rgba `(r, g, b, a)` の順のタプル
+ * @return auto constexpr `(a, b, g, r)` の順のタプル
+ */
+template <typename R, typename G, typename B, typename A>
+auto constexpr to_abgr(std::tuple<R, G, B, A> const& rgba) {
+  return std::tuple<A, B, G, R>{std::get<3>(rgba), std::get<2>(rgba), std::get<1>(rgba), std::get<0>(rgba)};
 }
 
 /**

@@ -1,5 +1,7 @@
 #include "catch2/catch_all.hpp"
 
+#include <tuple>
+
 #include "frozenchars.hpp"
 
 using namespace frozenchars;
@@ -393,6 +395,201 @@ TEST_CASE("split_numbers with floating-point type") {
   REQUIRE_THROWS_AS(split_numbers<float>("1.0.0"), std::invalid_argument);
   REQUIRE_THROWS_AS(split_numbers<float>("1e"), std::invalid_argument);
   REQUIRE_THROWS_AS(split_numbers<float>("1e999"), std::out_of_range);
+}
+
+TEST_CASE("parse_hex_rgb constexpr") {
+  auto constexpr rgb = parse_hex_rgb("#335577");
+  static_assert(std::get<0>(rgb) == 0x33);
+  static_assert(std::get<1>(rgb) == 0x55);
+  static_assert(std::get<2>(rgb) == 0x77);
+  REQUIRE(std::get<0>(rgb) == 0x33);
+  REQUIRE(std::get<1>(rgb) == 0x55);
+  REQUIRE(std::get<2>(rgb) == 0x77);
+
+  auto constexpr mixed = parse_hex_rgb("#aBcDeF");
+  static_assert(std::get<0>(mixed) == 0xab);
+  static_assert(std::get<1>(mixed) == 0xcd);
+  static_assert(std::get<2>(mixed) == 0xef);
+  REQUIRE(std::get<0>(mixed) == 0xab);
+  REQUIRE(std::get<1>(mixed) == 0xcd);
+  REQUIRE(std::get<2>(mixed) == 0xef);
+
+  auto constexpr short_rgb = parse_hex_rgb("#532");
+  static_assert(std::get<0>(short_rgb) == 0x55);
+  static_assert(std::get<1>(short_rgb) == 0x33);
+  static_assert(std::get<2>(short_rgb) == 0x22);
+  REQUIRE(std::get<0>(short_rgb) == 0x55);
+  REQUIRE(std::get<1>(short_rgb) == 0x33);
+  REQUIRE(std::get<2>(short_rgb) == 0x22);
+}
+
+TEST_CASE("parse_hex_rgb can initialize user color types") {
+  struct RgbAggregate {
+    std::uint8_t r;
+    std::uint8_t g;
+    std::uint8_t b;
+  };
+
+  struct RgbClass {
+    std::uint8_t r;
+    std::uint8_t g;
+    std::uint8_t b;
+
+    constexpr RgbClass(std::uint8_t red, std::uint8_t green, std::uint8_t blue) noexcept
+    : r(red), g(green), b(blue)
+    {}
+  };
+
+  auto constexpr aggregate = std::apply([](auto... channels) constexpr {
+    return RgbAggregate{channels...};
+  }, parse_hex_rgb("#123456"));
+  static_assert(aggregate.r == 0x12);
+  static_assert(aggregate.g == 0x34);
+  static_assert(aggregate.b == 0x56);
+  REQUIRE(aggregate.r == 0x12);
+  REQUIRE(aggregate.g == 0x34);
+  REQUIRE(aggregate.b == 0x56);
+
+  auto constexpr color = std::make_from_tuple<RgbClass>(parse_hex_rgb("#abcdef"));
+  static_assert(color.r == 0xab);
+  static_assert(color.g == 0xcd);
+  static_assert(color.b == 0xef);
+  REQUIRE(color.r == 0xab);
+  REQUIRE(color.g == 0xcd);
+  REQUIRE(color.b == 0xef);
+}
+
+TEST_CASE("parse_hex_rgba constexpr") {
+  auto constexpr rgba = parse_hex_rgba("#335577cc");
+  static_assert(std::get<0>(rgba) == 0x33);
+  static_assert(std::get<1>(rgba) == 0x55);
+  static_assert(std::get<2>(rgba) == 0x77);
+  static_assert(std::get<3>(rgba) == 0xcc);
+  REQUIRE(std::get<0>(rgba) == 0x33);
+  REQUIRE(std::get<1>(rgba) == 0x55);
+  REQUIRE(std::get<2>(rgba) == 0x77);
+  REQUIRE(std::get<3>(rgba) == 0xcc);
+
+  auto constexpr short_rgba = parse_hex_rgba("#5a3c");
+  static_assert(std::get<0>(short_rgba) == 0x55);
+  static_assert(std::get<1>(short_rgba) == 0xaa);
+  static_assert(std::get<2>(short_rgba) == 0x33);
+  static_assert(std::get<3>(short_rgba) == 0xcc);
+  REQUIRE(std::get<0>(short_rgba) == 0x55);
+  REQUIRE(std::get<1>(short_rgba) == 0xaa);
+  REQUIRE(std::get<2>(short_rgba) == 0x33);
+  REQUIRE(std::get<3>(short_rgba) == 0xcc);
+}
+
+TEST_CASE("parse_hex_rgba can initialize user color types") {
+  struct RgbaAggregate {
+    std::uint8_t r;
+    std::uint8_t g;
+    std::uint8_t b;
+    std::uint8_t a;
+  };
+
+  struct RgbaClass {
+    std::uint8_t r;
+    std::uint8_t g;
+    std::uint8_t b;
+    std::uint8_t a;
+
+    constexpr RgbaClass(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha) noexcept
+    : r(red), g(green), b(blue), a(alpha)
+    {}
+  };
+
+  auto constexpr aggregate = std::apply([](auto... channels) constexpr {
+    return RgbaAggregate{channels...};
+  }, parse_hex_rgba("#1234"));
+  static_assert(aggregate.r == 0x11);
+  static_assert(aggregate.g == 0x22);
+  static_assert(aggregate.b == 0x33);
+  static_assert(aggregate.a == 0x44);
+  REQUIRE(aggregate.r == 0x11);
+  REQUIRE(aggregate.g == 0x22);
+  REQUIRE(aggregate.b == 0x33);
+  REQUIRE(aggregate.a == 0x44);
+
+  auto constexpr color = std::make_from_tuple<RgbaClass>(parse_hex_rgba("#abcdef99"));
+  static_assert(color.r == 0xab);
+  static_assert(color.g == 0xcd);
+  static_assert(color.b == 0xef);
+  static_assert(color.a == 0x99);
+  REQUIRE(color.r == 0xab);
+  REQUIRE(color.g == 0xcd);
+  REQUIRE(color.b == 0xef);
+  REQUIRE(color.a == 0x99);
+}
+
+TEST_CASE("tuple channel reorder helpers are constexpr") {
+  auto constexpr bgr = to_bgr(parse_hex_rgb("#123456"));
+  static_assert(std::get<0>(bgr) == 0x56);
+  static_assert(std::get<1>(bgr) == 0x34);
+  static_assert(std::get<2>(bgr) == 0x12);
+  REQUIRE(std::get<0>(bgr) == 0x56);
+  REQUIRE(std::get<1>(bgr) == 0x34);
+  REQUIRE(std::get<2>(bgr) == 0x12);
+
+  auto constexpr bgra = to_bgra(parse_hex_rgba("#12345678"));
+  static_assert(std::get<0>(bgra) == 0x56);
+  static_assert(std::get<1>(bgra) == 0x34);
+  static_assert(std::get<2>(bgra) == 0x12);
+  static_assert(std::get<3>(bgra) == 0x78);
+  REQUIRE(std::get<0>(bgra) == 0x56);
+  REQUIRE(std::get<1>(bgra) == 0x34);
+  REQUIRE(std::get<2>(bgra) == 0x12);
+  REQUIRE(std::get<3>(bgra) == 0x78);
+
+  auto constexpr abgr = to_abgr(parse_hex_rgba("#1234"));
+  static_assert(std::get<0>(abgr) == 0x44);
+  static_assert(std::get<1>(abgr) == 0x33);
+  static_assert(std::get<2>(abgr) == 0x22);
+  static_assert(std::get<3>(abgr) == 0x11);
+  REQUIRE(std::get<0>(abgr) == 0x44);
+  REQUIRE(std::get<1>(abgr) == 0x33);
+  REQUIRE(std::get<2>(abgr) == 0x22);
+  REQUIRE(std::get<3>(abgr) == 0x11);
+}
+
+TEST_CASE("tuple channel reorder helpers can initialize user color types") {
+  struct BgrColor {
+    std::uint8_t b;
+    std::uint8_t g;
+    std::uint8_t r;
+  };
+
+  struct AbgrColor {
+    std::uint8_t a;
+    std::uint8_t b;
+    std::uint8_t g;
+    std::uint8_t r;
+
+    constexpr AbgrColor(std::uint8_t alpha, std::uint8_t blue, std::uint8_t green, std::uint8_t red) noexcept
+    : a(alpha), b(blue), g(green), r(red)
+    {}
+  };
+
+  auto constexpr aggregate = std::apply([](auto... channels) constexpr {
+    return BgrColor{channels...};
+  }, to_bgr(parse_hex_rgb("#abcdef")));
+  static_assert(aggregate.b == 0xef);
+  static_assert(aggregate.g == 0xcd);
+  static_assert(aggregate.r == 0xab);
+  REQUIRE(aggregate.b == 0xef);
+  REQUIRE(aggregate.g == 0xcd);
+  REQUIRE(aggregate.r == 0xab);
+
+  auto constexpr color = std::make_from_tuple<AbgrColor>(to_abgr(parse_hex_rgba("#12345678")));
+  static_assert(color.a == 0x78);
+  static_assert(color.b == 0x56);
+  static_assert(color.g == 0x34);
+  static_assert(color.r == 0x12);
+  REQUIRE(color.a == 0x78);
+  REQUIRE(color.b == 0x56);
+  REQUIRE(color.g == 0x34);
+  REQUIRE(color.r == 0x12);
 }
 
 TEST_CASE("capitalize") {
