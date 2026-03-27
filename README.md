@@ -73,6 +73,28 @@ static_assert(u.sv() == "HELLO, WORLD!");
 static_assert(l.sv() == "hello, world!");
 ```
 
+## `trim` / `ltrim` / `rtrim`（端の文字を削る）
+
+指定文字を文字列の両端・左端・右端から削るスタンドアロン関数です。`FrozenString`、文字列リテラル、`const char*` を受け取ります。
+
+- `trim<TrimChar = ' '>(...)`
+- `ltrim<TrimChar = ' '>(...)`
+- `rtrim<TrimChar = ' '>(...)`
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr s1 = trim("  hello  "_fs);      // "hello"
+auto constexpr s2 = ltrim<'-'>("---hello");    // "hello"
+auto constexpr s3 = rtrim("hello   ");         // "hello"
+
+static_assert(s1.sv() == "hello");
+static_assert(s2.sv() == "hello");
+static_assert(s3.sv() == "hello");
+```
+
 ## `substr`（部分文字列）
 
 `substr<Pos, Len>(...)` は部分文字列を取り出します。`FrozenString` と文字列リテラルの両方を受け取ります。

@@ -274,6 +274,60 @@ TEST_CASE("substr") {
   REQUIRE(s8.sv() == "Hel");
 }
 
+TEST_CASE("trim helpers") {
+  auto constexpr s1 = trim("  hello  "_fs);
+  static_assert(s1.sv() == "hello");
+  REQUIRE(s1.sv() == "hello");
+
+  auto constexpr s2 = ltrim("  hello  "_fs);
+  static_assert(s2.sv() == "hello  ");
+  REQUIRE(s2.sv() == "hello  ");
+
+  auto constexpr s3 = ltrim("  hello  ");
+  static_assert(s3.sv() == "hello  ");
+  REQUIRE(s3.sv() == "hello  ");
+
+  auto constexpr s4 = rtrim("  hello  "_fs);
+  static_assert(s4.sv() == "  hello");
+  REQUIRE(s4.sv() == "  hello");
+
+  auto constexpr s5 = trim("  hello  ");
+  static_assert(s5.sv() == "hello");
+  REQUIRE(s5.sv() == "hello");
+
+  auto constexpr s6 = rtrim("  hello  ");
+  static_assert(s6.sv() == "  hello");
+  REQUIRE(s6.sv() == "  hello");
+
+  auto constexpr s7 = trim<'-'>("---a-b---");
+  static_assert(s7.sv() == "a-b");
+  REQUIRE(s7.sv() == "a-b");
+
+  auto constexpr s8 = trim<'-'>("---a-b---"_fs);
+  static_assert(s8.sv() == "a-b");
+  REQUIRE(s8.sv() == "a-b");
+
+  auto constexpr s9 = ltrim<'-'>("---a-b---"_fs);
+  static_assert(s9.sv() == "a-b---");
+  REQUIRE(s9.sv() == "a-b---");
+
+  auto constexpr s10 = rtrim<'-'>("---a-b---");
+  static_assert(s10.sv() == "---a-b");
+  REQUIRE(s10.sv() == "---a-b");
+
+  auto constexpr s11 = trim("      "_fs);
+  static_assert(s11.sv() == "");
+  REQUIRE(s11.sv() == "");
+
+  auto constexpr s12 = ltrim("      "_fs);
+  static_assert(s12.sv() == "");
+  REQUIRE(s12.sv() == "");
+
+  auto constexpr s13 = rtrim(""_fs);
+  static_assert(s13.sv() == "");
+  REQUIRE(s13.sv() == "");
+}
+
 TEST_CASE("split") {
   auto constexpr count = split_count("  alpha  beta\tgamma\n");
   static_assert(count == 3);

@@ -22,6 +22,26 @@ TEST_CASE("freeze with char pointers") {
   REQUIRE(s3.sv().empty());
 }
 
+TEST_CASE("trim helpers with char pointers") {
+  char const* padded = "  runtime  ";
+  auto const  s1     = trim(padded);
+  REQUIRE(s1.sv() == "runtime");
+
+  auto const s2 = ltrim(padded);
+  REQUIRE(s2.sv() == "runtime  ");
+
+  auto const s3 = rtrim(padded);
+  REQUIRE(s3.sv() == "  runtime");
+
+  char const* dashed = "---runtime---";
+  auto const  s4     = trim<'-'>(dashed);
+  REQUIRE(s4.sv() == "runtime");
+
+  char const* nullp = nullptr;
+  auto const  s5    = trim(nullp);
+  REQUIRE(s5.sv().empty());
+}
+
 TEST_CASE("freeze truncates long char pointer") {
   auto big = std::array<char, 300>{};
   for (auto i = 0uz; i < big.size() - 1; ++i) {

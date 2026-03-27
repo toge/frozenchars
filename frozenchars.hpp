@@ -405,6 +405,33 @@ namespace detail {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
   }
 
+  template <bool TrimLeft, bool TrimRight, char TrimChar, size_t N>
+  auto constexpr trim_copy(FrozenString<N> const& str) noexcept {
+    auto res = FrozenString<N>{};
+    auto start = 0uz;
+    auto end = str.length;
+
+    if constexpr (TrimLeft) {
+      while (start < str.length && str.buffer[start] == TrimChar) {
+        ++start;
+      }
+    }
+
+    if constexpr (TrimRight) {
+      while (end > start && str.buffer[end - 1] == TrimChar) {
+        --end;
+      }
+    }
+
+    auto const out_len = end - start;
+    for (auto i = 0uz; i < out_len; ++i) {
+      res.buffer[i] = str.buffer[start + i];
+    }
+    res.buffer[out_len] = '\0';
+    res.length = out_len;
+    return res;
+  }
+
   /**
    * @brief ASCII の16進数字かどうかを判定する関数
    *
@@ -1531,6 +1558,57 @@ auto constexpr freeze(std::vector<std::byte, Alloc> const& arg) noexcept {
  * nullptrは非対応とする
 \*/
 auto constexpr freeze(decltype(nullptr)) noexcept = delete;
+
+template <char TrimChar = ' ', size_t N>
+auto constexpr ltrim(FrozenString<N> const& str) noexcept {
+  return detail::trim_copy<true, false, TrimChar>(str);
+}
+
+template <char TrimChar = ' ', size_t N>
+auto constexpr rtrim(FrozenString<N> const& str) noexcept {
+  return detail::trim_copy<false, true, TrimChar>(str);
+}
+
+template <char TrimChar = ' ', size_t N>
+auto constexpr trim(FrozenString<N> const& str) noexcept {
+  return detail::trim_copy<true, true, TrimChar>(str);
+}
+
+template <char TrimChar = ' ', size_t N>
+auto constexpr ltrim(char const (&str)[N]) noexcept {
+  return ltrim<TrimChar>(FrozenString{str});
+}
+
+template <char TrimChar = ' ', size_t N>
+auto constexpr rtrim(char const (&str)[N]) noexcept {
+  return rtrim<TrimChar>(FrozenString{str});
+}
+
+template <char TrimChar = ' ', size_t N>
+auto constexpr trim(char const (&str)[N]) noexcept {
+  return trim<TrimChar>(FrozenString{str});
+}
+
+template <char TrimChar = ' ', typename Ptr>
+  requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
+            || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+auto constexpr ltrim(Ptr&& str) noexcept {
+  return ltrim<TrimChar>(freeze(str));
+}
+
+template <char TrimChar = ' ', typename Ptr>
+  requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
+            || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+auto constexpr rtrim(Ptr&& str) noexcept {
+  return rtrim<TrimChar>(freeze(str));
+}
+
+template <char TrimChar = ' ', typename Ptr>
+  requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
+            || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+auto constexpr trim(Ptr&& str) noexcept {
+  return trim<TrimChar>(freeze(str));
+}
 
 /*-------------------------------------------------------------------------------*\
  * 数値対応
