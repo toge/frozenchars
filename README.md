@@ -102,15 +102,16 @@ static_assert(s3.sv() == "hello");
 ```cpp
 #include "frozenchars.hpp"
 using namespace frozenchars::literals;
-using namespace frozenchars::ops;
+namespace fops = frozenchars::ops;
 
-auto constexpr value = "  abcdef  "_fs | trim | toupper | substr(0, 3);
+auto constexpr value = "  abcdef  "_fs | fops::trim | fops::toupper | fops::substr(0, 3);
 static_assert(value.sv() == "ABC");
 ```
 
 スタンドアロン関数 `frozenchars::trim(...)` や `frozenchars::toupper(...)` も引き続き使えます。
-README の例では、パイプ演算子を使うスコープで `using namespace frozenchars;` と
-`using namespace frozenchars::ops;` を混在させず、必要なら `frozenchars::trim(...)` のように修飾して使う形を推奨します。
+`frozenchars::ops::toupper` / `tolower` は、環境によっては C ライブラリの `::toupper` / `::tolower` と
+名前が衝突しうるため、README の例では `namespace fops = frozenchars::ops;` のようなエイリアス経由で
+アダプタを修飾して使う形を推奨します。
 
 ## `substr`（部分文字列）
 
