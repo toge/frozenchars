@@ -342,6 +342,11 @@ TEST_CASE("pipe operator fixed adaptors") {
   auto constexpr s3 = "hello_world"_fs | fops::to_pascal_case;
   static_assert(s3.sv() == "HelloWorld");
   REQUIRE(s3.sv() == "HelloWorld");
+
+  auto constexpr direct = frozenchars::toupper(frozenchars::trim("  hello  "_fs));
+  auto constexpr piped  = "  hello  "_fs | fops::trim | fops::toupper;
+  static_assert(direct.sv() == piped.sv());
+  REQUIRE(direct.sv() == piped.sv());
 }
 
 TEST_CASE("pipe operator substr adaptor") {

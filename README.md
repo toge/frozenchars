@@ -95,6 +95,23 @@ static_assert(s2.sv() == "hello");
 static_assert(s3.sv() == "hello");
 ```
 
+## パイプ演算子で文字列ヘルパーをつなぐ
+
+パイプ演算子を使うと、文字列ヘルパーを左から右へ読み下せる形で連結できます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars::literals;
+using namespace frozenchars::ops;
+
+auto constexpr value = "  abcdef  "_fs | trim | toupper | substr(0, 3);
+static_assert(value.sv() == "ABC");
+```
+
+スタンドアロン関数 `frozenchars::trim(...)` や `frozenchars::toupper(...)` も引き続き使えます。
+README の例では、パイプ演算子を使うスコープで `using namespace frozenchars;` と
+`using namespace frozenchars::ops;` を混在させず、必要なら `frozenchars::trim(...)` のように修飾して使う形を推奨します。
+
 ## `substr`（部分文字列）
 
 `substr<Pos, Len>(...)` は部分文字列を取り出します。`FrozenString` と文字列リテラルの両方を受け取ります。
