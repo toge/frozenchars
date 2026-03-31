@@ -344,6 +344,26 @@ TEST_CASE("pipe operator fixed adaptors") {
   REQUIRE(s3.sv() == "HelloWorld");
 }
 
+TEST_CASE("pipe operator substr adaptor") {
+  namespace fops = frozenchars::ops;
+
+  auto constexpr s1 = "Hello, World!"_fs | fops::substr(7, 5);
+  static_assert(s1.sv() == "World");
+  REQUIRE(s1.sv() == "World");
+
+  auto constexpr s2 = "Hello, World!"_fs | fops::substr(5, -5);
+  static_assert(s2.sv() == "Hello");
+  REQUIRE(s2.sv() == "Hello");
+
+  auto constexpr s3 = "Hello"_fs | fops::substr(20, 5);
+  static_assert(s3.sv() == "");
+  REQUIRE(s3.sv() == "");
+
+  auto constexpr s4 = "  abcdef  "_fs | fops::trim | fops::toupper | fops::substr(0, 3);
+  static_assert(s4.sv() == "ABC");
+  REQUIRE(s4.sv() == "ABC");
+}
+
 TEST_CASE("split") {
   auto constexpr count = split_count("  alpha  beta\tgamma\n");
   static_assert(count == 3);

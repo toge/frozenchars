@@ -408,6 +408,40 @@ auto constexpr substr(char const (&str)[N]) noexcept {
   return substr<Pos, Len>(FrozenString{str});
 }
 
+/**
+ * @brief 文字列の部分文字列を生成する関数
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @param pos 開始位置
+ * @param len 文字数。負の場合は pos の左側から abs(len) 文字
+ * @return auto constexpr 部分文字列
+ */
+template <size_t N>
+auto constexpr substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_t len) noexcept {
+  auto res = FrozenString<N>{};
+  auto const requested_len = len >= 0
+    ? static_cast<size_t>(len)
+    : static_cast<size_t>(-(len + 1)) + 1uz;
+  auto const anchor = std::min(pos, str.length);
+  auto start = anchor;
+  auto actual_len = 0uz;
+
+  if (len >= 0) {
+    actual_len = anchor < str.length ? std::min(requested_len, str.length - anchor) : 0uz;
+  } else {
+    start = anchor > requested_len ? anchor - requested_len : 0uz;
+    actual_len = anchor - start;
+  }
+
+  for (auto i = 0uz; i < actual_len; ++i) {
+    res.buffer[i] = str.buffer[start + i];
+  }
+  res.buffer[actual_len] = '\0';
+  res.length = actual_len;
+  return res;
+}
+
 namespace detail {
 
   /**
@@ -1662,6 +1696,20 @@ struct tolower_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
+struct substr_adaptor : detail::pipe_adaptor_tag {
+  std::size_t pos;
+  std::ptrdiff_t len;
+
+  constexpr substr_adaptor(std::size_t p, std::ptrdiff_t l) noexcept
+  : pos(p), len(l)
+  {}
+
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::substr(str, pos, len);
+  }
+};
+
 struct capitalize_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
   constexpr auto operator()(FrozenString<N> const& str) const noexcept {
@@ -1699,6 +1747,10 @@ inline constexpr capitalize_adaptor capitalize{};
 inline constexpr to_snake_case_adaptor to_snake_case{};
 inline constexpr to_camel_case_adaptor to_camel_case{};
 inline constexpr to_pascal_case_adaptor to_pascal_case{};
+
+constexpr auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
+  return substr_adaptor{pos, len};
+}
 
 }
 
