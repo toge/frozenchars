@@ -328,6 +328,22 @@ TEST_CASE("trim helpers") {
   REQUIRE(s13.sv() == "");
 }
 
+TEST_CASE("pipe operator fixed adaptors") {
+  namespace fops = frozenchars::ops;
+
+  auto constexpr s1 = "hello"_fs | fops::toupper;
+  static_assert(s1.sv() == "HELLO");
+  REQUIRE(s1.sv() == "HELLO");
+
+  auto constexpr s2 = "  hello  "_fs | fops::trim | fops::toupper;
+  static_assert(s2.sv() == "HELLO");
+  REQUIRE(s2.sv() == "HELLO");
+
+  auto constexpr s3 = "hello_world"_fs | fops::to_pascal_case;
+  static_assert(s3.sv() == "HelloWorld");
+  REQUIRE(s3.sv() == "HelloWorld");
+}
+
 TEST_CASE("split") {
   auto constexpr count = split_count("  alpha  beta\tgamma\n");
   static_assert(count == 3);

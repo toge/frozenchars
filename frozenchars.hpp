@@ -153,6 +153,21 @@ struct FrozenString {
   }
 };
 
+namespace detail {
+
+struct pipe_adaptor_tag {};
+
+template <typename T>
+concept PipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_tag>;
+
+}
+
+template <size_t N, detail::PipeAdaptor Adaptor>
+constexpr auto operator|(FrozenString<N> const& lhs, Adaptor const& rhs)
+  noexcept(noexcept(rhs(lhs))) {
+  return rhs(lhs);
+}
+
 /**
  * @brief 文字列を指定回数繰り返した静的文字列を生成する関数
  *
@@ -1608,6 +1623,83 @@ template <char TrimChar = ' ', typename Ptr>
             || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 auto constexpr trim(Ptr&& str) noexcept {
   return trim<TrimChar>(freeze(str));
+}
+
+namespace ops {
+
+struct trim_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::trim(str);
+  }
+};
+
+struct ltrim_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::ltrim(str);
+  }
+};
+
+struct rtrim_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::rtrim(str);
+  }
+};
+
+struct toupper_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::toupper(str);
+  }
+};
+
+struct tolower_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::tolower(str);
+  }
+};
+
+struct capitalize_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::capitalize(str);
+  }
+};
+
+struct to_snake_case_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::to_snake_case(str);
+  }
+};
+
+struct to_camel_case_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::to_camel_case(str);
+  }
+};
+
+struct to_pascal_case_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  constexpr auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::to_pascal_case(str);
+  }
+};
+
+inline constexpr trim_adaptor trim{};
+inline constexpr ltrim_adaptor ltrim{};
+inline constexpr rtrim_adaptor rtrim{};
+inline constexpr toupper_adaptor toupper{};
+inline constexpr tolower_adaptor tolower{};
+inline constexpr capitalize_adaptor capitalize{};
+inline constexpr to_snake_case_adaptor to_snake_case{};
+inline constexpr to_camel_case_adaptor to_camel_case{};
+inline constexpr to_pascal_case_adaptor to_pascal_case{};
+
 }
 
 /*-------------------------------------------------------------------------------*\
