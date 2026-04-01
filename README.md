@@ -95,24 +95,6 @@ static_assert(s2.sv() == "hello");
 static_assert(s3.sv() == "hello");
 ```
 
-## パイプ演算子で文字列ヘルパーをつなぐ
-
-パイプ演算子を使うと、文字列ヘルパーを左から右へ読み下せる形で連結できます。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars::literals;
-namespace fops = frozenchars::ops;
-
-auto constexpr value = "  abcdef  "_fs | fops::trim | fops::toupper | fops::substr(0, 3);
-static_assert(value.sv() == "ABC");
-```
-
-スタンドアロン関数 `frozenchars::trim(...)` や `frozenchars::toupper(...)` も引き続き使えます。
-`frozenchars::ops::toupper` / `tolower` は、環境によっては C ライブラリの `::toupper` / `::tolower` と
-名前が衝突しうるため、README の例では `namespace fops = frozenchars::ops;` のようなエイリアス経由で
-アダプタを修飾して使う形を推奨します。
-
 ## `substr`（部分文字列）
 
 `substr<Pos, Len>(...)` は部分文字列を取り出します。`FrozenString` と文字列リテラルの両方を受け取ります。
@@ -212,6 +194,83 @@ static_assert(dvalues[0] == 100.0);
 static_assert(dvalues[1] == -25.0);
 static_assert(dvalues[2] == 3.125);
 ```
+
+## `capitalize`（先頭大文字化）
+
+先頭の文字を大文字、残りを小文字に変換します。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr c = capitalize("hELLO wORLD"_fs);  // "Hello world"
+
+static_assert(c.sv() == "Hello world");
+```
+
+## `to_snake_case`（スネークケース変換）
+
+camelCase または PascalCase をスネークケース（snake_case）に変換します。各大文字の前に `_` を挿入し、すべての文字を小文字にします。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr s1 = to_snake_case("helloWorld"_fs);   // "hello_world"
+auto constexpr s2 = to_snake_case("HelloWorld");      // "hello_world"
+
+static_assert(s1.sv() == "hello_world");
+static_assert(s2.sv() == "hello_world");
+```
+
+## `to_camel_case`（キャメルケース変換）
+
+snake_case をキャメルケース（camelCase）に変換します。`_` を除去し、その直後の文字を大文字にします。先頭は小文字のままです。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr c = to_camel_case("hello_world"_fs);  // "helloWorld"
+
+static_assert(c.sv() == "helloWorld");
+```
+
+## `to_pascal_case`（パスカルケース変換）
+
+snake_case をパスカルケース（PascalCase）に変換します。`_` を除去し、その直後の文字および先頭の文字を大文字にします。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr p = to_pascal_case("hello_world"_fs);  // "HelloWorld"
+
+static_assert(p.sv() == "HelloWorld");
+```
+
+## パイプ演算子で文字列ヘルパーをつなぐ
+
+パイプ演算子を使うと、文字列ヘルパーを左から右へ読み下せる形で連結できます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars::literals;
+namespace fops = frozenchars::ops;
+
+auto constexpr value = "  abcdef  "_fs | fops::trim | fops::toupper | fops::substr(0, 3);
+static_assert(value.sv() == "ABC");
+```
+
+スタンドアロン関数 `frozenchars::trim(...)` や `frozenchars::toupper(...)` も引き続き使えます。
+`frozenchars::ops::toupper` / `tolower` は、環境によっては C ライブラリの `::toupper` / `::tolower` と
+名前が衝突しうるため、README の例では `namespace fops = frozenchars::ops;` のようなエイリアス経由で
+アダプタを修飾して使う形を推奨します。
+
 
 ## `parse_hex_rgb` / `parse_hex_rgba`（hex color → RGB/RGBAタプル）
 
@@ -363,64 +422,6 @@ static_assert(aggregate_a.a == 0x44);
 static_assert(color_a.a == 0x99);
 static_assert(aggregate_bgr.b == 0xef);
 static_assert(color_abgr.a == 0x78);
-```
-
-## `capitalize`（先頭大文字化）
-
-先頭の文字を大文字、残りを小文字に変換します。`FrozenString` と文字列リテラルの両方を受け取ります。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-auto constexpr c = capitalize("hELLO wORLD"_fs);  // "Hello world"
-
-static_assert(c.sv() == "Hello world");
-```
-
-## `to_snake_case`（スネークケース変換）
-
-camelCase または PascalCase をスネークケース（snake_case）に変換します。各大文字の前に `_` を挿入し、すべての文字を小文字にします。`FrozenString` と文字列リテラルの両方を受け取ります。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-auto constexpr s1 = to_snake_case("helloWorld"_fs);   // "hello_world"
-auto constexpr s2 = to_snake_case("HelloWorld");      // "hello_world"
-
-static_assert(s1.sv() == "hello_world");
-static_assert(s2.sv() == "hello_world");
-```
-
-## `to_camel_case`（キャメルケース変換）
-
-snake_case をキャメルケース（camelCase）に変換します。`_` を除去し、その直後の文字を大文字にします。先頭は小文字のままです。`FrozenString` と文字列リテラルの両方を受け取ります。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-auto constexpr c = to_camel_case("hello_world"_fs);  // "helloWorld"
-
-static_assert(c.sv() == "helloWorld");
-```
-
-## `to_pascal_case`（パスカルケース変換）
-
-snake_case をパスカルケース（PascalCase）に変換します。`_` を除去し、その直後の文字および先頭の文字を大文字にします。`FrozenString` と文字列リテラルの両方を受け取ります。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-auto constexpr p = to_pascal_case("hello_world"_fs);  // "HelloWorld"
-
-static_assert(p.sv() == "HelloWorld");
 ```
 
 ## `freeze` 対応型一覧
