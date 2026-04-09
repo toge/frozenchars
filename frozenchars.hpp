@@ -13,6 +13,7 @@
 #include <string_view>
 #include <type_traits>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace frozenchars {
@@ -1882,68 +1883,131 @@ auto consteval concat(Args const&... args) noexcept {
   return (freeze(args) + ...);
 }
 
+namespace detail {
+  /**
+   * @brief 型情報を保持するための単純な構造体
+   */
+  template <typename T>
+  struct type_identity {
+    using type = T;
+  };
+
+  /**
+   * @brief 文字列トークンを対応する型に変換するヘルパー関数
+   * 
+   * @tparam S 判定対象の FrozenString
+   */
+  template <auto S>
+  consteval auto map_string_to_type() {
+    auto constexpr s = S.sv();
+    if constexpr (s == "bool") return type_identity<bool>{};
+    else if constexpr (s == "char") return type_identity<char>{};
+    else if constexpr (s == "int") return type_identity<int>{};
+    else if constexpr (s == "uint" || s == "unsigned") return type_identity<unsigned int>{};
+    else if constexpr (s == "long") return type_identity<long>{};
+    else if constexpr (s == "ulong") return type_identity<unsigned long>{};
+    else if constexpr (s == "float") return type_identity<float>{};
+    else if constexpr (s == "double") return type_identity<double>{};
+    else if constexpr (s == "string") return type_identity<std::string>{};
+    // 固定幅整数
+    else if constexpr (s == "int8_t" || s == "int8") return type_identity<std::int8_t>{};
+    else if constexpr (s == "int16_t" || s == "int16") return type_identity<std::int16_t>{};
+    else if constexpr (s == "int32_t" || s == "int32") return type_identity<std::int32_t>{};
+    else if constexpr (s == "int64_t" || s == "int64") return type_identity<std::int64_t>{};
+    else if constexpr (s == "uint8_t" || s == "uint8") return type_identity<std::uint8_t>{};
+    else if constexpr (s == "uint16_t" || s == "uint16") return type_identity<std::uint16_t>{};
+    else if constexpr (s == "uint32_t" || s == "uint32") return type_identity<std::uint32_t>{};
+    else if constexpr (s == "uint64_t" || s == "uint64") return type_identity<std::uint64_t>{};
+    else return type_identity<void>{};
+  }
+
+  /**
+   * @brief 閉じ括弧 ']' を探す。括弧の深さを考慮する。
+   */
+  template <auto S>
+  consteval std::size_t find_closing_bracket() {
+    auto constexpr sv = S.sv();
+    std::size_t depth = 0;
+    for (std::size_t i = 0; i < sv.size(); ++i) {
+      if (sv[i] == '[') ++depth;
+      else if (sv[i] == ']') {
+        if (--depth == 0) return i;
+      }
+    }
+    return std::string_view::npos;
+  }
+
+  /**
+   * @brief トップレベルのカンマ ',' を探す。括弧の深さを考慮する。
+   */
+  template <auto S>
+  consteval std::size_t find_top_level_comma() {
+    auto constexpr sv = S.sv();
+    std::size_t depth = 0;
+    for (std::size_t i = 0; i < sv.size(); ++i) {
+      if (sv[i] == '[') ++depth;
+      else if (sv[i] == ']') --depth;
+      else if (sv[i] == ',' && depth == 0) return i;
+    }
+    return std::string_view::npos;
+  }
+}
+
 /**
  * @brief 文字列トークンを対応する型に変換するメタ関数
  * @tparam S 判定対象の文字列
  */
 template <auto S>
 struct type_mapping {
-  using type = void; // デフォルト（空文字など）
+  using type = typename decltype(detail::map_string_to_type<S>())::type;
 };
 
-// 基本型
-template <size_t N> struct type_mapping<FrozenString<N>{"bool"}> { using type = bool; };
-template <size_t N> struct type_mapping<FrozenString<N>{"char"}> { using type = char; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int"}> { using type = int; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint"}> { using type = unsigned int; };
-template <size_t N> struct type_mapping<FrozenString<N>{"unsigned"}> { using type = unsigned int; };
-template <size_t N> struct type_mapping<FrozenString<N>{"long"}> { using type = long; };
-template <size_t N> struct type_mapping<FrozenString<N>{"ulong"}> { using type = unsigned long; };
-template <size_t N> struct type_mapping<FrozenString<N>{"float"}> { using type = float; };
-template <size_t N> struct type_mapping<FrozenString<N>{"double"}> { using type = double; };
-template <size_t N> struct type_mapping<FrozenString<N>{"string"}> { using type = std::string; };
-
-// 固定幅整数 (標準名)
-template <size_t N> struct type_mapping<FrozenString<N>{"int8_t"}> { using type = std::int8_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int16_t"}> { using type = std::int16_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int32_t"}> { using type = std::int32_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int64_t"}> { using type = std::int64_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint8_t"}> { using type = std::uint8_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint16_t"}> { using type = std::uint16_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint32_t"}> { using type = std::uint32_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint64_t"}> { using type = std::uint64_t; };
-
-// 固定幅整数 (短縮名)
-template <size_t N> struct type_mapping<FrozenString<N>{"int8"}> { using type = std::int8_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int16"}> { using type = std::int16_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int32"}> { using type = std::int32_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"int64"}> { using type = std::int64_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint8"}> { using type = std::uint8_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint16"}> { using type = std::uint16_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint32"}> { using type = std::uint32_t; };
-template <size_t N> struct type_mapping<FrozenString<N>{"uint64"}> { using type = std::uint64_t; };
-
 /**
- * @brief 固定文字列をパースして型のリスト（std::tuple）を生成する
+ * @brief 固定文字列をパースして型のリスト（std::tuple）を保持する type_identity を生成する
+ * 入れ子構造 [...] にも対応
  * 
  * @tparam Str 入力文字列 (FrozenString)
  */
 template <auto Str>
 consteval auto parse_to_tuple() {
-  auto constexpr sv = Str.sv();
+  auto constexpr trimmed = trim(Str);
   
-  if constexpr (sv.empty()) {
-    return std::tuple<>{};
-  } else {
-    auto constexpr end = sv.find(',');
-    if constexpr (end == std::string_view::npos) {
-      using T = typename type_mapping<Str>::type;
-      return std::tuple<T>{};
+  if constexpr (trimmed.length == 0) {
+    return detail::type_identity<std::tuple<>>{};
+  } else if constexpr (trimmed.buffer[0] == '[') {
+    auto constexpr closing_pos = detail::find_closing_bracket<trimmed>();
+    static_assert(closing_pos != std::string_view::npos, "Missing matching ']'");
+    
+    // 入れ子の中身
+    auto constexpr inner = substr(trimmed, 1, static_cast<std::ptrdiff_t>(closing_pos - 1));
+    using InnerTuple = typename decltype(parse_to_tuple<inner>())::type;
+    
+    // 次の要素があるか確認
+    auto constexpr next_comma = trimmed.sv().find(',', closing_pos);
+    if constexpr (next_comma == std::string_view::npos) {
+      return detail::type_identity<std::tuple<InnerTuple>>{};
     } else {
-      auto constexpr token = substr<0, end>(Str);
-      auto constexpr rest = substr<end + 1, static_cast<std::ptrdiff_t>(sv.size() - end - 1)>(Str);
+      auto constexpr rest = substr(trimmed, next_comma + 1, static_cast<std::ptrdiff_t>(trimmed.length - next_comma - 1));
+      using RestTuple = typename decltype(parse_to_tuple<rest>())::type;
+      using Combined = decltype(std::tuple_cat(std::declval<std::tuple<InnerTuple>>(), std::declval<RestTuple>()));
+      return detail::type_identity<Combined>{};
+    }
+  } else {
+    // トップレベルのカンマを探す
+    auto constexpr comma_pos = detail::find_top_level_comma<trimmed>();
+    
+    if constexpr (comma_pos == std::string_view::npos) {
+      using T = typename type_mapping<trimmed>::type;
+      static_assert(!std::is_same_v<T, void>, "Unknown type name");
+      return detail::type_identity<std::tuple<T>>{};
+    } else {
+      auto constexpr token = trim(substr(trimmed, 0, comma_pos));
+      auto constexpr rest = substr(trimmed, comma_pos + 1, static_cast<std::ptrdiff_t>(trimmed.length - comma_pos - 1));
       using T = typename type_mapping<token>::type;
-      return std::tuple_cat(std::tuple<T>{}, parse_to_tuple<rest>());
+      static_assert(!std::is_same_v<T, void>, "Unknown type name");
+      using RestTuple = typename decltype(parse_to_tuple<rest>())::type;
+      using Combined = decltype(std::tuple_cat(std::declval<std::tuple<T>>(), std::declval<RestTuple>()));
+      return detail::type_identity<Combined>{};
     }
   }
 }
