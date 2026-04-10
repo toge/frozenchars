@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <stdexcept>
@@ -1964,7 +1965,7 @@ struct type_mapping {
 
 /**
  * @brief 固定文字列をパースして型のリスト（std::tuple）を保持する type_identity を生成する
- * 入れ子構造 [...] にも対応
+ * 入れ子構造 [...] にも対応。末尾の '?' による std::optional にも対応。
  * 
  * @tparam Str 入力文字列 (FrozenString)
  */
@@ -1980,10 +1981,23 @@ consteval auto parse_to_tuple() {
     
     // 入れ子の中身
     auto constexpr inner = substr(trimmed, 1, static_cast<std::ptrdiff_t>(closing_pos - 1));
-    using InnerTuple = typename decltype(parse_to_tuple<inner>())::type;
+    using BaseInnerTuple = typename decltype(parse_to_tuple<inner>())::type;
+    
+    // ] の後に空白を挟んで ? があるか確認
+    auto constexpr opt_info = [](auto const& s, size_t pos) {
+      size_t i = pos + 1;
+      while (i < s.length && detail::is_whitespace(s.buffer[i])) ++i;
+      bool found = (i < s.length && s.buffer[i] == '?');
+      return std::pair{found, found ? i : pos};
+    }(trimmed, closing_pos);
+
+    auto constexpr is_opt = opt_info.first;
+    auto constexpr search_start = opt_info.second;
+    
+    using InnerTuple = std::conditional_t<is_opt, std::optional<BaseInnerTuple>, BaseInnerTuple>;
     
     // 次の要素があるか確認
-    auto constexpr next_comma = trimmed.sv().find(',', closing_pos);
+    auto constexpr next_comma = trimmed.sv().find(',', search_start);
     if constexpr (next_comma == std::string_view::npos) {
       return detail::type_identity<std::tuple<InnerTuple>>{};
     } else {
@@ -1997,17 +2011,36 @@ consteval auto parse_to_tuple() {
     auto constexpr comma_pos = detail::find_top_level_comma<trimmed>();
     
     if constexpr (comma_pos == std::string_view::npos) {
-      using T = typename type_mapping<trimmed>::type;
-      static_assert(!std::is_same_v<T, void>, "Unknown type name");
-      return detail::type_identity<std::tuple<T>>{};
+      // 単一要素。末尾が ? かどうか。
+      auto constexpr is_opt = (trimmed.length > 0 && trimmed.buffer[trimmed.length - 1] == '?');
+      if constexpr (is_opt) {
+        auto constexpr name = trim(substr(trimmed, 0, static_cast<std::ptrdiff_t>(trimmed.length - 1)));
+        using T = typename type_mapping<name>::type;
+        static_assert(!std::is_same_v<T, void>, "Unknown type name before '?'");
+        return detail::type_identity<std::tuple<std::optional<T>>>{};
+      } else {
+        using T = typename type_mapping<trimmed>::type;
+        static_assert(!std::is_same_v<T, void>, "Unknown type name");
+        return detail::type_identity<std::tuple<T>>{};
+      }
     } else {
       auto constexpr token = trim(substr(trimmed, 0, comma_pos));
-      auto constexpr rest = substr(trimmed, comma_pos + 1, static_cast<std::ptrdiff_t>(trimmed.length - comma_pos - 1));
-      using T = typename type_mapping<token>::type;
-      static_assert(!std::is_same_v<T, void>, "Unknown type name");
-      using RestTuple = typename decltype(parse_to_tuple<rest>())::type;
-      using Combined = decltype(std::tuple_cat(std::declval<std::tuple<T>>(), std::declval<RestTuple>()));
-      return detail::type_identity<Combined>{};
+      auto constexpr is_opt = (token.length > 0 && token.buffer[token.length - 1] == '?');
+      auto constexpr rest_str = substr(trimmed, comma_pos + 1, static_cast<std::ptrdiff_t>(trimmed.length - comma_pos - 1));
+      using RestTuple = typename decltype(parse_to_tuple<rest_str>())::type;
+
+      if constexpr (is_opt) {
+        auto constexpr name = trim(substr(token, 0, static_cast<std::ptrdiff_t>(token.length - 1)));
+        using T = typename type_mapping<name>::type;
+        static_assert(!std::is_same_v<T, void>, "Unknown type name before '?'");
+        using Combined = decltype(std::tuple_cat(std::declval<std::tuple<std::optional<T>>>(), std::declval<RestTuple>()));
+        return detail::type_identity<Combined>{};
+      } else {
+        using T = typename type_mapping<token>::type;
+        static_assert(!std::is_same_v<T, void>, "Unknown type name");
+        using Combined = decltype(std::tuple_cat(std::declval<std::tuple<T>>(), std::declval<RestTuple>()));
+        return detail::type_identity<Combined>{};
+      }
     }
   }
 }
