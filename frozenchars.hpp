@@ -162,7 +162,7 @@ struct pipe_adaptor_tag {};
 template <typename T>
 concept PipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_tag>;
 
-}
+} // namespace detail
 
 template <size_t N, detail::PipeAdaptor Adaptor>
 consteval auto operator|(FrozenString<N> const& lhs, Adaptor const& rhs)
@@ -446,282 +446,282 @@ auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_
 
 namespace detail {
 
-  /**
-   * @brief ASCII 空白文字かどうかを判定する関数
-   *
-   * @param c 判定する文字
-   * @return auto consteval 空白なら true
-   */
-  auto consteval is_whitespace(char c) noexcept {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+/**
+ * @brief ASCII 空白文字かどうかを判定する関数
+ *
+ * @param c 判定する文字
+ * @return auto consteval 空白なら true
+ */
+auto constexpr is_whitespace(char c) noexcept {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+template <bool TrimLeft, bool TrimRight, char TrimChar, size_t N>
+auto consteval trim_copy(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto start = 0uz;
+  auto end = str.length;
+
+  if constexpr (TrimLeft) {
+    while (start < str.length && str.buffer[start] == TrimChar) {
+      ++start;
+    }
   }
 
-  template <bool TrimLeft, bool TrimRight, char TrimChar, size_t N>
-  auto consteval trim_copy(FrozenString<N> const& str) noexcept {
-    auto res = FrozenString<N>{};
-    auto start = 0uz;
-    auto end = str.length;
-
-    if constexpr (TrimLeft) {
-      while (start < str.length && str.buffer[start] == TrimChar) {
-        ++start;
-      }
+  if constexpr (TrimRight) {
+    while (end > start && str.buffer[end - 1] == TrimChar) {
+      --end;
     }
-
-    if constexpr (TrimRight) {
-      while (end > start && str.buffer[end - 1] == TrimChar) {
-        --end;
-      }
-    }
-
-    auto const out_len = end - start;
-    for (auto i = 0uz; i < out_len; ++i) {
-      res.buffer[i] = str.buffer[start + i];
-    }
-    res.buffer[out_len] = '\0';
-    res.length = out_len;
-    return res;
   }
 
-  /**
-   * @brief ASCII の16進数字かどうかを判定する関数
-   *
-   * @param c 判定する文字
-   * @return auto consteval 16進数字なら true
-   */
-  auto consteval is_hex_digit(char c) noexcept {
-    return (c >= '0' && c <= '9')
-      || (c >= 'a' && c <= 'f')
-      || (c >= 'A' && c <= 'F');
+  auto const out_len = end - start;
+  for (auto i = 0uz; i < out_len; ++i) {
+    res.buffer[i] = str.buffer[start + i];
   }
+  res.buffer[out_len] = '\0';
+  res.length = out_len;
+  return res;
+}
 
-  /**
-   * @brief 16進数字1文字を 0..15 に変換する関数
-   *
-   * @param c 変換する16進数字
-   * @return auto consteval 変換結果
-   */
-  auto consteval hex_digit_to_value(char c) {
-    if (c >= '0' && c <= '9') {
-      return static_cast<std::uint8_t>(c - '0');
-    }
-    if (c >= 'a' && c <= 'f') {
-      return static_cast<std::uint8_t>(10 + (c - 'a'));
-    }
-    if (c >= 'A' && c <= 'F') {
-      return static_cast<std::uint8_t>(10 + (c - 'A'));
-    }
+/**
+ * @brief ASCII の16進数字かどうかを判定する関数
+ *
+ * @param c 判定する文字
+ * @return auto consteval 16進数字なら true
+ */
+auto consteval is_hex_digit(char c) noexcept {
+  return (c >= '0' && c <= '9')
+    || (c >= 'a' && c <= 'f')
+    || (c >= 'A' && c <= 'F');
+}
+
+/**
+ * @brief 16進数字1文字を 0..15 に変換する関数
+ *
+ * @param c 変換する16進数字
+ * @return auto consteval 変換結果
+ */
+auto consteval hex_digit_to_value(char c) {
+  if (c >= '0' && c <= '9') {
+    return static_cast<std::uint8_t>(c - '0');
+  }
+  if (c >= 'a' && c <= 'f') {
+    return static_cast<std::uint8_t>(10 + (c - 'a'));
+  }
+  if (c >= 'A' && c <= 'F') {
+    return static_cast<std::uint8_t>(10 + (c - 'A'));
+  }
+  throw std::invalid_argument("parse_hex_color: invalid hex digit");
+}
+
+/**
+ * @brief 16進数字2文字を 1byte に変換する関数
+ *
+ * @param hi 上位4bitを表す16進数字
+ * @param lo 下位4bitを表す16進数字
+ * @return auto consteval 変換結果
+ */
+auto consteval parse_hex_byte(char hi, char lo) {
+  if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
     throw std::invalid_argument("parse_hex_color: invalid hex digit");
   }
+  return static_cast<std::uint8_t>((hex_digit_to_value(hi) << 4u) | hex_digit_to_value(lo));
+}
 
-  /**
-   * @brief 16進数字2文字を 1byte に変換する関数
-   *
-   * @param hi 上位4bitを表す16進数字
-   * @param lo 下位4bitを表す16進数字
-   * @return auto consteval 変換結果
-   */
-  auto consteval parse_hex_byte(char hi, char lo) {
-    if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
-      throw std::invalid_argument("parse_hex_color: invalid hex digit");
+/**
+ * @brief 16進数字1文字を nibble 複製して 1byte に変換する関数
+ *
+ * @param c 変換する16進数字
+ * @return auto consteval 変換結果
+ */
+auto consteval parse_hex_shorthand_byte(char c) {
+  auto const value = hex_digit_to_value(c);
+  return static_cast<std::uint8_t>((value << 4u) | value);
+}
+
+/**
+ * @brief 区切り判定関数でトークン数を数える関数
+ *
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto consteval トークン数
+ */
+template <auto IsDelimiter = is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto consteval split_count_impl(FrozenString<N> const& str) noexcept {
+  auto count = 0uz;
+  auto in_token = false;
+  for (auto i = 0uz; i < str.length; ++i) {
+    if (IsDelimiter(str.buffer[i])) {
+      in_token = false;
+    } else if (!in_token) {
+      in_token = true;
+      ++count;
     }
-    return static_cast<std::uint8_t>((hex_digit_to_value(hi) << 4u) | hex_digit_to_value(lo));
+  }
+  return count;
+}
+
+/**
+ * @brief 整数字句を指定整数型に変換する関数
+ *
+ * @tparam Int 変換先の整数型
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param token 変換するトークン
+ * @return auto consteval 変換結果
+ */
+template <Numeric Number = int, size_t N>
+  requires (!std::same_as<std::remove_cv_t<Number>, bool>)
+auto consteval parse_int_token(FrozenString<N> const& token) {
+  using Result = std::remove_cv_t<Number>;
+
+  if (token.length == 0) {
+    throw std::invalid_argument("split_numbers: empty token");
   }
 
-  /**
-   * @brief 16進数字1文字を nibble 複製して 1byte に変換する関数
-   *
-   * @param c 変換する16進数字
-   * @return auto consteval 変換結果
-   */
-  auto consteval parse_hex_shorthand_byte(char c) {
-    auto const value = hex_digit_to_value(c);
-    return static_cast<std::uint8_t>((value << 4u) | value);
-  }
+  if constexpr (Integral<Result>) {
+    using Unsigned = std::make_unsigned_t<Result>;
 
-  /**
-   * @brief 区切り判定関数でトークン数を数える関数
-   *
-   * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
-   * @tparam N 文字列の長さ (終端文字'\0'を含む)
-   * @param str 対象文字列
-   * @return auto consteval トークン数
-   */
-  template <auto IsDelimiter = is_whitespace, size_t N>
-    requires std::predicate<decltype(IsDelimiter), char>
-  auto consteval split_count_impl(FrozenString<N> const& str) noexcept {
-    auto count = 0uz;
-    auto in_token = false;
-    for (auto i = 0uz; i < str.length; ++i) {
-      if (IsDelimiter(str.buffer[i])) {
-        in_token = false;
-      } else if (!in_token) {
-        in_token = true;
-        ++count;
-      }
+    auto pos = 0uz;
+    auto negative = false;
+    if (token.buffer[pos] == '+' || token.buffer[pos] == '-') {
+      negative = token.buffer[pos] == '-';
+      ++pos;
     }
-    return count;
-  }
-
-  /**
-   * @brief 整数字句を指定整数型に変換する関数
-   *
-   * @tparam Int 変換先の整数型
-   * @tparam N 文字列の長さ (終端文字'\0'を含む)
-   * @param token 変換するトークン
-   * @return auto consteval 変換結果
-   */
-  template <Numeric Number = int, size_t N>
-    requires (!std::same_as<std::remove_cv_t<Number>, bool>)
-  auto consteval parse_int_token(FrozenString<N> const& token) {
-    using Result = std::remove_cv_t<Number>;
-
-    if (token.length == 0) {
-      throw std::invalid_argument("split_numbers: empty token");
+    if (pos == token.length) {
+      throw std::invalid_argument("split_numbers: sign without digits");
     }
 
-    if constexpr (Integral<Result>) {
-      using Unsigned = std::make_unsigned_t<Result>;
-
-      auto pos = 0uz;
-      auto negative = false;
-      if (token.buffer[pos] == '+' || token.buffer[pos] == '-') {
-        negative = token.buffer[pos] == '-';
-        ++pos;
+    auto value = Unsigned{0};
+    auto constexpr IS_SIGNED = std::numeric_limits<Result>::is_signed;
+    auto constexpr MAX_POSITIVE = static_cast<Unsigned>(std::numeric_limits<Result>::max());
+    auto const limit = [&]() constexpr {
+      if constexpr (IS_SIGNED) {
+        auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
+        return negative ? NEGATIVE_LIMIT : MAX_POSITIVE;
+      } else {
+        return MAX_POSITIVE;
       }
-      if (pos == token.length) {
-        throw std::invalid_argument("split_numbers: sign without digits");
+    }();
+
+    for (; pos < token.length; ++pos) {
+      auto const c = token.buffer[pos];
+      if (c < '0' || c > '9') {
+        throw std::invalid_argument("split_numbers: non-numeric token");
       }
 
-      auto value = Unsigned{0};
-      auto constexpr IS_SIGNED = std::numeric_limits<Result>::is_signed;
-      auto constexpr MAX_POSITIVE = static_cast<Unsigned>(std::numeric_limits<Result>::max());
-      auto const limit = [&]() constexpr {
-        if constexpr (IS_SIGNED) {
-          auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
-          return negative ? NEGATIVE_LIMIT : MAX_POSITIVE;
-        } else {
-          return MAX_POSITIVE;
+      auto const digit = static_cast<Unsigned>(c - '0');
+      if (value > (limit - digit) / 10u) {
+        throw std::out_of_range("split_numbers: integer out of range");
+      }
+      value = static_cast<Unsigned>(value * 10u + digit);
+    }
+
+    if (negative) {
+      if constexpr (!IS_SIGNED) {
+        throw std::out_of_range("split_numbers: negative token for unsigned type");
+      } else {
+        auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
+        if (value == NEGATIVE_LIMIT) {
+          return std::numeric_limits<Result>::min();
         }
-      }();
-
-      for (; pos < token.length; ++pos) {
-        auto const c = token.buffer[pos];
-        if (c < '0' || c > '9') {
-          throw std::invalid_argument("split_numbers: non-numeric token");
-        }
-
-        auto const digit = static_cast<Unsigned>(c - '0');
-        if (value > (limit - digit) / 10u) {
-          throw std::out_of_range("split_numbers: integer out of range");
-        }
-        value = static_cast<Unsigned>(value * 10u + digit);
+        return static_cast<Result>(-static_cast<Result>(value));
       }
+    }
 
-      if (negative) {
-        if constexpr (!IS_SIGNED) {
-          throw std::out_of_range("split_numbers: negative token for unsigned type");
-        } else {
-          auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
-          if (value == NEGATIVE_LIMIT) {
-            return std::numeric_limits<Result>::min();
-          }
-          return static_cast<Result>(-static_cast<Result>(value));
-        }
-      }
+    return static_cast<Result>(value);
+  } else {
+    auto pos = 0uz;
+    auto negative = false;
+    if (token.buffer[pos] == '+' || token.buffer[pos] == '-') {
+      negative = token.buffer[pos] == '-';
+      ++pos;
+    }
+    if (pos == token.length) {
+      throw std::invalid_argument("split_numbers: sign without digits");
+    }
 
-      return static_cast<Result>(value);
-    } else {
-      auto pos = 0uz;
-      auto negative = false;
-      if (token.buffer[pos] == '+' || token.buffer[pos] == '-') {
-        negative = token.buffer[pos] == '-';
-        ++pos;
-      }
-      if (pos == token.length) {
-        throw std::invalid_argument("split_numbers: sign without digits");
-      }
+    auto value = 0.0L;
+    auto has_digits = false;
 
-      auto value = 0.0L;
-      auto has_digits = false;
+    while (pos < token.length && token.buffer[pos] >= '0' && token.buffer[pos] <= '9') {
+      has_digits = true;
+      value = value * 10.0L + static_cast<long double>(token.buffer[pos] - '0');
+      ++pos;
+    }
 
+    if (pos < token.length && token.buffer[pos] == '.') {
+      ++pos;
+      auto place = 0.1L;
       while (pos < token.length && token.buffer[pos] >= '0' && token.buffer[pos] <= '9') {
         has_digits = true;
-        value = value * 10.0L + static_cast<long double>(token.buffer[pos] - '0');
+        value += static_cast<long double>(token.buffer[pos] - '0') * place;
+        place *= 0.1L;
         ++pos;
       }
-
-      if (pos < token.length && token.buffer[pos] == '.') {
-        ++pos;
-        auto place = 0.1L;
-        while (pos < token.length && token.buffer[pos] >= '0' && token.buffer[pos] <= '9') {
-          has_digits = true;
-          value += static_cast<long double>(token.buffer[pos] - '0') * place;
-          place *= 0.1L;
-          ++pos;
-        }
-      }
-
-      if (!has_digits) {
-        throw std::invalid_argument("split_numbers: non-numeric token");
-      }
-
-      if (pos < token.length && (token.buffer[pos] == 'e' || token.buffer[pos] == 'E')) {
-        ++pos;
-        auto exp_negative = false;
-        if (pos < token.length && (token.buffer[pos] == '+' || token.buffer[pos] == '-')) {
-          exp_negative = token.buffer[pos] == '-';
-          ++pos;
-        }
-
-        if (pos == token.length || token.buffer[pos] < '0' || token.buffer[pos] > '9') {
-          throw std::invalid_argument("split_numbers: invalid exponent");
-        }
-
-        auto exponent = 0;
-        while (pos < token.length && token.buffer[pos] >= '0' && token.buffer[pos] <= '9') {
-          auto const digit = token.buffer[pos] - '0';
-          if (exponent > (std::numeric_limits<int>::max() - digit) / 10) {
-            throw std::out_of_range("split_numbers: floating exponent out of range");
-          }
-          exponent = exponent * 10 + digit;
-          ++pos;
-        }
-
-        if (exp_negative) {
-          for (auto i = 0; i < exponent; ++i) {
-            value /= 10.0L;
-          }
-        } else {
-          auto const max_abs = static_cast<long double>(std::numeric_limits<Result>::max());
-          for (auto i = 0; i < exponent; ++i) {
-            value *= 10.0L;
-            if (value > max_abs) {
-              throw std::out_of_range("split_numbers: floating value out of range");
-            }
-          }
-        }
-      }
-
-      if (pos != token.length) {
-        throw std::invalid_argument("split_numbers: non-numeric token");
-      }
-
-      if (negative) {
-        value = -value;
-      }
-
-      auto const min_value = static_cast<long double>(std::numeric_limits<Result>::lowest());
-      auto const max_value = static_cast<long double>(std::numeric_limits<Result>::max());
-      if (value < min_value || value > max_value) {
-        throw std::out_of_range("split_numbers: floating value out of range");
-      }
-
-      return static_cast<Result>(value);
     }
-  }
 
+    if (!has_digits) {
+      throw std::invalid_argument("split_numbers: non-numeric token");
+    }
+
+    if (pos < token.length && (token.buffer[pos] == 'e' || token.buffer[pos] == 'E')) {
+      ++pos;
+      auto exp_negative = false;
+      if (pos < token.length && (token.buffer[pos] == '+' || token.buffer[pos] == '-')) {
+        exp_negative = token.buffer[pos] == '-';
+        ++pos;
+      }
+
+      if (pos == token.length || token.buffer[pos] < '0' || token.buffer[pos] > '9') {
+        throw std::invalid_argument("split_numbers: invalid exponent");
+      }
+
+      auto exponent = 0;
+      while (pos < token.length && token.buffer[pos] >= '0' && token.buffer[pos] <= '9') {
+        auto const digit = token.buffer[pos] - '0';
+        if (exponent > (std::numeric_limits<int>::max() - digit) / 10) {
+          throw std::out_of_range("split_numbers: floating exponent out of range");
+        }
+        exponent = exponent * 10 + digit;
+        ++pos;
+      }
+
+      if (exp_negative) {
+        for (auto i = 0; i < exponent; ++i) {
+          value /= 10.0L;
+        }
+      } else {
+        auto const max_abs = static_cast<long double>(std::numeric_limits<Result>::max());
+        for (auto i = 0; i < exponent; ++i) {
+          value *= 10.0L;
+          if (value > max_abs) {
+            throw std::out_of_range("split_numbers: floating value out of range");
+          }
+        }
+      }
+    }
+
+    if (pos != token.length) {
+      throw std::invalid_argument("split_numbers: non-numeric token");
+    }
+
+    if (negative) {
+      value = -value;
+    }
+
+    auto const min_value = static_cast<long double>(std::numeric_limits<Result>::lowest());
+    auto const max_value = static_cast<long double>(std::numeric_limits<Result>::max());
+    if (value < min_value || value > max_value) {
+      throw std::out_of_range("split_numbers: floating value out of range");
+    }
+
+    return static_cast<Result>(value);
+  }
 }
+
+} // namespace detail
 
 /**
  * @brief 文字列を区切り判定関数で分割したときのトークン数を返す関数
@@ -1240,236 +1240,237 @@ auto consteval operator+(char const (&lhs)[N], FrozenString<M> const& rhs) noexc
 
 namespace detail {
 
-  /**
-   * @brief 10進数整数を文字列に変換する関数
-   *
-   * @param v 変換する整数
-   * @return auto consteval 変換された文字列とその長さのペア
-   */
-  auto consteval to_dec_chars(long long v) noexcept {
-    auto buffer = std::array<char, 21>{};
-    if (v == 0) {
-      buffer[0] = '0';
-      return std::pair{buffer, 1uz};
-    }
-    auto const neg = v < 0;
-    auto val = neg ? (v == -9223372036854775807LL - 1 ? 9223372036854775807LL : -v) : v;
-    auto i = 0uz;
-    while (val > 0) {
-      buffer[i++] = static_cast<char>('0' + (val % 10));
-      val /= 10;
-    }
-    if (neg) {
-      buffer[i++] = '-';
-    }
-    for (auto const j : std::views::iota(0uz, i / 2)) {
-      std::swap(buffer[j], buffer[i - j - 1]);
-    }
-    return std::pair{buffer, i};
+/**
+ * @brief 10進数整数を文字列に変換する関数
+ *
+ * @param v 変換する整数
+ * @return auto consteval 変換された文字列とその長さのペア
+ */
+auto consteval to_dec_chars(long long v) noexcept {
+  auto buffer = std::array<char, 21>{};
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  auto const neg = v < 0;
+  auto val = neg ? (v == -9223372036854775807LL - 1 ? 9223372036854775807LL : -v) : v;
+  auto i = 0uz;
+  while (val > 0) {
+    buffer[i++] = static_cast<char>('0' + (val % 10));
+    val /= 10;
+  }
+  if (neg) {
+    buffer[i++] = '-';
+  }
+  for (auto const j : std::views::iota(0uz, i / 2)) {
+    std::swap(buffer[j], buffer[i - j - 1]);
+  }
+  return std::pair{buffer, i};
+}
+
+/**
+ * @brief 16進数整数を文字列に変換する関数
+ *
+ * @param value 変換する整数
+ * @return auto consteval 変換された文字列とその長さのペア
+ */
+auto consteval to_hex_chars(long long value) noexcept {
+  auto buffer = std::array<char, 17>{};
+  auto v = static_cast<unsigned long long>(value);
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  auto i = 0uz;
+  auto constexpr digits = "0123456789abcdef";
+  while (v > 0) {
+    buffer[i++] = digits[v % 16]; v /= 16;
+  }
+  for (auto const j : std::views::iota(0uz, i / 2)) {
+    std::swap(buffer[j], buffer[i - j - 1]);
+  }
+  return std::pair{buffer, i};
+}
+
+/**
+ * @brief 2進数整数を文字列に変換する関数
+ *
+ * @param value 変換する整数
+ * @return auto consteval 変換された文字列とその長さのペア
+ */
+auto consteval to_bin_chars(long long value) noexcept {
+  auto buffer = std::array<char, 65>{};
+  auto v = static_cast<unsigned long long>(value);
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  auto i = 0uz;
+  while (v > 0) {
+    buffer[i++] = '0' + static_cast<char>(v % 2); v /= 2;
+  }
+  for (auto const j : std::views::iota(0uz, i / 2)) {
+    std::swap(buffer[j], buffer[i - j - 1]);
+  }
+  return std::pair{buffer, i};
+}
+
+/**
+ * @brief 8進数整数を文字列に変換する関数
+ *
+ * @param value 変換する整数
+ * @return auto consteval 変換された文字列とその長さのペア
+ */
+auto consteval to_oct_chars(long long value) noexcept {
+  auto buffer = std::array<char, 23>{};
+  auto v = static_cast<unsigned long long>(value);
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  auto i = 0uz;
+  while (v > 0) {
+    buffer[i++] = '0' + static_cast<char>(v % 8); v /= 8;
+  }
+  for (auto const j : std::views::iota(0uz, i / 2)) {
+    std::swap(buffer[j], buffer[i - j - 1]);
+  }
+  return std::pair{buffer, i};
+}
+
+/**
+ * @brief 浮動小数点数を文字列に変換する関数（簡易固定小数点）
+ *
+ * @param value 変換する浮動小数点数
+ * @param precision 小数点以下の桁数
+ * @return auto consteval 変換された文字列とその長さのペア
+ */
+auto consteval to_float_chars(double value, int precision) noexcept {
+  auto buffer = std::array<char, 48>{};
+  auto i = 0uz;
+  if (value < 0) {
+    buffer[i++] = '-'; value = -value;
   }
 
-  /**
-   * @brief 16進数整数を文字列に変換する関数
-   *
-   * @param value 変換する整数
-   * @return auto consteval 変換された文字列とその長さのペア
-   */
-  auto consteval to_hex_chars(long long value) noexcept {
-    auto buffer = std::array<char, 17>{};
-    auto v = static_cast<unsigned long long>(value);
-    if (v == 0) {
-      buffer[0] = '0';
-      return std::pair{buffer, 1uz};
-    }
-    auto i = 0uz;
-    auto constexpr digits = "0123456789abcdef";
-    while (v > 0) {
-      buffer[i++] = digits[v % 16]; v /= 16;
-    }
-    for (auto const j : std::views::iota(0uz, i / 2)) {
-      std::swap(buffer[j], buffer[i - j - 1]);
-    }
-    return std::pair{buffer, i};
+  auto integral = static_cast<long long>(value);
+  auto [int_data, int_len] = to_dec_chars(integral);
+  for (auto const j : std::views::iota(0uz, int_len)) {
+    buffer[i++] = int_data[j];
   }
 
-  /**
-   * @brief 2進数整数を文字列に変換する関数
-   *
-   * @param value 変換する整数
-   * @return auto consteval 変換された文字列とその長さのペア
-   */
-  auto consteval to_bin_chars(long long value) noexcept {
-    auto buffer = std::array<char, 65>{};
-    auto v = static_cast<unsigned long long>(value);
-    if (v == 0) {
-      buffer[0] = '0';
-      return std::pair{buffer, 1uz};
-    }
-    auto i = 0uz;
-    while (v > 0) {
-      buffer[i++] = '0' + static_cast<char>(v % 2); v /= 2;
-    }
-    for (auto const j : std::views::iota(0uz, i / 2)) {
-      std::swap(buffer[j], buffer[i - j - 1]);
-    }
-    return std::pair{buffer, i};
-  }
+  auto p = std::max(0, precision);
+  if (p > 0 && i < buffer.size()) {
+    buffer[i++] = '.';
+    auto const room = static_cast<int>(buffer.size() - i);
+    p = std::min(p, room);
 
-  /**
-   * @brief 8進数整数を文字列に変換する関数
-   *
-   * @param value 変換する整数
-   * @return auto consteval 変換された文字列とその長さのペア
-   */
-  auto consteval to_oct_chars(long long value) noexcept {
-    auto buffer = std::array<char, 23>{};
-    auto v = static_cast<unsigned long long>(value);
-    if (v == 0) {
-      buffer[0] = '0';
-      return std::pair{buffer, 1uz};
-    }
-    auto i = 0uz;
-    while (v > 0) {
-      buffer[i++] = '0' + static_cast<char>(v % 8); v /= 8;
-    }
-    for (auto const j : std::views::iota(0uz, i / 2)) {
-      std::swap(buffer[j], buffer[i - j - 1]);
-    }
-    return std::pair{buffer, i};
-  }
-
-  /**
-   * @brief 浮動小数点数を文字列に変換する関数（簡易固定小数点）
-   *
-   * @param value 変換する浮動小数点数
-   * @param precision 小数点以下の桁数
-   * @return auto consteval 変換された文字列とその長さのペア
-   */
-  auto consteval to_float_chars(double value, int precision) noexcept {
-    auto buffer = std::array<char, 48>{};
-    auto i = 0uz;
-    if (value < 0) {
-      buffer[i++] = '-'; value = -value;
-    }
-
-    auto integral = static_cast<long long>(value);
-    auto [int_data, int_len] = to_dec_chars(integral);
-    for (auto const j : std::views::iota(0uz, int_len)) {
-      buffer[i++] = int_data[j];
-    }
-
-    auto p = std::max(0, precision);
-    if (p > 0 && i < buffer.size()) {
-      buffer[i++] = '.';
-      auto const room = static_cast<int>(buffer.size() - i);
-      p = std::min(p, room);
-
-      double frac = value - static_cast<double>(integral);
-      for (auto const _ : std::views::iota(0, p)) {
-        frac *= 10.0;
-        int digit = static_cast<int>(frac);
-        buffer[i++] = static_cast<char>('0' + digit);
-        frac -= digit;
-      }
-    }
-    return std::pair{buffer, i};
-  }
-
-  /**
-   * @brief 1要素を 0..255 の値として扱うための共通変換関数
-   * - std::byte は std::to_integer<unsigned char> を使用
-   * - それ以外は unsigned char へキャスト
-   *
-   * @tparam T 変換する要素の型
-   * @param v 変換する要素
-   * @return auto consteval 変換された 0..255 の値
-   */
-  template <typename T>
-  auto consteval to_u8(T const v) noexcept {
-    if constexpr (std::same_as<std::remove_cv_t<T>, std::byte>) {
-      return std::to_integer<unsigned char>(v);
-    } else {
-      return static_cast<unsigned char>(v);
+    double frac = value - static_cast<double>(integral);
+    for (auto const _ : std::views::iota(0, p)) {
+      frac *= 10.0;
+      int digit = static_cast<int>(frac);
+      buffer[i++] = static_cast<char>('0' + digit);
+      frac -= digit;
     }
   }
+  return std::pair{buffer, i};
+}
 
-  /**
-   * @brief ヌル終端ポインタを FrozenString<257> に変換する関数
-   * - nullptr は空文字とする
-   * - '\0' もしくは 256 文字で打ち切り
-   *
-   * @tparam Elem 変換する要素の型
-   * @param arg 変換するヌル終端ポインタ
-   * @return auto consteval 変換された FrozenString<257>
-   */
-  template <typename Elem>
-  auto consteval freeze_from_ptr(Elem const* arg) noexcept {
-    auto res = FrozenString<257>{};
-    if (arg == nullptr) {
-      res.buffer[0] = '\0';
-      res.length = 0;
-      return res;
-    }
-
-    auto len = 0uz;
-    for (; len < res.buffer.size() - 1; ++len) {
-      auto const byte = to_u8(arg[len]);
-      if (byte == 0u) {
-        break;
-      }
-      res.buffer[len] = static_cast<char>(byte);
-    }
-    res.buffer[len] = '\0';
-    res.length = len;
-    return res;
-  }
-
-  /**
-   * @brief span を FrozenString<257> に変換する関数
-   * - 先頭から 0 値までを文字列として扱う
-   * - 0 がなくても最大 256 文字までコピー
-   *
-   * @tparam Elem 変換する要素の型
-   * @tparam Extent span の長さ
-   * @param arg 変換する span
-   * @return auto consteval 変換された FrozenString<257>
-   */
-  template <typename Elem, size_t Extent>
-  auto consteval freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
-    auto res = FrozenString<257>{};
-    auto const max_len = std::min(arg.size(), res.buffer.size() - 1);
-    auto len = 0uz;
-    for (; len < max_len; ++len) {
-      auto const byte = to_u8(arg[len]);
-      if (byte == 0u) {
-        break;
-      }
-      res.buffer[len] = static_cast<char>(byte);
-    }
-    res.buffer[len] = '\0';
-    res.length = len;
-    return res;
-  }
-
-  /**
-   * @brief string_view を FrozenString<257> に変換する関数
-   * - 終端は長さベース
-   * - 最大 256 文字までコピー
-   *
-   * @param s 変換する string_view
-   * @return auto consteval 変換された FrozenString<257>
-   */
-  auto consteval freeze_from_sv(std::string_view s) noexcept {
-    auto res = FrozenString<257>{};
-    auto const len = std::min(s.size(), res.buffer.size() - 1);
-    for (auto i = 0uz; i < len; ++i) {
-      res.buffer[i] = s[i];
-    }
-    res.buffer[len] = '\0';
-    res.length = len;
-    return res;
+/**
+ * @brief 1要素を 0..255 の値として扱うための共通変換関数
+ * - std::byte は std::to_integer<unsigned char> を使用
+ * - それ以外は unsigned char へキャスト
+ *
+ * @tparam T 変換する要素の型
+ * @param v 変換する要素
+ * @return auto consteval 変換された 0..255 の値
+ */
+template <typename T>
+auto consteval to_u8(T const v) noexcept {
+  if constexpr (std::same_as<std::remove_cv_t<T>, std::byte>) {
+    return std::to_integer<unsigned char>(v);
+  } else {
+    return static_cast<unsigned char>(v);
   }
 }
+
+/**
+ * @brief ヌル終端ポインタを FrozenString<257> に変換する関数
+ * - nullptr は空文字とする
+ * - '\0' もしくは 256 文字で打ち切り
+ *
+ * @tparam Elem 変換する要素の型
+ * @param arg 変換するヌル終端ポインタ
+ * @return auto consteval 変換された FrozenString<257>
+ */
+template <typename Elem>
+auto consteval freeze_from_ptr(Elem const* arg) noexcept {
+  auto res = FrozenString<257>{};
+  if (arg == nullptr) {
+    res.buffer[0] = '\0';
+    res.length = 0;
+    return res;
+  }
+
+  auto len = 0uz;
+  for (; len < res.buffer.size() - 1; ++len) {
+    auto const byte = to_u8(arg[len]);
+    if (byte == 0u) {
+      break;
+    }
+    res.buffer[len] = static_cast<char>(byte);
+  }
+  res.buffer[len] = '\0';
+  res.length = len;
+  return res;
+}
+
+/**
+ * @brief span を FrozenString<257> に変換する関数
+ * - 先頭から 0 値までを文字列として扱う
+ * - 0 がなくても最大 256 文字までコピー
+ *
+ * @tparam Elem 変換する要素の型
+ * @tparam Extent span の長さ
+ * @param arg 変換する span
+ * @return auto consteval 変換された FrozenString<257>
+ */
+template <typename Elem, size_t Extent>
+auto consteval freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
+  auto res = FrozenString<257>{};
+  auto const max_len = std::min(arg.size(), res.buffer.size() - 1);
+  auto len = 0uz;
+  for (; len < max_len; ++len) {
+    auto const byte = to_u8(arg[len]);
+    if (byte == 0u) {
+      break;
+    }
+    res.buffer[len] = static_cast<char>(byte);
+  }
+  res.buffer[len] = '\0';
+  res.length = len;
+  return res;
+}
+
+/**
+ * @brief string_view を FrozenString<257> に変換する関数
+ * - 終端は長さベース
+ * - 最大 256 文字までコピー
+ *
+ * @param s 変換する string_view
+ * @return auto consteval 変換された FrozenString<257>
+ */
+auto consteval freeze_from_sv(std::string_view s) noexcept {
+  auto res = FrozenString<257>{};
+  auto const len = std::min(s.size(), res.buffer.size() - 1);
+  for (auto i = 0uz; i < len; ++i) {
+    res.buffer[i] = s[i];
+  }
+  res.buffer[len] = '\0';
+  res.length = len;
+  return res;
+}
+
+} // namespace detail
 
 /*===============================================================================*\
  * 各種データ型に対応したfreeze関数の定義
@@ -1754,7 +1755,7 @@ consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};
 }
 
-}
+} // namespace ops
 
 /*-------------------------------------------------------------------------------*\
  * 数値対応
@@ -1885,74 +1886,81 @@ auto consteval concat(Args const&... args) noexcept {
 }
 
 namespace detail {
-  /**
-   * @brief 型情報を保持するための単純な構造体
-   */
-  template <typename T>
-  struct type_identity {
-    using type = T;
-  };
 
-  /**
-   * @brief 文字列トークンを対応する型に変換するヘルパー関数
-   * 
-   * @tparam S 判定対象の FrozenString
-   */
-  template <auto S>
-  consteval auto map_string_to_type() {
-    auto constexpr s = S.sv();
-    if constexpr (s == "bool") return type_identity<bool>{};
-    else if constexpr (s == "char") return type_identity<char>{};
-    else if constexpr (s == "int") return type_identity<int>{};
-    else if constexpr (s == "uint" || s == "unsigned") return type_identity<unsigned int>{};
-    else if constexpr (s == "long") return type_identity<long>{};
-    else if constexpr (s == "ulong") return type_identity<unsigned long>{};
-    else if constexpr (s == "float") return type_identity<float>{};
-    else if constexpr (s == "double") return type_identity<double>{};
-    else if constexpr (s == "string") return type_identity<std::string>{};
-    // 固定幅整数
-    else if constexpr (s == "int8_t" || s == "int8") return type_identity<std::int8_t>{};
-    else if constexpr (s == "int16_t" || s == "int16") return type_identity<std::int16_t>{};
-    else if constexpr (s == "int32_t" || s == "int32") return type_identity<std::int32_t>{};
-    else if constexpr (s == "int64_t" || s == "int64") return type_identity<std::int64_t>{};
-    else if constexpr (s == "uint8_t" || s == "uint8") return type_identity<std::uint8_t>{};
-    else if constexpr (s == "uint16_t" || s == "uint16") return type_identity<std::uint16_t>{};
-    else if constexpr (s == "uint32_t" || s == "uint32") return type_identity<std::uint32_t>{};
-    else if constexpr (s == "uint64_t" || s == "uint64") return type_identity<std::uint64_t>{};
-    else return type_identity<void>{};
-  }
+/**
+ * @brief 型情報を保持するための単純な構造体
+ */
+template <typename T>
+struct type_identity {
+  using type = T;
+};
 
-  /**
-   * @brief 閉じ括弧 ']' を探す。括弧の深さを考慮する。
-   */
-  template <auto S>
-  consteval std::size_t find_closing_bracket() {
-    auto constexpr sv = S.sv();
-    std::size_t depth = 0;
-    for (std::size_t i = 0; i < sv.size(); ++i) {
-      if (sv[i] == '[') ++depth;
-      else if (sv[i] == ']') {
-        if (--depth == 0) return i;
-      }
-    }
-    return std::string_view::npos;
-  }
+struct unknown_type {};
 
-  /**
-   * @brief トップレベルのカンマ ',' を探す。括弧の深さを考慮する。
-   */
-  template <auto S>
-  consteval std::size_t find_top_level_comma() {
-    auto constexpr sv = S.sv();
-    std::size_t depth = 0;
-    for (std::size_t i = 0; i < sv.size(); ++i) {
-      if (sv[i] == '[') ++depth;
-      else if (sv[i] == ']') --depth;
-      else if (sv[i] == ',' && depth == 0) return i;
-    }
-    return std::string_view::npos;
-  }
+/**
+ * @brief 文字列トークンを対応する型に変換するヘルパー関数
+ *
+ * @tparam S 判定対象の FrozenString
+ */
+template <auto S>
+consteval auto map_string_to_type() {
+  auto constexpr s = S.sv();
+  if constexpr (s == "bool") return type_identity<bool>{};
+  else if constexpr (s == "char") return type_identity<char>{};
+  else if constexpr (s == "int") return type_identity<int>{};
+  else if constexpr (s == "uint" || s == "unsigned") return type_identity<unsigned int>{};
+  else if constexpr (s == "long") return type_identity<long>{};
+  else if constexpr (s == "ulong") return type_identity<unsigned long>{};
+  else if constexpr (s == "float") return type_identity<float>{};
+  else if constexpr (s == "double") return type_identity<double>{};
+  else if constexpr (s == "string" || s == "str") return type_identity<std::string>{};
+  else if constexpr (s == "string_view" || s == "sv") return type_identity<std::string_view>{};
+  else if constexpr (s == "void") return type_identity<void>{};
+  else if constexpr (s == "size_t" || s == "sz") return type_identity<std::size_t>{};
+  // 固定幅整数
+  else if constexpr (s == "int8_t" || s == "int8") return type_identity<std::int8_t>{};
+  else if constexpr (s == "int16_t" || s == "int16") return type_identity<std::int16_t>{};
+  else if constexpr (s == "int32_t" || s == "int32") return type_identity<std::int32_t>{};
+  else if constexpr (s == "int64_t" || s == "int64") return type_identity<std::int64_t>{};
+  else if constexpr (s == "uint8_t" || s == "uint8") return type_identity<std::uint8_t>{};
+  else if constexpr (s == "uint16_t" || s == "uint16") return type_identity<std::uint16_t>{};
+  else if constexpr (s == "uint32_t" || s == "uint32") return type_identity<std::uint32_t>{};
+  else if constexpr (s == "uint64_t" || s == "uint64") return type_identity<std::uint64_t>{};
+  else return type_identity<unknown_type>{};
 }
+
+/**
+ * @brief 閉じ括弧 ']' を探す。括弧の深さを考慮する。
+ */
+template <auto S>
+consteval std::size_t find_closing_bracket() {
+  auto constexpr sv = S.sv();
+  std::size_t depth = 0;
+  for (std::size_t i = 0; i < sv.size(); ++i) {
+    if (sv[i] == '[') ++depth;
+    else if (sv[i] == ']') {
+      if (--depth == 0) return i;
+    }
+  }
+  return std::string_view::npos;
+}
+
+/**
+ * @brief トップレベルのカンマ ',' を探す。括弧の深さを考慮する。
+ */
+template <auto S>
+consteval std::size_t find_top_level_comma() {
+  auto constexpr sv = S.sv();
+  std::size_t depth = 0;
+  for (std::size_t i = 0; i < sv.size(); ++i) {
+    if (sv[i] == '[') ++depth;
+    else if (sv[i] == ']') --depth;
+    else if (sv[i] == ',' && depth == 0) return i;
+  }
+  return std::string_view::npos;
+}
+
+} // namespace detail
 
 /**
  * @brief 文字列トークンを対応する型に変換するメタ関数
@@ -1963,27 +1971,24 @@ struct type_mapping {
   using type = typename decltype(detail::map_string_to_type<S>())::type;
 };
 
-/**
- * @brief 固定文字列をパースして型のリスト（std::tuple）を保持する type_identity を生成する
- * 入れ子構造 [...] にも対応。末尾の '?' による std::optional にも対応。
- * 
- * @tparam Str 入力文字列 (FrozenString)
- */
-template <auto Str>
-consteval auto parse_to_tuple() {
+template <bool EmptyMeansVoid, auto Str>
+consteval auto parse_to_tuple_impl() {
   auto constexpr trimmed = trim(Str);
-  
+
   if constexpr (trimmed.length == 0) {
-    return detail::type_identity<std::tuple<>>{};
+    if constexpr (EmptyMeansVoid) {
+      return detail::type_identity<std::tuple<void>>{};
+    } else {
+      return detail::type_identity<std::tuple<>>{};
+    }
   } else if constexpr (trimmed.buffer[0] == '[') {
     auto constexpr closing_pos = detail::find_closing_bracket<trimmed>();
-    static_assert(closing_pos != std::string_view::npos, "Missing matching ']'");
-    
-    // 入れ子の中身
+    static_assert(closing_pos != std::string_view::npos, "Missing matching ']'"
+    );
+
     auto constexpr inner = substr(trimmed, 1, static_cast<std::ptrdiff_t>(closing_pos - 1));
-    using BaseInnerTuple = typename decltype(parse_to_tuple<inner>())::type;
-    
-    // ] の後に空白を挟んで ? があるか確認
+    using BaseInnerTuple = typename decltype(parse_to_tuple_impl<false, inner>())::type;
+
     auto constexpr opt_info = [](auto const& s, size_t pos) {
       size_t i = pos + 1;
       while (i < s.length && detail::is_whitespace(s.buffer[i])) ++i;
@@ -1993,56 +1998,69 @@ consteval auto parse_to_tuple() {
 
     auto constexpr is_opt = opt_info.first;
     auto constexpr search_start = opt_info.second;
-    
+
     using InnerTuple = std::conditional_t<is_opt, std::optional<BaseInnerTuple>, BaseInnerTuple>;
-    
-    // 次の要素があるか確認
+
     auto constexpr next_comma = trimmed.sv().find(',', search_start);
     if constexpr (next_comma == std::string_view::npos) {
       return detail::type_identity<std::tuple<InnerTuple>>{};
     } else {
       auto constexpr rest = substr(trimmed, next_comma + 1, static_cast<std::ptrdiff_t>(trimmed.length - next_comma - 1));
-      using RestTuple = typename decltype(parse_to_tuple<rest>())::type;
+      using RestTuple = typename decltype(parse_to_tuple_impl<true, rest>())::type;
       using Combined = decltype(std::tuple_cat(std::declval<std::tuple<InnerTuple>>(), std::declval<RestTuple>()));
       return detail::type_identity<Combined>{};
     }
   } else {
-    // トップレベルのカンマを探す
     auto constexpr comma_pos = detail::find_top_level_comma<trimmed>();
-    
+
     if constexpr (comma_pos == std::string_view::npos) {
-      // 単一要素。末尾が ? かどうか。
       auto constexpr is_opt = (trimmed.length > 0 && trimmed.buffer[trimmed.length - 1] == '?');
       if constexpr (is_opt) {
         auto constexpr name = trim(substr(trimmed, 0, static_cast<std::ptrdiff_t>(trimmed.length - 1)));
         using T = typename type_mapping<name>::type;
-        static_assert(!std::is_same_v<T, void>, "Unknown type name before '?'");
+        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name before '?'");
+        static_assert(!std::is_same_v<T, void>, "'void?' is not supported");
         return detail::type_identity<std::tuple<std::optional<T>>>{};
       } else {
         using T = typename type_mapping<trimmed>::type;
-        static_assert(!std::is_same_v<T, void>, "Unknown type name");
+        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name");
         return detail::type_identity<std::tuple<T>>{};
       }
     } else {
       auto constexpr token = trim(substr(trimmed, 0, comma_pos));
       auto constexpr is_opt = (token.length > 0 && token.buffer[token.length - 1] == '?');
       auto constexpr rest_str = substr(trimmed, comma_pos + 1, static_cast<std::ptrdiff_t>(trimmed.length - comma_pos - 1));
-      using RestTuple = typename decltype(parse_to_tuple<rest_str>())::type;
+      using RestTuple = typename decltype(parse_to_tuple_impl<true, rest_str>())::type;
 
-      if constexpr (is_opt) {
+      if constexpr (token.length == 0) {
+        using Combined = decltype(std::tuple_cat(std::declval<std::tuple<void>>(), std::declval<RestTuple>()));
+        return detail::type_identity<Combined>{};
+      } else if constexpr (is_opt) {
         auto constexpr name = trim(substr(token, 0, static_cast<std::ptrdiff_t>(token.length - 1)));
         using T = typename type_mapping<name>::type;
-        static_assert(!std::is_same_v<T, void>, "Unknown type name before '?'");
+        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name before '?'");
+        static_assert(!std::is_same_v<T, void>, "'void?' is not supported");
         using Combined = decltype(std::tuple_cat(std::declval<std::tuple<std::optional<T>>>(), std::declval<RestTuple>()));
         return detail::type_identity<Combined>{};
       } else {
         using T = typename type_mapping<token>::type;
-        static_assert(!std::is_same_v<T, void>, "Unknown type name");
+        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name");
         using Combined = decltype(std::tuple_cat(std::declval<std::tuple<T>>(), std::declval<RestTuple>()));
         return detail::type_identity<Combined>{};
       }
     }
   }
+}
+
+/**
+ * @brief 固定文字列をパースして型のリスト（std::tuple）を保持する type_identity を生成する
+ * 入れ子構造 [...] にも対応。末尾の '?' による std::optional にも対応。
+ *
+ * @tparam Str 入力文字列 (FrozenString)
+ */
+template <auto Str>
+consteval auto parse_to_tuple() {
+  return parse_to_tuple_impl<false, Str>();
 }
 
 }

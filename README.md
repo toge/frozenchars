@@ -195,6 +195,48 @@ static_assert(dvalues[1] == -25.0);
 static_assert(dvalues[2] == 3.125);
 ```
 
+## `parse_to_tuple`（型列文字列 → `std::tuple<...>`）
+
+`parse_to_tuple<Str>()` は、固定文字列で書いた型リストをパースし、
+対応する `std::tuple<...>` 型を保持する `type_identity` を返します。
+実際の型は `typename decltype(parse_to_tuple<...>())::type` で取り出します。
+
+- `,` で型を区切ります
+- `?` を末尾に付けると `std::optional<T>` になります
+- `[ ... ]` でネストした `std::tuple<...>` を書けます
+- `[ ... ]?` は `std::optional<std::tuple<...>>` になります
+- 空要素（例: `"int,,string"`）は `void` として扱われます
+- `"void"` と明示的に書いた場合も `void` になります
+- 空白は無視されます
+- `void?` は `std::optional<void>` になるため非対応です
+
+対応している主な型名:
+
+- `bool`, `char`, `int`, `uint` / `unsigned`, `long`, `ulong`, `float`, `double`
+- `string` / `str`, `string_view` / `sv`, `void`, `size_t` / `sz`
+- `int8_t` / `int8`, `int16_t` / `int16`, `int32_t` / `int32`, `int64_t` / `int64`
+- `uint8_t` / `uint8`, `uint16_t` / `uint16`, `uint32_t` / `uint32`, `uint64_t` / `uint64`
+
+```cpp
+#include "frozenchars.hpp"
+#include <type_traits>
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+using T1 = typename decltype(parse_to_tuple<"int, string?, bool"_fs>())::type;
+static_assert(std::is_same_v<T1, std::tuple<int, std::optional<std::string>, bool>>);
+
+using T2 = typename decltype(parse_to_tuple<"[int, bool?], void, sv"_fs>())::type;
+static_assert(std::is_same_v<T2, std::tuple<std::tuple<int, std::optional<bool>>, void, std::string_view>>);
+
+using T3 = typename decltype(parse_to_tuple<"int,,[char, double]?"_fs>())::type;
+static_assert(std::is_same_v<T3, std::tuple<int, void, std::optional<std::tuple<char, double>>>>);
+```
+
+`parse_to_tuple` 自体は型計算用のヘルパーなので、実行時に `std::tuple` オブジェクトを返す関数ではありません。
+未知の型名や不正な構文は、ランタイムではなくコンパイル時エラーになります。
+
 ## `capitalize`（先頭大文字化）
 
 先頭の文字を大文字、残りを小文字に変換します。`FrozenString` と文字列リテラルの両方を受け取ります。
