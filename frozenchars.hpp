@@ -23,6 +23,9 @@ namespace frozenchars {
  * ユーティリティ
 \*===============================================================================*/
 
+template <size_t N>
+struct FrozenString;
+
 /**
  * @brief 整数型を文字列化するためのタグ
  *
@@ -100,13 +103,22 @@ struct Precision {
 template <size_t N>
 struct FixedString {
   char data[N]{};
-  constexpr FixedString(char const (&str)[N]) noexcept {
+  size_t length{N > 0 ? N - 1 : 0};
+
+  constexpr FixedString(char const (&str)[N]) noexcept
+  : length{N > 0 ? N - 1 : 0} {
     for (auto i = 0uz; i < N; ++i) {
       data[i] = str[i];
     }
   }
+  constexpr FixedString(FrozenString<N> const& str) noexcept
+  : length{str.length} {
+    for (auto i = 0uz; i < N; ++i) {
+      data[i] = str.buffer[i];
+    }
+  }
   auto constexpr sv() const noexcept {
-    return std::string_view{data, N - 1};
+    return std::string_view{data, length};
   }
 };
 
@@ -162,6 +174,42 @@ struct pipe_adaptor_tag {};
 template <typename T>
 concept PipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_tag>;
 
+template <typename T>
+struct is_frozen_string : std::false_type {};
+
+template <size_t N>
+struct is_frozen_string<FrozenString<N>> : std::true_type {};
+
+template <typename T>
+inline constexpr auto is_frozen_string_v = is_frozen_string<std::remove_cvref_t<T>>::value;
+
+template <size_t N>
+consteval auto find_substring(FrozenString<N> const& str,
+                              std::string_view needle,
+                              std::size_t pos = 0uz) noexcept -> std::size_t {
+  if (needle.empty()) {
+    return pos <= str.length ? pos : std::string_view::npos;
+  }
+  if (needle.size() > str.length || pos > str.length - needle.size()) {
+    return std::string_view::npos;
+  }
+
+  auto const last = str.length - needle.size();
+  for (auto i = pos; i <= last; ++i) {
+    auto matched = true;
+    for (auto j = 0uz; j < needle.size(); ++j) {
+      if (str.buffer[i + j] != needle[j]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) {
+      return i;
+    }
+  }
+  return std::string_view::npos;
+}
+
 } // namespace detail
 
 template <size_t N, detail::PipeAdaptor Adaptor>
@@ -169,6 +217,12 @@ consteval auto operator|(FrozenString<N> const& lhs, Adaptor const& rhs)
   noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
+
+template <size_t Width, char Fill, size_t N>
+auto consteval pad_left(FrozenString<N> const& str) noexcept;
+
+template <size_t Width, char Fill, size_t N>
+auto consteval pad_left(char const (&str)[N]) noexcept;
 
 /**
  * @brief 文字列を指定回数繰り返した静的文字列を生成する関数
@@ -222,22 +276,7 @@ auto consteval repeat(char const (&str)[N]) noexcept {
  */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval right(FrozenString<N> const& str) noexcept {
-  auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
-  auto res = FrozenString<OUT_CAP>{};
-
-  auto const out_len = std::max(str.length, Width);
-  auto const left_pad = out_len - str.length;
-
-  for (auto i = 0uz; i < left_pad; ++i) {
-    res.buffer[i] = Fill;
-  }
-  for (auto i = 0uz; i < str.length; ++i) {
-    res.buffer[left_pad + i] = str.buffer[i];
-  }
-
-  res.buffer[out_len] = '\0';
-  res.length = out_len;
-  return res;
+  return pad_left<Width, Fill>(str);
 }
 
 /**
@@ -251,7 +290,7 @@ auto consteval right(FrozenString<N> const& str) noexcept {
  */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval right(char const (&str)[N]) noexcept {
-  return right<Width, Fill>(FrozenString{str});
+  return pad_left<Width, Fill>(str);
 }
 
 /**
@@ -1926,6 +1965,213 @@ auto consteval trim(Ptr&& str) noexcept {
   return trim<TrimChar>(freeze(str));
 }
 
+// join - zero args: returns empty string
+template <FixedString Delim>
+auto consteval join() noexcept {
+  return FrozenString<1>{};
+}
+
+// join - homogeneous std::array of FrozenStrings
+template <FixedString Delim, size_t ElemN, size_t Count>
+auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
+  if constexpr (Count == 0) {
+    return FrozenString<1>{};
+  } else {
+    auto constexpr DELIM_LEN = Delim.sv().size();
+    auto constexpr MAX_ELEM = ElemN > 0 ? ElemN - 1 : 0;
+    auto constexpr OUT_CAP = Count * MAX_ELEM + (Count - 1) * DELIM_LEN + 1;
+    auto res = FrozenString<OUT_CAP>{};
+    auto offset = 0uz;
+    for (auto i = 0uz; i < Count; ++i) {
+      if (i > 0) {
+        for (auto const c : Delim.sv()) {
+          res.buffer[offset++] = c;
+        }
+      }
+      for (auto j = 0uz; j < arr[i].length; ++j) {
+        res.buffer[offset++] = arr[i].buffer[j];
+      }
+    }
+    res.buffer[offset] = '\0';
+    res.length = offset;
+    return res;
+  }
+}
+
+// join - variadic heterogeneous FrozenStrings
+template <FixedString Delim, size_t N0, size_t... Ns>
+auto consteval join(FrozenString<N0> const& first, FrozenString<Ns> const&... rest) noexcept {
+  auto constexpr DELIM_LEN = Delim.sv().size();
+  auto constexpr COUNT = 1uz + sizeof...(Ns);
+  auto constexpr MAX_ELEMS = (N0 > 0 ? N0 - 1 : 0) + (0uz + ... + (Ns > 0 ? Ns - 1 : 0));
+  auto constexpr DELIM_TOTAL = COUNT > 1 ? (COUNT - 1) * DELIM_LEN : 0uz;
+  auto constexpr OUT_CAP = MAX_ELEMS + DELIM_TOTAL + 1;
+
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+
+  for (auto i = 0uz; i < first.length; ++i) {
+    res.buffer[offset++] = first.buffer[i];
+  }
+  ([&](auto const& elem) {
+    for (auto const c : Delim.sv()) {
+      res.buffer[offset++] = c;
+    }
+    for (auto i = 0uz; i < elem.length; ++i) {
+      res.buffer[offset++] = elem.buffer[i];
+    }
+  }(rest), ...);
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+// pad_left - FrozenString (add Fill chars on left; delegates to right<>)
+template <size_t Width, char Fill = ' ', size_t N>
+auto consteval pad_left(FrozenString<N> const& str) noexcept {
+  auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
+  auto res = FrozenString<OUT_CAP>{};
+
+  auto const out_len = std::max(str.length, Width);
+  auto const left_pad = out_len - str.length;
+
+  for (auto i = 0uz; i < left_pad; ++i) {
+    res.buffer[i] = Fill;
+  }
+  for (auto i = 0uz; i < str.length; ++i) {
+    res.buffer[left_pad + i] = str.buffer[i];
+  }
+
+  res.buffer[out_len] = '\0';
+  res.length = out_len;
+  return res;
+}
+
+// pad_left - string literal
+template <size_t Width, char Fill = ' ', size_t N>
+auto consteval pad_left(char const (&str)[N]) noexcept {
+  return pad_left<Width, Fill>(FrozenString{str});
+}
+
+// pad_left - Integral (default Fill = '0')
+// Defined after freeze(Integral) to ensure visibility
+// (see below, near the end of the namespace)
+
+// pad_right - FrozenString (add Fill chars on right)
+template <size_t Width, char Fill = ' ', size_t N>
+auto consteval pad_right(FrozenString<N> const& str) noexcept {
+  auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
+  auto res = FrozenString<OUT_CAP>{};
+  auto const out_len = std::max(str.length, Width);
+  auto const right_pad = out_len - str.length;
+  for (auto i = 0uz; i < str.length; ++i) {
+    res.buffer[i] = str.buffer[i];
+  }
+  for (auto i = 0uz; i < right_pad; ++i) {
+    res.buffer[str.length + i] = Fill;
+  }
+  res.buffer[out_len] = '\0';
+  res.length = out_len;
+  return res;
+}
+
+// pad_right - string literal
+template <size_t Width, char Fill = ' ', size_t N>
+auto consteval pad_right(char const (&str)[N]) noexcept {
+  return pad_right<Width, Fill>(FrozenString{str});
+}
+
+// pad_right - Integral (default Fill = '0')
+// Defined after freeze(Integral) to ensure visibility
+// (see below, near the end of the namespace)
+
+// replace - first occurrence of From with To
+template <FixedString From, FixedString To, size_t N>
+auto consteval replace(FrozenString<N> const& str) noexcept {
+  static_assert(From.sv().size() > 0, "replace: From must not be empty");
+  auto constexpr FROM_LEN = From.sv().size();
+  auto constexpr TO_LEN = To.sv().size();
+  auto constexpr EXTRA = TO_LEN > FROM_LEN ? TO_LEN - FROM_LEN : 0uz;
+  auto constexpr OUT_CAP = N + EXTRA;
+
+  auto res = FrozenString<OUT_CAP>{};
+  auto const from_sv = From.sv();
+  auto const to_sv = To.sv();
+  auto const match_pos = detail::find_substring(str, from_sv);
+  if (match_pos == std::string_view::npos) {
+    for (auto i = 0uz; i < str.length; ++i) {
+      res.buffer[i] = str.buffer[i];
+    }
+    res.buffer[str.length] = '\0';
+    res.length = str.length;
+    return res;
+  }
+  auto offset = 0uz;
+  for (auto i = 0uz; i < match_pos; ++i) {
+    res.buffer[offset++] = str.buffer[i];
+  }
+  for (auto const c : to_sv) {
+    res.buffer[offset++] = c;
+  }
+  auto after = match_pos + FROM_LEN;
+  while (after < str.length) {
+    res.buffer[offset++] = str.buffer[after++];
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+// replace - string literal
+template <FixedString From, FixedString To, size_t N>
+auto consteval replace(char const (&str)[N]) noexcept {
+  return replace<From, To>(FrozenString{str});
+}
+
+// replace_all - all non-overlapping occurrences of From with To (left-to-right)
+template <FixedString From, FixedString To, size_t N>
+auto consteval replace_all(FrozenString<N> const& str) noexcept {
+  static_assert(From.sv().size() > 0, "replace_all: From must not be empty");
+  auto constexpr FROM_LEN = From.sv().size();
+  auto constexpr TO_LEN = To.sv().size();
+  auto constexpr MAX_STR_LEN = N > 0 ? N - 1 : 0;
+  auto constexpr MAX_MATCHES = MAX_STR_LEN / FROM_LEN;
+  auto constexpr EXTRA = TO_LEN > FROM_LEN ? (TO_LEN - FROM_LEN) * MAX_MATCHES : 0uz;
+  auto constexpr OUT_CAP = N + EXTRA;
+
+  auto res = FrozenString<OUT_CAP>{};
+  auto const from_sv = From.sv();
+  auto const to_sv = To.sv();
+  auto offset = 0uz;
+  auto pos = 0uz;
+  while (pos < str.length) {
+    auto const found = detail::find_substring(str, from_sv, pos);
+    if (found == std::string_view::npos) {
+      while (pos < str.length) {
+        res.buffer[offset++] = str.buffer[pos++];
+      }
+      break;
+    }
+    while (pos < found) {
+      res.buffer[offset++] = str.buffer[pos++];
+    }
+    for (auto const c : to_sv) {
+      res.buffer[offset++] = c;
+    }
+    pos = found + FROM_LEN;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+// replace_all - string literal
+template <FixedString From, FixedString To, size_t N>
+auto consteval replace_all(char const (&str)[N]) noexcept {
+  return replace_all<From, To>(FrozenString{str});
+}
+
 namespace ops {
 
 struct trim_adaptor : detail::pipe_adaptor_tag {
@@ -2082,6 +2328,72 @@ consteval auto remove_comments(std::string_view comment_seq = "#") noexcept {
   return remove_comments_adaptor{comment_seq};
 }
 
+// join adaptor: works on std::array<FrozenString<ElemN>, Count>
+template <FixedString Delim>
+struct join_adaptor : detail::pipe_adaptor_tag {
+  template <size_t ElemN, size_t Count>
+  consteval auto operator()(std::array<FrozenString<ElemN>, Count> const& arr) const noexcept {
+    return frozenchars::join<Delim>(arr);
+  }
+};
+
+template <FixedString Delim>
+inline constexpr join_adaptor<Delim> join{};
+
+template <size_t ElemN, size_t Count, FixedString Delim>
+consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
+                         join_adaptor<Delim> const& rhs) noexcept(noexcept(rhs(lhs))) {
+  return rhs(lhs);
+}
+
+// pad_left adaptor: pads left with Fill (default ' ')
+template <size_t Width, char Fill = ' '>
+struct pad_left_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::pad_left<Width, Fill>(str);
+  }
+};
+
+template <size_t Width, char Fill = ' '>
+inline constexpr pad_left_adaptor<Width, Fill> pad_left{};
+
+// pad_right adaptor: pads right with Fill (default ' ')
+template <size_t Width, char Fill = ' '>
+struct pad_right_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::pad_right<Width, Fill>(str);
+  }
+};
+
+template <size_t Width, char Fill = ' '>
+inline constexpr pad_right_adaptor<Width, Fill> pad_right{};
+
+// replace adaptor: replaces first occurrence of From with To
+template <FixedString From, FixedString To>
+struct replace_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::replace<From, To>(str);
+  }
+};
+
+template <FixedString From, FixedString To>
+inline constexpr replace_adaptor<From, To> replace{};
+
+// replace_all adaptor: replaces all non-overlapping occurrences of From with To
+template <FixedString From, FixedString To>
+struct replace_all_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::replace_all<From, To>(str);
+  }
+};
+
+template <FixedString From, FixedString To>
+inline constexpr replace_all_adaptor<From, To> replace_all{};
+
 } // namespace ops
 
 /*-------------------------------------------------------------------------------*\
@@ -2199,6 +2511,40 @@ auto consteval freeze(T const& arg) noexcept {
 \*/
 template <typename T>
 auto consteval freeze(T const&) noexcept = delete;
+
+// pad_left - non-integral freezable values
+template <size_t Width, char Fill = ' ', typename T>
+  requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+auto consteval pad_left(T const& v) noexcept {
+  return pad_left<Width, Fill>(freeze(v));
+}
+
+// pad_right - non-integral freezable values
+template <size_t Width, char Fill = ' ', typename T>
+  requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+auto consteval pad_right(T const& v) noexcept {
+  return pad_right<Width, Fill>(freeze(v));
+}
+
+template <FixedString Delim, typename First, typename... Rest>
+  requires (requires(First const& v) { freeze(v); }
+            && (... && requires(Rest const& v) { freeze(v); })
+            && (!detail::is_frozen_string_v<First> || (... || !detail::is_frozen_string_v<Rest>)))
+auto consteval join(First const& first, Rest const&... rest) noexcept {
+  return join<Delim>(freeze(first), freeze(rest)...);
+}
+
+// pad_left - Integral (default Fill = '0'); defined after freeze(Integral)
+template <size_t Width, char Fill = '0', Integral T>
+auto consteval pad_left(T const& v) noexcept {
+  return pad_left<Width, Fill>(freeze(v));
+}
+
+// pad_right - Integral (default Fill = '0'); defined after freeze(Integral)
+template <size_t Width, char Fill = '0', Integral T>
+auto consteval pad_right(T const& v) noexcept {
+  return pad_right<Width, Fill>(freeze(v));
+}
 
 /**
  * @brief 引数で渡された値をすべて FrozenString に変換し結合する
