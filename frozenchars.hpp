@@ -55,6 +55,17 @@ concept FloatingPoint = std::is_floating_point_v<T>;
 template <typename T>
 concept Numeric = Integral<T> || FloatingPoint<T>;
 
+template <typename T>
+concept ParseNumberTarget =
+  std::same_as<std::remove_cv_t<T>, int>
+  || std::same_as<std::remove_cv_t<T>, long>
+  || std::same_as<std::remove_cv_t<T>, long long>
+  || std::same_as<std::remove_cv_t<T>, unsigned int>
+  || std::same_as<std::remove_cv_t<T>, unsigned long>
+  || std::same_as<std::remove_cv_t<T>, unsigned long long>
+  || std::same_as<std::remove_cv_t<T>, float>
+  || std::same_as<std::remove_cv_t<T>, double>;
+
 /**
  * @brief 整数値を16進数表現するためのタグ
  *
@@ -187,6 +198,11 @@ struct is_frozen_string<FrozenString<N>> : std::true_type {};
 
 template <typename T>
 inline constexpr auto is_frozen_string_v = is_frozen_string<std::remove_cvref_t<T>>::value;
+
+enum class integer_base_mode {
+  decimal_only,
+  autodetect
+};
 
 template <size_t N>
 consteval auto find_substring(FrozenString<N> const& str,
@@ -608,20 +624,24 @@ auto consteval split_count_impl(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 整数字句を指定整数型に変換する関数
+ * @brief 数値字句を指定数値型に変換する関数
  *
- * @tparam Int 変換先の整数型
+ * @tparam Number 変換先の数値型
+ * @tparam BaseMode 整数の基数解釈モード
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param token 変換するトークン
- * @return auto consteval 変換結果
+ * @return auto constexpr 変換結果
  */
-template <Numeric Number = int, size_t N>
+template <Numeric Number = int, integer_base_mode BaseMode = integer_base_mode::decimal_only, size_t N>
   requires (!std::same_as<std::remove_cv_t<Number>, bool>)
-auto consteval parse_int_token(FrozenString<N> const& token) {
+constexpr auto parse_number_token(FrozenString<N> const& token) {
   using Result = std::remove_cv_t<Number>;
 
+  auto constexpr invalid = "parse_number: invalid number";
+  auto constexpr out_of_range = "parse_number: out of range";
+
   if (token.length == 0) {
-    throw std::invalid_argument("split_numbers: empty token");
+    throw std::invalid_argument(invalid);
   }
 
   if constexpr (Integral<Result>) {
@@ -634,7 +654,26 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
       ++pos;
     }
     if (pos == token.length) {
-      throw std::invalid_argument("split_numbers: sign without digits");
+      throw std::invalid_argument(invalid);
+    }
+
+    auto base = Unsigned{10};
+    if constexpr (BaseMode == integer_base_mode::autodetect) {
+      if (token.buffer[pos] == '0' && pos + 1 < token.length) {
+        if (token.buffer[pos + 1] == 'x' || token.buffer[pos + 1] == 'X') {
+          base = 16;
+          pos += 2;
+        } else if (token.buffer[pos + 1] == 'b' || token.buffer[pos + 1] == 'B') {
+          base = 2;
+          pos += 2;
+        } else {
+          base = 8;
+          ++pos;
+        }
+      }
+    }
+    if (pos == token.length) {
+      throw std::invalid_argument(invalid);
     }
 
     auto value = Unsigned{0};
@@ -651,20 +690,30 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
 
     for (; pos < token.length; ++pos) {
       auto const c = token.buffer[pos];
-      if (c < '0' || c > '9') {
-        throw std::invalid_argument("split_numbers: non-numeric token");
+      auto const digit = [&]() constexpr -> Unsigned {
+        if (c >= '0' && c <= '9') {
+          return static_cast<Unsigned>(c - '0');
+        }
+        if (c >= 'a' && c <= 'f') {
+          return static_cast<Unsigned>(10 + (c - 'a'));
+        }
+        if (c >= 'A' && c <= 'F') {
+          return static_cast<Unsigned>(10 + (c - 'A'));
+        }
+        return base;
+      }();
+      if (digit >= base) {
+        throw std::invalid_argument(invalid);
       }
-
-      auto const digit = static_cast<Unsigned>(c - '0');
-      if (value > (limit - digit) / 10u) {
-        throw std::out_of_range("split_numbers: integer out of range");
+      if (value > (limit - digit) / base) {
+        throw std::out_of_range(out_of_range);
       }
-      value = static_cast<Unsigned>(value * 10u + digit);
+      value = static_cast<Unsigned>(value * base + digit);
     }
 
     if (negative) {
       if constexpr (!IS_SIGNED) {
-        throw std::out_of_range("split_numbers: negative token for unsigned type");
+        throw std::out_of_range(out_of_range);
       } else {
         auto constexpr NEGATIVE_LIMIT = static_cast<Unsigned>(MAX_POSITIVE + 1u);
         if (value == NEGATIVE_LIMIT) {
@@ -683,7 +732,7 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
       ++pos;
     }
     if (pos == token.length) {
-      throw std::invalid_argument("split_numbers: sign without digits");
+      throw std::invalid_argument(invalid);
     }
 
     auto value = 0.0L;
@@ -707,7 +756,7 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
     }
 
     if (!has_digits) {
-      throw std::invalid_argument("split_numbers: non-numeric token");
+      throw std::invalid_argument(invalid);
     }
 
     if (pos < token.length && (token.buffer[pos] == 'e' || token.buffer[pos] == 'E')) {
@@ -719,14 +768,14 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
       }
 
       if (pos == token.length || token.buffer[pos] < '0' || token.buffer[pos] > '9') {
-        throw std::invalid_argument("split_numbers: invalid exponent");
+        throw std::invalid_argument(invalid);
       }
 
       auto exponent = 0;
       while (pos < token.length && token.buffer[pos] >= '0' && token.buffer[pos] <= '9') {
         auto const digit = token.buffer[pos] - '0';
         if (exponent > (std::numeric_limits<int>::max() - digit) / 10) {
-          throw std::out_of_range("split_numbers: floating exponent out of range");
+          throw std::out_of_range(out_of_range);
         }
         exponent = exponent * 10 + digit;
         ++pos;
@@ -736,20 +785,20 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
         for (auto i = 0; i < exponent; ++i) {
           value /= 10.0L;
         }
-      } else {
-        auto const max_abs = static_cast<long double>(std::numeric_limits<Result>::max());
-        for (auto i = 0; i < exponent; ++i) {
-          value *= 10.0L;
-          if (value > max_abs) {
-            throw std::out_of_range("split_numbers: floating value out of range");
+        } else {
+          auto const max_abs = static_cast<long double>(std::numeric_limits<Result>::max());
+          for (auto i = 0; i < exponent; ++i) {
+            value *= 10.0L;
+            if (value > max_abs) {
+              throw std::out_of_range(out_of_range);
+            }
           }
         }
       }
-    }
 
-    if (pos != token.length) {
-      throw std::invalid_argument("split_numbers: non-numeric token");
-    }
+      if (pos != token.length) {
+        throw std::invalid_argument(invalid);
+      }
 
     if (negative) {
       value = -value;
@@ -758,7 +807,7 @@ auto consteval parse_int_token(FrozenString<N> const& token) {
     auto const min_value = static_cast<long double>(std::numeric_limits<Result>::lowest());
     auto const max_value = static_cast<long double>(std::numeric_limits<Result>::max());
     if (value < min_value || value > max_value) {
-      throw std::out_of_range("split_numbers: floating value out of range");
+      throw std::out_of_range(out_of_range);
     }
 
     return static_cast<Result>(value);
@@ -915,7 +964,7 @@ auto consteval split_numbers(FrozenString<N> const& str) {
     if (tokens[i].length == 0) {
       continue;
     }
-    res[i] = detail::parse_int_token<Result>(tokens[i]);
+    res[i] = detail::parse_number_token<Result, detail::integer_base_mode::decimal_only>(tokens[i]);
   }
   return res;
 }
@@ -963,6 +1012,16 @@ template <Numeric Int, size_t N>
   requires (!std::same_as<std::remove_cv_t<Int>, bool>)
 auto consteval split_numbers(char const (&str)[N]) {
   return split_numbers<detail::is_whitespace, Int>(FrozenString{str});
+}
+
+template <ParseNumberTarget Number, size_t N>
+constexpr auto parse_number(FrozenString<N> const& str) {
+  return detail::parse_number_token<std::remove_cv_t<Number>, detail::integer_base_mode::autodetect>(str);
+}
+
+template <ParseNumberTarget Number, size_t N>
+consteval auto parse_number(char const (&str)[N]) {
+  return parse_number<std::remove_cv_t<Number>>(FrozenString{str});
 }
 
 /**
