@@ -44,17 +44,24 @@
 - 実装は `std::formatter<std::string_view, char>` を内部メンバとして保持し、`parse` / `format` の両方をそのまま委譲する。
 - `format` では `FrozenString::sv()` を渡すだけにして、幅・位置揃え・精度・debug などの文字列 spec は標準実装に任せる。
 - これにより `std::format("[{}]", "tag"_fs)` と `std::print("{:>12}\n", "tag"_fs)` がそのまま使える。
+- 提供条件は標準ライブラリ機能に合わせて明示する。
+  - `std::formatter` 特殊化自体は `<format>` が使える環境で有効化する。
+  - `std::print` テストは `<print>` と `__cpp_lib_print` がある環境で有効化する。
+  - 現在の開発環境では両方を有効にして検証するが、公開ヘッダは機能検出で守る。
 
 ### `parse_number<T>(...)`
 
 - 公開 API は `parse_number<T>(FrozenString<N> const&)` と `parse_number<T>(char const (&)[N])` を追加する。
-- `T` は `int`, `long`, `long long`, `unsigned` 系, `float`, `double` を含む既存 `Numeric` 制約に従う。`bool` は非対応のままにする。
-- 内部実装は `detail` に共通数値パーサーを用意し、`split_numbers` もそれを使うように整理する。
+- サポート対象 `T` は `int`, `long`, `long long`, `unsigned int`, `unsigned long`, `unsigned long long`, `float`, `double` に限定する。`bool`, `char`, `short`, `long double` などは今回の対象外とする。
+- 内部実装は `detail` に共通数値パーサーを用意し、`split_numbers` もそれを使うように整理する。ただし **パース方針は呼び出し元ごとに切り替える**。
+  - `parse_number<T>`: 整数で基数自動検出を有効化
+  - `split_numbers`: 既存互換を優先し、整数は従来どおり 10 進のみ
 - 整数だけ基数自動検出を追加する。
   - `0x` / `0X` -> 16 進
   - `0b` / `0B` -> 2 進
   - 先頭 `0` -> 8 進
   - それ以外 -> 10 進
+- 符号は基数接頭辞より先に解釈する。したがって `-0xff`, `+077`, `-0b10` は有効で、unsigned 型への負値だけ `std::out_of_range` とする。
 - 浮動小数点は 10 進のみを受理し、整数向け接頭辞は無効入力として扱う。
 - 先頭末尾の空白は許容しない。
 
@@ -78,6 +85,7 @@
 ## Refactoring boundaries
 
 - `split_numbers` の公開シグネチャや返り値形状は変えない。
+- `split_numbers` の整数解釈は既存互換を維持し、今回の基数自動検出拡張は `parse_number<T>` に限定する。
 - 変更対象は数値解析の内部整理と、新しい単一値 API の追加に限定する。
 - 既存の `parse_hex_*` や `parse_to_tuple` など他のパーサーには触れない。
 
@@ -95,6 +103,7 @@
 - 16 進整数: `0xff`
 - 2 進整数: `0b1010`
 - 8 進整数: `077`
+- 符号付き接頭辞: `-0xff`, `+077`, `-0b10`
 - 浮動小数点: `3.14`, `-1.5`, `1e2`, `-2.5e1`
 - 境界値: `INT_MAX`, `INT_MIN`, `LONG_LONG_MAX`, `ULLONG_MAX`
 
@@ -106,5 +115,5 @@
 ## Implementation notes for planning
 
 - `std::formatter` 特殊化は `namespace std` に置く必要がある。
-- `<format>` と `<print>` を使うテストは現在のツールチェインで有効化し、標準ライブラリ実装依存の差分が出ないか確認する。
+- `<format>` / `<print>` は feature-test macro に基づいて条件付きで取り込む。
 - 数値パーサーの共通化では、`split_numbers` が現在期待している厳密パース挙動を崩さないことを優先する。
