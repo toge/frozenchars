@@ -17,6 +17,20 @@ constexpr bool is_semicolon(char c) noexcept {
   return c == ';';
 }
 
+auto constexpr namespace_scope_replace =
+  replace<"World", "C++">("Hello World"_fs);
+static_assert(namespace_scope_replace.sv() == "Hello C++");
+
+auto constexpr namespace_scope_replace_all =
+  replace_all<"aa", "a">("aaaa"_fs);
+static_assert(namespace_scope_replace_all.sv() == "aa");
+
+auto constexpr namespace_scope_from = trim(" x "_fs);
+auto constexpr namespace_scope_to = trim(" y "_fs);
+auto constexpr namespace_scope_replace_trimmed =
+  replace<namespace_scope_from, namespace_scope_to>("x x"_fs);
+static_assert(namespace_scope_replace_trimmed.sv() == "y x");
+
 }
 
 TEST_CASE("simple string") {
@@ -328,6 +342,134 @@ TEST_CASE("trim helpers") {
   REQUIRE(s13.sv() == "");
 }
 
+TEST_CASE("join") {
+  auto constexpr empty = join<",">();
+  static_assert(empty.sv() == "");
+  REQUIRE(empty.sv() == "");
+
+  auto constexpr frozen_delim = ", "_fs;
+  auto constexpr trimmed_delim = trim(" , "_fs);
+
+  auto constexpr empty_parts = std::array<FrozenString<1>, 0>{};
+  auto constexpr joined_empty_parts = join<", ">(empty_parts);
+  static_assert(joined_empty_parts.sv() == "");
+  REQUIRE(joined_empty_parts.sv() == "");
+
+  auto constexpr single_part = join<", ">("solo"_fs);
+  static_assert(single_part.sv() == "solo");
+  REQUIRE(single_part.sv() == "solo");
+
+  auto constexpr parts = std::array{"aa"_fs, "bb"_fs, "cc"_fs};
+  auto constexpr joined = join<", ">(parts);
+  static_assert(joined.sv() == "aa, bb, cc");
+  REQUIRE(joined.sv() == "aa, bb, cc");
+
+  auto constexpr variadic = join<"-">("a"_fs, "bb"_fs, "ccc"_fs);
+  static_assert(variadic.sv() == "a-bb-ccc");
+  REQUIRE(variadic.sv() == "a-bb-ccc");
+
+  auto constexpr literal_variadic = join<",">("a", "bb", "ccc");
+  static_assert(literal_variadic.sv() == "a,bb,ccc");
+  REQUIRE(literal_variadic.sv() == "a,bb,ccc");
+
+  auto constexpr frozen_delim_variadic = join<frozen_delim>("a"_fs, "bb"_fs, "ccc"_fs);
+  static_assert(frozen_delim_variadic.sv() == "a, bb, ccc");
+  REQUIRE(frozen_delim_variadic.sv() == "a, bb, ccc");
+
+  auto constexpr trimmed_delim_variadic = join<trimmed_delim>("a"_fs, "bb"_fs, "ccc"_fs);
+  static_assert(trimmed_delim_variadic.sv() == "a,bb,ccc");
+  REQUIRE(trimmed_delim_variadic.sv() == "a,bb,ccc");
+
+  auto constexpr empty_delim = join<"">("a"_fs, "bb"_fs, "ccc"_fs);
+  static_assert(empty_delim.sv() == "abbccc");
+  REQUIRE(empty_delim.sv() == "abbccc");
+}
+
+TEST_CASE("pad left and right") {
+  auto constexpr left_num = pad_left<6>(42);
+  static_assert(left_num.sv() == "000042");
+  REQUIRE(left_num.sv() == "000042");
+
+  auto constexpr right_num = pad_right<6>(42);
+  static_assert(right_num.sv() == "420000");
+  REQUIRE(right_num.sv() == "420000");
+
+  auto constexpr left_str = pad_left<2>("abc"_fs);
+  static_assert(left_str.sv() == "abc");
+  REQUIRE(left_str.sv() == "abc");
+
+  auto constexpr left_str_equal = pad_left<3>("abc"_fs);
+  static_assert(left_str_equal.sv() == "abc");
+  REQUIRE(left_str_equal.sv() == "abc");
+
+  auto constexpr right_str = pad_right<5>("abc"_fs);
+  static_assert(right_str.sv() == "abc  ");
+  REQUIRE(right_str.sv() == "abc  ");
+
+  auto constexpr right_str_equal = pad_right<3>("abc"_fs);
+  static_assert(right_str_equal.sv() == "abc");
+  REQUIRE(right_str_equal.sv() == "abc");
+
+  auto constexpr left_str_fill = pad_left<5, '.'>("abc"_fs);
+  static_assert(left_str_fill.sv() == "..abc");
+  REQUIRE(left_str_fill.sv() == "..abc");
+
+  auto constexpr right_str_fill = pad_right<5, '_'>("abc"_fs);
+  static_assert(right_str_fill.sv() == "abc__");
+  REQUIRE(right_str_fill.sv() == "abc__");
+
+  auto constexpr left_empty = pad_left<4>(""_fs);
+  static_assert(left_empty.sv() == "    ");
+  REQUIRE(left_empty.sv() == "    ");
+
+  auto constexpr right_empty = pad_right<4>(""_fs);
+  static_assert(right_empty.sv() == "    ");
+  REQUIRE(right_empty.sv() == "    ");
+}
+
+TEST_CASE("replace and replace all") {
+  auto constexpr from = "World"_fs;
+  auto constexpr to = "C++"_fs;
+  auto constexpr trimmed_from = trim(" x "_fs);
+  auto constexpr trimmed_to = trim(" y "_fs);
+
+  auto constexpr first = replace<"World", "C++">("Hello World World"_fs);
+  static_assert(first.sv() == "Hello C++ World");
+  REQUIRE(first.sv() == "Hello C++ World");
+
+  auto constexpr first_frozen_nttp = replace<from, to>("Hello World"_fs);
+  static_assert(first_frozen_nttp.sv() == "Hello C++");
+  REQUIRE(first_frozen_nttp.sv() == "Hello C++");
+
+  auto constexpr trimmed_frozen_nttp = replace<trimmed_from, trimmed_to>("x x"_fs);
+  static_assert(trimmed_frozen_nttp.sv() == "y x");
+  REQUIRE(trimmed_frozen_nttp.sv() == "y x");
+
+  auto constexpr no_match = replace<"z", "x">("abc"_fs);
+  static_assert(no_match.sv() == "abc");
+  REQUIRE(no_match.sv() == "abc");
+
+  auto constexpr all = replace_all<".", "_">("a.b.c"_fs);
+  static_assert(all.sv() == "a_b_c");
+  REQUIRE(all.sv() == "a_b_c");
+
+  auto constexpr shrink = replace_all<"abc", "x">("abcabc"_fs);
+  static_assert(shrink.sv() == "xx");
+  REQUIRE(shrink.sv() == "xx");
+
+  auto constexpr overlap = replace_all<"aa", "a">("aaaa"_fs);
+  static_assert(overlap.sv() == "aa");
+  REQUIRE(overlap.sv() == "aa");
+
+  auto constexpr expand = replace_all<"a", "aaa">("aba"_fs);
+  static_assert(expand.sv() == "aaabaaa");
+  REQUIRE(expand.sv() == "aaabaaa");
+
+  auto constexpr miss = replace_all<"z", "x">("abc"_fs);
+  static_assert(miss.sv() == "abc");
+  REQUIRE(miss.sv() == "abc");
+}
+
 TEST_CASE("pipe operator fixed adaptors") {
   namespace fops = frozenchars::ops;
 
@@ -347,6 +489,69 @@ TEST_CASE("pipe operator fixed adaptors") {
   auto constexpr piped  = "  hello  "_fs | fops::trim | fops::toupper;
   static_assert(direct.sv() == piped.sv());
   REQUIRE(direct.sv() == piped.sv());
+}
+
+TEST_CASE("pipe operator join pad replace adaptors") {
+  namespace fops = frozenchars::ops;
+  auto constexpr frozen_delim = ", "_fs;
+  auto constexpr trimmed_delim = trim(" , "_fs);
+  auto constexpr from = "foo"_fs;
+  auto constexpr to = "bar"_fs;
+  auto constexpr trimmed_from = trim(" x "_fs);
+  auto constexpr trimmed_to = trim(" y "_fs);
+
+  auto constexpr joined = std::array{"aa"_fs, "bb"_fs, "cc"_fs}
+    | fops::join<", ">
+    | fops::trim
+    | fops::toupper;
+  static_assert(joined.sv() == "AA, BB, CC");
+  REQUIRE(joined.sv() == "AA, BB, CC");
+
+  auto constexpr joined_frozen_nttp = std::array{"aa"_fs, "bb"_fs}
+    | fops::join<frozen_delim>;
+  static_assert(joined_frozen_nttp.sv() == "aa, bb");
+  REQUIRE(joined_frozen_nttp.sv() == "aa, bb");
+
+  auto constexpr joined_trimmed_nttp = std::array{"aa"_fs, "bb"_fs}
+    | fops::join<trimmed_delim>;
+  static_assert(joined_trimmed_nttp.sv() == "aa,bb");
+  REQUIRE(joined_trimmed_nttp.sv() == "aa,bb");
+
+  auto constexpr padded_left = "abc"_fs
+    | fops::pad_left<5>
+    | fops::trim
+    | fops::toupper;
+  static_assert(padded_left.sv() == "ABC");
+  REQUIRE(padded_left.sv() == "ABC");
+
+  auto constexpr padded_right = "abc"_fs
+    | fops::pad_right<5>
+    | fops::trim
+    | fops::toupper;
+  static_assert(padded_right.sv() == "ABC");
+  REQUIRE(padded_right.sv() == "ABC");
+
+  auto constexpr replaced = "  foo.foo  "_fs
+    | fops::trim
+    | fops::replace_all<".", "/">
+    | fops::toupper;
+  static_assert(replaced.sv() == "FOO/FOO");
+  REQUIRE(replaced.sv() == "FOO/FOO");
+
+  auto constexpr direct_replace = "hello world"_fs
+    | fops::replace<"world", "C++">;
+  static_assert(direct_replace.sv() == "hello C++");
+  REQUIRE(direct_replace.sv() == "hello C++");
+
+  auto constexpr frozen_nttp_replace = "foo"_fs
+    | fops::replace<from, to>;
+  static_assert(frozen_nttp_replace.sv() == "bar");
+  REQUIRE(frozen_nttp_replace.sv() == "bar");
+
+  auto constexpr trimmed_nttp_replace = "x x"_fs
+    | fops::replace<trimmed_from, trimmed_to>;
+  static_assert(trimmed_nttp_replace.sv() == "y x");
+  REQUIRE(trimmed_nttp_replace.sv() == "y x");
 }
 
 TEST_CASE("pipe operator substr adaptor") {
