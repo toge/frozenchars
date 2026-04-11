@@ -295,6 +295,49 @@ auto constexpr p = to_pascal_case("hello_world"_fs);  // "HelloWorld"
 static_assert(p.sv() == "HelloWorld");
 ```
 
+## マルチライン文字列の処理
+
+複数行を含む文字列（`\n` で区切られた文字列）に対して、行単位での加工を行うスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+- `remove_leading_spaces(str, n)` : 各行の先頭から最大 `n` 個の空白を削除します。
+- `remove_comment_lines(str, comment_seq = "#")` : 指定した文字列で始まる行を削除します。
+- `remove_comments(str, comment_seq = "#")` : 指定した文字列以降行末までを削除します。直前の空白文字も削除します。
+- `join_lines(str)` : すべての行を結合します。結合部分にスペースがない場合は自動的に 1 つ挿入します。
+- `trim_trailing_spaces(str)` : 各行の末尾の空白（スペース、タブなど）を削除します。
+- `remove_empty_lines(str)` : 空行（改行のみの行）を削除します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr src = "  line1\n##comment\n  line2    # inline comment\n\nline3"_fs;
+
+// 先頭の空白を2つ削除
+auto constexpr r1 = remove_leading_spaces(src, 2);
+// "line1\n##comment\nline2    # inline comment\n\nline3"
+
+// コメント行（## で始まる行）を削除
+auto constexpr r2 = remove_comment_lines(src, "##");
+// "  line1\n  line2    # inline comment\n\nline3"
+
+// インラインコメント（# 以降）を削除（直前の空白も削除される）
+auto constexpr r3 = remove_comments(src, "#");
+// "  line1\n##comment\n  line2\n\nline3"
+
+// 行を結合（スペース補完あり）
+auto constexpr r4 = join_lines("line1\nline2"_fs);
+// "line1 line2"
+
+// 末尾の空白を削除
+auto constexpr r5 = trim_trailing_spaces("line1  \nline2 \n"_fs);
+// "line1\nline2\n"
+
+// 空行を削除
+auto constexpr r6 = remove_empty_lines("line1\n\nline2"_fs);
+// "line1\nline2"
+```
+
 ## パイプ演算子で文字列ヘルパーをつなぐ
 
 パイプ演算子を使うと、文字列ヘルパーを左から右へ読み下せる形で連結できます。
