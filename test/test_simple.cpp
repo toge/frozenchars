@@ -969,3 +969,61 @@ TEST_CASE("to_pascal_case") {
   static_assert(s4.sv() == "HelloWorld");
   REQUIRE(s4.sv() == "HelloWorld");
 }
+
+TEST_CASE("FrozenString iterator interface") {
+  auto constexpr fs = "hello"_fs;
+
+  // begin/end and range-for
+  std::string result;
+  for (char c : fs) {
+    result += c;
+  }
+  REQUIRE(result == "hello");
+
+  // size and empty
+  static_assert(fs.size() == 5);
+  static_assert(!fs.empty());
+  static_assert(""_fs.empty());
+
+  // operator[]
+  static_assert(fs[0] == 'h');
+  static_assert(fs[4] == 'o');
+  REQUIRE(fs[0] == 'h');
+
+  // std::ranges compatibility
+  auto it = std::ranges::find(fs, 'l');
+  REQUIRE(it != fs.end());
+  REQUIRE(*it == 'l');
+}
+
+TEST_CASE("FrozenString string_view conversion") {
+  auto constexpr fs = "hello"_fs;
+
+  // explicit operator std::string_view
+  auto sv = static_cast<std::string_view>(fs);
+  REQUIRE(sv == "hello");
+
+  // constexpr context
+  static_assert(static_cast<std::string_view>("world"_fs) == "world");
+}
+
+TEST_CASE("to_snake_case NTTP exact size") {
+  // NTTP version returns precisely-sized buffer
+  auto constexpr s1 = to_snake_case<"helloWorld"_fs>();
+  static_assert(s1.sv() == "hello_world");
+  REQUIRE(s1.sv() == "hello_world");
+  // "helloWorld" length=10, 1 underscore → buffer size = 12
+  static_assert(s1.buffer.size() == 12);
+
+  auto constexpr s2 = to_snake_case<"already_snake"_fs>();
+  static_assert(s2.sv() == "already_snake");
+  REQUIRE(s2.sv() == "already_snake");
+  // no underscores added → buffer size = length + 1 = 14
+  static_assert(s2.buffer.size() == 14);
+
+  auto constexpr s3 = to_snake_case<"myVariableName"_fs>();
+  static_assert(s3.sv() == "my_variable_name");
+  REQUIRE(s3.sv() == "my_variable_name");
+  // "myVariableName" length=14, 2 underscores → buffer size = 17
+  static_assert(s3.buffer.size() == 17);
+}
