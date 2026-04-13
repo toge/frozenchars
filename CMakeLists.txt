@@ -1,30 +1,23 @@
 cmake_minimum_required(VERSION 3.25)
-project(template_cpp LANGUAGES CXX)
+project(frozenchars LANGUAGES CXX)
 
 set(FROZENCHARS_VERSION "0.1.0")
+
+option(ENABLE_TESTS "Enable tests" ON)
 
 ## add stdc++ compiler flag
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++26" COMPILER_SUPPORTS_CXX26)
 CHECK_CXX_COMPILER_FLAG("-std=c++23" COMPILER_SUPPORTS_CXX23)
 CHECK_CXX_COMPILER_FLAG("-std=c++20" COMPILER_SUPPORTS_CXX20)
-CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
-CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 if(COMPILER_SUPPORTS_CXX26)
     set(STD_CPP cxx_std_26)
 elseif(COMPILER_SUPPORTS_CXX23)
     set(STD_CPP cxx_std_23)
 elseif(COMPILER_SUPPORTS_CXX20)
     set(STD_CPP cxx_std_20)
-elseif(COMPILER_SUPPORTS_CXX17)
-    set(STD_CPP cxx_std_17)
-elseif(COMPILER_SUPPORTS_CXX14)
-    set(STD_CPP cxx_std_14)
-elseif(COMPILER_SUPPORTS_CXX11)
-    set(STD_CPP cxx_std_11)
 else()
-    message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+    message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++20 support. Please use a different C++ compiler.")
 endif()
 
 ## add warning
@@ -99,5 +92,7 @@ install(EXPORT frozencharsTargets
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
 )
 
-enable_testing()
-add_subdirectory(test)
+if(ENABLE_TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
