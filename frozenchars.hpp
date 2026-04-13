@@ -6,10 +6,8 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#if defined(__has_include)
-#  if __has_include(<format>)
-#    include <format>
-#  endif
+#if defined(__has_include) && __has_include(<format>)
+#  include <format>
 #endif
 #include <limits>
 #include <optional>
@@ -28,6 +26,7 @@ namespace frozenchars {
  * ユーティリティ
 \*===============================================================================*/
 
+// 前方宣言
 template <size_t N>
 struct FrozenString;
 
@@ -139,8 +138,8 @@ struct FixedString {
 };
 
 /**
- * @brief 静的文字列を表す構造体
- *
+ * @brief 静的文字列
+ * このライブラリでの基本的な文字列型
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  */
 template <size_t N>
@@ -204,8 +203,17 @@ enum class integer_base_mode {
   autodetect
 };
 
+/**
+ * @brief 部分文字列を検索する
+ *
+ * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
+ * @param str 処理対象の文字列
+ * @param needle 検索する部分文字列
+ * @param pos 検索開始位置
+ * @return std::size_t 見つかった位置、見つからなかった場合はstd::string_view::npos
+ */
 template <size_t N>
-consteval auto find_substring(FrozenString<N> const& str,
+auto consteval find_substring(FrozenString<N> const& str,
                               std::string_view needle,
                               std::size_t pos = 0uz) noexcept -> std::size_t {
   if (needle.empty()) {
@@ -233,9 +241,17 @@ consteval auto find_substring(FrozenString<N> const& str,
 
 } // namespace detail
 
+/**
+ * @brief FrozenString とパイプアダプタの結合演算子
+ *
+ * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
+ * @tparam Adaptor パイプアダプタの型
+ * @param lhs 左辺の FrozenString
+ * @param rhs 右辺のパイプアダプタ
+ * @return auto パイプアダプタを適用した結果
+ */
 template <size_t N, detail::PipeAdaptor Adaptor>
-consteval auto operator|(FrozenString<N> const& lhs, Adaptor const& rhs)
-  noexcept(noexcept(rhs(lhs))) {
+auto consteval operator|(FrozenString<N> const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
 
@@ -246,12 +262,12 @@ template <size_t Width, char Fill, size_t N>
 auto consteval pad_left(char const (&str)[N]) noexcept;
 
 /**
- * @brief 文字列を指定回数繰り返した静的文字列を生成する関数
+ * @brief 指定回数繰り返した文字列を生成する
  *
  * @tparam Count 繰り返し回数
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 繰り返す文字列
- * @return auto consteval 繰り返された静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t Count, size_t N>
 auto consteval repeat(FrozenString<N> const& str) noexcept {
@@ -274,12 +290,12 @@ auto consteval repeat(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルを繰り返した文字列を生成する関数
+ * @brief 文字列リテラルを繰り返した文字列を生成する
  *
  * @tparam Count 繰り返し回数
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 繰り返す文字列リテラル
- * @return auto consteval 繰り返された静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t Count, size_t N>
 auto consteval repeat(char const (&str)[N]) noexcept {
@@ -287,13 +303,13 @@ auto consteval repeat(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列を指定幅で右寄せした静的文字列を生成する関数
+ * @brief 文字列を指定幅で右寄せした文字列を生成する
  *
  * @tparam Width 右寄せ後の幅
  * @tparam Fill 埋める文字（デフォルト: 半角スペース）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 右寄せされた静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval right(FrozenString<N> const& str) noexcept {
@@ -301,13 +317,13 @@ auto consteval right(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルを指定幅で右寄せした静的文字列を生成する関数
+ * @brief 文字列リテラルを指定幅で右寄せした文字列を生成する
  *
  * @tparam Width 右寄せ後の幅
  * @tparam Fill 埋める文字（デフォルト: 半角スペース）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 右寄せされた静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval right(char const (&str)[N]) noexcept {
@@ -315,13 +331,13 @@ auto consteval right(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列を指定幅で中央寄せした静的文字列を生成する関数
+ * @brief 文字列を指定幅で中央寄せした文字列を生成する
  *
  * @tparam Width 中央寄せ後の幅
  * @tparam Fill 埋める文字（デフォルト: 半角スペース）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 中央寄せされた静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval center(FrozenString<N> const& str) noexcept {
@@ -349,13 +365,13 @@ auto consteval center(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルを指定幅で中央寄せした静的文字列を生成する関数
+ * @brief 文字列リテラルを指定幅で中央寄せした文字列を生成する
  *
  * @tparam Width 中央寄せ後の幅
  * @tparam Fill 埋める文字（デフォルト: 半角スペース）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 中央寄せされた静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval center(char const (&str)[N]) noexcept {
@@ -363,11 +379,11 @@ auto consteval center(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列をすべて大文字に変換した静的文字列を生成する関数
+ * @brief 文字列をすべて大文字に変換した文字列を生成する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 大文字に変換された静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t N>
 auto consteval toupper(FrozenString<N> const& str) noexcept {
@@ -382,11 +398,11 @@ auto consteval toupper(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルをすべて大文字に変換した静的文字列を生成する関数
+ * @brief 文字列リテラルをすべて大文字に変換した文字列を生成する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 大文字に変換された静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t N>
 auto consteval toupper(char const (&str)[N]) noexcept {
@@ -394,11 +410,11 @@ auto consteval toupper(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列をすべて小文字に変換した静的文字列を生成する関数
+ * @brief 文字列をすべて小文字に変換した文字列を生成する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 小文字に変換された静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t N>
 auto consteval tolower(FrozenString<N> const& str) noexcept {
@@ -413,11 +429,11 @@ auto consteval tolower(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルをすべて小文字に変換した静的文字列を生成する関数
+ * @brief 文字列リテラルをすべて小文字に変換した文字列を生成する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 小文字に変換された静的文字列
+ * @return auto 生成した文字列
  */
 template <size_t N>
 auto consteval tolower(char const (&str)[N]) noexcept {
@@ -431,7 +447,7 @@ auto consteval tolower(char const (&str)[N]) noexcept {
  * @tparam Len 文字数。負の場合は Pos の左側から abs(Len) 文字
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 部分文字列
+ * @return auto 生成した文字列
  */
 template <size_t Pos, std::ptrdiff_t Len, size_t N>
 auto consteval substr(FrozenString<N> const& str) noexcept {
@@ -457,13 +473,13 @@ auto consteval substr(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルの部分文字列を生成する関数
+ * @brief 文字列リテラルの部分文字列を生成する
  *
  * @tparam Pos 開始位置
  * @tparam Len 文字数。負の場合は Pos の左側から abs(Len) 文字
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 部分文字列
+ * @return auto 生成した文字列
  */
 template <size_t Pos, std::ptrdiff_t Len, size_t N>
 auto consteval substr(char const (&str)[N]) noexcept {
@@ -471,13 +487,13 @@ auto consteval substr(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列の部分文字列を生成する関数
+ * @brief 文字列の部分文字列を生成する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @param pos 開始位置
  * @param len 文字数。負の場合は pos の左側から abs(len) 文字
- * @return auto consteval 部分文字列
+ * @return auto 生成した文字列
  */
 template <size_t N>
 auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_t len) noexcept {
@@ -507,15 +523,25 @@ auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_
 namespace detail {
 
 /**
- * @brief ASCII 空白文字かどうかを判定する関数
+ * @brief ASCII 空白文字か判定する
  *
  * @param c 判定する文字
- * @return auto consteval 空白なら true
+ * @return auto 空白なら true
  */
 auto constexpr is_whitespace(char c) noexcept {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
 }
 
+/**
+ * @brief 引数の文字列から指定した文字を左端と右端から削除した文字列を生成する
+ *
+ * @tparam TrimLeft 左端から削除するかどうか
+ * @tparam TrimRight 右端から削除するかどうか
+ * @tparam TrimChar 削除する文字
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 生成した文字列
+ */
 template <bool TrimLeft, bool TrimRight, char TrimChar, size_t N>
 auto consteval trim_copy(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
@@ -527,7 +553,6 @@ auto consteval trim_copy(FrozenString<N> const& str) noexcept {
       ++start;
     }
   }
-
   if constexpr (TrimRight) {
     while (end > start && str.buffer[end - 1] == TrimChar) {
       --end;
@@ -544,24 +569,24 @@ auto consteval trim_copy(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief ASCII の16進数字かどうかを判定する関数
+ * @brief ASCII の16進数字かどうかを判定する
  *
  * @param c 判定する文字
- * @return auto consteval 16進数字なら true
+ * @return auto 16進数字文字なら true
  */
-auto consteval is_hex_digit(char c) noexcept {
+auto consteval is_hex_digit(char const c) noexcept {
   return (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'f')
     || (c >= 'A' && c <= 'F');
 }
 
 /**
- * @brief 16進数字1文字を 0..15 に変換する関数
+ * @brief 16進数字1文字を 0..15 の数値に変換する
  *
  * @param c 変換する16進数字
- * @return auto consteval 変換結果
+ * @return auto 変換結果の数字
  */
-auto consteval hex_digit_to_value(char c) {
+auto consteval hex_digit_to_value(char const c) {
   if (c >= '0' && c <= '9') {
     return static_cast<std::uint8_t>(c - '0');
   }
@@ -575,13 +600,13 @@ auto consteval hex_digit_to_value(char c) {
 }
 
 /**
- * @brief 16進数字2文字を 1byte に変換する関数
+ * @brief 16進数字2文字を 1byte に変換する
  *
  * @param hi 上位4bitを表す16進数字
  * @param lo 下位4bitを表す16進数字
- * @return auto consteval 変換結果
+ * @return auto 変換結果
  */
-auto consteval parse_hex_byte(char hi, char lo) {
+auto consteval parse_hex_byte(char const hi, char const lo) {
   if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
     throw std::invalid_argument("parse_hex_color: invalid hex digit");
   }
@@ -589,23 +614,23 @@ auto consteval parse_hex_byte(char hi, char lo) {
 }
 
 /**
- * @brief 16進数字1文字を nibble 複製して 1byte に変換する関数
+ * @brief 16進数字1文字を nibble 複製して 1byte に変換する
  *
  * @param c 変換する16進数字
- * @return auto consteval 変換結果
+ * @return auto 変換結果
  */
-auto consteval parse_hex_shorthand_byte(char c) {
+auto consteval parse_hex_shorthand_byte(char const c) {
   auto const value = hex_digit_to_value(c);
   return static_cast<std::uint8_t>((value << 4u) | value);
 }
 
 /**
- * @brief 区切り判定関数でトークン数を数える関数
+ * @brief 区切り判定関数でトークン数を数える
  *
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval トークン数
+ * @return auto トークン数
  */
 template <auto IsDelimiter = is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
@@ -624,13 +649,13 @@ auto consteval split_count_impl(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 数値字句を指定数値型に変換する関数
+ * @brief 数値字句を指定数値型に変換する
  *
  * @tparam Number 変換先の数値型
  * @tparam BaseMode 整数の基数解釈モード
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param token 変換するトークン
- * @return auto constexpr 変換結果
+ * @return auto 変換結果
  */
 template <Numeric Number = int, integer_base_mode BaseMode = integer_base_mode::decimal_only, size_t N>
   requires (!std::same_as<std::remove_cv_t<Number>, bool>)
@@ -644,6 +669,7 @@ constexpr auto parse_number_token(FrozenString<N> const& token) {
     throw std::invalid_argument(invalid);
   }
 
+  // 整数値へ変換
   if constexpr (Integral<Result>) {
     using Unsigned = std::make_unsigned_t<Result>;
 
@@ -724,6 +750,7 @@ constexpr auto parse_number_token(FrozenString<N> const& token) {
     }
 
     return static_cast<Result>(value);
+  // 実数値へ変換
   } else {
     auto pos = 0uz;
     auto negative = false;
@@ -785,20 +812,20 @@ constexpr auto parse_number_token(FrozenString<N> const& token) {
         for (auto i = 0; i < exponent; ++i) {
           value /= 10.0L;
         }
-        } else {
-          auto const max_abs = static_cast<long double>(std::numeric_limits<Result>::max());
-          for (auto i = 0; i < exponent; ++i) {
-            value *= 10.0L;
-            if (value > max_abs) {
-              throw std::out_of_range(out_of_range);
-            }
+      } else {
+        auto const max_abs = static_cast<long double>(std::numeric_limits<Result>::max());
+        for (auto i = 0; i < exponent; ++i) {
+          value *= 10.0L;
+          if (value > max_abs) {
+            throw std::out_of_range(out_of_range);
           }
         }
       }
+    }
 
-      if (pos != token.length) {
-        throw std::invalid_argument(invalid);
-      }
+    if (pos != token.length) {
+      throw std::invalid_argument(invalid);
+    }
 
     if (negative) {
       value = -value;
@@ -817,12 +844,12 @@ constexpr auto parse_number_token(FrozenString<N> const& token) {
 } // namespace detail
 
 /**
- * @brief 文字列を区切り判定関数で分割したときのトークン数を返す関数
+ * @brief 文字列を区切り判定関数で分割したときのトークン数を返す
  *
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval トークン数
+ * @return auto トークン数
  */
 template <auto IsDelimiter = detail::is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
@@ -831,12 +858,12 @@ auto consteval split_count(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルを区切り判定関数で分割したときのトークン数を返す関数
+ * @brief 文字列リテラルを区切り判定関数で分割したときのトークン数を返す
  *
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval トークン数
+ * @return auto トークン数
  */
 template <auto IsDelimiter = detail::is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
@@ -845,14 +872,14 @@ auto consteval split_count(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列を区切り判定関数で分割して std::array に変換する関数
+ * @brief 文字列を区切り判定関数で分割して std::array に変換する
  * `Count` より多いトークンは切り捨て、足りない要素は空文字列のまま残る
  *
  * @tparam Count 返却する配列の要素数
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 分割結果の配列
+ * @return auto 分割結果の配列
  */
 template <size_t Count, auto IsDelimiter = detail::is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
@@ -887,13 +914,13 @@ auto consteval split(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで結果を返す関数
+ * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで結果を返す
  * split_count(...) を内部で呼び出して、必要分までトークンを格納する
  *
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 分割結果の配列（未使用要素は空文字）
+ * @return auto 分割結果の配列（未使用要素は空文字）
  */
 template <auto IsDelimiter = detail::is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
@@ -903,6 +930,7 @@ auto consteval split(FrozenString<N> const& str) noexcept {
     token.length = 0;
   }
 
+  // 事前にsplit結果のトークン数を数えておく
   auto const token_count = split_count<IsDelimiter>(str);
   auto src = 0uz;
   auto dst = 0uz;
@@ -928,13 +956,12 @@ auto consteval split(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルを区切り判定関数で分割し、1回の呼び出しで結果を返す関数
- * split_count(...) を内部で呼び出して、必要分までトークンを格納する
+ * @brief 文字列リテラルを区切り判定関数で分割する
  *
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 分割結果の配列（未使用要素は空文字）
+ * @return auto 分割結果の配列（未使用要素は空文字）
  */
 template <auto IsDelimiter = detail::is_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
@@ -943,8 +970,7 @@ auto consteval split(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 文字列を区切り判定関数で分割し、1回の呼び出しで数値配列へ変換する関数
- * split_count(...) を内部で呼び出して、必要分まで数値変換する
+ * @brief 文字列を区切り判定関数で分割し数値配列へ変換する
  *
  * @tparam Int 解析する数値型（デフォルト: int）
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
@@ -970,12 +996,12 @@ auto consteval split_numbers(FrozenString<N> const& str) {
 }
 
 /**
- * @brief 文字列を空白区切りで分割し、1回の呼び出しで指定数値型配列へ変換する関数
+ * @brief 文字列を空白区切りで分割し指定数値型配列へ変換する
  *
  * @tparam Int 解析する数値型
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 分割・数値変換結果の配列（未使用要素は0）
+ * @return auto 分割・数値変換結果の配列（未使用要素は0）
  */
 template <Numeric Int, size_t N>
   requires (!std::same_as<std::remove_cv_t<Int>, bool>)
@@ -984,8 +1010,7 @@ auto consteval split_numbers(FrozenString<N> const& str) {
 }
 
 /**
- * @brief 文字列リテラルを区切り判定関数で分割し、1回の呼び出しで数値配列へ変換する関数
- * split_count(...) を内部で呼び出して、必要分まで数値変換する
+ * @brief 文字列リテラルを区切り判定関数で分割し数値配列へ変換する
  *
  * @tparam Int 解析する数値型（デフォルト: int）
  * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
@@ -996,21 +1021,21 @@ auto consteval split_numbers(FrozenString<N> const& str) {
 template <auto IsDelimiter = detail::is_whitespace, Numeric Int = int, size_t N>
   requires (std::predicate<decltype(IsDelimiter), char>
             && !std::same_as<std::remove_cv_t<Int>, bool>)
-auto consteval split_numbers(char const (&str)[N]) {
+auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<IsDelimiter, Int>(FrozenString{str});
 }
 
 /**
- * @brief 文字列リテラルを空白区切りで分割し、1回の呼び出しで指定数値型配列へ変換する関数
+ * @brief 文字列リテラルを空白区切りで分割し指定数値型配列へ変換する
  *
  * @tparam Int 解析する数値型
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 分割・数値変換結果ের 配列（未使用要素は0）
+ * @return auto 分割・数値変換結果の配列（未使用要素は0）
  */
 template <Numeric Int, size_t N>
   requires (!std::same_as<std::remove_cv_t<Int>, bool>)
-auto consteval split_numbers(char const (&str)[N]) {
+auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<detail::is_whitespace, Int>(FrozenString{str});
 }
 
@@ -1020,12 +1045,12 @@ constexpr auto parse_number(FrozenString<N> const& str) {
 }
 
 template <ParseNumberTarget Number, size_t N>
-consteval auto parse_number(char const (&str)[N]) {
+consteval auto parse_number(char const (&str)[N]) noexcept {
   return parse_number<std::remove_cv_t<Number>>(FrozenString{str});
 }
 
 /**
- * @brief `#RGB` / `#RRGGBB` 形式の色文字列を RGB タプルへ変換する関数
+ * @brief `#RGB` / `#RRGGBB` 形式の色文字列を RGB タプルへ変換する
  *
  * @param str 対象文字列
  * @return auto consteval `(r, g, b)` の順に並んだタプル
@@ -1051,11 +1076,11 @@ auto consteval parse_hex_rgb(std::string_view str) {
 }
 
 /**
- * @brief 文字列リテラル版の `#RGB` / `#RRGGBB` パーサ
+ * @brief `#RGB` / `#RRGGBB` 形式の色文字列を RGB タプルへ変換する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval `(r, g, b)` の順に並んだタプル
+ * @return auto `(r, g, b)` の順に並んだタプル
  */
 template <size_t N>
 auto consteval parse_hex_rgb(char const (&str)[N]) {
@@ -1066,7 +1091,7 @@ auto consteval parse_hex_rgb(char const (&str)[N]) {
  * @brief `#RGBA` / `#RRGGBBAA` 形式の色文字列を RGBA タプルへ変換する関数
  *
  * @param str 対象文字列
- * @return auto consteval `(r, g, b, a)` の順に並んだタプル
+ * @return auto  `(r, g, b, a)` の順に並んだタプル
  */
 auto consteval parse_hex_rgba(std::string_view str) {
   if (str.empty() || str[0] != '#' || (str.size() != 5 && str.size() != 9)) {
@@ -1095,7 +1120,7 @@ auto consteval parse_hex_rgba(std::string_view str) {
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval `(r, g, b, a)` の順に並んだタプル
+ * @return auto `(r, g, b, a)` の順に並んだタプル
  */
 template <size_t N>
 auto consteval parse_hex_rgba(char const (&str)[N]) {
@@ -1103,13 +1128,13 @@ auto consteval parse_hex_rgba(char const (&str)[N]) {
 }
 
 /**
- * @brief RGB タプルを BGR タプルへ並び替える関数
+ * @brief RGB タプルを BGR タプルへ並び替える
  *
  * @tparam R 赤チャネル型
  * @tparam G 緑チャネル型
  * @tparam B 青チャネル型
  * @param rgb `(r, g, b)` の順のタプル
- * @return auto consteval `(b, g, r)` の順のタプル
+ * @return auto `(b, g, r)` の順のタプル
  */
 template <typename R, typename G, typename B>
 auto consteval to_bgr(std::tuple<R, G, B> const& rgb) {
@@ -1117,14 +1142,14 @@ auto consteval to_bgr(std::tuple<R, G, B> const& rgb) {
 }
 
 /**
- * @brief RGBA タプルを BGRA タプルへ並び替える関数
+ * @brief RGBA タプルを BGRA タプルへ並び替える
  *
  * @tparam R 赤チャネル型
  * @tparam G 緑チャネル型
  * @tparam B 青チャネル型
  * @tparam A アルファチャネル型
  * @param rgba `(r, g, b, a)` の順のタプル
- * @return auto consteval `(b, g, r, a)` の順のタプル
+ * @return auto `(b, g, r, a)` の順のタプル
  */
 template <typename R, typename G, typename B, typename A>
 auto consteval to_bgra(std::tuple<R, G, B, A> const& rgba) {
@@ -1132,14 +1157,14 @@ auto consteval to_bgra(std::tuple<R, G, B, A> const& rgba) {
 }
 
 /**
- * @brief RGBA タプルを ABGR タプルへ並び替える関数
+ * @brief RGBA タプルを ABGR タプルへ並び替える
  *
  * @tparam R 赤チャネル型
  * @tparam G 緑チャネル型
  * @tparam B 青チャネル型
  * @tparam A アルファチャネル型
  * @param rgba `(r, g, b, a)` の順のタプル
- * @return auto consteval `(a, b, g, r)` の順のタプル
+ * @return auto `(a, b, g, r)` の順のタプル
  */
 template <typename R, typename G, typename B, typename A>
 auto consteval to_abgr(std::tuple<R, G, B, A> const& rgba) {
@@ -1147,11 +1172,11 @@ auto consteval to_abgr(std::tuple<R, G, B, A> const& rgba) {
 }
 
 /**
- * @brief 文字列の先頭を大文字に、残りを小文字に変換した静的文字列を生成する関数
+ * @brief 文字列の先頭を大文字に残りを小文字に変換する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 先頭大文字・残り小文字に変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval capitalize(FrozenString<N> const& str) noexcept {
@@ -1166,11 +1191,11 @@ auto consteval capitalize(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief 文字列リテラルの先頭を大文字に、残りを小文字に変換した静的文字列を生成する関数
+ * @brief 文字列リテラルの先頭を大文字に残りを小文字に変換する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval 先頭大文字・残り小文字に変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval capitalize(char const (&str)[N]) noexcept {
@@ -1178,12 +1203,12 @@ auto consteval capitalize(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief camelCase/PascalCase文字列をsnake_caseに変換した静的文字列を生成する関数
+ * @brief camelCase/PascalCase文字列をsnake_caseに変換する
  * 大文字の前にアンダースコアを挿入し、すべての文字を小文字に変換する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval snake_caseに変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval to_snake_case(FrozenString<N> const& str) noexcept {
@@ -1203,11 +1228,11 @@ auto consteval to_snake_case(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief camelCase/PascalCase文字列リテラルをsnake_caseに変換した静的文字列を生成する関数
+ * @brief camelCase/PascalCase文字列リテラルをsnake_caseに変換する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval snake_caseに変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval to_snake_case(char const (&str)[N]) noexcept {
@@ -1215,12 +1240,12 @@ auto consteval to_snake_case(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief snake_case文字列をcamelCaseに変換した静的文字列を生成する関数
+ * @brief snake_case文字列をcamelCaseに変換する
  * アンダースコアを除去し、アンダースコアに続く文字を大文字に変換する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval camelCaseに変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval to_camel_case(FrozenString<N> const& str) noexcept {
@@ -1244,11 +1269,11 @@ auto consteval to_camel_case(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief snake_case文字列リテラルをcamelCaseに変換した静的文字列を生成する関数
+ * @brief snake_case文字列リテラルをcamelCaseに変換する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval camelCaseに変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval to_camel_case(char const (&str)[N]) noexcept {
@@ -1256,12 +1281,12 @@ auto consteval to_camel_case(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief snake_case文字列をPascalCaseに変換した静的文字列を生成する関数
+ * @brief snake_case文字列をPascalCaseに変換する
  * アンダースコアを除去し、アンダースコアに続く文字および先頭の文字を大文字に変換する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval PascalCaseに変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval to_pascal_case(FrozenString<N> const& str) noexcept {
@@ -1285,11 +1310,11 @@ auto consteval to_pascal_case(FrozenString<N> const& str) noexcept {
 }
 
 /**
- * @brief snake_case文字列リテラルをPascalCaseに変換した静的文字列を生成する関数
+ * @brief snake_case文字列リテラルをPascalCaseに変換する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return auto consteval PascalCaseに変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval to_pascal_case(char const (&str)[N]) noexcept {
@@ -1297,13 +1322,13 @@ auto consteval to_pascal_case(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief 各行の先頭の空白を指定個数分削除する静的文字列を生成する関数
+ * @brief 各行の先頭の空白を指定個数分削除する
  * 空白がなくなった行についてはそれ以上削除しない
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @param n 削除する空白の数
- * @return auto consteval 変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval remove_leading_spaces(FrozenString<N> const& str, size_t n) noexcept {
@@ -1334,12 +1359,12 @@ auto consteval remove_leading_spaces(char const (&str)[N], size_t n) noexcept {
 }
 
 /**
- * @brief 指定されたコメント開始文字列で始まる行を削除する静的文字列を生成する関数
+ * @brief 指定されたコメント開始文字列で始まる行を削除する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @param comment_seq コメント開始文字列 (デフォルト: "#")
- * @return auto consteval 変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval remove_comment_lines(FrozenString<N> const& str, std::string_view comment_seq = "#") noexcept {
@@ -1379,13 +1404,13 @@ auto consteval remove_comment_lines(char const (&str)[N], std::string_view comme
 }
 
 /**
- * @brief 指定された文字列以降行末までを削除した静的文字列を生成する関数
+ * @brief 指定された文字列以降行末までを削除する
  * 指定された文字列直前に空白文字が連続している場合はそれも削除します。
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @param comment_seq コメント開始文字列 (デフォルト: "#")
- * @return auto consteval 変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval remove_comments(FrozenString<N> const& str, std::string_view comment_seq = "#") noexcept {
@@ -1434,12 +1459,12 @@ auto consteval remove_comments(char const (&str)[N], std::string_view comment_se
 }
 
 /**
- * @brief すべての行を結合する静的文字列を生成する関数
- * 行を結合した際に、行末と行頭どちらにもスペースがない場合にはスペースを入れる
+ * @brief すべての行を結合する
+ * 行末と行頭どちらにもスペースがない場合にはスペースを入れる
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 結合された静的文字列
+ * @return auto 結合結果
  */
 template <size_t N>
 auto consteval join_lines(FrozenString<N> const& str) noexcept {
@@ -1482,11 +1507,11 @@ auto consteval join_lines(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief すべての行末の空白を削除する静的文字列を生成する関数
+ * @brief すべての行末の空白を削除する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval trim_trailing_spaces(FrozenString<N> const& str) noexcept {
@@ -1521,11 +1546,11 @@ auto consteval trim_trailing_spaces(char const (&str)[N]) noexcept {
 }
 
 /**
- * @brief すべての空行を削除する静的文字列を生成する関数
+ * @brief すべての空行を削除する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto consteval 変換された静的文字列
+ * @return auto 変換文字列
  */
 template <size_t N>
 auto consteval remove_empty_lines(FrozenString<N> const& str) noexcept {
@@ -1563,10 +1588,10 @@ auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
 namespace literals {
 
 /**
- * @brief 文字列リテラルを FrozenString に変換するリテラル演算子
+ * @brief 文字列リテラルを FrozenString に変換する
  *
  * @tparam FS 固定長文字列
- * @return auto consteval FrozenString に変換された文字列
+ * @return auto 変換文字列
  */
 template <FixedString FS>
 auto consteval operator""_fs() noexcept {
@@ -1582,13 +1607,12 @@ auto consteval operator""_fs() noexcept {
 }
 
 /**
- * @brief 文字列リテラルと FrozenString を結合する演算子
- * FrozenString + 文字列リテラルについては、FrozenString内で定義されている
+ * @brief 文字列リテラルと FrozenString を結合する
  *
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @tparam M FrozenString の長さ (終端文字'\0'を含む)
  * @param rhs 結合する FrozenString
- * @return auto consteval 結合された FrozenString
+ * @return auto 結合結果
  */
 template <size_t N, size_t M>
 auto consteval operator+(char const (&lhs)[N], FrozenString<M> const& rhs) noexcept {
@@ -1608,7 +1632,7 @@ auto consteval operator+(char const (&lhs)[N], FrozenString<M> const& rhs) noexc
 namespace detail {
 
 /**
- * @brief 10進数整数を文字列に変換する関数
+ * @brief 10進数整数を文字列に変換する
  *
  * @param v 変換する整数
  * @return auto consteval 変換された文字列とその長さのペア
@@ -1636,10 +1660,10 @@ auto consteval to_dec_chars(long long v) noexcept {
 }
 
 /**
- * @brief 16進数整数を文字列に変換する関数
+ * @brief 16進数整数を文字列に変換する
  *
  * @param value 変換する整数
- * @return auto consteval 変換された文字列とその長さのペア
+ * @return auto 変換文字列とその長さのペア
  */
 auto consteval to_hex_chars(long long value) noexcept {
   auto buffer = std::array<char, 17>{};
@@ -1660,10 +1684,10 @@ auto consteval to_hex_chars(long long value) noexcept {
 }
 
 /**
- * @brief 2進数整数を文字列に変換する関数
+ * @brief 2進数整数を文字列に変換する
  *
  * @param value 変換する整数
- * @return auto consteval 変換された文字列とその長さのペア
+ * @return auto 変換文字列とその長さのペア
  */
 auto consteval to_bin_chars(long long value) noexcept {
   auto buffer = std::array<char, 65>{};
@@ -1683,10 +1707,10 @@ auto consteval to_bin_chars(long long value) noexcept {
 }
 
 /**
- * @brief 8進数整数を文字列に変換する関数
+ * @brief 8進数整数を文字列に変換する
  *
  * @param value 変換する整数
- * @return auto consteval 変換された文字列とその長さのペア
+ * @return auto 変換された文字列とその長さのペア
  */
 auto consteval to_oct_chars(long long value) noexcept {
   auto buffer = std::array<char, 23>{};
@@ -1706,13 +1730,13 @@ auto consteval to_oct_chars(long long value) noexcept {
 }
 
 /**
- * @brief 浮動小数点数を文字列に変換する関数（簡易固定小数点）
+ * @brief 浮動小数点数を文字列に変換する（簡易固定小数点）
  *
  * @param value 変換する浮動小数点数
  * @param precision 小数点以下の桁数
- * @return auto consteval 変換された文字列とその長さのペア
+ * @return auto 変換文字列とその長さのペア
  */
-auto consteval to_float_chars(double value, int precision) noexcept {
+auto consteval to_float_chars(double value, int const precision) noexcept {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
   if (value < 0) {
@@ -1743,13 +1767,13 @@ auto consteval to_float_chars(double value, int precision) noexcept {
 }
 
 /**
- * @brief 1要素を 0..255 の値として扱うための共通変換関数
+ * @brief 1要素を 0..255 の値として扱う
  * - std::byte は std::to_integer<unsigned char> を使用
  * - それ以外は unsigned char へキャスト
  *
  * @tparam T 変換する要素の型
  * @param v 変換する要素
- * @return auto consteval 変換された 0..255 の値
+ * @return auto 変換された 0..255 の値
  */
 template <typename T>
 auto consteval to_u8(T const v) noexcept {
@@ -1761,13 +1785,13 @@ auto consteval to_u8(T const v) noexcept {
 }
 
 /**
- * @brief ヌル終端ポインタを FrozenString<257> に変換する関数
+ * @brief ヌル終端ポインタを FrozenString<257> に変換する
  * - nullptr は空文字とする
  * - '\0' もしくは 256 文字で打ち切り
  *
  * @tparam Elem 変換する要素の型
  * @param arg 変換するヌル終端ポインタ
- * @return auto consteval 変換された FrozenString<257>
+ * @return auto 変換文字列
  */
 template <typename Elem>
 auto consteval freeze_from_ptr(Elem const* arg) noexcept {
@@ -1792,14 +1816,14 @@ auto consteval freeze_from_ptr(Elem const* arg) noexcept {
 }
 
 /**
- * @brief span を FrozenString<257> に変換する関数
+ * @brief span を FrozenString<257> に変換する
  * - 先頭から 0 値までを文字列として扱う
  * - 0 がなくても最大 256 文字までコピー
  *
  * @tparam Elem 変換する要素の型
  * @tparam Extent span の長さ
  * @param arg 変換する span
- * @return auto consteval 変換された FrozenString<257>
+ * @return auto 変換文字列
  */
 template <typename Elem, size_t Extent>
 auto consteval freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
@@ -1819,12 +1843,12 @@ auto consteval freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
 }
 
 /**
- * @brief string_view を FrozenString<257> に変換する関数
+ * @brief string_view を FrozenString<257> に変換する
  * - 終端は長さベース
  * - 最大 256 文字までコピー
  *
  * @param s 変換する string_view
- * @return auto consteval 変換された FrozenString<257>
+ * @return auto 変換文字列
  */
 auto consteval freeze_from_sv(std::string_view s) noexcept {
   auto res = FrozenString<257>{};
@@ -2029,13 +2053,28 @@ auto consteval trim(Ptr&& str) noexcept {
   return trim<TrimChar>(freeze(str));
 }
 
-// join - zero args: returns empty string
+/**
+ * @brief 引数なしのjoin関数は空文字を返す
+ *
+ * @tparam Delim 区切り文字列
+ * @return auto 結合結果
+ */
 template <FixedString Delim>
 auto consteval join() noexcept {
   return FrozenString<1>{};
 }
 
 // join - homogeneous std::array of FrozenStrings
+/**
+ * @brief std::array 内の FrozenString を Delim で結合する
+ * std::arrayは要素数が一致している
+ *
+ * @tparam Delim 区切り文字列
+ * @tparam ElemN FrozenStringの要素数 (終端文字'\0'を含む)
+ * @tparam Count std::arrayの要素数
+ * @param arr 結合する FrozenString の std::array
+ * @return auto 結合結果
+ */
 template <FixedString Delim, size_t ElemN, size_t Count>
 auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
   if constexpr (Count == 0) {
@@ -2063,6 +2102,16 @@ auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept 
 }
 
 // join - variadic heterogeneous FrozenStrings
+/**
+ * @brief 複数の FrozenString を Delim で結合する
+ *
+ * @tparam Delim 区切り文字列
+ * @tparam N0 最初の FrozenString の長さ (終端文字'\0'を含む)
+ * @tparam Ns 残りの FrozenString の長さ (終端文字'\0'を含む)
+ * @param first 最初の FrozenString
+ * @param rest 残りの FrozenString（可変引数）
+ * @return auto 結合結果
+ */
 template <FixedString Delim, size_t N0, size_t... Ns>
 auto consteval join(FrozenString<N0> const& first, FrozenString<Ns> const&... rest) noexcept {
   auto constexpr DELIM_LEN = Delim.sv().size();
@@ -2091,7 +2140,15 @@ auto consteval join(FrozenString<N0> const& first, FrozenString<Ns> const&... re
   return res;
 }
 
-// pad_left - FrozenString (add Fill chars on left; delegates to right<>)
+/**
+ * @brief 左側に指定した幅まで Fill 文字を追加してパディングする
+ *
+ * @tparam Width 出力文字列の幅
+ * @tparam Fill パディングに使用する文字
+ * @tparam N 入力文字列の長さ (終端文字'\0'を含む)
+ * @param str 入力文字列
+ * @return auto パディング後の文字列
+ */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval pad_left(FrozenString<N> const& str) noexcept {
   auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
@@ -2112,17 +2169,20 @@ auto consteval pad_left(FrozenString<N> const& str) noexcept {
   return res;
 }
 
-// pad_left - string literal
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval pad_left(char const (&str)[N]) noexcept {
   return pad_left<Width, Fill>(FrozenString{str});
 }
 
-// pad_left - Integral (default Fill = '0')
-// Defined after freeze(Integral) to ensure visibility
-// (see below, near the end of the namespace)
-
-// pad_right - FrozenString (add Fill chars on right)
+/**
+ * @brief 右側に指定した幅まで Fill 文字を追加してパディングする
+ *
+ * @tparam Width 出力文字列の幅
+ * @tparam Fill パディングに使用する文字
+ * @tparam N 入力文字列の長さ (終端文字'\0'を含む)
+ * @param str 入力文字列
+ * @return auto パディング後の文字列
+ */
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval pad_right(FrozenString<N> const& str) noexcept {
   auto constexpr OUT_CAP = N > (Width + 1) ? N : (Width + 1);
@@ -2140,17 +2200,20 @@ auto consteval pad_right(FrozenString<N> const& str) noexcept {
   return res;
 }
 
-// pad_right - string literal
 template <size_t Width, char Fill = ' ', size_t N>
 auto consteval pad_right(char const (&str)[N]) noexcept {
   return pad_right<Width, Fill>(FrozenString{str});
 }
 
-// pad_right - Integral (default Fill = '0')
-// Defined after freeze(Integral) to ensure visibility
-// (see below, near the end of the namespace)
-
-// replace - first occurrence of From with To
+/**
+ * @brief 文字列中の最初の From を To に置換する
+ *
+ * @tparam From 置換対象の文字列
+ * @tparam To 置換後の文字列
+ * @tparam N 入力文字列の長さ (終端文字'\0'を含む)
+ * @param str 入力文字列
+ * @return auto 置換後の文字列
+ */
 template <FixedString From, FixedString To, size_t N>
 auto consteval replace(FrozenString<N> const& str) noexcept {
   static_assert(From.sv().size() > 0, "replace: From must not be empty");
@@ -2187,13 +2250,20 @@ auto consteval replace(FrozenString<N> const& str) noexcept {
   return res;
 }
 
-// replace - string literal
 template <FixedString From, FixedString To, size_t N>
 auto consteval replace(char const (&str)[N]) noexcept {
   return replace<From, To>(FrozenString{str});
 }
 
-// replace_all - all non-overlapping occurrences of From with To (left-to-right)
+/**
+ * @brief 文字列中のすべての From を To に置換する
+ *
+ * @tparam From 置換対象の文字列
+ * @tparam To 置換後の文字列
+ * @tparam N 入力文字列の長さ (終端文字'\0'を含む)
+ * @param str 入力文字列
+ * @return auto 置換後の文字列
+ */
 template <FixedString From, FixedString To, size_t N>
 auto consteval replace_all(FrozenString<N> const& str) noexcept {
   static_assert(From.sv().size() > 0, "replace_all: From must not be empty");
@@ -2230,12 +2300,15 @@ auto consteval replace_all(FrozenString<N> const& str) noexcept {
   return res;
 }
 
-// replace_all - string literal
 template <FixedString From, FixedString To, size_t N>
 auto consteval replace_all(char const (&str)[N]) noexcept {
   return replace_all<From, To>(FrozenString{str});
 }
 
+/**
+ * @brief パイプライン処理のためのアダプタ構造体と定数オブジェクトの定義
+ *
+ */
 namespace ops {
 
 struct trim_adaptor : detail::pipe_adaptor_tag {
@@ -2392,7 +2465,6 @@ consteval auto remove_comments(std::string_view comment_seq = "#") noexcept {
   return remove_comments_adaptor{comment_seq};
 }
 
-// join adaptor: works on std::array<FrozenString<ElemN>, Count>
 template <FixedString Delim>
 struct join_adaptor : detail::pipe_adaptor_tag {
   template <size_t ElemN, size_t Count>
@@ -2410,7 +2482,6 @@ consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
   return rhs(lhs);
 }
 
-// pad_left adaptor: pads left with Fill (default ' ')
 template <size_t Width, char Fill = ' '>
 struct pad_left_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
@@ -2422,7 +2493,6 @@ struct pad_left_adaptor : detail::pipe_adaptor_tag {
 template <size_t Width, char Fill = ' '>
 inline constexpr pad_left_adaptor<Width, Fill> pad_left{};
 
-// pad_right adaptor: pads right with Fill (default ' ')
 template <size_t Width, char Fill = ' '>
 struct pad_right_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
@@ -2434,7 +2504,6 @@ struct pad_right_adaptor : detail::pipe_adaptor_tag {
 template <size_t Width, char Fill = ' '>
 inline constexpr pad_right_adaptor<Width, Fill> pad_right{};
 
-// replace adaptor: replaces first occurrence of From with To
 template <FixedString From, FixedString To>
 struct replace_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
@@ -2446,7 +2515,6 @@ struct replace_adaptor : detail::pipe_adaptor_tag {
 template <FixedString From, FixedString To>
 inline constexpr replace_adaptor<From, To> replace{};
 
-// replace_all adaptor: replaces all non-overlapping occurrences of From with To
 template <FixedString From, FixedString To>
 struct replace_all_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
@@ -2465,10 +2533,10 @@ inline constexpr replace_all_adaptor<From, To> replace_all{};
 \*/
 
 /**
- * @brief Bin タグを受け取って整数を2進数表現の文字列に変換する
+ * @brief Binタグを受け取って整数を2進数表現の文字列に変換する
  *
  * @param arg 変換する整数を含む Bin タグ
- * @return auto consteval 変換後の静的文字列
+ * @return auto 変換後の文字列
  */
 auto consteval freeze(Bin const& arg) noexcept {
   auto const p = detail::to_bin_chars(arg.value);
@@ -2482,10 +2550,10 @@ auto consteval freeze(Bin const& arg) noexcept {
 }
 
 /**
- * @brief Oct タグを受け取って整数を8進数表現の文字列に変換する
+ * @brief Octタグを受け取って整数を8進数表現の文字列に変換する
  *
  * @param arg 変換する整数を含む Oct タグ
- * @return auto consteval 変換後の静的文字列
+ * @return auto 変換後の文字列
  */
 auto consteval freeze(Oct const& arg) noexcept {
   auto const p = detail::to_oct_chars(arg.value);
@@ -2499,10 +2567,10 @@ auto consteval freeze(Oct const& arg) noexcept {
 }
 
 /**
- * @brief Hex タグを受け取って整数を16進数表現の文字列に変換する
+ * @brief Hexタグを受け取って整数を16進数表現の文字列に変換する
  *
  * @param arg 変換する整数を含む Hex タグ
- * @return auto consteval 変換後の静的文字列
+ * @return auto 変換後の文字列
  */
 auto consteval freeze(Hex const& arg) noexcept {
   auto const p = detail::to_hex_chars(arg.value);
@@ -2516,10 +2584,10 @@ auto consteval freeze(Hex const& arg) noexcept {
 }
 
 /**
- * @brief Precision タグを受け取って浮動小数点数を指定精度の文字列に変換する
+ * @brief Precisionタグを受け取って浮動小数点数を指定精度の文字列に変換する
  *
  * @param arg 変換する浮動小数点数を含む Precision タグ
- * @return auto consteval 変換後の静的文字列
+ * @return auto 変換後の文字列
  */
 auto consteval freeze(Precision const& arg) noexcept {
   auto const p = detail::to_float_chars(arg.value, arg.precision);
@@ -2537,7 +2605,7 @@ auto consteval freeze(Precision const& arg) noexcept {
  *
  * @tparam T 整数型
  * @param arg 変換する整数
- * @return auto consteval 変換後の静的文字列
+ * @return auto 変換後の文字列
  */
 template <Integral T>
 auto consteval freeze(T const& arg) noexcept {
@@ -2553,12 +2621,9 @@ auto consteval freeze(T const& arg) noexcept {
 
 template <FloatingPoint T>
 auto consteval freeze(T const& arg) noexcept {
-  return freeze(Precision(arg, 2)); // デフォルト精度2
+  return freeze(Precision(arg, 2)); // デフォルト精度は2
 }
 
-/*-------------------------------------------------------------------------------*\
- * string_view 変換可能型
-\*/
 template <typename T>
   requires (std::is_convertible_v<T, std::string_view>
             && !Integral<std::remove_cvref_t<T>>
@@ -2576,14 +2641,12 @@ auto consteval freeze(T const& arg) noexcept {
 template <typename T>
 auto consteval freeze(T const&) noexcept = delete;
 
-// pad_left - non-integral freezable values
 template <size_t Width, char Fill = ' ', typename T>
   requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
-// pad_right - non-integral freezable values
 template <size_t Width, char Fill = ' ', typename T>
   requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 auto consteval pad_right(T const& v) noexcept {
@@ -2598,24 +2661,22 @@ auto consteval join(First const& first, Rest const&... rest) noexcept {
   return join<Delim>(freeze(first), freeze(rest)...);
 }
 
-// pad_left - Integral (default Fill = '0'); defined after freeze(Integral)
 template <size_t Width, char Fill = '0', Integral T>
 auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
-// pad_right - Integral (default Fill = '0'); defined after freeze(Integral)
 template <size_t Width, char Fill = '0', Integral T>
 auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
 }
 
 /**
- * @brief 引数で渡された値をすべて FrozenString に変換し結合する
+ * @brief 引数で渡された値を結合する
  *
  * @tparam Args 可変引数の型
  * @param args 結合する引数
- * @return auto consteval 結合後の静的文字列
+ * @return auto 変換後の文字列
  */
 template <typename... Args>
 auto consteval concat(Args const&... args) noexcept {
@@ -2635,7 +2696,7 @@ struct type_identity {
 struct unknown_type {};
 
 /**
- * @brief 文字列トークンを対応する型に変換するヘルパー関数
+ * @brief 文字列トークンを対応する型に変換する
  *
  * @tparam S 判定対象の FrozenString
  */
@@ -2700,7 +2761,7 @@ consteval std::size_t find_top_level_comma() {
 } // namespace detail
 
 /**
- * @brief 文字列トークンを対応する型に変換するメタ関数
+ * @brief 文字列トークンを対応する型に変換する
  * @tparam S 判定対象の文字列
  */
 template <auto S>
@@ -2708,8 +2769,15 @@ struct type_mapping {
   using type = typename decltype(detail::map_string_to_type<S>())::type;
 };
 
+/**
+ * @brief 固定文字列をパースして型のリストを生成する
+ *
+ * @tparam EmptyMeansVoid 空文字列を std::tuple<void> として扱うかどうかのフラグ
+ * @tparam Str 入力文字列 (FrozenString)
+ * @return consteval 型のリスト（std::tuple）
+ */
 template <bool EmptyMeansVoid, auto Str>
-consteval auto parse_to_tuple_impl() {
+consteval auto parse_to_tuple_impl() noexcept {
   auto constexpr trimmed = trim(Str);
 
   if constexpr (trimmed.length == 0) {
@@ -2789,12 +2857,6 @@ consteval auto parse_to_tuple_impl() {
   }
 }
 
-/**
- * @brief 固定文字列をパースして型のリスト（std::tuple）を保持する type_identity を生成する
- * 入れ子構造 [...] にも対応。末尾の '?' による std::optional にも対応。
- *
- * @tparam Str 入力文字列 (FrozenString)
- */
 template <auto Str>
 consteval auto parse_to_tuple() {
   return parse_to_tuple_impl<false, Str>();
