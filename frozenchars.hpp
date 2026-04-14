@@ -159,6 +159,19 @@ struct FrozenString {
     return std::string_view{buffer.data(), length};
   }
 
+  explicit constexpr operator std::string_view() const noexcept {
+    return sv();
+  }
+
+  auto constexpr begin() const noexcept { return buffer.data(); }
+  auto constexpr end()   const noexcept { return buffer.data() + length; }
+
+  auto constexpr operator[](std::size_t i) const noexcept -> char const& { return buffer[i]; }
+  auto constexpr operator[](std::size_t i)       noexcept -> char&       { return buffer[i]; }
+
+  auto constexpr size()  const noexcept { return length; }
+  auto constexpr empty() const noexcept { return length == 0; }
+
   // FrozenString同士の結合
   template <size_t M>
   auto consteval operator+(FrozenString<M> const& other) const noexcept {
@@ -237,6 +250,22 @@ auto consteval find_substring(FrozenString<N> const& str,
     }
   }
   return std::string_view::npos;
+}
+
+/**
+ * @brief snake_case変換時に挿入されるアンダースコアの数を計算する
+ *
+ * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
+ * @param str 処理対象の文字列
+ * @return std::size_t 挿入されるアンダースコアの数
+ */
+template <size_t N>
+auto consteval count_snake_underscores(FrozenString<N> const& str) noexcept -> std::size_t {
+  auto count = 0uz;
+  for (auto i = 1uz; i < str.length; ++i) {
+    if (str.buffer[i] >= 'A' && str.buffer[i] <= 'Z') { ++count; }
+  }
+  return count;
 }
 
 } // namespace detail
@@ -1237,6 +1266,33 @@ auto consteval to_snake_case(FrozenString<N> const& str) noexcept {
 template <size_t N>
 auto consteval to_snake_case(char const (&str)[N]) noexcept {
   return to_snake_case(FrozenString{str});
+}
+
+/**
+ * @brief camelCase/PascalCase文字列をsnake_caseに変換する（NTTP版・正確なバッファサイズ）
+ * 入力文字列をNTTPとして受け取り、必要なアンダースコア数を事前計算して
+ * ぴったりのサイズの FrozenString を返す。
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 変換文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval to_snake_case() noexcept {
+  constexpr auto EXTRA = detail::count_snake_underscores(Str);
+  constexpr auto OUT_CAP = Str.length + EXTRA + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  for (auto i = 0uz; i < Str.length; ++i) {
+    auto const c = Str.buffer[i];
+    if (c >= 'A' && c <= 'Z' && i > 0) {
+      res.buffer[offset++] = '_';
+    }
+    res.buffer[offset++] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
 }
 
 /**
