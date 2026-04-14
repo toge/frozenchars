@@ -37,7 +37,9 @@ TEST_CASE("simple string") {
   auto constexpr star = "*"_fs;
 
   static_assert(star.sv() == "*");
+  static_assert(star.data() == star.buffer.data());
   REQUIRE(star.sv() == "*");
+  REQUIRE(star.data() == star.buffer.data());
 }
 
 TEST_CASE("simple repeat") {

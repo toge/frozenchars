@@ -295,6 +295,70 @@ auto constexpr p = to_pascal_case("hello_world"_fs);  // "HelloWorld"
 static_assert(p.sv() == "HelloWorld");
 ```
 
+## `url_encode`（URLエンコード）
+
+文字列をURLエンコード（パーセントエンコーディング）します。RFC 3986 に準拠し、非予約文字（アルファベット、数字、`-`, `.`, `_`, `~`）以外の文字を `%XX` 形式に変換します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr e1 = url_encode("Hello World!"_fs);  // "Hello%20World%21"
+auto constexpr e2 = url_encode<"a b c"_fs>();      // NTTP版（正確なサイズ）
+
+static_assert(e1.sv() == "Hello%20World%21");
+static_assert(e2.sv() == "a%20b%20c");
+```
+
+## `url_decode`（URLデコード）
+
+URLエンコードされた文字列をデコードします。`%XX` 形式を元の文字に変換し、`+` をスペースに変換します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr d1 = url_decode("Hello%20World%21"_fs);  // "Hello World!"
+auto constexpr d2 = url_decode("a+b+c"_fs);            // "a b c"
+
+static_assert(d1.sv() == "Hello World!");
+static_assert(d2.sv() == "a b c");
+```
+
+## `base64_encode`（Base64エンコード）
+
+文字列を Base64 エンコードします。`FrozenString` と文字列リテラルの両方を受け取ります。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr e1 = base64_encode("Hello"_fs);      // "SGVsbG8="
+auto constexpr e2 = base64_encode<"f"_fs>();       // NTTP版（正確なサイズ）
+
+static_assert(e1.sv() == "SGVsbG8=");
+static_assert(e2.sv() == "Zg==");
+```
+
+## `base64_decode`（Base64デコード）
+
+Base64 エンコードされた文字列をデコードします。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr d1 = base64_decode("SGVsbG8="_fs);    // "Hello"
+auto constexpr d2 = base64_decode<"Zg=="_fs>();     // NTTP版（正確なサイズ）
+
+static_assert(d1.sv() == "Hello");
+static_assert(d2.sv() == "f");
+```
+
 ## マルチライン文字列の処理
 
 複数行を含む文字列（`\n` で区切られた文字列）に対して、行単位での加工を行うスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。

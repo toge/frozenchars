@@ -172,6 +172,9 @@ struct FrozenString {
   auto constexpr size()  const noexcept { return length; }
   auto constexpr empty() const noexcept { return length == 0; }
 
+  auto constexpr data() const noexcept { return buffer.data(); }
+  auto constexpr data()       noexcept { return buffer.data(); }
+
   // FrozenString同士の結合
   template <size_t M>
   auto consteval operator+(FrozenString<M> const& other) const noexcept {
@@ -651,6 +654,131 @@ auto consteval parse_hex_byte(char const hi, char const lo) {
 auto consteval parse_hex_shorthand_byte(char const c) {
   auto const value = hex_digit_to_value(c);
   return static_cast<std::uint8_t>((value << 4u) | value);
+}
+
+/**
+ * @brief URLエンコードでエンコード不要な文字（unreserved）か判定する
+ * RFC 3986: ALPHA / DIGIT / "-" / "." / "_" / "~"
+ *
+ * @param c 判定する文字
+ * @return auto エンコード不要なら true
+ */
+auto constexpr is_unreserved(char const c) noexcept {
+  return (c >= 'A' && c <= 'Z')
+    || (c >= 'a' && c <= 'z')
+    || (c >= '0' && c <= '9')
+    || c == '-' || c == '.' || c == '_' || c == '~';
+}
+
+/**
+ * @brief URLエンコード後の文字数を計算する
+ *
+ * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
+ * @param str 処理対象の文字列
+ * @return std::size_t エンコード後の文字数
+ */
+template <size_t N>
+auto consteval count_url_encoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
+  auto count = 0uz;
+  for (auto const c : str.sv()) {
+    if (is_unreserved(c)) {
+      ++count;
+    } else {
+      count += 3;
+    }
+  }
+  return count;
+}
+
+/**
+ * @brief URLデコード後の文字数を計算する
+ *
+ * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
+ * @param str 処理対象の文字列
+ * @return std::size_t デコード後の文字数
+ */
+template <size_t N>
+auto consteval count_url_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
+  auto count = 0uz;
+  auto const s = str.sv();
+  for (auto i = 0uz; i < s.size(); ++i) {
+    if (s[i] == '%' && i + 2 < s.size() && is_hex_digit(s[i + 1]) && is_hex_digit(s[i + 2])) {
+      ++count;
+      i += 2;
+    } else if (s[i] == '+') {
+      ++count;
+    } else {
+      ++count;
+    }
+  }
+  return count;
+}
+
+/**
+ * @brief 0..15 の数値を16進数字に変換する
+ *
+ * @param value 変換する数値
+ * @param uppercase 大文字にするかどうか
+ * @return auto 変換結果の文字
+ */
+auto constexpr value_to_hex_digit(std::uint8_t const value, bool const uppercase = true) noexcept {
+  if (value < 10) {
+    return static_cast<char>('0' + value);
+  }
+  if (uppercase) {
+    return static_cast<char>('A' + (value - 10));
+  }
+  return static_cast<char>('a' + (value - 10));
+}
+
+/**
+ * @brief Base64の文字テーブル
+ */
+inline constexpr char base64_chars[] =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  "abcdefghijklmnopqrstuvwxyz"
+  "0123456789+/";
+
+/**
+ * @brief Base64文字から数値(0..63)への変換
+ *
+ * @param c 変換する文字
+ * @return auto 変換後の数値。不正な文字の場合は 255
+ */
+auto constexpr base64_char_to_value(char const c) noexcept -> std::uint8_t {
+  if (c >= 'A' && c <= 'Z') return static_cast<std::uint8_t>(c - 'A');
+  if (c >= 'a' && c <= 'z') return static_cast<std::uint8_t>(c - 'a' + 26);
+  if (c >= '0' && c <= '9') return static_cast<std::uint8_t>(c - '0' + 52);
+  if (c == '+') return 62;
+  if (c == '/') return 63;
+  return 255;
+}
+
+/**
+ * @brief Base64エンコード後の文字数を計算する
+ *
+ * @param n 入力バイト数
+ * @return std::size_t エンコード後の文字数（パディング込み）
+ */
+auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
+  return ((n + 2) / 3) * 4;
+}
+
+/**
+ * @brief Base64デコード後の最大バイト数を計算する
+ *
+ * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
+ * @param str 処理対象の文字列
+ * @return std::size_t デコード後のバイト数（パディングを考慮）
+ */
+template <size_t N>
+auto consteval count_base64_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
+  auto const s = str.sv();
+  if (s.empty()) return 0;
+  auto count = (s.size() / 4) * 3;
+  if (s.ends_with("==")) count -= 2;
+  else if (s.ends_with("=")) count -= 1;
+  return count;
 }
 
 /**
@@ -1375,6 +1503,296 @@ auto consteval to_pascal_case(FrozenString<N> const& str) noexcept {
 template <size_t N>
 auto consteval to_pascal_case(char const (&str)[N]) noexcept {
   return to_pascal_case(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をURLエンコードする
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列 (バッファサイズは最悪ケース 3 * length + 1)
+ */
+template <size_t N>
+auto consteval url_encode(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 3 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  for (auto const c : str.sv()) {
+    if (detail::is_unreserved(c)) {
+      res.buffer[offset++] = c;
+    } else {
+      auto const byte = static_cast<std::uint8_t>(c);
+      res.buffer[offset++] = '%';
+      res.buffer[offset++] = detail::value_to_hex_digit(byte >> 4);
+      res.buffer[offset++] = detail::value_to_hex_digit(byte & 0x0F);
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをURLエンコードする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval url_encode(char const (&str)[N]) noexcept {
+  return url_encode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をURLエンコードする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 変換文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval url_encode() noexcept {
+  constexpr auto OUT_LEN = detail::count_url_encoded_size(Str);
+  auto res = FrozenString<OUT_LEN + 1>{};
+  auto offset = 0uz;
+  for (auto const c : Str.sv()) {
+    if (detail::is_unreserved(c)) {
+      res.buffer[offset++] = c;
+    } else {
+      auto const byte = static_cast<std::uint8_t>(c);
+      res.buffer[offset++] = '%';
+      res.buffer[offset++] = detail::value_to_hex_digit(byte >> 4);
+      res.buffer[offset++] = detail::value_to_hex_digit(byte & 0x0F);
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列をURLデコードする
+ * `%XX` 形式を元の文字に変換します。`+` はスペースに変換されます。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval url_decode(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto const s = str.sv();
+  for (auto i = 0uz; i < s.size(); ++i) {
+    if (s[i] == '%' && i + 2 < s.size() && detail::is_hex_digit(s[i + 1]) && detail::is_hex_digit(s[i + 2])) {
+      res.buffer[offset++] = static_cast<char>(detail::parse_hex_byte(s[i + 1], s[i + 2]));
+      i += 2;
+    } else if (s[i] == '+') {
+      res.buffer[offset++] = ' ';
+    } else {
+      res.buffer[offset++] = s[i];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをURLデコードする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval url_decode(char const (&str)[N]) noexcept {
+  return url_decode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をURLデコードする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 変換文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval url_decode() noexcept {
+  constexpr auto OUT_LEN = detail::count_url_decoded_size(Str);
+  auto res = FrozenString<OUT_LEN + 1>{};
+  auto offset = 0uz;
+  auto const s = Str.sv();
+  for (auto i = 0uz; i < s.size(); ++i) {
+    if (s[i] == '%' && i + 2 < s.size() && detail::is_hex_digit(s[i + 1]) && detail::is_hex_digit(s[i + 2])) {
+      res.buffer[offset++] = static_cast<char>(detail::parse_hex_byte(s[i + 1], s[i + 2]));
+      i += 2;
+    } else if (s[i] == '+') {
+      res.buffer[offset++] = ' ';
+    } else {
+      res.buffer[offset++] = s[i];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列をBase64エンコードする
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列 (バッファサイズは ((length + 2) / 3) * 4 + 1)
+ */
+template <size_t N>
+auto consteval base64_encode(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = detail::count_base64_encoded_size(N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto const s = str.sv();
+  auto offset = 0uz;
+
+  for (auto i = 0uz; i < s.size(); i += 3) {
+    auto const b1 = static_cast<std::uint8_t>(s[i]);
+    auto const b2 = (i + 1 < s.size()) ? static_cast<std::uint8_t>(s[i + 1]) : 0;
+    auto const b3 = (i + 2 < s.size()) ? static_cast<std::uint8_t>(s[i + 2]) : 0;
+
+    res.buffer[offset++] = detail::base64_chars[b1 >> 2];
+    res.buffer[offset++] = detail::base64_chars[((b1 & 0x03) << 4) | (b2 >> 4)];
+    res.buffer[offset++] = (i + 1 < s.size()) ? detail::base64_chars[((b2 & 0x0F) << 2) | (b3 >> 6)] : '=';
+    res.buffer[offset++] = (i + 2 < s.size()) ? detail::base64_chars[b3 & 0x3F] : '=';
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをBase64エンコードする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval base64_encode(char const (&str)[N]) noexcept {
+  return base64_encode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をBase64エンコードする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 変換文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval base64_encode() noexcept {
+  return base64_encode(Str);
+}
+
+/**
+ * @brief 文字列をBase64デコードする
+ * 不正な文字は無視されます。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換後のバイナリ/文字列
+ */
+template <size_t N>
+auto consteval base64_decode(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{}; // デコード後は必ず元のサイズ以下になる
+  auto const s = str.sv();
+  auto offset = 0uz;
+  auto count = 0uz;
+  std::uint32_t buffer = 0;
+
+  for (auto const c : s) {
+    if (c == '=') break;
+    auto const val = detail::base64_char_to_value(c);
+    if (val == 255) continue;
+
+    buffer = (buffer << 6) | val;
+    count++;
+
+    if (count == 4) {
+      res.buffer[offset++] = static_cast<char>((buffer >> 16) & 0xFF);
+      res.buffer[offset++] = static_cast<char>((buffer >> 8) & 0xFF);
+      res.buffer[offset++] = static_cast<char>(buffer & 0xFF);
+      count = 0;
+      buffer = 0;
+    }
+  }
+
+  if (count == 2) {
+    res.buffer[offset++] = static_cast<char>((buffer >> 4) & 0xFF);
+  } else if (count == 3) {
+    res.buffer[offset++] = static_cast<char>((buffer >> 10) & 0xFF);
+    res.buffer[offset++] = static_cast<char>((buffer >> 2) & 0xFF);
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをBase64デコードする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval base64_decode(char const (&str)[N]) noexcept {
+  return base64_decode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をBase64デコードする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 変換文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval base64_decode() noexcept {
+  constexpr auto OUT_LEN = detail::count_base64_decoded_size(Str);
+  auto res = FrozenString<OUT_LEN + 1>{};
+  auto const s = Str.sv();
+  auto offset = 0uz;
+  auto count = 0uz;
+  std::uint32_t buffer = 0;
+
+  for (auto const c : s) {
+    if (c == '=') break;
+    auto const val = detail::base64_char_to_value(c);
+    if (val == 255) continue;
+
+    buffer = (buffer << 6) | val;
+    count++;
+
+    if (count == 4) {
+      res.buffer[offset++] = static_cast<char>((buffer >> 16) & 0xFF);
+      res.buffer[offset++] = static_cast<char>((buffer >> 8) & 0xFF);
+      res.buffer[offset++] = static_cast<char>(buffer & 0xFF);
+      count = 0;
+      buffer = 0;
+    }
+  }
+
+  if (count == 2) {
+    res.buffer[offset++] = static_cast<char>((buffer >> 4) & 0xFF);
+  } else if (count == 3) {
+    res.buffer[offset++] = static_cast<char>((buffer >> 10) & 0xFF);
+    res.buffer[offset++] = static_cast<char>((buffer >> 2) & 0xFF);
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
 }
 
 /**
@@ -2492,6 +2910,34 @@ struct remove_empty_lines_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
+struct url_encode_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::url_encode(str);
+  }
+};
+
+struct url_decode_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::url_decode(str);
+  }
+};
+
+struct base64_encode_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::base64_encode(str);
+  }
+};
+
+struct base64_decode_adaptor : detail::pipe_adaptor_tag {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::base64_decode(str);
+  }
+};
+
 inline constexpr trim_adaptor trim{};
 inline constexpr ltrim_adaptor ltrim{};
 inline constexpr rtrim_adaptor rtrim{};
@@ -2504,6 +2950,10 @@ inline constexpr to_pascal_case_adaptor to_pascal_case{};
 inline constexpr join_lines_adaptor join_lines{};
 inline constexpr trim_trailing_spaces_adaptor trim_trailing_spaces{};
 inline constexpr remove_empty_lines_adaptor remove_empty_lines{};
+inline constexpr url_encode_adaptor url_encode{};
+inline constexpr url_decode_adaptor url_decode{};
+inline constexpr base64_encode_adaptor base64_encode{};
+inline constexpr base64_decode_adaptor base64_decode{};
 
 consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};
