@@ -118,6 +118,28 @@ static_assert(s2.sv() == "Hello");
 static_assert(s3.sv() == "Hello");
 ```
 
+## `shrink_to_fit`（最初の終端位置に合わせて縮小）
+
+`shrink_to_fit<Str>()` は、`FrozenString` 値 `Str` の `buffer` を先頭から走査し、
+最初の `'\0'` までを含む最小サイズの `FrozenString` を返します。
+`'\0'` が無い場合は `length + 1` サイズへ縮小します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr raw = [] {
+  auto s = FrozenString<6>{};
+  s.buffer = {'a', 'b', 'c', '\0', 'x', 'x'};
+  s.length = 5;
+  return s;
+}();
+
+auto constexpr shrunk = shrink_to_fit<raw>();
+static_assert(shrunk.sv() == "abc");
+```
+
 ## `split`（区切りで分割）
 
 `split(...)` は内部で `split_count(...)` を呼び出し、トークン数に合わせた `std::vector<FrozenString<...>>` を返します。1回の呼び出しで分割まで完了します。

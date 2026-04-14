@@ -274,6 +274,33 @@ auto consteval count_snake_underscores(FrozenString<N> const& str) noexcept -> s
 } // namespace detail
 
 /**
+ * @brief FrozenString の先頭から最初の終端文字までを含む最小サイズへ縮小する
+ *
+ * @tparam Str 処理対象の FrozenString 値
+ * @return auto 縮小後の FrozenString
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval shrink_to_fit() noexcept {
+  auto constexpr fit_len = [] {
+    for (auto i = 0uz; i < Str.buffer.size(); ++i) {
+      if (Str.buffer[i] == '\0') {
+        return i;
+      }
+    }
+    return Str.length;
+  }();
+
+  auto result = FrozenString<fit_len + 1>{};
+  for (auto i = 0uz; i < fit_len; ++i) {
+    result.buffer[i] = Str.buffer[i];
+  }
+  result.buffer[fit_len] = '\0';
+  result.length = fit_len;
+  return result;
+}
+
+/**
  * @brief FrozenString とパイプアダプタの結合演算子
  *
  * @tparam N FrozenStringの長さ (終端文字'\0'を含む)

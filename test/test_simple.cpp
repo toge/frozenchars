@@ -42,6 +42,54 @@ TEST_CASE("simple string") {
   REQUIRE(star.data() == star.buffer.data());
 }
 
+TEST_CASE("shrink_to_fit") {
+  auto constexpr plain_input = "hello"_fs;
+  auto constexpr plain = shrink_to_fit<plain_input>();
+  static_assert(std::same_as<std::remove_cvref_t<decltype(plain)>, FrozenString<6>>);
+  static_assert(plain.sv() == "hello");
+  REQUIRE(plain.sv() == "hello");
+
+  auto constexpr embedded = [] {
+    auto s = FrozenString<8>{};
+    s.buffer = {'a', 'b', '\0', 'c', 'd', '\0', 'x', 'x'};
+    s.length = 7;
+    return s;
+  }();
+
+  auto constexpr embedded_shrunk = shrink_to_fit<embedded>();
+  static_assert(std::same_as<std::remove_cvref_t<decltype(embedded_shrunk)>, FrozenString<3>>);
+  static_assert(embedded_shrunk.sv() == "ab");
+  REQUIRE(embedded_shrunk.sv() == "ab");
+
+  auto constexpr no_null = [] {
+    auto s = FrozenString<5>{};
+    s.buffer = {'a', 'b', 'c', 'd', 'e'};
+    s.length = 4;
+    return s;
+  }();
+  auto constexpr no_null_shrunk = shrink_to_fit<no_null>();
+  static_assert(std::same_as<std::remove_cvref_t<decltype(no_null_shrunk)>, FrozenString<5>>);
+  static_assert(no_null_shrunk.sv() == "abcd");
+  REQUIRE(no_null_shrunk.sv() == "abcd");
+
+  auto constexpr late_terminator = [] {
+    auto s = FrozenString<6>{};
+    s.buffer = {'a', 'b', 'c', 'd', '\0', 'x'};
+    s.length = 2;
+    return s;
+  }();
+  auto constexpr late_terminator_shrunk = shrink_to_fit<late_terminator>();
+  static_assert(std::same_as<std::remove_cvref_t<decltype(late_terminator_shrunk)>, FrozenString<5>>);
+  static_assert(late_terminator_shrunk.sv() == "abcd");
+  REQUIRE(late_terminator_shrunk.sv() == "abcd");
+
+  auto constexpr empty_input = ""_fs;
+  auto constexpr empty = shrink_to_fit<empty_input>();
+  static_assert(std::same_as<std::remove_cvref_t<decltype(empty)>, FrozenString<1>>);
+  static_assert(empty.sv() == "");
+  REQUIRE(empty.sv() == "");
+}
+
 TEST_CASE("simple repeat") {
   auto constexpr starline = repeat<10>("*"_fs);
   static_assert(starline.sv() == "**********");

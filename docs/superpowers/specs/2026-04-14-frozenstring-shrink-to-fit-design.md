@@ -7,9 +7,15 @@
 
 ## Approved API
 
-1. `FrozenString<N>::shrink_to_fit() consteval noexcept`
-2. `frozenchars::shrink_to_fit(FrozenString<N> const&) consteval noexcept`
-3. `frozenchars::ops::shrink_to_fit`
+1. `frozenchars::shrink_to_fit<Str>() consteval noexcept`
+2. `Str` は `FrozenString` 値を受ける class-type NTTP とする
+
+## Constraint discovered during implementation
+
+`FrozenString<N>` のメンバ関数や通常関数で、オブジェクト内容に応じて
+`FrozenString<M>` の `M` を変える実装は、GCC/Clang/MSVC をまたいで移植的には成立しない。
+`consteval` であっても `this` や関数引数由来のオブジェクト値を、そのまま型サイズ決定の
+テンプレート引数へ使えないため、最小型を返す要件を守るには NTTP ベースの API が必要だった。
 
 ## Behavior
 
@@ -21,14 +27,15 @@
 
 ## Implementation shape
 
-- 実装の本体はメンバ関数に置く。
-- 通常関数はメンバ関数への薄い委譲にする。
-- pipe adaptor は `frozenchars::shrink_to_fit(str)` を呼ぶ。
+- 実装本体は `template <auto Str> consteval auto shrink_to_fit() noexcept` に置く。
+- `Str` には `FrozenString` 値だけを受ける制約を付ける。
+- `fit_len` は `Str.buffer` を走査して求め、`FrozenString<fit_len + 1>` を直接構築する。
 - 既存の `freeze(std::array/std::span)` が「最初の 0 値までを文字列とみなす」挙動なので、それと整合する。
 
 ## Tests
 
 1. 終端が可視文字列の末尾にある通常ケースで、値が維持されること
 2. `buffer` 内に埋め込み `'\0'` があるケースで、そこまでに縮むこと
-3. メンバ関数・通常関数・pipe adaptor の 3 経路が同じ結果を返すこと
-4. 空文字列で `FrozenString<1>` 相当の結果になること
+3. `length` より後ろにある最初の `'\0'` も拾うこと
+4. `'\0'` が存在しない場合は `length + 1` サイズになること
+5. 空文字列で `FrozenString<1>` 相当の結果になること
