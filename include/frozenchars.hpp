@@ -1,0 +1,15 @@
+#pragma once
+
+#include "frozenchars/concepts.hpp"
+#include "frozenchars/frozen_string.hpp"
+#include "frozenchars/freeze.hpp"
+#include "frozenchars/string_ops.hpp"
+#include "frozenchars/case_conv.hpp"
+#include "frozenchars/split.hpp"
+#include "frozenchars/multiline.hpp"
+#include "frozenchars/encoding.hpp"
+#include "frozenchars/color.hpp"
+#include "frozenchars/type_parser.hpp"
+#include "frozenchars/literals.hpp"
+#include "frozenchars/ops.hpp"
+#include "frozenchars/format.hpp"

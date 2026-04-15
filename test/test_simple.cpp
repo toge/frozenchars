@@ -647,7 +647,7 @@ TEST_CASE("split") {
   static_assert(empty_count == 0);
   REQUIRE(empty_count == 0);
 
-  auto constexpr empty = split<0>(""_fs);
+  auto constexpr empty = split<0, frozenchars::detail::is_whitespace>(""_fs);
   static_assert(empty.size() == 0);
   REQUIRE(empty.size() == 0);
 }

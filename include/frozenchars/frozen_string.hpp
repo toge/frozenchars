@@ -1,0 +1,122 @@
+#pragma once
+
+#include "concepts.hpp"
+#include "detail/pipe.hpp"
+#include <array>
+#include <cstddef>
+#include <string_view>
+
+namespace frozenchars {
+
+/**
+ * @brief 固定長文字列を表す構造体
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ */
+template <size_t N>
+struct FixedString {
+  char data[N]{};
+  size_t length{N > 0 ? N - 1 : 0};
+
+  constexpr FixedString(char const (&str)[N]) noexcept
+  : length{N > 0 ? N - 1 : 0} {
+    for (auto i = 0uz; i < N; ++i) {
+      data[i] = str[i];
+    }
+  }
+  constexpr FixedString(FrozenString<N> const& str) noexcept
+  : length{str.length} {
+    for (auto i = 0uz; i < N; ++i) {
+      data[i] = str.buffer[i];
+    }
+  }
+  auto constexpr sv() const noexcept {
+    return std::string_view{data, length};
+  }
+};
+
+/**
+ * @brief 静的文字列
+ * このライブラリでの基本的な文字列型
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ */
+template <size_t N>
+struct FrozenString {
+  std::array<char, N> buffer{};
+  size_t length{N > 0 ? N - 1 : 0};
+
+  consteval FrozenString() noexcept = default;
+  consteval FrozenString(char const (&str)[N]) noexcept
+  : length{N > 0 ? N - 1 : 0} {
+    for (auto i = 0uz; i < N; ++i) {
+      buffer[i] = str[i];
+    }
+  }
+
+  auto constexpr sv() const noexcept {
+    return std::string_view{buffer.data(), length};
+  }
+
+  explicit constexpr operator std::string_view() const noexcept {
+    return sv();
+  }
+
+  auto constexpr begin() const noexcept { return buffer.data(); }
+  auto constexpr end()   const noexcept { return buffer.data() + length; }
+
+  auto constexpr operator[](std::size_t i) const noexcept -> char const& { return buffer[i]; }
+  auto constexpr operator[](std::size_t i)       noexcept -> char&       { return buffer[i]; }
+
+  auto constexpr size()  const noexcept { return length; }
+  auto constexpr empty() const noexcept { return length == 0; }
+
+  auto constexpr data() const noexcept { return buffer.data(); }
+  auto constexpr data()       noexcept { return buffer.data(); }
+
+  // FrozenString同士の結合
+  template <size_t M>
+  auto consteval operator+(FrozenString<M> const& other) const noexcept {
+    FrozenString<N + M - 1> res{};
+    auto offset = 0uz;
+    for (auto const c : this->sv()) {
+      res.buffer[offset++] = c;
+    }
+    for (auto const c : other.sv()) {
+      res.buffer[offset++] = c;
+    }
+    res.buffer[offset] = '\0';
+    res.length = offset;
+    return res;
+  }
+
+  // 文字列リテラルとの結合
+  template <size_t M>
+  auto consteval operator+(char const (&rhs)[M]) const noexcept {
+    return *this + FrozenString<M>{rhs};
+  }
+};
+
+} // namespace frozenchars
+
+/**
+ * @brief 文字列リテラルと FrozenString を結合する
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @tparam M FrozenString の長さ (終端文字'\0'を含む)
+ * @param rhs 結合する FrozenString
+ * @return auto 結合結果
+ */
+template <size_t N, size_t M>
+auto consteval operator+(char const (&lhs)[N], frozenchars::FrozenString<M> const& rhs) noexcept {
+  frozenchars::FrozenString<N + M - 1> res{};
+  auto offset = 0uz;
+  for (auto i = 0uz; i < N - 1; ++i) {
+    res.buffer[offset++] = lhs[i];
+  }
+  for (auto const c : rhs.sv()) {
+    res.buffer[offset++] = c;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}

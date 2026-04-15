@@ -56,7 +56,7 @@ add_library(frozenchars::frozenchars ALIAS frozenchars)
 target_compile_features(frozenchars INTERFACE ${STD_CPP})
 target_include_directories(frozenchars
     INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
@@ -64,7 +64,11 @@ install(TARGETS frozenchars
     EXPORT frozencharsTargets
 )
 install(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/frozenchars.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(DIRECTORY
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 

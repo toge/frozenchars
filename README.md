@@ -686,7 +686,7 @@ static_assert(color_abgr.a == 0x78);
 cmake --install build --prefix ./install
 ```
 
-インストール先のディレクトリには `frozenchars.hpp` と `find_package(frozenchars CONFIG)` 用の CMake 設定が含まれます。
+インストール先のディレクトリには `frozenchars.hpp` とその依存先のヘッダファイル、および `find_package(frozenchars CONFIG)` 用の CMake 設定が含まれます。
 
 ## ライセンス
 

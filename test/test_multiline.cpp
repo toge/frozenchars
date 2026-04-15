@@ -1,5 +1,5 @@
 #include "catch2/catch_all.hpp"
-#include "../frozenchars.hpp"
+#include "frozenchars.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -19,7 +19,7 @@ TEST_CASE("remove_leading_spaces") {
 
 TEST_CASE("remove_comment_lines") {
   auto constexpr src = "line1\n##comment\nline2\n;comment2\nline3"_fs;
-  
+
   // 文字列での指定 (##)
   auto constexpr res1 = remove_comment_lines(src, "##");
   static_assert(res1.sv() == "line1\nline2\n;comment2\nline3");
