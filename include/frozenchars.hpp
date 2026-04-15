@@ -13,3 +13,4 @@
 #include "frozenchars/literals.hpp"
 #include "frozenchars/ops.hpp"
 #include "frozenchars/format.hpp"
+#include "frozenchars/url.hpp"
