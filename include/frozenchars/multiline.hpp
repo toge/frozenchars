@@ -146,15 +146,16 @@ auto consteval remove_comments(char const (&str)[N], std::string_view comment_se
 
 /**
  * @brief すべての行を結合する
- * 行末と行頭どちらにもスペースがない場合にはスペースを入れる
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
+ * @param sep 行の間に入れる文字列 (デフォルト: "")
  * @return auto 結合結果
  */
 template <size_t N>
-auto consteval join_lines(FrozenString<N> const& str) noexcept {
-  constexpr auto OUT_CAP = (N > 0 ? N - 1 : 0) * 2 + 1;
+auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") noexcept {
+  constexpr auto MAX_SEP_LEN = 32uz;
+  constexpr auto OUT_CAP = N + (N * MAX_SEP_LEN);
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -162,15 +163,8 @@ auto consteval join_lines(FrozenString<N> const& str) noexcept {
 
   while (i < str.length) {
     if (!first_line) {
-      auto needs_space = true;
-      if (offset > 0 && (res.buffer[offset - 1] == ' ' || res.buffer[offset - 1] == '\t')) {
-        needs_space = false;
-      }
-      if (i < str.length && (str.buffer[i] == ' ' || str.buffer[i] == '\t')) {
-        needs_space = false;
-      }
-      if (needs_space) {
-        res.buffer[offset++] = ' ';
+      for (auto const c : sep) {
+        res.buffer[offset++] = c;
       }
     }
 
@@ -188,8 +182,8 @@ auto consteval join_lines(FrozenString<N> const& str) noexcept {
 }
 
 template <size_t N>
-auto consteval join_lines(char const (&str)[N]) noexcept {
-  return join_lines(FrozenString{str});
+auto consteval join_lines(char const (&str)[N], std::string_view sep = "") noexcept {
+  return join_lines(FrozenString{str}, sep);
 }
 
 /**

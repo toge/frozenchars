@@ -116,9 +116,16 @@ struct remove_comments_adaptor : detail::pipe_adaptor_tag {
 };
 
 struct join_lines_adaptor : detail::pipe_adaptor_tag {
+  std::string_view sep;
+  constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
+
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::join_lines(str);
+    return frozenchars::join_lines(str, sep);
+  }
+
+  consteval auto operator()(std::string_view s) const noexcept {
+    return join_lines_adaptor{s};
   }
 };
 

@@ -64,9 +64,21 @@ TEST_CASE("remove_comments") {
 
 TEST_CASE("join_lines") {
   auto constexpr src = "line1\nline2 \n line3\nline4"_fs;
+
+  // デフォルト (sep="")
   auto constexpr res = join_lines(src);
-  static_assert(res.sv() == "line1 line2  line3 line4");
-  REQUIRE(res.sv() == "line1 line2  line3 line4");
+  static_assert(res.sv() == "line1line2  line3line4");
+  REQUIRE(res.sv() == "line1line2  line3line4");
+
+  // セパレータ指定 (" ")
+  auto constexpr res_space = join_lines(src, " ");
+  static_assert(res_space.sv() == "line1 line2   line3 line4");
+  REQUIRE(res_space.sv() == "line1 line2   line3 line4");
+
+  // セパレータ指定 (",")
+  auto constexpr res_comma = join_lines(src, ",");
+  static_assert(res_comma.sv() == "line1,line2 , line3,line4");
+  REQUIRE(res_comma.sv() == "line1,line2 , line3,line4");
 
   auto constexpr src2 = "line1\n"_fs;
   auto constexpr res2 = join_lines(src2);
@@ -75,14 +87,18 @@ TEST_CASE("join_lines") {
 
   auto constexpr src3 = "line1\n\n"_fs;
   auto constexpr res3 = join_lines(src3);
-  static_assert(res3.sv() == "line1 ");
-  REQUIRE(res3.sv() == "line1 ");
+  static_assert(res3.sv() == "line1");
+  REQUIRE(res3.sv() == "line1");
 
   // Pipe adaptor
   namespace fops = frozenchars::ops;
   auto constexpr res_pipe = src | fops::join_lines;
-  static_assert(res_pipe.sv() == "line1 line2  line3 line4");
-  REQUIRE(res_pipe.sv() == "line1 line2  line3 line4");
+  static_assert(res_pipe.sv() == "line1line2  line3line4");
+  REQUIRE(res_pipe.sv() == "line1line2  line3line4");
+
+  auto constexpr res_pipe_sep = src | fops::join_lines(" ");
+  static_assert(res_pipe_sep.sv() == "line1 line2   line3 line4");
+  REQUIRE(res_pipe_sep.sv() == "line1 line2   line3 line4");
 }
 
 TEST_CASE("trim_trailing_spaces") {
