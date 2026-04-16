@@ -73,7 +73,7 @@ TEST_CASE("URL Query String") {
   REQUIRE(query_string.sv() == "?key1=value1&key2=1&key3=3.54");
 }
 
-TEST_CASE("URL Query String2") {
+TEST_CASE("URL Query String Tuples") {
   auto constexpr query_string = make_querystring(
     std::pair{"key1", "value1"},
     std::pair{"key2", "value2"},
@@ -82,3 +82,20 @@ TEST_CASE("URL Query String2") {
   static_assert(query_string.sv() == "?key1=value1&key2=value2&key3=value3");
   REQUIRE(query_string.sv() == "?key1=value1&key2=value2&key3=value3");
 }
+
+TEST_CASE("URL Query String with URL encoded") {
+  auto constexpr params = std::array{
+    std::pair{"key1", "a b:c"},
+    std::pair{"key2", "value2"},
+    std::pair{"key3", "value3"},
+  };
+
+  auto constexpr query_string = make_querystring(
+    "key1", "a b:c",
+    "key2", "value2",
+    "key3", "value3"
+  );
+  static_assert(query_string.sv() == "?key1=a%20b%3Ac&key2=value2&key3=value3");
+  REQUIRE(query_string.sv() == "?key1=a%20b%3Ac&key2=value2&key3=value3");
+}
+

@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "freeze.hpp"
+#include "encoding.hpp"
 
 namespace frozenchars {
 
@@ -30,14 +31,14 @@ concept FreezablePair = requires(T t) {
 template <class Key, class Value>
 requires (Freezable<Key> && Freezable<Value>)
 auto consteval make_querystring_impl(Key&& key, Value&& value) {
-  return concat(freeze(key), "=", freeze(value));
+  return concat(freeze(key), "=", url_encode(freeze(value)));
 }
 
 template <class Key, class Value, class... Tail>
 requires (sizeof...(Tail) % 2 == 0 && Freezable<Key> && Freezable<Value>)
 auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
   return concat(
-    freeze(key), "=", freeze(value),
+    freeze(key), "=", url_encode(freeze(value)),
     "&",
     make_querystring_impl(std::forward<Tail>(tail)...)
   );
@@ -46,14 +47,14 @@ auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
 template <FreezablePair T>
 auto consteval make_querystring_impl(T&& t) {
   return concat(
-    freeze(std::get<0>(t)), "=", freeze(std::get<1>(t))
+    freeze(std::get<0>(t)), "=", url_encode(freeze(std::get<1>(t)))
   );
 }
 
 template <FreezablePair Head, FreezablePair... Tail>
 auto consteval make_querystring_impl(Head&& head, Tail&&... tail) {
   return concat(
-    freeze(std::get<0>(head)), "=", freeze(std::get<1>(head)),
+    freeze(std::get<0>(head)), "=", url_encode(freeze(std::get<1>(head))),
     "&",
     make_querystring_impl(std::forward<Tail>(tail)...)
   );
