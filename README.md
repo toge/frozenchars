@@ -381,6 +381,24 @@ static_assert(d1.sv() == "Hello");
 static_assert(d2.sv() == "f");
 ```
 
+## 'make_querystring`（クエリ文字列生成）
+
+キーと値のペアからURLクエリ文字列を生成します。`FrozenString` と文字列リテラルの両方を受け取ります。l
+std::tuple, std::pair, std::array などのタプルライクな型も受け取ります（要素数2である必要があります）。
+値はURLエンコードされます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr q = make_querystring("name", "Alice & Bob");  // "name=Alice%20%26%20Bob"
+static_assert(q.sv() == "?name=Alice%20%26%20Bob");
+
+auto constexpr q2 = make_querystring(std::tuple{"name", "Alice & Bob"});
+static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
+```
+
 ## マルチライン文字列の処理
 
 複数行を含む文字列（`\n` で区切られた文字列）に対して、行単位での加工を行うスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。
