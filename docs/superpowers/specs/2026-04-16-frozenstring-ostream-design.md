@@ -35,7 +35,8 @@ auto operator<<(std::ostream& os, frozenchars::FrozenString<N> const& value)
 
 - Output only the visible string contents represented by `value.length`
 - Delegate to the existing `std::string_view` representation via `value.sv()`
-- Preserve stream flags and formatting state
+- Follow the same formatted insertion semantics as `std::string_view`, including width,
+  fill, and alignment behavior provided by the stream
 - Return the original stream reference to support chaining
 
 ## Why this approach
@@ -67,5 +68,6 @@ Add runtime tests using `std::ostringstream` to verify:
 1. A normal `FrozenString` is written as its visible contents
 2. An empty `FrozenString` writes nothing
 3. A `FrozenString` whose internal buffer contains characters past `length` only writes the prefix selected by `length`
+4. Width and fill formatting behave the same way as ordinary string insertion
 
 `std::ostringstream` is sufficient because `std::cout` and `std::cerr` use the same `std::ostream` insertion contract.
