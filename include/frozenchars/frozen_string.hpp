@@ -4,6 +4,7 @@
 #include "detail/pipe.hpp"
 #include <array>
 #include <cstddef>
+#include <ostream>
 #include <string_view>
 
 namespace frozenchars {
@@ -95,6 +96,11 @@ struct FrozenString {
     return *this + FrozenString<M>{rhs};
   }
 };
+
+template <size_t N>
+auto operator<<(std::ostream& os, FrozenString<N> const& value) -> std::ostream& {
+  return os << value.sv();
+}
 
 } // namespace frozenchars
 
