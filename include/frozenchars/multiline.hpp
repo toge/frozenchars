@@ -3,6 +3,7 @@
 #include "frozen_string.hpp"
 #include "detail/char_utils.hpp"
 #include <cstddef>
+#include <stdexcept>
 #include <string_view>
 
 namespace frozenchars {
@@ -142,6 +143,60 @@ auto consteval remove_comments(FrozenString<N> const& str, std::string_view comm
 template <size_t N>
 auto consteval remove_comments(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
   return remove_comments(FrozenString{str}, comment_seq);
+}
+
+/**
+ * @brief 指定した開始文字列から終了文字列までの範囲を繰り返し削除する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @param start_seq 削除範囲の開始文字列
+ * @param end_seq 削除範囲の終了文字列
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval remove_range_comments(FrozenString<N> const& str,
+                                     std::string_view const start_seq,
+                                     std::string_view const end_seq) noexcept {
+  if (start_seq.empty() || end_seq.empty()) {
+    throw std::invalid_argument("remove_range_comments: start_seq/end_seq must not be empty");
+  }
+
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto cursor = 0uz;
+  auto const sv = str.sv();
+
+  while (cursor < str.length) {
+    auto const start_pos = sv.find(start_seq, cursor);
+    if (start_pos == std::string_view::npos) {
+      for (auto i = cursor; i < str.length; ++i) {
+        res.buffer[offset++] = str.buffer[i];
+      }
+      break;
+    }
+
+    for (auto i = cursor; i < start_pos; ++i) {
+      res.buffer[offset++] = str.buffer[i];
+    }
+
+    auto const end_pos = sv.find(end_seq, start_pos + start_seq.size());
+    if (end_pos == std::string_view::npos) {
+      throw std::invalid_argument("remove_range_comments: unmatched end_seq");
+    }
+    cursor = end_pos + end_seq.size();
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+auto consteval remove_range_comments(char const (&str)[N],
+                                     std::string_view const start_seq,
+                                     std::string_view const end_seq) noexcept {
+  return remove_range_comments(FrozenString{str}, start_seq, end_seq);
 }
 
 /**
