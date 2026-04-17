@@ -90,10 +90,13 @@ struct to_pascal_case_adaptor : detail::pipe_adaptor_tag {
 
 struct remove_leading_spaces_adaptor : detail::pipe_adaptor_tag {
   size_t n;
-  constexpr remove_leading_spaces_adaptor(size_t count) noexcept : n(count) {}
+  constexpr remove_leading_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_leading_spaces(str, n);
+  }
+  consteval auto operator()(size_t count) const noexcept {
+    return remove_leading_spaces_adaptor{count};
   }
 };
 
@@ -187,13 +190,10 @@ inline constexpr url_encode_adaptor url_encode{};
 inline constexpr url_decode_adaptor url_decode{};
 inline constexpr base64_encode_adaptor base64_encode{};
 inline constexpr base64_decode_adaptor base64_decode{};
+inline constexpr remove_leading_spaces_adaptor remove_leading_spaces{};
 
 consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};
-}
-
-consteval auto remove_leading_spaces(size_t n) noexcept {
-  return remove_leading_spaces_adaptor{n};
 }
 
 consteval auto remove_comment_lines(std::string_view comment_seq = "#") noexcept {

@@ -10,11 +10,20 @@ TEST_CASE("remove_leading_spaces") {
   static_assert(res.sv() == "line1\n  line2\nline3");
   REQUIRE(res.sv() == "line1\n  line2\nline3");
 
+  // Test n=0 (should remove all spaces)
+  auto constexpr res_all = remove_leading_spaces(src, 0);
+  static_assert(res_all.sv() == "line1\nline2\nline3");
+  REQUIRE(res_all.sv() == "line1\nline2\nline3");
+
   // Pipe adaptor
   namespace fops = frozenchars::ops;
   auto constexpr res_pipe = src | fops::remove_leading_spaces(2);
   static_assert(res_pipe.sv() == "line1\n  line2\nline3");
   REQUIRE(res_pipe.sv() == "line1\n  line2\nline3");
+
+  auto constexpr res_pipe_all = src | fops::remove_leading_spaces;
+  static_assert(res_pipe_all.sv() == "line1\nline2\nline3");
+  REQUIRE(res_pipe_all.sv() == "line1\nline2\nline3");
 }
 
 TEST_CASE("remove_comment_lines") {

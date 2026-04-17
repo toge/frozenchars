@@ -17,13 +17,13 @@ namespace frozenchars {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_leading_spaces(FrozenString<N> const& str, size_t n) noexcept {
+auto consteval remove_leading_spaces(FrozenString<N> const& str, size_t n = 0) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
   while (i < str.length) {
     auto spaces = 0uz;
-    while (i < str.length && str.buffer[i] == ' ' && spaces < n) {
+    while (i < str.length && str.buffer[i] == ' ' && (n == 0 || spaces < n)) {
       ++i;
       ++spaces;
     }
@@ -40,7 +40,7 @@ auto consteval remove_leading_spaces(FrozenString<N> const& str, size_t n) noexc
 }
 
 template <size_t N>
-auto consteval remove_leading_spaces(char const (&str)[N], size_t n) noexcept {
+auto consteval remove_leading_spaces(char const (&str)[N], size_t n = 0) noexcept {
   return remove_leading_spaces(FrozenString{str}, n);
 }
 
