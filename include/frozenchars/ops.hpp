@@ -118,6 +118,18 @@ struct remove_comments_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
+struct remove_trailing_spaces_adaptor : detail::pipe_adaptor_tag {
+  size_t n;
+  constexpr remove_trailing_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::remove_trailing_spaces(str, n);
+  }
+  consteval auto operator()(size_t count) const noexcept {
+    return remove_trailing_spaces_adaptor{count};
+  }
+};
+
 struct remove_range_comments_adaptor : detail::pipe_adaptor_tag {
   std::string_view start_seq;
   std::string_view end_seq;
@@ -204,6 +216,7 @@ inline constexpr url_decode_adaptor url_decode{};
 inline constexpr base64_encode_adaptor base64_encode{};
 inline constexpr base64_decode_adaptor base64_decode{};
 inline constexpr remove_leading_spaces_adaptor remove_leading_spaces{};
+inline constexpr remove_trailing_spaces_adaptor remove_trailing_spaces{};
 
 consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};

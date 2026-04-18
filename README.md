@@ -405,10 +405,13 @@ static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 
 - `remove_leading_spaces(str, n)` : 各行の先頭から最大 `n` 個の空白を削除します。
 - `remove_comment_lines(str, comment_seq = "#")` : 指定した文字列で始まる行を削除します。
-- `remove_comments(str, comment_seq = "#")` : 指定した文字列以降行末までを削除します。直前の空白文字も削除します。
+- `remove_comments(str, comment_seq = "#")` : 指定した文字列を含めて行末までを削除します（直前の空白は残ります）。
+- `remove_trailing_spaces(str, n)` : 各行の末尾から最大 `n` 個の連続した半角スペースを削除します（`n = 0` ですべて削除）。
 - `join_lines(str)` : すべての行を結合します。結合部分にスペースがない場合は自動的に 1 つ挿入します。
 - `trim_trailing_spaces(str)` : 各行の末尾の空白（スペース、タブなど）を削除します。
 - `remove_empty_lines(str)` : 空行（改行のみの行）を削除します。
+
+`remove_trailing_spaces` は半角スペースのみを対象にし、`trim_trailing_spaces` はスペース・タブなどの空白文字全般を対象にします。
 
 ```cpp
 #include "frozenchars.hpp"
@@ -425,20 +428,24 @@ auto constexpr r1 = remove_leading_spaces(src, 2);
 auto constexpr r2 = remove_comment_lines(src, "##");
 // "  line1\n  line2    # inline comment\n\nline3"
 
-// インラインコメント（# 以降）を削除（直前の空白も削除される）
+// インラインコメント（# 以降）を削除（直前の空白は残る）
 auto constexpr r3 = remove_comments(src, "#");
+// "  line1\n##comment\n  line2    \n\nline3"
+
+// 行末の連続スペースを削除
+auto constexpr r4 = remove_trailing_spaces(r3);
 // "  line1\n##comment\n  line2\n\nline3"
 
 // 行を結合（スペース補完あり）
-auto constexpr r4 = join_lines("line1\nline2"_fs);
+auto constexpr r5 = join_lines("line1\nline2"_fs);
 // "line1 line2"
 
 // 末尾の空白を削除
-auto constexpr r5 = trim_trailing_spaces("line1  \nline2 \n"_fs);
+auto constexpr r6 = trim_trailing_spaces("line1  \nline2 \n"_fs);
 // "line1\nline2\n"
 
 // 空行を削除
-auto constexpr r6 = remove_empty_lines("line1\n\nline2"_fs);
+auto constexpr r7 = remove_empty_lines("line1\n\nline2"_fs);
 // "line1\nline2"
 ```
 
