@@ -141,7 +141,7 @@ auto consteval remove_comments(char const (&str)[N], std::string_view comment_se
 }
 
 /**
- * @brief 各行の末尾の連続した空白を削除する
+ * @brief 各行の末尾の連続した半角スペースを削除する
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
@@ -158,6 +158,7 @@ auto consteval remove_trailing_spaces(FrozenString<N> const& str) noexcept {
       ++i;
     }
     auto line_end = i;
+    // remove_trailing_spaces は「半角スペース」のみを削除対象にする
     while (line_end > line_start && str.buffer[line_end - 1] == ' ') {
       --line_end;
     }

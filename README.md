@@ -411,6 +411,8 @@ static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 - `trim_trailing_spaces(str)` : 各行の末尾の空白（スペース、タブなど）を削除します。
 - `remove_empty_lines(str)` : 空行（改行のみの行）を削除します。
 
+`remove_trailing_spaces` は半角スペースのみを対象にし、`trim_trailing_spaces` はスペース・タブなどの空白文字全般を対象にします。
+
 ```cpp
 #include "frozenchars.hpp"
 using namespace frozenchars;

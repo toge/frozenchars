@@ -77,9 +77,20 @@ TEST_CASE("remove_comments") {
 
 TEST_CASE("remove_trailing_spaces") {
   auto constexpr src = "line1  \nline2\t \nline3 "_fs;
+  // remove_trailing_spaces は末尾の半角スペースのみを削除し、タブは保持する
   auto constexpr res = remove_trailing_spaces(src);
   static_assert(res.sv() == "line1\nline2\t\nline3");
   REQUIRE(res.sv() == "line1\nline2\t\nline3");
+
+  auto constexpr src_no_newline = "line1  "_fs;
+  auto constexpr res_no_newline = remove_trailing_spaces(src_no_newline);
+  static_assert(res_no_newline.sv() == "line1");
+  REQUIRE(res_no_newline.sv() == "line1");
+
+  auto constexpr src_last_blank = "line1\n  "_fs;
+  auto constexpr res_last_blank = remove_trailing_spaces(src_last_blank);
+  static_assert(res_last_blank.sv() == "line1\n");
+  REQUIRE(res_last_blank.sv() == "line1\n");
 
   namespace fops = frozenchars::ops;
   auto constexpr res_pipe = src | fops::remove_trailing_spaces;
