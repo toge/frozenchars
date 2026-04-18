@@ -49,15 +49,15 @@ TEST_CASE("remove_comment_lines") {
 TEST_CASE("remove_comments") {
   auto constexpr src = "code1 # comment\ncode2    ## long comment\ncode3;comment\ncode4"_fs;
 
-  // # 以降を削除、直前の空白も削除
+  // # 以降を削除（直前の空白は残す）
   auto constexpr res1 = remove_comments(src, "#");
-  static_assert(res1.sv() == "code1\ncode2\ncode3;comment\ncode4");
-  REQUIRE(res1.sv() == "code1\ncode2\ncode3;comment\ncode4");
+  static_assert(res1.sv() == "code1 \ncode2    \ncode3;comment\ncode4");
+  REQUIRE(res1.sv() == "code1 \ncode2    \ncode3;comment\ncode4");
 
-  // ## 以降を削除、直前の空白も削除
+  // ## 以降を削除（直前の空白は残す）
   auto constexpr res2 = remove_comments(src, "##");
-  static_assert(res2.sv() == "code1 # comment\ncode2\ncode3;comment\ncode4");
-  REQUIRE(res2.sv() == "code1 # comment\ncode2\ncode3;comment\ncode4");
+  static_assert(res2.sv() == "code1 # comment\ncode2    \ncode3;comment\ncode4");
+  REQUIRE(res2.sv() == "code1 # comment\ncode2    \ncode3;comment\ncode4");
 
   // ; 以降を削除 (直前に空白なし)
   auto constexpr res3 = remove_comments(src, ";");
@@ -67,8 +67,24 @@ TEST_CASE("remove_comments") {
   // Pipe adaptor
   namespace fops = frozenchars::ops;
   auto constexpr res_pipe = src | fops::remove_comments("##");
-  static_assert(res_pipe.sv() == "code1 # comment\ncode2\ncode3;comment\ncode4");
-  REQUIRE(res_pipe.sv() == "code1 # comment\ncode2\ncode3;comment\ncode4");
+  static_assert(res_pipe.sv() == "code1 # comment\ncode2    \ncode3;comment\ncode4");
+  REQUIRE(res_pipe.sv() == "code1 # comment\ncode2    \ncode3;comment\ncode4");
+
+  auto constexpr res_clean = src | fops::remove_comments("#") | fops::remove_trailing_spaces;
+  static_assert(res_clean.sv() == "code1\ncode2\ncode3;comment\ncode4");
+  REQUIRE(res_clean.sv() == "code1\ncode2\ncode3;comment\ncode4");
+}
+
+TEST_CASE("remove_trailing_spaces") {
+  auto constexpr src = "line1  \nline2\t \nline3 "_fs;
+  auto constexpr res = remove_trailing_spaces(src);
+  static_assert(res.sv() == "line1\nline2\t\nline3");
+  REQUIRE(res.sv() == "line1\nline2\t\nline3");
+
+  namespace fops = frozenchars::ops;
+  auto constexpr res_pipe = src | fops::remove_trailing_spaces;
+  static_assert(res_pipe.sv() == "line1\nline2\t\nline3");
+  REQUIRE(res_pipe.sv() == "line1\nline2\t\nline3");
 }
 
 TEST_CASE("remove_range_comments") {

@@ -92,7 +92,6 @@ auto consteval remove_comment_lines(char const (&str)[N], std::string_view comme
 
 /**
  * @brief 指定された文字列以降行末までを削除する
- * 指定された文字列直前に空白文字が連続している場合はそれも削除します。
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
@@ -121,12 +120,8 @@ auto consteval remove_comments(FrozenString<N> const& str, std::string_view comm
         res.buffer[offset++] = str.buffer[j];
       }
     } else {
-      // コメントあり。直前の空白も削除
-      auto last_non_space = comment_pos;
-      while (last_non_space > 0 && detail::is_whitespace(line[last_non_space - 1])) {
-        --last_non_space;
-      }
-      for (auto j = 0uz; j < last_non_space; ++j) {
+      // コメントあり。コメント開始文字列から行末まで削除
+      for (auto j = 0uz; j < comment_pos; ++j) {
         res.buffer[offset++] = line[j];
       }
     }
@@ -143,6 +138,44 @@ auto consteval remove_comments(FrozenString<N> const& str, std::string_view comm
 template <size_t N>
 auto consteval remove_comments(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
   return remove_comments(FrozenString{str}, comment_seq);
+}
+
+/**
+ * @brief 各行の末尾の連続した空白を削除する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval remove_trailing_spaces(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  while (i < str.length) {
+    auto line_start = i;
+    while (i < str.length && str.buffer[i] != '\n') {
+      ++i;
+    }
+    auto line_end = i;
+    while (line_end > line_start && str.buffer[line_end - 1] == ' ') {
+      --line_end;
+    }
+    for (auto j = line_start; j < line_end; ++j) {
+      res.buffer[offset++] = str.buffer[j];
+    }
+    if (i < str.length && str.buffer[i] == '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+auto consteval remove_trailing_spaces(char const (&str)[N]) noexcept {
+  return remove_trailing_spaces(FrozenString{str});
 }
 
 /**
