@@ -406,7 +406,7 @@ static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 - `remove_leading_spaces(str, n)` : 各行の先頭から最大 `n` 個の空白を削除します。
 - `remove_comment_lines(str, comment_seq = "#")` : 指定した文字列で始まる行を削除します。
 - `remove_comments(str, comment_seq = "#")` : 指定した文字列を含めて行末までを削除します（直前の空白は残ります）。
-- `remove_trailing_spaces(str)` : 各行の末尾の連続した半角スペースを削除します。
+- `remove_trailing_spaces(str, n)` : 各行の末尾から最大 `n` 個の連続した半角スペースを削除します（`n = 0` ですべて削除）。
 - `join_lines(str)` : すべての行を結合します。結合部分にスペースがない場合は自動的に 1 つ挿入します。
 - `trim_trailing_spaces(str)` : 各行の末尾の空白（スペース、タブなど）を削除します。
 - `remove_empty_lines(str)` : 空行（改行のみの行）を削除します。

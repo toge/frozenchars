@@ -145,10 +145,11 @@ auto consteval remove_comments(char const (&str)[N], std::string_view comment_se
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
+ * @param n 削除する空白の最大数 (0 の場合はすべて削除)
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_trailing_spaces(FrozenString<N> const& str) noexcept {
+auto consteval remove_trailing_spaces(FrozenString<N> const& str, size_t n = 0) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -159,8 +160,10 @@ auto consteval remove_trailing_spaces(FrozenString<N> const& str) noexcept {
     }
     auto line_end = i;
     // remove_trailing_spaces は「半角スペース」のみを削除対象にする
-    while (line_end > line_start && str.buffer[line_end - 1] == ' ') {
+    auto spaces = 0uz;
+    while (line_end > line_start && str.buffer[line_end - 1] == ' ' && (n == 0 || spaces < n)) {
       --line_end;
+      ++spaces;
     }
     for (auto j = line_start; j < line_end; ++j) {
       res.buffer[offset++] = str.buffer[j];
@@ -175,8 +178,8 @@ auto consteval remove_trailing_spaces(FrozenString<N> const& str) noexcept {
 }
 
 template <size_t N>
-auto consteval remove_trailing_spaces(char const (&str)[N]) noexcept {
-  return remove_trailing_spaces(FrozenString{str});
+auto consteval remove_trailing_spaces(char const (&str)[N], size_t n = 0) noexcept {
+  return remove_trailing_spaces(FrozenString{str}, n);
 }
 
 /**

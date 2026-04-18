@@ -119,9 +119,14 @@ struct remove_comments_adaptor : detail::pipe_adaptor_tag {
 };
 
 struct remove_trailing_spaces_adaptor : detail::pipe_adaptor_tag {
+  size_t n;
+  constexpr remove_trailing_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::remove_trailing_spaces(str);
+    return frozenchars::remove_trailing_spaces(str, n);
+  }
+  consteval auto operator()(size_t count) const noexcept {
+    return remove_trailing_spaces_adaptor{count};
   }
 };
 
