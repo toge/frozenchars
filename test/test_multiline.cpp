@@ -71,6 +71,19 @@ TEST_CASE("remove_comments") {
   REQUIRE(res_pipe.sv() == "code1 # comment\ncode2\ncode3;comment\ncode4");
 }
 
+TEST_CASE("remove_range_comments") {
+  auto constexpr src = "a /* block\ncomment */ b /* c */ d"_fs;
+
+  auto constexpr res = remove_range_comments(src, "/*", "*/");
+  static_assert(res.sv() == "a  b  d");
+  REQUIRE(res.sv() == "a  b  d");
+
+  namespace fops = frozenchars::ops;
+  auto constexpr res_pipe = src | fops::remove_range_comments("/*", "*/");
+  static_assert(res_pipe.sv() == "a  b  d");
+  REQUIRE(res_pipe.sv() == "a  b  d");
+}
+
 TEST_CASE("join_lines") {
   auto constexpr src = "line1\nline2 \n line3\nline4"_fs;
 

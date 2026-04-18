@@ -118,6 +118,19 @@ struct remove_comments_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
+struct remove_range_comments_adaptor : detail::pipe_adaptor_tag {
+  std::string_view start_seq;
+  std::string_view end_seq;
+  constexpr remove_range_comments_adaptor(std::string_view start, std::string_view end) noexcept
+  : start_seq(start), end_seq(end)
+  {}
+
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::remove_range_comments(str, start_seq, end_seq);
+  }
+};
+
 struct join_lines_adaptor : detail::pipe_adaptor_tag {
   std::string_view sep;
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
@@ -202,6 +215,10 @@ consteval auto remove_comment_lines(std::string_view comment_seq = "#") noexcept
 
 consteval auto remove_comments(std::string_view comment_seq = "#") noexcept {
   return remove_comments_adaptor{comment_seq};
+}
+
+consteval auto remove_range_comments(std::string_view start_seq, std::string_view end_seq) noexcept {
+  return remove_range_comments_adaptor{start_seq, end_seq};
 }
 
 template <FixedString Delim>
