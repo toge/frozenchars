@@ -234,7 +234,7 @@ consteval auto remove_range_comments(std::string_view start_seq, std::string_vie
   return remove_range_comments_adaptor{start_seq, end_seq};
 }
 
-template <FixedString Delim>
+template <FrozenString Delim>
 struct join_adaptor : detail::pipe_adaptor_tag {
   template <size_t ElemN, size_t Count>
   consteval auto operator()(std::array<FrozenString<ElemN>, Count> const& arr) const noexcept {
@@ -242,10 +242,10 @@ struct join_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-template <FixedString Delim>
+template <FrozenString Delim>
 inline constexpr join_adaptor<Delim> join{};
 
-template <size_t ElemN, size_t Count, FixedString Delim>
+template <size_t ElemN, size_t Count, FrozenString Delim>
 consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
                          join_adaptor<Delim> const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
@@ -273,7 +273,7 @@ struct pad_right_adaptor : detail::pipe_adaptor_tag {
 template <size_t Width, char Fill = ' '>
 inline constexpr pad_right_adaptor<Width, Fill> pad_right{};
 
-template <FixedString From, FixedString To>
+template <FrozenString From, FrozenString To>
 struct replace_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -281,10 +281,10 @@ struct replace_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-template <FixedString From, FixedString To>
+template <FrozenString From, FrozenString To>
 inline constexpr replace_adaptor<From, To> replace{};
 
-template <FixedString From, FixedString To>
+template <FrozenString From, FrozenString To>
 struct replace_all_adaptor : detail::pipe_adaptor_tag {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -292,7 +292,7 @@ struct replace_all_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-template <FixedString From, FixedString To>
+template <FrozenString From, FrozenString To>
 inline constexpr replace_all_adaptor<From, To> replace_all{};
 
 } // namespace frozenchars::ops

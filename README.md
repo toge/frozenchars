@@ -381,7 +381,7 @@ static_assert(d1.sv() == "Hello");
 static_assert(d2.sv() == "f");
 ```
 
-## 'make_querystring`（クエリ文字列生成）
+## `make_querystring`（クエリ文字列生成）
 
 キーと値のペアからURLクエリ文字列を生成します。`FrozenString` と文字列リテラルの両方を受け取ります。l
 std::tuple, std::pair, std::array などのタプルライクな型も受け取ります（要素数2である必要があります）。

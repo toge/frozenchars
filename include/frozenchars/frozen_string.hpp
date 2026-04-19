@@ -10,33 +10,6 @@
 namespace frozenchars {
 
 /**
- * @brief 固定長文字列を表す構造体
- *
- * @tparam N 文字列の長さ (終端文字'\0'を含む)
- */
-template <size_t N>
-struct FixedString {
-  char data[N]{};
-  size_t length{N > 0 ? N - 1 : 0};
-
-  constexpr FixedString(char const (&str)[N]) noexcept
-  : length{N > 0 ? N - 1 : 0} {
-    for (auto i = 0uz; i < N; ++i) {
-      data[i] = str[i];
-    }
-  }
-  constexpr FixedString(FrozenString<N> const& str) noexcept
-  : length{str.length} {
-    for (auto i = 0uz; i < N; ++i) {
-      data[i] = str.buffer[i];
-    }
-  }
-  auto constexpr sv() const noexcept {
-    return std::string_view{data, length};
-  }
-};
-
-/**
  * @brief 静的文字列
  * このライブラリでの基本的な文字列型
  * @tparam N 文字列の長さ (終端文字'\0'を含む)

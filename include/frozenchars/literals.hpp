@@ -11,7 +11,7 @@ namespace frozenchars::literals {
  * @tparam FS 固定長文字列
  * @return auto 変換文字列
  */
-template <FixedString FS>
+template <FrozenString FS>
 auto consteval operator""_fs() noexcept {
   auto res = FrozenString<FS.sv().size() + 1>{};
   auto const s = FS.sv();

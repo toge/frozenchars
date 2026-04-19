@@ -281,7 +281,7 @@ auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_
   auto res = FrozenString<N>{};
   auto const requested_len = len >= 0
     ? static_cast<size_t>(len)
-    : static_cast<size_t>(-(len + 1)) + 1uz;
+    : static_cast<size_t>(-len);
   auto const anchor = std::min(pos, str.length);
   auto start = anchor;
   auto actual_len = 0uz;
@@ -364,7 +364,7 @@ auto consteval split(FrozenString<N> const& str) noexcept;
  * @tparam Delim 区切り文字列
  * @return auto 結合結果
  */
-template <FixedString Delim>
+template <FrozenString Delim>
 auto consteval join() noexcept {
   return FrozenString<1>{};
 }
@@ -380,7 +380,7 @@ auto consteval join() noexcept {
  * @param arr 結合する FrozenString の std::array
  * @return auto 結合結果
  */
-template <FixedString Delim, size_t ElemN, size_t Count>
+template <FrozenString Delim, size_t ElemN, size_t Count>
 auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
   if constexpr (Count == 0) {
     return FrozenString<1>{};
@@ -417,7 +417,7 @@ auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept 
  * @param rest 残りの FrozenString（可変引数）
  * @return auto 結合結果
  */
-template <FixedString Delim, size_t N0, size_t... Ns>
+template <FrozenString Delim, size_t N0, size_t... Ns>
 auto consteval join(FrozenString<N0> const& first, FrozenString<Ns> const&... rest) noexcept {
   auto constexpr DELIM_LEN = Delim.sv().size();
   auto constexpr COUNT = 1uz + sizeof...(Ns);
@@ -519,7 +519,7 @@ auto consteval pad_right(char const (&str)[N]) noexcept {
  * @param str 入力文字列
  * @return auto 置換後の文字列
  */
-template <FixedString From, FixedString To, size_t N>
+template <FrozenString From, FrozenString To, size_t N>
 auto consteval replace(FrozenString<N> const& str) noexcept {
   static_assert(From.sv().size() > 0, "replace: From must not be empty");
   auto constexpr FROM_LEN = From.sv().size();
@@ -555,7 +555,7 @@ auto consteval replace(FrozenString<N> const& str) noexcept {
   return res;
 }
 
-template <FixedString From, FixedString To, size_t N>
+template <FrozenString From, FrozenString To, size_t N>
 auto consteval replace(char const (&str)[N]) noexcept {
   return replace<From, To>(FrozenString{str});
 }
@@ -569,7 +569,7 @@ auto consteval replace(char const (&str)[N]) noexcept {
  * @param str 入力文字列
  * @return auto 置換後の文字列
  */
-template <FixedString From, FixedString To, size_t N>
+template <FrozenString From, FrozenString To, size_t N>
 auto consteval replace_all(FrozenString<N> const& str) noexcept {
   static_assert(From.sv().size() > 0, "replace_all: From must not be empty");
   auto constexpr FROM_LEN = From.sv().size();
@@ -605,7 +605,7 @@ auto consteval replace_all(FrozenString<N> const& str) noexcept {
   return res;
 }
 
-template <FixedString From, FixedString To, size_t N>
+template <FrozenString From, FrozenString To, size_t N>
 auto consteval replace_all(char const (&str)[N]) noexcept {
   return replace_all<From, To>(FrozenString{str});
 }
@@ -622,7 +622,7 @@ auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
 }
 
-template <FixedString Delim, typename First, typename... Rest>
+template <FrozenString Delim, typename First, typename... Rest>
   requires (requires(First const& v) { freeze(v); }
             && (... && requires(Rest const& v) { freeze(v); })
             && (!detail::is_frozen_string_v<First> || (... || !detail::is_frozen_string_v<Rest>)))
