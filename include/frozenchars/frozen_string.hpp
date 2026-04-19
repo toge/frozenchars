@@ -95,6 +95,19 @@ struct FrozenString {
   auto consteval operator+(char const (&rhs)[M]) const noexcept {
     return *this + FrozenString<M>{rhs};
   }
+
+  // 1文字の追加
+  auto consteval operator+(char rhs) const noexcept {
+    FrozenString<N + 1> res{};
+    auto offset = 0uz;
+    for (auto const c : this->sv()) {
+      res.buffer[offset++] = c;
+    }
+    res.buffer[offset++] = rhs;
+    res.buffer[offset] = '\0';
+    res.length = offset;
+    return res;
+  }
 };
 
 template <size_t N>

@@ -113,6 +113,14 @@ TEST_CASE("simple concat with literal rhs") {
   REQUIRE(message.sv() == "Hello, world!");
 }
 
+TEST_CASE("simple concat with char rhs") {
+  auto constexpr src  = "test"_fs;
+  auto constexpr dest = src + 'a';
+
+  static_assert(dest.sv() == "testa");
+  REQUIRE(dest.sv() == "testa");
+}
+
 TEST_CASE("simple right align") {
   auto constexpr s1 = right<5>("abc"_fs);
   static_assert(s1.sv() == "  abc");
