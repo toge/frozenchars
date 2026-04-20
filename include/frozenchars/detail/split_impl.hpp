@@ -38,6 +38,31 @@ auto consteval split_count_impl(FrozenString<N> const& str) noexcept {
 }
 
 /**
+ * @brief 区切り判定関数で分割したときの最大トークン長を返す
+ *
+ * @tparam IsDelimiter 区切り文字判定関数
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 最大トークン長
+ */
+template <auto IsDelimiter = is_whitespace, size_t N>
+  requires std::predicate<decltype(IsDelimiter), char>
+auto consteval max_token_len_impl(FrozenString<N> const& str) noexcept {
+  auto max_len = 0uz;
+  auto cur_len = 0uz;
+  for (auto i = 0uz; i < str.length; ++i) {
+    if (IsDelimiter(str.buffer[i])) {
+      if (cur_len > max_len) max_len = cur_len;
+      cur_len = 0;
+    } else {
+      ++cur_len;
+    }
+  }
+  if (cur_len > max_len) max_len = cur_len;
+  return max_len;
+}
+
+/**
  * @brief 数値字句を指定数値型に変換する
  *
  * @tparam Number 変換先の数値型

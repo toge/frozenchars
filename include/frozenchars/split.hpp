@@ -135,6 +135,37 @@ auto consteval split(char const (&str)[N]) noexcept {
 }
 
 /**
+ * @brief 文字列をNTTPとして受け取り、正確なサイズの配列に分割する
+ * トークン数・最大トークン長をコンパイル時に確定し、無駄のない型を返す
+ *
+ * @tparam Str 分割対象の FrozenString（NTTPとして渡す）
+ * @tparam IsDelimiter 区切り文字判定関数（デフォルト: 空白判定）
+ * @return auto std::array<FrozenString<MaxTokenLen+1>, TokenCount>
+ */
+template <auto Str, auto IsDelimiter = detail::is_whitespace>
+  requires (detail::is_frozen_string_v<decltype(Str)>
+            && std::predicate<decltype(IsDelimiter), char>)
+auto consteval split() noexcept {
+  constexpr auto token_count = detail::split_count_impl<IsDelimiter>(Str);
+  constexpr auto max_len     = detail::max_token_len_impl<IsDelimiter>(Str);
+  auto res = std::array<FrozenString<max_len + 1>, token_count>{};
+  auto src = 0uz;
+  auto dst = 0uz;
+  while (src < Str.length && dst < token_count) {
+    while (src < Str.length && IsDelimiter(Str.buffer[src])) ++src;
+    if (src >= Str.length) break;
+    auto token_len = 0uz;
+    while (src < Str.length && !IsDelimiter(Str.buffer[src])) {
+      res[dst].buffer[token_len++] = Str.buffer[src++];
+    }
+    res[dst].buffer[token_len] = '\0';
+    res[dst].length = token_len;
+    ++dst;
+  }
+  return res;
+}
+
+/**
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する
  *
  * @tparam Int 解析する数値型（デフォルト: int）
