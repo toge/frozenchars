@@ -14,3 +14,4 @@
 #include "frozenchars/ops.hpp"
 #include "frozenchars/format.hpp"
 #include "frozenchars/url.hpp"
+#include "frozenchars/number_conv.hpp"

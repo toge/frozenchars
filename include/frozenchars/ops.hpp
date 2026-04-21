@@ -11,42 +11,77 @@
 
 namespace frozenchars::ops {
 
-struct trim_adaptor : detail::pipe_adaptor_tag {
+template <auto Pred = detail::is_space_char>
+struct trim_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::trim(str);
+    return frozenchars::trim_if<Pred>(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::trim_if<Pred>(FrozenString{str});
   }
 };
 
-struct ltrim_adaptor : detail::pipe_adaptor_tag {
+template <auto Pred = detail::is_space_char>
+struct ltrim_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::ltrim(str);
+    return frozenchars::ltrim_if<Pred>(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::ltrim_if<Pred>(FrozenString{str});
   }
 };
 
-struct rtrim_adaptor : detail::pipe_adaptor_tag {
+template <auto Pred = detail::is_space_char>
+struct rtrim_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::rtrim(str);
+    return frozenchars::rtrim_if<Pred>(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::rtrim_if<Pred>(FrozenString{str});
   }
 };
 
-struct toupper_adaptor : detail::pipe_adaptor_tag {
+struct toupper_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::toupper(str);
   }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::toupper(FrozenString{str});
+  }
 };
 
-struct tolower_adaptor : detail::pipe_adaptor_tag {
+struct tolower_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::tolower(str);
   }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::tolower(FrozenString{str});
+  }
 };
 
-struct substr_adaptor : detail::pipe_adaptor_tag {
+template <auto Pred = detail::is_space_char>
+struct collapse_spaces_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::collapse_spaces_if<Pred>(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::collapse_spaces_if<Pred>(FrozenString{str});
+  }
+};
+
+struct substr_adaptor : pipe_adaptor_base {
   std::size_t pos;
   std::ptrdiff_t len;
 
@@ -60,47 +95,48 @@ struct substr_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-struct capitalize_adaptor : detail::pipe_adaptor_tag {
+struct capitalize_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::capitalize(str);
   }
 };
 
-struct to_snake_case_adaptor : detail::pipe_adaptor_tag {
+struct to_snake_case_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::to_snake_case(str);
   }
 };
 
-struct to_camel_case_adaptor : detail::pipe_adaptor_tag {
+struct to_camel_case_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::to_camel_case(str);
   }
 };
 
-struct to_pascal_case_adaptor : detail::pipe_adaptor_tag {
+struct to_pascal_case_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::to_pascal_case(str);
   }
 };
 
-struct remove_leading_spaces_adaptor : detail::pipe_adaptor_tag {
+template <auto Pred = detail::is_space_char>
+struct remove_leading_spaces_adaptor : pipe_adaptor_base {
   size_t n;
   constexpr remove_leading_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::remove_leading_spaces(str, n);
+    return frozenchars::remove_leading_spaces_if<Pred>(str, n);
   }
   consteval auto operator()(size_t count) const noexcept {
-    return remove_leading_spaces_adaptor{count};
+    return remove_leading_spaces_adaptor<Pred>{count};
   }
 };
 
-struct remove_comment_lines_adaptor : detail::pipe_adaptor_tag {
+struct remove_comment_lines_adaptor : pipe_adaptor_base {
   std::string_view comment_seq;
   constexpr remove_comment_lines_adaptor(std::string_view seq = "#") noexcept : comment_seq(seq) {}
   template <size_t N>
@@ -109,7 +145,7 @@ struct remove_comment_lines_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-struct remove_comments_adaptor : detail::pipe_adaptor_tag {
+struct remove_comments_adaptor : pipe_adaptor_base {
   std::string_view comment_seq;
   constexpr remove_comments_adaptor(std::string_view seq = "#") noexcept : comment_seq(seq) {}
   template <size_t N>
@@ -118,19 +154,20 @@ struct remove_comments_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-struct remove_trailing_spaces_adaptor : detail::pipe_adaptor_tag {
+template <auto Pred = detail::is_space_char>
+struct remove_trailing_spaces_adaptor : pipe_adaptor_base {
   size_t n;
   constexpr remove_trailing_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::remove_trailing_spaces(str, n);
+    return frozenchars::remove_trailing_spaces_if<Pred>(str, n);
   }
   consteval auto operator()(size_t count) const noexcept {
-    return remove_trailing_spaces_adaptor{count};
+    return remove_trailing_spaces_adaptor<Pred>{count};
   }
 };
 
-struct remove_range_comments_adaptor : detail::pipe_adaptor_tag {
+struct remove_range_comments_adaptor : pipe_adaptor_base {
   std::string_view start_seq;
   std::string_view end_seq;
   constexpr remove_range_comments_adaptor(std::string_view start, std::string_view end) noexcept
@@ -143,7 +180,7 @@ struct remove_range_comments_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-struct join_lines_adaptor : detail::pipe_adaptor_tag {
+struct join_lines_adaptor : pipe_adaptor_base {
   std::string_view sep;
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
 
@@ -157,53 +194,54 @@ struct join_lines_adaptor : detail::pipe_adaptor_tag {
   }
 };
 
-struct trim_trailing_spaces_adaptor : detail::pipe_adaptor_tag {
+struct trim_trailing_spaces_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::trim_trailing_spaces(str);
   }
 };
 
-struct remove_empty_lines_adaptor : detail::pipe_adaptor_tag {
+struct remove_empty_lines_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_empty_lines(str);
   }
 };
 
-struct url_encode_adaptor : detail::pipe_adaptor_tag {
+struct url_encode_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::url_encode(str);
   }
 };
 
-struct url_decode_adaptor : detail::pipe_adaptor_tag {
+struct url_decode_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::url_decode(str);
   }
 };
 
-struct base64_encode_adaptor : detail::pipe_adaptor_tag {
+struct base64_encode_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::base64_encode(str);
   }
 };
 
-struct base64_decode_adaptor : detail::pipe_adaptor_tag {
+struct base64_decode_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::base64_decode(str);
   }
 };
 
-inline constexpr trim_adaptor trim{};
-inline constexpr ltrim_adaptor ltrim{};
-inline constexpr rtrim_adaptor rtrim{};
+inline constexpr trim_adaptor<> trim{};
+inline constexpr ltrim_adaptor<> ltrim{};
+inline constexpr rtrim_adaptor<> rtrim{};
 inline constexpr toupper_adaptor toupper{};
 inline constexpr tolower_adaptor tolower{};
+inline constexpr collapse_spaces_adaptor<> collapse_spaces{};
 inline constexpr capitalize_adaptor capitalize{};
 inline constexpr to_snake_case_adaptor to_snake_case{};
 inline constexpr to_camel_case_adaptor to_camel_case{};
@@ -215,8 +253,16 @@ inline constexpr url_encode_adaptor url_encode{};
 inline constexpr url_decode_adaptor url_decode{};
 inline constexpr base64_encode_adaptor base64_encode{};
 inline constexpr base64_decode_adaptor base64_decode{};
-inline constexpr remove_leading_spaces_adaptor remove_leading_spaces{};
-inline constexpr remove_trailing_spaces_adaptor remove_trailing_spaces{};
+inline constexpr remove_leading_spaces_adaptor<> remove_leading_spaces{};
+inline constexpr remove_trailing_spaces_adaptor<> remove_trailing_spaces{};
+
+// Predicate variants
+template <auto Pred> inline constexpr trim_adaptor<Pred> trim_if{};
+template <auto Pred> inline constexpr ltrim_adaptor<Pred> ltrim_if{};
+template <auto Pred> inline constexpr rtrim_adaptor<Pred> rtrim_if{};
+template <auto Pred> inline constexpr collapse_spaces_adaptor<Pred> collapse_spaces_if{};
+template <auto Pred> inline constexpr remove_leading_spaces_adaptor<Pred> remove_leading_spaces_if{};
+template <auto Pred> inline constexpr remove_trailing_spaces_adaptor<Pred> remove_trailing_spaces_if{};
 
 consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};
@@ -235,7 +281,7 @@ consteval auto remove_range_comments(std::string_view start_seq, std::string_vie
 }
 
 template <FrozenString Delim>
-struct join_adaptor : detail::pipe_adaptor_tag {
+struct join_adaptor : pipe_adaptor_base {
   template <size_t ElemN, size_t Count>
   consteval auto operator()(std::array<FrozenString<ElemN>, Count> const& arr) const noexcept {
     return frozenchars::join<Delim>(arr);
@@ -252,10 +298,14 @@ consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
 }
 
 template <size_t Width, char Fill = ' '>
-struct pad_left_adaptor : detail::pipe_adaptor_tag {
+struct pad_left_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::pad_left<Width, Fill>(str);
+  }
+  template <Integral T>
+  consteval auto operator()(T const& v) const noexcept {
+    return frozenchars::pad_left<Width, Fill>(v);
   }
 };
 
@@ -263,10 +313,14 @@ template <size_t Width, char Fill = ' '>
 inline constexpr pad_left_adaptor<Width, Fill> pad_left{};
 
 template <size_t Width, char Fill = ' '>
-struct pad_right_adaptor : detail::pipe_adaptor_tag {
+struct pad_right_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::pad_right<Width, Fill>(str);
+  }
+  template <Integral T>
+  consteval auto operator()(T const& v) const noexcept {
+    return frozenchars::pad_right<Width, Fill>(v);
   }
 };
 
@@ -274,7 +328,7 @@ template <size_t Width, char Fill = ' '>
 inline constexpr pad_right_adaptor<Width, Fill> pad_right{};
 
 template <FrozenString From, FrozenString To>
-struct replace_adaptor : detail::pipe_adaptor_tag {
+struct replace_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::replace<From, To>(str);
@@ -285,7 +339,7 @@ template <FrozenString From, FrozenString To>
 inline constexpr replace_adaptor<From, To> replace{};
 
 template <FrozenString From, FrozenString To>
-struct replace_all_adaptor : detail::pipe_adaptor_tag {
+struct replace_all_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::replace_all<From, To>(str);
@@ -294,5 +348,13 @@ struct replace_all_adaptor : detail::pipe_adaptor_tag {
 
 template <FrozenString From, FrozenString To>
 inline constexpr replace_all_adaptor<From, To> replace_all{};
+
+/**
+ * @brief 数値型に対してアダプタを適用するパイプ演算子
+ */
+template <Integral T, PipeAdaptor Adaptor>
+auto consteval operator|(T const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
+  return rhs(lhs);
+}
 
 } // namespace frozenchars::ops

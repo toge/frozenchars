@@ -273,4 +273,9 @@ auto consteval freeze(T const& arg) noexcept {
 template <typename T>
 auto consteval freeze(T const&) noexcept = delete;
 
+template <size_t N, size_t Count>
+constexpr auto const& freeze(std::array<FrozenString<N>, Count> const& arr) noexcept {
+  return arr;
+}
+
 } // namespace frozenchars

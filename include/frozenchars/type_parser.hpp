@@ -45,7 +45,9 @@ consteval auto parse_to_tuple_impl() noexcept {
 
     auto constexpr opt_info = [](auto const& s, size_t pos) {
       size_t i = pos + 1;
-      while (i < s.length && detail::is_whitespace(s.buffer[i])) ++i;
+      while (i < s.length && detail::is_any_whitespace(s.buffer[i])) {
+        ++i;
+      }
       bool found = (i < s.length && s.buffer[i] == '?');
       return std::pair{found, found ? i : pos};
     }(trimmed, closing_pos);

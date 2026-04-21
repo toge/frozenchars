@@ -27,6 +27,18 @@ struct FrozenString {
     }
   }
 
+  template <size_t M>
+  consteval FrozenString(FrozenString<M> const& other) noexcept
+  : length{std::min(other.length, N > 0 ? N - 1 : 0)} {
+    auto const copy_len = length;
+    for (auto i = 0uz; i < copy_len; ++i) {
+      buffer[i] = other.buffer[i];
+    }
+    if constexpr (N > 0) {
+      buffer[copy_len] = '\0';
+    }
+  }
+
   auto constexpr sv() const noexcept {
     return std::string_view{buffer.data(), length};
   }

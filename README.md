@@ -403,7 +403,7 @@ static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 
 複数行を含む文字列（`\n` で区切られた文字列）に対して、行単位での加工を行うスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。
 
-- `remove_leading_spaces(str, n)` : 各行の先頭から最大 `n` 個の空白を削除します。
+- `remove_leading_spaces(str, n)` : 各行の先頭から最大 `n` 個の空白を削除します（`n = 0` ですべて削除）。
 - `remove_comment_lines(str, comment_seq = "#")` : 指定した文字列で始まる行を削除します。
 - `remove_comments(str, comment_seq = "#")` : 指定した文字列を含めて行末までを削除します（直前の空白は残ります）。
 - `remove_trailing_spaces(str, n)` : 各行の末尾から最大 `n` 個の連続した半角スペースを削除します（`n = 0` ですべて削除）。

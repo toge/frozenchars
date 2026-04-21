@@ -56,34 +56,36 @@ template <size_t N>
 auto consteval count_snake_underscores(FrozenString<N> const& str) noexcept -> std::size_t {
   auto count = 0uz;
   for (auto i = 1uz; i < str.length; ++i) {
-    if (str.buffer[i] >= 'A' && str.buffer[i] <= 'Z') { ++count; }
+    if (str.buffer[i] >= 'A' && str.buffer[i] <= 'Z') {
+      ++count;
+    }
   }
   return count;
 }
 
 /**
- * @brief 引数の文字列から指定した文字を左端と右端から削除した文字列を生成する
+ * @brief 引数の文字列から指定した条件を満たす文字を左端と右端から削除した文字列を生成する
  *
  * @tparam TrimLeft 左端から削除するかどうか
  * @tparam TrimRight 右端から削除するかどうか
- * @tparam TrimChar 削除する文字
+ * @tparam Pred 削除対象を判定する述語（デフォルト: 半角スペース）
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
  * @return auto 生成した文字列
  */
-template <bool TrimLeft, bool TrimRight, char TrimChar, size_t N>
+template <bool TrimLeft, bool TrimRight, auto Pred = is_space_char, size_t N>
 auto consteval trim_copy(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto start = 0uz;
   auto end = str.length;
 
   if constexpr (TrimLeft) {
-    while (start < str.length && str.buffer[start] == TrimChar) {
+    while (start < str.length && Pred(str.buffer[start])) {
       ++start;
     }
   }
   if constexpr (TrimRight) {
-    while (end > start && str.buffer[end - 1] == TrimChar) {
+    while (end > start && Pred(str.buffer[end - 1])) {
       --end;
     }
   }

@@ -12,14 +12,32 @@ template <size_t N> struct FrozenString;
 namespace frozenchars::detail {
 
 /**
+ * @brief 半角スペースか判定する
+ *
+ * @param c 判定する文字
+ * @return auto 半角スペースなら true
+ */
+auto constexpr is_space_char(char c) noexcept {
+  return c == ' ';
+}
+
+/**
  * @brief ASCII 空白文字か判定する
  *
  * @param c 判定する文字
  * @return auto 空白なら true
  */
-auto constexpr is_whitespace(char c) noexcept {
+auto constexpr is_any_whitespace(char c) noexcept {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
 }
+
+/**
+ * @brief 指定した文字かどうかを判定する述語を生成する
+ *
+ * @tparam Target 対象の文字
+ */
+template <char Target>
+inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
 
 /**
  * @brief ASCII の16進数字かどうかを判定する
@@ -167,11 +185,21 @@ inline constexpr char base64_chars[] =
  * @return auto 変換後の数値。不正な文字の場合は 255
  */
 auto constexpr base64_char_to_value(char const c) noexcept -> std::uint8_t {
-  if (c >= 'A' && c <= 'Z') return static_cast<std::uint8_t>(c - 'A');
-  if (c >= 'a' && c <= 'z') return static_cast<std::uint8_t>(c - 'a' + 26);
-  if (c >= '0' && c <= '9') return static_cast<std::uint8_t>(c - '0' + 52);
-  if (c == '+') return 62;
-  if (c == '/') return 63;
+  if (c >= 'A' && c <= 'Z') {
+    return static_cast<std::uint8_t>(c - 'A');
+  }
+  if (c >= 'a' && c <= 'z') {
+    return static_cast<std::uint8_t>(c - 'a' + 26);
+  }
+  if (c >= '0' && c <= '9') {
+    return static_cast<std::uint8_t>(c - '0' + 52);
+  }
+  if (c == '+') {
+    return 62;
+  }
+  if (c == '/') {
+    return 63;
+  }
   return 255;
 }
 
@@ -195,10 +223,16 @@ auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
 template <size_t N>
 auto consteval count_base64_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
   auto const s = str.sv();
-  if (s.empty()) return 0;
+  if (s.empty()) {
+    return 0;
+  }
   auto count = (s.size() / 4) * 3;
-  if (s.ends_with("==")) count -= 2;
-  else if (s.ends_with("=")) count -= 1;
+  if (s.ends_with("==")) {
+    count -= 2;
+  }
+  else if (s.ends_with("=")) {
+    count -= 1;
+  }
   return count;
 }
 
