@@ -84,51 +84,87 @@ consteval auto find_seed() -> std::uint32_t {
 template <typename T, FrozenString... Keys>
 class StaticPerfectMap {
  public:
+  /**
+   * @brief 固定キー集合の要素数を返す
+   * @return std::size_t キー数
+   */
   static_assert(sizeof...(Keys) > 0, "StaticPerfectMap requires at least one key");
 
   static constexpr auto size() noexcept -> std::size_t {
     return sizeof...(Keys);
   }
 
+  /**
+   * @brief 値をデフォルト構築してマップを初期化する
+   */
   constexpr StaticPerfectMap() noexcept
     requires std::default_initializable<T> = default;
 
+  /**
+   * @brief 宣言順の値配列からマップを初期化する
+   * @param values キー宣言順に並んだ値配列
+   */
   constexpr explicit StaticPerfectMap(std::array<T, size()> values) noexcept(
       std::is_nothrow_move_constructible_v<T>)
   : values_{reorder_to_slots(std::move(values), std::make_index_sequence<size()>{})} {
   }
 
+  /**
+   * @brief キーが存在するか判定する
+   * @param key 検索対象キー
+   * @return bool 存在する場合 true
+   */
   constexpr auto contains(std::string_view key) const noexcept -> bool {
     return at(key).has_value();
   }
 
+  /**
+   * @brief キーに対応する値を取得する
+   * @param key 検索対象キー
+   * @return std::optional<std::reference_wrapper<T>> 値参照。未存在なら空
+   */
   constexpr auto at(std::string_view key) noexcept
       -> std::optional<std::reference_wrapper<T>> {
     auto const slot = slot_for(key);
-    if (slot_key_views_[slot] == key) {
+    if (slot_key_views_[slot] == key) [[likely]] {
       return values_[slot];
     }
     return std::nullopt;
   }
 
+  /**
+   * @brief キーに対応する値を取得する const 版
+   * @param key 検索対象キー
+   * @return std::optional<std::reference_wrapper<T const>> 値参照。未存在なら空
+   */
   constexpr auto at(std::string_view key) const noexcept
       -> std::optional<std::reference_wrapper<T const>> {
     auto const slot = slot_for(key);
-    if (slot_key_views_[slot] == key) {
+    if (slot_key_views_[slot] == key) [[likely]] {
       return values_[slot];
     }
     return std::nullopt;
   }
 
+  /**
+   * @brief キーに対応する値を参照する
+   * @param key 検索対象キー
+   * @return T& 値参照
+   */
   constexpr auto operator[](std::string_view key) -> T& {
-    if (auto value = at(key); value.has_value()) {
+    if (auto value = at(key); value.has_value()) [[likely]] {
       return value->get();
     }
     throw std::out_of_range("StaticPerfectMap key not found");
   }
 
+  /**
+   * @brief キーに対応する値を参照する const 版
+   * @param key 検索対象キー
+   * @return T const& 値参照
+   */
   constexpr auto operator[](std::string_view key) const -> T const& {
-    if (auto value = at(key); value.has_value()) {
+    if (auto value = at(key); value.has_value()) [[likely]] {
       return value->get();
     }
     throw std::out_of_range("StaticPerfectMap key not found");

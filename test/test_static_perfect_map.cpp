@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <concepts>
+#include <tuple>
 
 #include "frozenchars/literals.hpp"
 #include "frozenchars/static_perfect_map.hpp"
@@ -71,3 +72,14 @@ TEST_CASE("StaticPerfectMap const access returns const references", "[static_per
 }
 
 static_assert(!std::default_initializable<StaticPerfectMap<NoDefault, "timeout"_fs>>);
+
+TEST_CASE("StaticPerfectMap example flow", "[static_perfect_map]") {
+  StaticPerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+  map["timeout"] = 30;
+  map["retry"] = 5;
+
+  auto const pair = std::tuple{map["timeout"], map["retry"]};
+  auto const timeout = std::get<0>(pair);
+
+  REQUIRE(timeout == 30);
+}

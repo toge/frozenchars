@@ -15,6 +15,11 @@ target_compile_features(all_test PUBLIC ${STD_CPP})
 
 add_test(NAME all_test COMMAND all_test -r junit)
 
+add_executable(example_smoke ../example.cpp)
+target_link_libraries(example_smoke PRIVATE frozenchars::frozenchars)
+target_compile_features(example_smoke PUBLIC ${STD_CPP})
+add_test(NAME example_smoke COMMAND example_smoke)
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
 assert_static_perfect_map_compile_fail(
