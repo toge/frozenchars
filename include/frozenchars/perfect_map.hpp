@@ -84,14 +84,28 @@ consteval auto find_seed() -> std::uint32_t {
 template <typename T, FrozenString... Keys>
 class PerfectMap {
  public:
+  using key_type = std::string_view;
+  using mapped_type = T;
+  using value_type = std::pair<key_type, mapped_type>;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
+
   /**
    * @brief 固定キー集合の要素数を返す
    * @return std::size_t キー数
    */
   static_assert(sizeof...(Keys) > 0, "PerfectMap requires at least one key");
 
-  static constexpr auto size() noexcept -> std::size_t {
+  static constexpr auto size() noexcept -> size_type {
     return sizeof...(Keys);
+  }
+
+  static constexpr auto max_size() noexcept -> size_type {
+    return size();
+  }
+
+  static constexpr auto empty() noexcept -> bool {
+    return false;
   }
 
   /**

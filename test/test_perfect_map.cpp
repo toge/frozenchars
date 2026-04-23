@@ -18,6 +18,18 @@ TEST_CASE("PerfectMap basic shape", "[perfect_map]") {
   REQUIRE_FALSE(map.contains("other"));
 }
 
+TEST_CASE("PerfectMap exposes container-like type aliases and size helpers", "[perfect_map]") {
+  using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+
+  static_assert(std::same_as<Map::key_type, std::string_view>);
+  static_assert(std::same_as<Map::mapped_type, int>);
+  static_assert(std::same_as<Map::size_type, std::size_t>);
+  static_assert(std::same_as<Map::difference_type, std::ptrdiff_t>);
+  static_assert(Map::size() == 2);
+  static_assert(Map::max_size() == 2);
+  static_assert(!Map::empty());
+}
+
 TEST_CASE("PerfectMap derives compile-time seed metadata", "[perfect_map]") {
   static_assert(detail::fnv1a_hash("timeout", 0) == 6954259676504937608ull);
   static_assert(detail::find_seed<1'000'001, "timeout"_fs, "retry"_fs, "backoff"_fs>() == 13u);
