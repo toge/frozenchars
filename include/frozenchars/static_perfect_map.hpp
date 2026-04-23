@@ -50,6 +50,8 @@ template <std::uint32_t MaxSeedExclusive, FrozenString... Keys>
 consteval auto find_seed() -> std::uint32_t {
   static_assert(!has_duplicate_keys<Keys...>(),
     "StaticPerfectMap keys must be unique");
+  static_assert(MaxSeedExclusive > 0,
+    "StaticPerfectMap seed search exhausted");
 
   constexpr std::array key_views{
     std::string_view{Keys.buffer.data(), Keys.length}...
