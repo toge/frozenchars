@@ -4,11 +4,14 @@
 
 #include <array>
 #include <cstddef>
+#include <concepts>
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 
 namespace frozenchars {
 
@@ -85,7 +88,13 @@ class StaticPerfectMap {
     return sizeof...(Keys);
   }
 
-  constexpr StaticPerfectMap() noexcept = default;
+  constexpr StaticPerfectMap() noexcept
+    requires std::default_initializable<T> = default;
+
+  constexpr explicit StaticPerfectMap(std::array<T, size()> values) noexcept(
+      std::is_nothrow_move_constructible_v<T>)
+  : values_{reorder_to_slots(std::move(values), std::make_index_sequence<size()>{})} {
+  }
 
   constexpr auto contains(std::string_view key) const noexcept -> bool {
     return at(key).has_value();
@@ -143,6 +152,31 @@ class StaticPerfectMap {
   }
 
   static constexpr auto slot_key_views_ = make_slot_key_views();
+
+  static consteval auto make_key_order_to_slot() -> std::array<std::size_t, size()> {
+    std::array<std::size_t, size()> key_order_to_slot{};
+    for (auto i = 0uz; i < size(); ++i) {
+      key_order_to_slot[i] = slot_for(key_views_[i]);
+    }
+    return key_order_to_slot;
+  }
+
+  static consteval auto make_slot_to_key_order() -> std::array<std::size_t, size()> {
+    auto const key_order_to_slot = make_key_order_to_slot();
+    std::array<std::size_t, size()> slot_to_key_order{};
+    for (auto i = 0uz; i < size(); ++i) {
+      slot_to_key_order[key_order_to_slot[i]] = i;
+    }
+    return slot_to_key_order;
+  }
+
+  template <std::size_t... SlotIndex>
+  static constexpr auto reorder_to_slots(
+      std::array<T, size()> values,
+      std::index_sequence<SlotIndex...>) -> std::array<T, size()> {
+    constexpr auto slot_to_key_order = make_slot_to_key_order();
+    return {std::move(values[slot_to_key_order[SlotIndex]])...};
+  }
 
   std::array<T, size()> values_{};
 };
