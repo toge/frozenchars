@@ -90,6 +90,38 @@ class PerfectMap {
   using size_type = std::size_t;
   using difference_type = std::ptrdiff_t;
 
+  class const_iterator;
+
+  class iterator {
+   public:
+    constexpr auto operator==(iterator const&) const noexcept -> bool = default;
+    constexpr operator const_iterator() const noexcept;
+
+   private:
+    friend class PerfectMap;
+    constexpr iterator(PerfectMap* owner, size_type index) noexcept
+    : owner_{owner}, index_{index} {
+    }
+
+    PerfectMap* owner_{nullptr};
+    size_type index_{0};
+  };
+
+  class const_iterator {
+   public:
+    constexpr auto operator==(const_iterator const&) const noexcept -> bool = default;
+
+   private:
+    friend class PerfectMap;
+    friend class iterator;
+    constexpr const_iterator(PerfectMap const* owner, size_type index) noexcept
+    : owner_{owner}, index_{index} {
+    }
+
+    PerfectMap const* owner_{nullptr};
+    size_type index_{0};
+  };
+
   /**
    * @brief 固定キー集合の要素数を返す
    * @return std::size_t キー数
@@ -106,6 +138,32 @@ class PerfectMap {
 
   static constexpr auto empty() noexcept -> bool {
     return false;
+  }
+
+  constexpr auto find(std::string_view key) noexcept -> iterator {
+    if (auto const slot = find_slot(key); slot.has_value()) {
+      return iterator{this, *slot};
+    }
+    return end();
+  }
+
+  constexpr auto find(std::string_view key) const noexcept -> const_iterator {
+    if (auto const slot = find_slot(key); slot.has_value()) {
+      return const_iterator{this, *slot};
+    }
+    return end();
+  }
+
+  constexpr auto count(std::string_view key) const noexcept -> size_type {
+    return find_slot(key).has_value() ? 1uz : 0uz;
+  }
+
+  constexpr auto end() noexcept -> iterator {
+    return iterator{this, size()};
+  }
+
+  constexpr auto end() const noexcept -> const_iterator {
+    return const_iterator{this, size()};
   }
 
   /**
@@ -195,6 +253,15 @@ class PerfectMap {
     return detail::fnv1a_hash(key, k_seed) % size();
   }
 
+  static constexpr auto find_slot(std::string_view key) noexcept
+      -> std::optional<size_type> {
+    auto const slot = slot_for(key);
+    if (slot_key_views_[slot] == key) [[likely]] {
+      return slot;
+    }
+    return std::nullopt;
+  }
+
   static consteval auto make_slot_key_views() -> std::array<std::string_view, size()> {
     std::array<std::string_view, size()> slot_key_views{};
     for (auto i = 0uz; i < size(); ++i) {
@@ -232,5 +299,11 @@ class PerfectMap {
 
   std::array<T, size()> values_{};
 };
+
+template <typename T, FrozenString... Keys>
+constexpr PerfectMap<T, Keys...>::iterator::operator
+    PerfectMap<T, Keys...>::const_iterator() const noexcept {
+  return typename PerfectMap<T, Keys...>::const_iterator{owner_, index_};
+}
 
 } // namespace frozenchars

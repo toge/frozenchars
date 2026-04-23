@@ -51,6 +51,19 @@ TEST_CASE("PerfectMap lookup and miss handling", "[perfect_map]") {
   REQUIRE_THROWS_AS(map["missing"], std::out_of_range);
 }
 
+TEST_CASE("PerfectMap supports find and count", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+  map["timeout"] = 30;
+
+  auto const found = map.find("timeout");
+  auto const missing = map.find("missing");
+
+  REQUIRE(found != map.end());
+  REQUIRE(missing == map.end());
+  REQUIRE(map.count("timeout") == 1);
+  REQUIRE(map.count("missing") == 0);
+}
+
 namespace {
 
 struct NoDefault {
