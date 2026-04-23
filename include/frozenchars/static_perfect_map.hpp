@@ -4,12 +4,77 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
 
 namespace frozenchars {
+
+namespace detail {
+
+inline constexpr auto k_fnv_offset_basis = 14695981039346656037ull;
+inline constexpr auto k_fnv_prime = 1099511628211ull;
+
+constexpr auto fnv1a_hash(std::string_view key, std::uint32_t seed) noexcept
+    -> std::uint64_t {
+  auto hash = k_fnv_offset_basis ^ static_cast<std::uint64_t>(seed);
+  for (auto const ch : key) {
+    hash ^= static_cast<unsigned char>(ch);
+    hash *= k_fnv_prime;
+  }
+  return hash;
+}
+
+template <FrozenString... Keys>
+consteval auto has_duplicate_keys() -> bool {
+  constexpr std::array key_views{
+    std::string_view{Keys.buffer.data(), Keys.length}...
+  };
+
+  for (auto i = 0uz; i < key_views.size(); ++i) {
+    for (auto j = i + 1; j < key_views.size(); ++j) {
+      if (key_views[i] == key_views[j]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+template <std::uint32_t MaxSeedExclusive, FrozenString... Keys>
+consteval auto find_seed() -> std::uint32_t {
+  static_assert(!has_duplicate_keys<Keys...>(),
+    "StaticPerfectMap keys must be unique");
+
+  constexpr std::array key_views{
+    std::string_view{Keys.buffer.data(), Keys.length}...
+  };
+  constexpr auto key_count = key_views.size();
+
+  for (auto seed = 0u; seed < MaxSeedExclusive; ++seed) {
+    std::array<bool, key_count> used_slots{};
+    auto collision = false;
+
+    for (auto const key_view : key_views) {
+      auto const slot = fnv1a_hash(key_view, seed) % key_count;
+      if (used_slots[slot]) {
+        collision = true;
+        break;
+      }
+      used_slots[slot] = true;
+    }
+
+    if (!collision) {
+      return seed;
+    }
+  }
+
+  throw "StaticPerfectMap seed search exhausted";
+}
+
+} // namespace detail
 
 template <typename T, FrozenString... Keys>
 class StaticPerfectMap {
@@ -23,21 +88,23 @@ class StaticPerfectMap {
   constexpr StaticPerfectMap() noexcept = default;
 
   constexpr auto contains(std::string_view key) const noexcept -> bool {
-    return find_linear(key).has_value();
+    return at(key).has_value();
   }
 
   constexpr auto at(std::string_view key) noexcept
       -> std::optional<std::reference_wrapper<T>> {
-    if (auto const index = find_linear(key); index.has_value()) {
-      return values_[*index];
+    auto const slot = slot_for(key);
+    if (slot_key_views_[slot] == key) {
+      return values_[slot];
     }
     return std::nullopt;
   }
 
   constexpr auto at(std::string_view key) const noexcept
       -> std::optional<std::reference_wrapper<T const>> {
-    if (auto const index = find_linear(key); index.has_value()) {
-      return values_[*index];
+    auto const slot = slot_for(key);
+    if (slot_key_views_[slot] == key) {
+      return values_[slot];
     }
     return std::nullopt;
   }
@@ -61,15 +128,21 @@ class StaticPerfectMap {
     std::string_view{Keys.buffer.data(), Keys.length}...
   };
 
-  static constexpr auto find_linear(std::string_view key) noexcept
-      -> std::optional<std::size_t> {
-    for (auto i = 0uz; i < key_views_.size(); ++i) {
-      if (key_views_[i] == key) {
-        return i;
-      }
-    }
-    return std::nullopt;
+  static constexpr auto k_seed = detail::find_seed<1'000'001, Keys...>();
+
+  static constexpr auto slot_for(std::string_view key) noexcept -> std::size_t {
+    return detail::fnv1a_hash(key, k_seed) % size();
   }
+
+  static consteval auto make_slot_key_views() -> std::array<std::string_view, size()> {
+    std::array<std::string_view, size()> slot_key_views{};
+    for (auto i = 0uz; i < size(); ++i) {
+      slot_key_views[slot_for(key_views_[i])] = key_views_[i];
+    }
+    return slot_key_views;
+  }
+
+  static constexpr auto slot_key_views_ = make_slot_key_views();
 
   std::array<T, size()> values_{};
 };
