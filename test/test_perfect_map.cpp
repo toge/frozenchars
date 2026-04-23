@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <concepts>
+#include <ranges>
 #include <tuple>
 
 #include "frozenchars/literals.hpp"
@@ -107,4 +108,49 @@ TEST_CASE("PerfectMap example flow", "[perfect_map]") {
   auto const timeout = std::get<0>(pair);
 
   REQUIRE(timeout == 30);
+}
+
+TEST_CASE("PerfectMap iterates with key and value access", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    std::array<int, 3>{30, 7, 2}
+  };
+
+  std::array<std::string_view, 3> keys{};
+  std::array<int, 3> values{};
+  auto index = 0uz;
+
+  for (auto&& [key, value] : map) {
+    keys[index] = key;
+    values[index] = value;
+    ++index;
+  }
+
+  REQUIRE(index == 3);
+  REQUIRE(std::ranges::find(values, 30) != values.end());
+  REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
+}
+
+TEST_CASE("PerfectMap structured bindings mutate mapped value", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+
+  for (auto&& [key, value] : map) {
+    if (key == "timeout") {
+      value = 42;
+    }
+  }
+
+  REQUIRE(map["timeout"] == 42);
+}
+
+TEST_CASE("PerfectMap const iteration uses cbegin and cend", "[perfect_map]") {
+  auto const map = PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
+    std::array<int, 3>{30, 7, 2}
+  };
+
+  auto it = map.cbegin();
+  REQUIRE(it != map.cend());
+
+  auto const [key, value] = *it;
+  REQUIRE_FALSE(key.empty());
+  REQUIRE((value == 30 || value == 7 || value == 2));
 }

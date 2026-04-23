@@ -7,9 +7,11 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -81,6 +83,38 @@ consteval auto find_seed() -> std::uint32_t {
 
 } // namespace detail
 
+template <typename T>
+struct PerfectMapReference {
+  std::string_view key;
+  T& value;
+};
+
+template <typename T>
+struct PerfectMapConstReference {
+  std::string_view key;
+  T const& value;
+};
+
+template <std::size_t I, typename T>
+constexpr decltype(auto) get(PerfectMapReference<T> ref) noexcept {
+  static_assert(I < 2);
+  if constexpr (I == 0) {
+    return ref.key;
+  } else {
+    return (ref.value);
+  }
+}
+
+template <std::size_t I, typename T>
+constexpr decltype(auto) get(PerfectMapConstReference<T> ref) noexcept {
+  static_assert(I < 2);
+  if constexpr (I == 0) {
+    return ref.key;
+  } else {
+    return (ref.value);
+  }
+}
+
 template <typename T, FrozenString... Keys>
 class PerfectMap {
  public:
@@ -89,13 +123,27 @@ class PerfectMap {
   using value_type = std::pair<key_type, mapped_type>;
   using size_type = std::size_t;
   using difference_type = std::ptrdiff_t;
+  using reference = PerfectMapReference<mapped_type>;
+  using const_reference = PerfectMapConstReference<mapped_type>;
 
   class const_iterator;
 
   class iterator {
    public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = PerfectMap::value_type;
+    using difference_type = PerfectMap::difference_type;
+    using reference = PerfectMap::reference;
+
     constexpr auto operator==(iterator const&) const noexcept -> bool = default;
     constexpr operator const_iterator() const noexcept;
+    constexpr auto operator*() const noexcept -> reference {
+      return reference{owner_->slot_key_views_[index_], owner_->values_[index_]};
+    }
+    constexpr auto operator++() noexcept -> iterator& {
+      ++index_;
+      return *this;
+    }
 
    private:
     friend class PerfectMap;
@@ -109,7 +157,19 @@ class PerfectMap {
 
   class const_iterator {
    public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = PerfectMap::value_type;
+    using difference_type = PerfectMap::difference_type;
+    using reference = PerfectMap::const_reference;
+
     constexpr auto operator==(const_iterator const&) const noexcept -> bool = default;
+    constexpr auto operator*() const noexcept -> reference {
+      return reference{owner_->slot_key_views_[index_], owner_->values_[index_]};
+    }
+    constexpr auto operator++() noexcept -> const_iterator& {
+      ++index_;
+      return *this;
+    }
 
    private:
     friend class PerfectMap;
@@ -158,12 +218,28 @@ class PerfectMap {
     return find_slot(key).has_value() ? 1uz : 0uz;
   }
 
+  constexpr auto begin() noexcept -> iterator {
+    return iterator{this, 0};
+  }
+
   constexpr auto end() noexcept -> iterator {
     return iterator{this, size()};
   }
 
+  constexpr auto begin() const noexcept -> const_iterator {
+    return const_iterator{this, 0};
+  }
+
   constexpr auto end() const noexcept -> const_iterator {
     return const_iterator{this, size()};
+  }
+
+  constexpr auto cbegin() const noexcept -> const_iterator {
+    return begin();
+  }
+
+  constexpr auto cend() const noexcept -> const_iterator {
+    return end();
   }
 
   /**
@@ -307,3 +383,37 @@ constexpr PerfectMap<T, Keys...>::iterator::operator
 }
 
 } // namespace frozenchars
+
+namespace std {
+
+template <typename T>
+struct tuple_size<frozenchars::PerfectMapReference<T>>
+  : integral_constant<std::size_t, 2> {
+};
+
+template <typename T>
+struct tuple_size<frozenchars::PerfectMapConstReference<T>>
+  : integral_constant<std::size_t, 2> {
+};
+
+template <typename T>
+struct tuple_element<0, frozenchars::PerfectMapReference<T>> {
+  using type = std::string_view;
+};
+
+template <typename T>
+struct tuple_element<1, frozenchars::PerfectMapReference<T>> {
+  using type = T&;
+};
+
+template <typename T>
+struct tuple_element<0, frozenchars::PerfectMapConstReference<T>> {
+  using type = std::string_view;
+};
+
+template <typename T>
+struct tuple_element<1, frozenchars::PerfectMapConstReference<T>> {
+  using type = T const&;
+};
+
+} // namespace std
