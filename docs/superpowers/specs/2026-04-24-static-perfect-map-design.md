@@ -20,6 +20,7 @@ STL 風コンテナを追加したい。
 5. `operator[](std::string_view)` の未存在キー時は `std::out_of_range` を送出する
 6. 値格納順は宣言順ではなく「完全ハッシュ後のスロット順」とする
 7. 値の初期化はデフォルト構築と `std::array<T, N>` 受け取りの両方を提供する
+8. `Keys...` が空のインスタンス化は許可せず、コンパイルエラーにする
 
 ## Approved API
 
@@ -44,6 +45,9 @@ class StaticPerfectMap {
 };
 ```
 
+デフォルトコンストラクタは `T` が default-initializable な場合のみ提供し、
+そうでない型は `std::array` コンストラクタ経由でのみ構築可能にする。
+
 ## Compile-time design
 
 ### Key metadata
@@ -54,15 +58,22 @@ class StaticPerfectMap {
 
 ### Hash function
 
-- FNV-1a を `constexpr` / `consteval` で実装する
-- seed は offset basis への加算または XOR のような単純合成で注入する
-- コンパイル時探索では `hash(key, seed) % N` が全キーで一意になる seed を総当たりする
+- 64-bit FNV-1a を `constexpr` / `consteval` で実装する
+- 基本定数は offset basis = `14695981039346656037ull`、
+  prime = `1099511628211ull` を使う
+- seed 注入式は `hash = offset_basis ^ seed` から開始し、
+  各文字に対して `hash ^= unsigned_char; hash *= prime;` を行う
+- seed 型は `std::uint32_t` とし、`0` から `k_max_seed = 1'000'000` まで昇順で総当たりする
+- コンパイル時探索では `hash(key, seed) % N` が全キーで一意になる最初の seed を採用する
 
 ### Validation
 
 - 先に全キー同士の文字列比較で重複キーを検出する
 - 次に seed を探索する
+- `sizeof...(Keys) == 0` は最初に拒否する
 - どちらかに失敗した場合は `static_assert` または即時関数内の失敗でコンパイルを止める
+- seed 探索は `detail::find_seed<MaxSeed, Keys...>()` のような detail helper に分離し、
+  公開クラスは `MaxSeed = 1'000'000` を使う
 
 ## Runtime lookup design
 
@@ -70,6 +81,7 @@ class StaticPerfectMap {
 
 - 内部状態は `std::array<T, N> values_` のみ
 - `values_[slot]` が、その slot に割り当てられたキーの値を持つ
+- `std::array<T, N>` コンストラクタの入力順は **キー宣言順** とし、構築時に slot 順へ再配置する
 
 ### Lookup flow
 
@@ -92,8 +104,11 @@ class StaticPerfectMap {
 ## Example and coding requirements
 
 - 利用例は `"timeout"_fs` と `"retry"_fs` を使う `main` 関数を用意する
-- サンプル出力には `std::print` を使う
-- C++26 の placeholder variables を利用できる箇所では `_` を使う
+- サンプル出力の第一経路には `std::print` を使う
+- ただしライブラリ本体は `<print>` に依存させず、`std::print` 非対応ツールチェインでは
+  サンプル出力だけを条件付きで代替できる構成にする
+- C++26 の placeholder variable `_` は、サンプルやテスト内の「意図的に使わない局所変数/束縛」に限定して使う
+- コンテナ API や完全ハッシュ本体の成立要件を `_` へ依存させない
 - Doxygen 日本語コメント、2 スペース、snake_case を守る
 - `constexpr` / `noexcept` / `const` は可能な限り付与する
 
@@ -104,6 +119,14 @@ class StaticPerfectMap {
 3. 値更新: `operator[]` 経由の更新が反映される
 4. 初期化: デフォルト構築と `std::array` コンストラクタの両方が動く
 5. compile-time guarantees: 重複キーと seed 未発見ケースを個別に検証できる形へ設計する
+6. `std::array` コンストラクタが宣言順入力を正しい slot に再配置する
+
+## Compile-fail testing note
+
+重複キー、空キー集合、seed 未発見のような compile-fail 系は通常テストとは分離し、
+少なくとも `try_compile` 相当で個別確認できる形にする。
+`seed 未発見` は公開 API を増やさず、`detail::find_seed<0, Keys...>()` のような
+detail helper をテスト専用に直接インスタンス化して決定的に失敗させる。
 
 ## Non-goals
 
