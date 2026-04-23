@@ -5,7 +5,7 @@
 #endif
 
 #include "frozenchars.hpp"
-#include "frozenchars/static_perfect_map.hpp"
+#include "frozenchars/perfect_map.hpp"
 
 int main() {
   auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars::Hex(255));
@@ -19,7 +19,7 @@ int main() {
   static_assert(removed.sv() == "value  end");
   static_assert(removed_pipe.sv() == "value  end");
 
-  frozenchars::StaticPerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+  frozenchars::PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
   map["timeout"] = 30;
   map["retry"] = 5;
 

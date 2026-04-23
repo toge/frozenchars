@@ -49,9 +49,9 @@ consteval auto has_duplicate_keys() -> bool {
 template <std::uint32_t MaxSeedExclusive, FrozenString... Keys>
 consteval auto find_seed() -> std::uint32_t {
   static_assert(!has_duplicate_keys<Keys...>(),
-    "StaticPerfectMap keys must be unique");
+    "PerfectMap keys must be unique");
   static_assert(MaxSeedExclusive > 0,
-    "StaticPerfectMap seed search exhausted");
+    "PerfectMap seed search exhausted");
 
   constexpr std::array key_views{
     std::string_view{Keys.buffer.data(), Keys.length}...
@@ -76,19 +76,19 @@ consteval auto find_seed() -> std::uint32_t {
     }
   }
 
-  throw "StaticPerfectMap seed search exhausted";
+  throw "PerfectMap seed search exhausted";
 }
 
 } // namespace detail
 
 template <typename T, FrozenString... Keys>
-class StaticPerfectMap {
+class PerfectMap {
  public:
   /**
    * @brief 固定キー集合の要素数を返す
    * @return std::size_t キー数
    */
-  static_assert(sizeof...(Keys) > 0, "StaticPerfectMap requires at least one key");
+  static_assert(sizeof...(Keys) > 0, "PerfectMap requires at least one key");
 
   static constexpr auto size() noexcept -> std::size_t {
     return sizeof...(Keys);
@@ -97,14 +97,14 @@ class StaticPerfectMap {
   /**
    * @brief 値をデフォルト構築してマップを初期化する
    */
-  constexpr StaticPerfectMap() noexcept
+  constexpr PerfectMap() noexcept
     requires std::default_initializable<T> = default;
 
   /**
    * @brief 宣言順の値配列からマップを初期化する
    * @param values キー宣言順に並んだ値配列
    */
-  constexpr explicit StaticPerfectMap(std::array<T, size()> values) noexcept(
+  constexpr explicit PerfectMap(std::array<T, size()> values) noexcept(
       std::is_nothrow_move_constructible_v<T>)
   : values_{reorder_to_slots(std::move(values), std::make_index_sequence<size()>{})} {
   }
@@ -155,7 +155,7 @@ class StaticPerfectMap {
     if (auto value = at(key); value.has_value()) [[likely]] {
       return value->get();
     }
-    throw std::out_of_range("StaticPerfectMap key not found");
+    throw std::out_of_range("PerfectMap key not found");
   }
 
   /**
@@ -167,7 +167,7 @@ class StaticPerfectMap {
     if (auto value = at(key); value.has_value()) [[likely]] {
       return value->get();
     }
-    throw std::out_of_range("StaticPerfectMap key not found");
+    throw std::out_of_range("PerfectMap key not found");
   }
 
  private:

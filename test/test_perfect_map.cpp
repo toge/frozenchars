@@ -4,21 +4,21 @@
 #include <tuple>
 
 #include "frozenchars/literals.hpp"
-#include "frozenchars/static_perfect_map.hpp"
+#include "frozenchars/perfect_map.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-TEST_CASE("StaticPerfectMap basic shape", "[static_perfect_map]") {
-  StaticPerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("PerfectMap basic shape", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
 
-  static_assert(StaticPerfectMap<int, "timeout"_fs, "retry"_fs>::size() == 2);
+  static_assert(PerfectMap<int, "timeout"_fs, "retry"_fs>::size() == 2);
   REQUIRE(map.contains("timeout"));
   REQUIRE(map.contains("retry"));
   REQUIRE_FALSE(map.contains("other"));
 }
 
-TEST_CASE("StaticPerfectMap derives compile-time seed metadata", "[static_perfect_map]") {
+TEST_CASE("PerfectMap derives compile-time seed metadata", "[perfect_map]") {
   static_assert(detail::fnv1a_hash("timeout", 0) == 6954259676504937608ull);
   static_assert(detail::find_seed<1'000'001, "timeout"_fs, "retry"_fs, "backoff"_fs>() == 13u);
   static_assert(detail::fnv1a_hash("timeout", 13) % 3 == 0);
@@ -26,8 +26,8 @@ TEST_CASE("StaticPerfectMap derives compile-time seed metadata", "[static_perfec
   static_assert(detail::fnv1a_hash("backoff", 13) % 3 == 1);
 }
 
-TEST_CASE("StaticPerfectMap lookup and miss handling", "[static_perfect_map]") {
-  StaticPerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("PerfectMap lookup and miss handling", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
 
   map["timeout"] = 30;
   map["retry"] = 5;
@@ -51,8 +51,8 @@ struct NoDefault {
 
 } // namespace
 
-TEST_CASE("StaticPerfectMap supports declaration-order initialization", "[static_perfect_map]") {
-  StaticPerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("PerfectMap supports declaration-order initialization", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     std::array<int, 3>{30, 7, 2}
   };
 
@@ -61,8 +61,8 @@ TEST_CASE("StaticPerfectMap supports declaration-order initialization", "[static
   REQUIRE(map["backoff"] == 2);
 }
 
-TEST_CASE("StaticPerfectMap const access returns const references", "[static_perfect_map]") {
-  auto const map = StaticPerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
+TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {
+  auto const map = PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
     std::array<int, 3>{30, 7, 2}
   };
 
@@ -71,10 +71,10 @@ TEST_CASE("StaticPerfectMap const access returns const references", "[static_per
   REQUIRE(map["timeout"] == 30);
 }
 
-static_assert(!std::default_initializable<StaticPerfectMap<NoDefault, "timeout"_fs>>);
+static_assert(!std::default_initializable<PerfectMap<NoDefault, "timeout"_fs>>);
 
-TEST_CASE("StaticPerfectMap example flow", "[static_perfect_map]") {
-  StaticPerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("PerfectMap example flow", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
   map["timeout"] = 30;
   map["retry"] = 5;
 

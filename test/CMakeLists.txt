@@ -22,20 +22,20 @@ add_test(NAME example_smoke COMMAND example_smoke)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
-assert_static_perfect_map_compile_fail(
-  NAME static_perfect_map_duplicate_keys
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/static_perfect_map_duplicate_keys.cpp
-  EXPECTED_TEXT "StaticPerfectMap keys must be unique"
+assert_perfect_map_compile_fail(
+  NAME perfect_map_duplicate_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_duplicate_keys.cpp
+  EXPECTED_TEXT "PerfectMap keys must be unique"
 )
 
-assert_static_perfect_map_compile_fail(
-  NAME static_perfect_map_empty_keys
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/static_perfect_map_empty_keys.cpp
-  EXPECTED_TEXT "StaticPerfectMap requires at least one key"
+assert_perfect_map_compile_fail(
+  NAME perfect_map_empty_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_empty_keys.cpp
+  EXPECTED_TEXT "PerfectMap requires at least one key"
 )
 
-assert_static_perfect_map_compile_fail(
-  NAME static_perfect_map_seed_limit_zero
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/static_perfect_map_seed_limit_zero.cpp
-  EXPECTED_TEXT "StaticPerfectMap seed search exhausted"
+assert_perfect_map_compile_fail(
+  NAME perfect_map_seed_limit_zero
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_seed_limit_zero.cpp
+  EXPECTED_TEXT "PerfectMap seed search exhausted"
 )
