@@ -1,5 +1,4 @@
 #include <iostream>
-#include <tuple>
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
 #include <print>
 #endif
@@ -23,19 +22,27 @@ int main() {
   map["timeout"] = 30;
   map["retry"] = 5;
 
-  auto const pair = std::tuple{map["timeout"], map["retry"]};
-#if defined(__cpp_placeholder_variables) && __cpp_placeholder_variables >= 202306L
-  auto const [timeout, _] = pair;
-#else
-  auto const timeout = std::get<0>(pair);
-#endif
-
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
-  std::print("{}\n{}\ntimeout={}, retry={}\n", msg.sv(), removed.sv(), timeout, map["retry"]);
+  std::print("{}\n{}\n", msg.sv(), removed.sv());
+  if (auto const it = map.find("timeout"); it != map.end()) {
+    auto const [key, value] = *it;
+    std::print("{}={}\n", key, value);
+  }
+  for (auto it = map.begin(); it != map.end(); it++) {
+    auto const [key, value] = *it;
+    std::print("{}={}\n", key, value);
+  }
 #else
   std::cout << msg.sv() << '\n';
   std::cout << removed.sv() << '\n';
-  std::cout << "timeout=" << timeout << ", retry=" << map["retry"] << '\n';
+  if (auto const it = map.find("timeout"); it != map.end()) {
+    auto const [key, value] = *it;
+    std::cout << key << '=' << value << '\n';
+  }
+  for (auto it = map.begin(); it != map.end(); it++) {
+    auto const [key, value] = *it;
+    std::cout << key << '=' << value << '\n';
+  }
 #endif
   return 0;
 }

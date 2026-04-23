@@ -154,3 +154,21 @@ TEST_CASE("PerfectMap const iteration uses cbegin and cend", "[perfect_map]") {
   REQUIRE_FALSE(key.empty());
   REQUIRE((value == 30 || value == 7 || value == 2));
 }
+
+TEST_CASE("PerfectMap example supports find and iterator loops", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+  map["timeout"] = 30;
+  map["retry"] = 5;
+
+  auto const found = map.find("timeout");
+  REQUIRE(found != map.end());
+
+  auto total = 0;
+  for (auto it = map.begin(); it != map.end(); it++) {
+    auto const [key, value] = *it;
+    std::ignore = key;
+    total += value;
+  }
+
+  REQUIRE(total == 35);
+}

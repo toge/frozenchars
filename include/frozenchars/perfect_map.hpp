@@ -137,12 +137,32 @@ class PerfectMap {
 
     constexpr auto operator==(iterator const&) const noexcept -> bool = default;
     constexpr operator const_iterator() const noexcept;
+
+    /**
+     * @brief 現在位置のキーと値を参照する
+     * @return reference キーと値への proxy
+     */
     constexpr auto operator*() const noexcept -> reference {
       return reference{owner_->slot_key_views_[index_], owner_->values_[index_]};
     }
+
+    /**
+     * @brief イテレータを前進させる
+     * @return iterator& 更新後のイテレータ
+     */
     constexpr auto operator++() noexcept -> iterator& {
       ++index_;
       return *this;
+    }
+
+    /**
+     * @brief イテレータを前進させる
+     * @return iterator 更新前のイテレータ
+     */
+    constexpr auto operator++(int) noexcept -> iterator {
+      auto const current = *this;
+      ++(*this);
+      return current;
     }
 
    private:
@@ -163,12 +183,32 @@ class PerfectMap {
     using reference = PerfectMap::const_reference;
 
     constexpr auto operator==(const_iterator const&) const noexcept -> bool = default;
+
+    /**
+     * @brief 現在位置のキーと値を参照する const 版
+     * @return const_reference キーと値への proxy
+     */
     constexpr auto operator*() const noexcept -> reference {
       return reference{owner_->slot_key_views_[index_], owner_->values_[index_]};
     }
+
+    /**
+     * @brief イテレータを前進させる
+     * @return const_iterator& 更新後のイテレータ
+     */
     constexpr auto operator++() noexcept -> const_iterator& {
       ++index_;
       return *this;
+    }
+
+    /**
+     * @brief イテレータを前進させる
+     * @return const_iterator 更新前のイテレータ
+     */
+    constexpr auto operator++(int) noexcept -> const_iterator {
+      auto const current = *this;
+      ++(*this);
+      return current;
     }
 
    private:
@@ -196,10 +236,19 @@ class PerfectMap {
     return size();
   }
 
+  /**
+   * @brief 空コンテナかどうかを返す
+   * @return bool 常に false
+   */
   static constexpr auto empty() noexcept -> bool {
     return false;
   }
 
+  /**
+   * @brief キーに対応する要素を検索する
+   * @param key 検索対象キー
+   * @return iterator 見つかった要素、未存在なら end()
+   */
   constexpr auto find(std::string_view key) noexcept -> iterator {
     if (auto const slot = find_slot(key); slot.has_value()) {
       return iterator{this, *slot};
@@ -207,6 +256,11 @@ class PerfectMap {
     return end();
   }
 
+  /**
+   * @brief キーに対応する要素を検索する const 版
+   * @param key 検索対象キー
+   * @return const_iterator 見つかった要素、未存在なら end()
+   */
   constexpr auto find(std::string_view key) const noexcept -> const_iterator {
     if (auto const slot = find_slot(key); slot.has_value()) {
       return const_iterator{this, *slot};
@@ -214,30 +268,59 @@ class PerfectMap {
     return end();
   }
 
+  /**
+   * @brief キーの出現数を返す
+   * @param key 検索対象キー
+   * @return size_type 0 または 1
+   */
   constexpr auto count(std::string_view key) const noexcept -> size_type {
     return find_slot(key).has_value() ? 1uz : 0uz;
   }
 
+  /**
+   * @brief 先頭要素を指す iterator を返す
+   * @return iterator slot 順先頭
+   */
   constexpr auto begin() noexcept -> iterator {
     return iterator{this, 0};
   }
 
+  /**
+   * @brief 終端 iterator を返す
+   * @return iterator past-the-end iterator
+   */
   constexpr auto end() noexcept -> iterator {
     return iterator{this, size()};
   }
 
+  /**
+   * @brief 先頭要素を指す const_iterator を返す
+   * @return const_iterator slot 順先頭
+   */
   constexpr auto begin() const noexcept -> const_iterator {
     return const_iterator{this, 0};
   }
 
+  /**
+   * @brief 終端 const_iterator を返す
+   * @return const_iterator past-the-end iterator
+   */
   constexpr auto end() const noexcept -> const_iterator {
     return const_iterator{this, size()};
   }
 
+  /**
+   * @brief 先頭要素を指す const_iterator を返す
+   * @return const_iterator slot 順先頭
+   */
   constexpr auto cbegin() const noexcept -> const_iterator {
     return begin();
   }
 
+  /**
+   * @brief 終端 const_iterator を返す
+   * @return const_iterator past-the-end iterator
+   */
   constexpr auto cend() const noexcept -> const_iterator {
     return end();
   }
@@ -347,6 +430,7 @@ class PerfectMap {
   }
 
   static constexpr auto slot_key_views_ = make_slot_key_views();
+  // Iteration order is slot order, not declaration order.
 
   static consteval auto make_key_order_to_slot() -> std::array<std::size_t, size()> {
     std::array<std::size_t, size()> key_order_to_slot{};
