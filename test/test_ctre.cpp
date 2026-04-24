@@ -78,4 +78,14 @@ TEST_CASE("to_ctre<S>() template: shrink_to_fit と組み合わせ") {
   REQUIRE_FALSE(ctre::match<ctre_tmpl_hi>("hello"));
 }
 
+TEST_CASE("ctre_search<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_search<pattern>("abcdef"));
+}
+
+TEST_CASE("ctre_match<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_match<pattern>("abcde"));
+}
+
 #endif // __has_include(<ctll/fixed_string.hpp>)
