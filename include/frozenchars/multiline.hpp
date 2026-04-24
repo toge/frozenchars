@@ -383,4 +383,149 @@ auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
   return remove_empty_lines(FrozenString{str});
 }
 
+/**
+ * @brief 各行の先頭に文字列を追加する
+ *
+ * @tparam N 文字列の長さ
+ * @tparam M 接頭辞の長さ
+ * @param str 対象文字列
+ * @param prefix 接頭辞
+ * @return auto 変換文字列
+ */
+template <size_t N, size_t M>
+auto consteval prefix_lines(FrozenString<N> const& str, FrozenString<M> const& prefix) noexcept {
+  // 最大必要サイズの見積もり
+  // 各文字が改行の場合、全文字の前にprefixが付く可能性がある
+  constexpr auto OUT_CAP = N + (N * M);
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+
+  while (i < str.length) {
+    // 行の開始時にprefixを追加
+    for (auto const c : prefix.sv()) {
+      res.buffer[offset++] = c;
+    }
+
+    while (i < str.length && str.buffer[i] != '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+
+    if (i < str.length && str.buffer[i] == '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+  }
+
+  // 最後の文字が改行で終わっており、かつ文字列が空でない場合、
+  // whileループ内で最後の改行の後の「空の行」は処理されない。
+  // しかし、もし文字列が改行で終わっていない場合、最後の行は処理されている。
+  // 標準的な挙動として、末尾が改行で終わっている場合、その後に「行」があるとはみなさない。
+  // ただし、空文字列の場合は何も追加しない。
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N, size_t M>
+auto consteval prefix_lines(char const (&str)[N], char const (&prefix)[M]) noexcept {
+  return prefix_lines(FrozenString{str}, FrozenString{prefix});
+}
+
+/**
+ * @brief 各行の末尾に文字列を追加する
+ *
+ * @tparam N 文字列の長さ
+ * @tparam M 接尾辞の長さ
+ * @param str 対象文字列
+ * @param postfix 接尾辞
+ * @return auto 変換文字列
+ */
+template <size_t N, size_t M>
+auto consteval postfix_lines(FrozenString<N> const& str, FrozenString<M> const& postfix) noexcept {
+  constexpr auto OUT_CAP = N + (N * M);
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+
+  while (i < str.length) {
+    while (i < str.length && str.buffer[i] != '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+
+    // 行末にpostfixを追加
+    for (auto const c : postfix.sv()) {
+      res.buffer[offset++] = c;
+    }
+
+    if (i < str.length && str.buffer[i] == '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N, size_t M>
+auto consteval postfix_lines(char const (&str)[N], char const (&postfix)[M]) noexcept {
+  return postfix_lines(FrozenString{str}, FrozenString{postfix});
+}
+
+/**
+ * @brief 各行の先頭と末尾に文字列を追加する
+ *
+ * @tparam N 文字列の長さ
+ * @tparam M1 接頭辞の長さ
+ * @tparam M2 接尾辞の長さ
+ * @param str 対象文字列
+ * @param prefix 接頭辞
+ * @param postfix 接尾辞
+ * @return auto 変換文字列
+ */
+template <size_t N, size_t M1, size_t M2>
+auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M1> const& prefix, FrozenString<M2> const& postfix) noexcept {
+  constexpr auto OUT_CAP = N + (N * (M1 + M2));
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+
+  while (i < str.length) {
+    for (auto const c : prefix.sv()) {
+      res.buffer[offset++] = c;
+    }
+
+    while (i < str.length && str.buffer[i] != '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+
+    for (auto const c : postfix.sv()) {
+      res.buffer[offset++] = c;
+    }
+
+    if (i < str.length && str.buffer[i] == '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 各行の先頭と末尾に同じ文字列を追加する
+ *
+ * @tparam N 文字列の長さ
+ * @tparam M 囲む文字列の長さ
+ * @param str 対象文字列
+ * @param both 前後に付ける文字列
+ * @return auto 変換文字列
+ */
+template <size_t N, size_t M>
+auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M> const& both) noexcept {
+  return surround_lines(str, both, both);
+}
+
 } // namespace frozenchars

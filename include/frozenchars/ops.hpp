@@ -208,6 +208,39 @@ struct remove_empty_lines_adaptor : pipe_adaptor_base {
   }
 };
 
+template <size_t M>
+struct prefix_lines_adaptor : pipe_adaptor_base {
+  FrozenString<M> prefix;
+  constexpr prefix_lines_adaptor(FrozenString<M> p) noexcept : prefix(p) {}
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::prefix_lines(str, prefix);
+  }
+};
+
+template <size_t M>
+struct postfix_lines_adaptor : pipe_adaptor_base {
+  FrozenString<M> postfix;
+  constexpr postfix_lines_adaptor(FrozenString<M> p) noexcept : postfix(p) {}
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::postfix_lines(str, postfix);
+  }
+};
+
+template <size_t M1, size_t M2>
+struct surround_lines_adaptor : pipe_adaptor_base {
+  FrozenString<M1> prefix;
+  FrozenString<M2> postfix;
+  constexpr surround_lines_adaptor(FrozenString<M1> pr, FrozenString<M2> po) noexcept
+  : prefix(pr), postfix(po) {}
+
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::surround_lines(str, prefix, postfix);
+  }
+};
+
 struct url_encode_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -263,6 +296,26 @@ template <auto Pred> inline constexpr rtrim_adaptor<Pred> rtrim_if{};
 template <auto Pred> inline constexpr collapse_spaces_adaptor<Pred> collapse_spaces_if{};
 template <auto Pred> inline constexpr remove_leading_spaces_adaptor<Pred> remove_leading_spaces_if{};
 template <auto Pred> inline constexpr remove_trailing_spaces_adaptor<Pred> remove_trailing_spaces_if{};
+
+template <size_t M>
+consteval auto prefix_lines(FrozenString<M> const& prefix) noexcept {
+  return prefix_lines_adaptor<M>{prefix};
+}
+
+template <size_t M>
+consteval auto postfix_lines(FrozenString<M> const& postfix) noexcept {
+  return postfix_lines_adaptor<M>{postfix};
+}
+
+template <size_t M1, size_t M2>
+consteval auto surround_lines(FrozenString<M1> const& prefix, FrozenString<M2> const& postfix) noexcept {
+  return surround_lines_adaptor<M1, M2>{prefix, postfix};
+}
+
+template <size_t M>
+consteval auto surround_lines(FrozenString<M> const& both) noexcept {
+  return surround_lines_adaptor<M, M>{both, both};
+}
 
 consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};
