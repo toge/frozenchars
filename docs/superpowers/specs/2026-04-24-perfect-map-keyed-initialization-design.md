@@ -15,6 +15,7 @@
 - キーを明示しながら `PerfectMap` を初期化できるようにする
 - 指定順に依存せず、全キーをちょうど1回ずつ与えれば初期化できるようにする
 - 既存の compile-time perfect hash metadata と slot 配置ロジックを再利用する
+- `PerfectMap(std::array<T, N>)` と同様に、非デフォルト構築型や move-only 型でも keyed initialization を使えるようにする
 
 ## 非目標
 
@@ -35,7 +36,7 @@ constexpr PerfectMap() noexcept
 constexpr explicit PerfectMap(std::array<T, size()> values) noexcept(/* existing */);
 ```
 
-### 2. 内部用 keyed constructor の追加
+### 2. keyed constructor の追加
 
 `PerfectMap` に、キー付き初期値配列を受ける constructor を追加する。
 
@@ -49,7 +50,7 @@ struct PerfectMapEntry {
 constexpr explicit PerfectMap(std::array<PerfectMapEntry<T>, size()> entries);
 ```
 
-この constructor は公開 API だが、主な役割は helper からの受け口とする。利用者が直接使ってもよい。
+この constructor は公開 API に含める。ただし主な ergonomic entry point は `make_perfect_map(...)` とし、constructor は `std::array` から直接初期化したい利用者向けの低レベル入口として扱う。
 
 ### 3. helper 関数の追加
 
@@ -96,13 +97,15 @@ helper は各 entry のキーを `std::string_view` へ正規化し、値を `T`
 ### constructor 側
 
 - 既存の `key_views_`, `slot_for()`, `slot_key_views_` を流用する
-- `std::array<T, size()>` と `std::array<bool, size()>` をローカルに確保し、entry を1件ずつ検証しながら slot 順へ配置する
-- 最後に全 slot が埋まったことを確認して `values_` を初期化する
+- `T` を直接並べた未初期化配列は使わず、`std::array<std::optional<T>, size()>` と `std::array<bool, size()>` など、`T` のデフォルト構築を要求しない一時表現を使って entry を1件ずつ検証しながら slot 順へ配置する
+- 最後に全 slot が埋まったことを確認し、index sequence を使って `values_` を一括構築する
+- これにより、非デフォルト構築型と move-only 型の両方を既存 `std::array<T, N>` constructor と同様にサポートする
 
 ### helper 側
 
 - `sizeof...(EntryLike) == size()` を要求する
 - `get<0>` / `get<1>` または `std::get<0>` / `std::get<1>` で pair-like を読み出せる型を対象にする
+- 各 entry は forwarding で受け取り、value 側は `T` へ直接構築して move-only 型も通せるようにする
 - `std::array<PerfectMapEntry<T>, size()>` を構築して keyed constructor に委譲する
 
 ### 互換性
@@ -120,5 +123,7 @@ helper は各 entry のキーを `std::string_view` へ正規化し、値を `T`
 4. 重複キーで `std::invalid_argument`
 5. 不足キーで `std::invalid_argument`
 6. 既存の `PerfectMap()` と `PerfectMap(std::array<T, N>)` が引き続き動作する
+7. 非デフォルト構築型でも keyed initialization できる
+8. move-only 型でも `make_perfect_map(...)` が使える
 
 必要なら compile-fail ではなく runtime/`constexpr` テストで扱う。今回の不正ケースは runtime entry に依存するため、主に通常テストで検証する。
