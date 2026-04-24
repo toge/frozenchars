@@ -82,7 +82,7 @@ for (auto it = map.begin(); it != map.end(); ++it) {
 - compile-fail では既存の wrong arity ケースを維持しつつ、少なくとも以下を固定する:
   - key が `std::string_view` 非変換
   - value が `T` 非構築
-- compile-fail の期待診断は、wrong arity では既存の `"make_perfect_map requires exactly one entry per key"` を維持し、key/value 不適合は concept / constraint failure を含む診断文字列を検査対象にする
+- compile-fail の期待診断は、wrong arity では既存の `"make_perfect_map requires exactly one entry per key"` を維持し、key/value 不適合は cross-compiler で安定する独自 `static_assert` メッセージを追加してそれを検査対象にする
 
 ### 互換性
 
@@ -112,4 +112,14 @@ for (auto it = map.begin(); it != map.end(); ++it) {
 2. key 非変換
 3. value 非構築
 
-最終確認では既存の full test path を維持する。
+key/value 不適合の compile-fail では、compiler 依存の concept 診断ではなく、helper 側で明示した安定メッセージを検査する。
+
+この spec は、以前の `docs/superpowers/specs/2026-04-24-perfect-map-stl-surface-design.md` で non-goal 扱いだった iterator polish を上書きして追加する。
+
+最終確認では少なくとも以下を通す。
+
+1. `cmake -S . -B build`
+2. `cmake --build build --parallel 4`
+3. `./build/test/all_test "[perfect_map]"`
+4. `ctest --test-dir build --output-on-failure`
+5. `./test.sh`
