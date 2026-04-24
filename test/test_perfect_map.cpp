@@ -71,6 +71,16 @@ static_assert(std::default_initializable<
   PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator>);
 static_assert(std::default_initializable<
   PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator>);
+using IntPerfectMap = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+static_assert(requires { { IntPerfectMap::size() } -> std::same_as<IntPerfectMap::size_type>; });
+static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
+  { map.find("timeout") };
+  { cmap.find("timeout") };
+  { map.at("timeout") };
+  { cmap.at("timeout") };
+  { cmap.contains("timeout") } -> std::same_as<bool>;
+  { cmap.count("timeout") } -> std::same_as<IntPerfectMap::size_type>;
+});
 
 TEST_CASE("PerfectMap iterators model forward_iterator", "[perfect_map]") {
   using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
@@ -94,6 +104,30 @@ TEST_CASE("PerfectMap iterator operator-> exposes key and value", "[perfect_map]
   REQUIRE(it != map.end());
   REQUIRE(it->key == "timeout");
   REQUIRE(it->value == 30);
+}
+
+TEST_CASE("PerfectMap const_iterator operator-> exposes key and value", "[perfect_map]") {
+  auto const map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", 5},
+    std::pair{"timeout", 30}
+  );
+
+  auto it = map.find("timeout");
+  REQUIRE(it != map.end());
+  REQUIRE(it->key == "timeout");
+  REQUIRE(it->value == 30);
+}
+
+TEST_CASE("PerfectMap iterator operator-> preserves writable mapped access", "[perfect_map]") {
+  auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", 5},
+    std::pair{"timeout", 30}
+  );
+
+  auto it = map.find("timeout");
+  REQUIRE(it != map.end());
+  it->value += 7;
+  REQUIRE(map["timeout"] == 37);
 }
 
 namespace {
