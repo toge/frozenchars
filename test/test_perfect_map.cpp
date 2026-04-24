@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <concepts>
+#include <iterator>
 #include <ranges>
 #include <tuple>
 #include <utility>
@@ -64,6 +65,35 @@ TEST_CASE("PerfectMap supports find and count", "[perfect_map]") {
   REQUIRE(missing == map.end());
   REQUIRE(map.count("timeout") == 1);
   REQUIRE(map.count("missing") == 0);
+}
+
+static_assert(std::default_initializable<
+  PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator>);
+static_assert(std::default_initializable<
+  PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator>);
+
+TEST_CASE("PerfectMap iterators model forward_iterator", "[perfect_map]") {
+  using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+  static_assert(std::forward_iterator<Map::iterator>);
+  static_assert(std::forward_iterator<Map::const_iterator>);
+}
+
+TEST_CASE("PerfectMap default-constructed iterators compare equal by type", "[perfect_map]") {
+  using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+  REQUIRE(Map::iterator{} == Map::iterator{});
+  REQUIRE(Map::const_iterator{} == Map::const_iterator{});
+}
+
+TEST_CASE("PerfectMap iterator operator-> exposes key and value", "[perfect_map]") {
+  auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", 5},
+    std::pair{"timeout", 30}
+  );
+
+  auto it = map.find("timeout");
+  REQUIRE(it != map.end());
+  REQUIRE(it->key == "timeout");
+  REQUIRE(it->value == 30);
 }
 
 namespace {
@@ -229,6 +259,16 @@ TEST_CASE("PerfectMap make_perfect_map accepts pair-like entries", "[perfect_map
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     PairLikeEntry<int>{"retry", 5},
     PairLikeEntry<int>{"timeout", 30}
+  );
+
+  REQUIRE(map["timeout"] == 30);
+  REQUIRE(map["retry"] == 5);
+}
+
+TEST_CASE("PerfectMap make_perfect_map accepts std::tuple entries", "[perfect_map]") {
+  auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::tuple{"retry", 5},
+    std::tuple{"timeout", 30}
   );
 
   REQUIRE(map["timeout"] == 30);
