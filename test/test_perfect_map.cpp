@@ -235,6 +235,17 @@ TEST_CASE("PerfectMap make_perfect_map accepts pair-like entries", "[perfect_map
   REQUIRE(map["retry"] == 5);
 }
 
+TEST_CASE("PerfectMap example supports make_perfect_map", "[perfect_map]") {
+  auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", 5},
+    std::pair{"timeout", 30}
+  );
+
+  REQUIRE(map.find("timeout") != map.end());
+  REQUIRE(map["timeout"] == 30);
+  REQUIRE(map["retry"] == 5);
+}
+
 TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {
   auto const map = PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
     std::array<int, 3>{30, 7, 2}

@@ -18,9 +18,10 @@ int main() {
   static_assert(removed.sv() == "value  end");
   static_assert(removed_pipe.sv() == "value  end");
 
-  frozenchars::PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
-  map["timeout"] = 30;
-  map["retry"] = 5;
+  auto map = frozenchars::make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", 5},
+    std::pair{"timeout", 30}
+  );
 
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
   std::print("{}\n{}\n", msg.sv(), removed.sv());
