@@ -112,6 +112,30 @@ TEST_CASE("PerfectMap make_perfect_map builds from pair-like entries", "[perfect
   REQUIRE(map["retry"] == 5);
 }
 
+TEST_CASE("PerfectMap keyed initialization rejects unknown keys", "[perfect_map]") {
+  REQUIRE_THROWS_AS(
+    (PerfectMap<int, "timeout"_fs, "retry"_fs>{
+      std::array{
+        PerfectMapEntry<int>{"timeout", 30},
+        PerfectMapEntry<int>{"other", 5},
+      }
+    }),
+    std::invalid_argument
+  );
+}
+
+TEST_CASE("PerfectMap keyed initialization rejects duplicate keys", "[perfect_map]") {
+  REQUIRE_THROWS_AS(
+    (PerfectMap<int, "timeout"_fs, "retry"_fs>{
+      std::array{
+        PerfectMapEntry<int>{"timeout", 30},
+        PerfectMapEntry<int>{"timeout", 5},
+      }
+    }),
+    std::invalid_argument
+  );
+}
+
 TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {
   auto const map = PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
     std::array<int, 3>{30, 7, 2}

@@ -476,9 +476,26 @@ class PerfectMap {
   static constexpr auto stage_keyed_entries(std::array<PerfectMapEntry<T>, size()> entries)
       -> std::array<std::optional<T>, size()> {
     std::array<std::optional<T>, size()> staged{};
+    std::array<bool, size()> seen{};
+
     for (auto& entry : entries) {
-      staged[slot_for(entry.key)].emplace(std::move(entry.value));
+      auto const slot = find_slot(entry.key);
+      if (!slot.has_value()) {
+        throw std::invalid_argument("PerfectMap key not found during initialization");
+      }
+      if (seen[*slot]) {
+        throw std::invalid_argument("PerfectMap key specified more than once");
+      }
+      staged[*slot].emplace(std::move(entry.value));
+      seen[*slot] = true;
     }
+
+    for (auto const present : seen) {
+      if (!present) {
+        throw std::invalid_argument("PerfectMap requires every key to be initialized");
+      }
+    }
+
     return staged;
   }
 
