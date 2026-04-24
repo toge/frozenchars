@@ -76,7 +76,75 @@ struct NoDefault {
   int value;
 };
 
+struct MoveOnly {
+  explicit MoveOnly(int initial_value) noexcept
+  : value{initial_value} {
+  }
+
+  MoveOnly(MoveOnly&&) noexcept = default;
+  auto operator=(MoveOnly&&) noexcept -> MoveOnly& = default;
+  MoveOnly(MoveOnly const&) = delete;
+  auto operator=(MoveOnly const&) -> MoveOnly& = delete;
+
+  int value;
+};
+
+template <typename T>
+struct PairLikeEntry {
+  std::string_view key;
+  T value;
+};
+
+template <std::size_t I, typename T>
+constexpr decltype(auto) get(PairLikeEntry<T>& entry) noexcept {
+  static_assert(I < 2);
+  if constexpr (I == 0) {
+    return (entry.key);
+  } else {
+    return (entry.value);
+  }
+}
+
+template <std::size_t I, typename T>
+constexpr decltype(auto) get(PairLikeEntry<T> const& entry) noexcept {
+  static_assert(I < 2);
+  if constexpr (I == 0) {
+    return entry.key;
+  } else {
+    return (entry.value);
+  }
+}
+
+template <std::size_t I, typename T>
+constexpr decltype(auto) get(PairLikeEntry<T>&& entry) noexcept {
+  static_assert(I < 2);
+  if constexpr (I == 0) {
+    return std::move(entry.key);
+  } else {
+    return std::move(entry.value);
+  }
+}
+
 } // namespace
+
+namespace std {
+
+template <typename T>
+struct tuple_size<PairLikeEntry<T>>
+  : integral_constant<std::size_t, 2> {
+};
+
+template <typename T>
+struct tuple_element<0, PairLikeEntry<T>> {
+  using type = std::string_view;
+};
+
+template <typename T>
+struct tuple_element<1, PairLikeEntry<T>> {
+  using type = T;
+};
+
+} // namespace std
 
 TEST_CASE("PerfectMap supports declaration-order initialization", "[perfect_map]") {
   PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
@@ -134,6 +202,37 @@ TEST_CASE("PerfectMap keyed initialization rejects duplicate keys", "[perfect_ma
     }),
     std::invalid_argument
   );
+}
+
+TEST_CASE("PerfectMap keyed initialization supports non-default-constructible values",
+    "[perfect_map]") {
+  auto map = make_perfect_map<NoDefault, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", NoDefault{5}},
+    std::pair{"timeout", NoDefault{30}}
+  );
+
+  REQUIRE(map["timeout"].value == 30);
+  REQUIRE(map["retry"].value == 5);
+}
+
+TEST_CASE("PerfectMap keyed initialization supports move-only values", "[perfect_map]") {
+  auto map = make_perfect_map<MoveOnly, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", MoveOnly{5}},
+    std::pair{"timeout", MoveOnly{30}}
+  );
+
+  REQUIRE(map["timeout"].value == 30);
+  REQUIRE(map["retry"].value == 5);
+}
+
+TEST_CASE("PerfectMap make_perfect_map accepts pair-like entries", "[perfect_map]") {
+  auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    PairLikeEntry<int>{"retry", 5},
+    PairLikeEntry<int>{"timeout", 30}
+  );
+
+  REQUIRE(map["timeout"] == 30);
+  REQUIRE(map["retry"] == 5);
 }
 
 TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {

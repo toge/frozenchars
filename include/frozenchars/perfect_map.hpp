@@ -17,6 +17,9 @@
 
 namespace frozenchars {
 
+template <typename T>
+struct PerfectMapEntry;
+
 namespace detail {
 
 inline constexpr auto k_fnv_offset_basis = 14695981039346656037ull;
@@ -79,6 +82,36 @@ consteval auto find_seed() -> std::uint32_t {
   }
 
   throw "PerfectMap seed search exhausted";
+}
+
+template <typename EntryLike>
+concept PairLikeEntry = requires {
+  typename std::tuple_size<std::remove_cvref_t<EntryLike>>::type;
+  requires std::tuple_size_v<std::remove_cvref_t<EntryLike>> == 2;
+};
+
+template <std::size_t Index, typename EntryLike>
+constexpr decltype(auto) pair_like_get(EntryLike&& entry) {
+  using std::get;
+  return get<Index>(std::forward<EntryLike>(entry));
+}
+
+template <typename T, typename EntryLike>
+concept PerfectMapEntryLike =
+    PairLikeEntry<EntryLike> &&
+    requires(EntryLike&& entry) {
+      { pair_like_get<0>(std::forward<EntryLike>(entry)) }
+        -> std::convertible_to<std::string_view>;
+      T{pair_like_get<1>(std::forward<EntryLike>(entry))};
+    };
+
+template <typename T, typename EntryLike>
+  requires PerfectMapEntryLike<T, EntryLike>
+constexpr auto to_perfect_map_entry(EntryLike&& entry) -> PerfectMapEntry<T> {
+  return PerfectMapEntry<T>{
+    std::string_view{pair_like_get<0>(std::forward<EntryLike>(entry))},
+    T{pair_like_get<1>(std::forward<EntryLike>(entry))}
+  };
 }
 
 } // namespace detail
@@ -523,16 +556,14 @@ constexpr PerfectMap<T, Keys...>::iterator::operator
  * @return PerfectMap<T, Keys...> 初期化済みマップ
  */
 template <typename T, FrozenString... Keys, typename... EntryLike>
+  requires (detail::PerfectMapEntryLike<T, EntryLike> && ...)
 constexpr auto make_perfect_map(EntryLike&&... entries) -> PerfectMap<T, Keys...> {
   static_assert(sizeof...(EntryLike) == sizeof...(Keys),
     "make_perfect_map requires exactly one entry per key");
 
   return PerfectMap<T, Keys...>{
     std::array<PerfectMapEntry<T>, sizeof...(Keys)>{
-      PerfectMapEntry<T>{
-        std::string_view{std::get<0>(std::forward<EntryLike>(entries))},
-        T{std::get<1>(std::forward<EntryLike>(entries))}
-      }...
+      detail::to_perfect_map_entry<T>(std::forward<EntryLike>(entries))...
     }
   };
 }
