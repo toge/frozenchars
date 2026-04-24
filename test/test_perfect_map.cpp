@@ -3,6 +3,7 @@
 #include <concepts>
 #include <ranges>
 #include <tuple>
+#include <utility>
 
 #include "frozenchars/literals.hpp"
 #include "frozenchars/perfect_map.hpp"
@@ -85,6 +86,30 @@ TEST_CASE("PerfectMap supports declaration-order initialization", "[perfect_map]
   REQUIRE(map["timeout"] == 30);
   REQUIRE(map["retry"] == 7);
   REQUIRE(map["backoff"] == 2);
+}
+
+TEST_CASE("PerfectMap supports keyed entry initialization", "[perfect_map]") {
+  PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    std::array{
+      PerfectMapEntry<int>{"retry", 7},
+      PerfectMapEntry<int>{"backoff", 2},
+      PerfectMapEntry<int>{"timeout", 30},
+    }
+  };
+
+  REQUIRE(map["timeout"] == 30);
+  REQUIRE(map["retry"] == 7);
+  REQUIRE(map["backoff"] == 2);
+}
+
+TEST_CASE("PerfectMap make_perfect_map builds from pair-like entries", "[perfect_map]") {
+  auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", 5},
+    std::pair{"timeout", 30}
+  );
+
+  REQUIRE(map["timeout"] == 30);
+  REQUIRE(map["retry"] == 5);
 }
 
 TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {

@@ -84,6 +84,12 @@ consteval auto find_seed() -> std::uint32_t {
 } // namespace detail
 
 template <typename T>
+struct PerfectMapEntry {
+  std::string_view key;
+  T value;
+};
+
+template <typename T>
 struct PerfectMapReference {
   std::string_view key;
   T& value;
@@ -341,6 +347,16 @@ class PerfectMap {
   }
 
   /**
+   * @brief キー付きの値配列からマップを初期化する
+   * @param entries キーと値の組を含む配列
+   */
+  constexpr explicit PerfectMap(std::array<PerfectMapEntry<T>, size()> entries)
+  : values_{materialize_staged_values(
+      stage_keyed_entries(std::move(entries)),
+      std::make_index_sequence<size()>{})} {
+  }
+
+  /**
    * @brief キーが存在するか判定する
    * @param key 検索対象キー
    * @return bool 存在する場合 true
@@ -457,6 +473,22 @@ class PerfectMap {
     return {std::move(values[slot_to_key_order[SlotIndex]])...};
   }
 
+  static constexpr auto stage_keyed_entries(std::array<PerfectMapEntry<T>, size()> entries)
+      -> std::array<std::optional<T>, size()> {
+    std::array<std::optional<T>, size()> staged{};
+    for (auto& entry : entries) {
+      staged[slot_for(entry.key)].emplace(std::move(entry.value));
+    }
+    return staged;
+  }
+
+  template <std::size_t... Index>
+  static constexpr auto materialize_staged_values(
+      std::array<std::optional<T>, size()> staged,
+      std::index_sequence<Index...>) -> std::array<T, size()> {
+    return {std::move(*staged[Index])...};
+  }
+
   std::array<T, size()> values_{};
 };
 
@@ -464,6 +496,28 @@ template <typename T, FrozenString... Keys>
 constexpr PerfectMap<T, Keys...>::iterator::operator
     PerfectMap<T, Keys...>::const_iterator() const noexcept {
   return typename PerfectMap<T, Keys...>::const_iterator{owner_, index_};
+}
+
+/**
+ * @brief pair-like なエントリ列から PerfectMap を構築する
+ * @tparam T 値型
+ * @tparam Keys 固定キー列
+ * @param entries キーと値の組
+ * @return PerfectMap<T, Keys...> 初期化済みマップ
+ */
+template <typename T, FrozenString... Keys, typename... EntryLike>
+constexpr auto make_perfect_map(EntryLike&&... entries) -> PerfectMap<T, Keys...> {
+  static_assert(sizeof...(EntryLike) == sizeof...(Keys),
+    "make_perfect_map requires exactly one entry per key");
+
+  return PerfectMap<T, Keys...>{
+    std::array<PerfectMapEntry<T>, sizeof...(Keys)>{
+      PerfectMapEntry<T>{
+        std::string_view{std::get<0>(std::forward<EntryLike>(entries))},
+        T{std::get<1>(std::forward<EntryLike>(entries))}
+      }...
+    }
+  };
 }
 
 } // namespace frozenchars
