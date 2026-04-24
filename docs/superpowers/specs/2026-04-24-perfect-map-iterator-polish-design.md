@@ -61,7 +61,9 @@ for (auto it = map.begin(); it != map.end(); ++it) {
 - `at`
 - `contains`
 - `count`
-- 必要なら `size` / `max_size` / `empty` も同様に扱う
+- `size`
+- `max_size`
+- `empty`
 
 ## 実装方針
 
@@ -97,7 +99,7 @@ for (auto it = map.begin(); it != map.end(); ++it) {
 `test/test_perfect_map.cpp` に以下を追加する。
 
 1. `static_assert(std::forward_iterator<...>)`
-2. default-constructed iterator / const_iterator が比較可能
+2. default-constructed iterator / const_iterator がそれぞれ同種比較可能
 3. `it->key` / `it->value` が動作する
 4. `std::tuple{...}` でも `make_perfect_map(...)` が通る
 5. custom tuple-protocol type でも `make_perfect_map(...)` が通る
