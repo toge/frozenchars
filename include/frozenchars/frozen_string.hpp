@@ -16,6 +16,10 @@ namespace frozenchars {
  */
 template <size_t N>
 struct FrozenString {
+  // buffer は常にゼロ初期化されることを保証する
+  static_assert(std::is_trivially_default_constructible_v<std::array<char, 1>>,
+    "buffer zero-initialization relies on aggregate initialization");
+
   std::array<char, N> buffer{};
   size_t length{N > 0 ? N - 1 : 0};
 
@@ -27,6 +31,8 @@ struct FrozenString {
     }
   }
 
+  // @note buffer はメンバ初期化子 {} によりゼロ初期化済み。
+  //       copy_len 以降の要素は明示的に書かないが、値は保証された '\0' のまま。
   template <size_t M>
   consteval FrozenString(FrozenString<M> const& other) noexcept
   : length{std::min(other.length, N > 0 ? N - 1 : 0)} {

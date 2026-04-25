@@ -528,4 +528,14 @@ auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M> const&
   return surround_lines(str, both, both);
 }
 
+template <size_t N, size_t M1, size_t M2>
+auto consteval surround_lines(char const (&str)[N], char const (&prefix)[M1], char const (&postfix)[M2]) noexcept {
+  return surround_lines(FrozenString{str}, FrozenString{prefix}, FrozenString{postfix});
+}
+
+template <size_t N, size_t M>
+auto consteval surround_lines(char const (&str)[N], char const (&both)[M]) noexcept {
+  return surround_lines(FrozenString{str}, FrozenString{both});
+}
+
 } // namespace frozenchars

@@ -11,6 +11,38 @@
 
 namespace frozenchars {
 
+namespace detail {
+
+template <std::integral T>
+constexpr auto checked_mul(T a, T b, T& result) noexcept -> bool {
+  if (b != 0 && a > std::numeric_limits<T>::max() / b) {
+    return true; // overflow
+  }
+  if (b != 0 && a < std::numeric_limits<T>::min() / b) {
+    return true; // underflow
+  }
+  result = a * b;
+  return false;
+}
+
+template <std::integral T>
+constexpr auto checked_add(T a, T b, T& result) noexcept -> bool {
+  if (b > 0 && a > std::numeric_limits<T>::max() - b) { return true; }
+  if (b < 0 && a < std::numeric_limits<T>::min() - b) { return true; }
+  result = a + b;
+  return false;
+}
+
+template <std::integral T>
+constexpr auto checked_sub(T a, T b, T& result) noexcept -> bool {
+  if (b < 0 && a > std::numeric_limits<T>::max() + b) { return true; }
+  if (b > 0 && a < std::numeric_limits<T>::min() + b) { return true; }
+  result = a - b;
+  return false;
+}
+
+} // namespace detail
+
 /**
  * @brief 文字列を数値に変換する
  *
@@ -72,11 +104,11 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
       if (digit >= base) throw std::invalid_argument("digit out of base range");
 
       if (neg) {
-        if (__builtin_mul_overflow(res, static_cast<T>(base), &res) || __builtin_sub_overflow(res, static_cast<T>(digit), &res)) {
+        if (detail::checked_mul(res, static_cast<T>(base), res) || detail::checked_sub(res, static_cast<T>(digit), res)) {
           throw std::out_of_range("overflow");
         }
       } else {
-        if (__builtin_mul_overflow(res, static_cast<T>(base), &res) || __builtin_add_overflow(res, static_cast<T>(digit), &res)) {
+        if (detail::checked_mul(res, static_cast<T>(base), res) || detail::checked_add(res, static_cast<T>(digit), res)) {
           throw std::out_of_range("overflow");
         }
       }
@@ -112,7 +144,7 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
       int exp = 0;
       bool has_exp_digits = false;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-        if (__builtin_mul_overflow(exp, 10, &exp) || __builtin_add_overflow(exp, static_cast<int>(sv[i] - '0'), &exp)) {
+        if (detail::checked_mul(exp, 10, exp) || detail::checked_add(exp, static_cast<int>(sv[i] - '0'), exp)) {
           exp = 1000; // Force overflow later
         }
         ++i;

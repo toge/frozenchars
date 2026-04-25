@@ -577,7 +577,8 @@ class PerfectMap {
   template <std::size_t... SlotIndex>
   static constexpr auto reorder_to_slots(
       std::array<T, size()> values,
-      std::index_sequence<SlotIndex...>) -> std::array<T, size()> {
+      std::index_sequence<SlotIndex...>) noexcept(std::is_nothrow_move_constructible_v<T>)
+      -> std::array<T, size()> {
     constexpr auto slot_to_key_order = make_slot_to_key_order();
     return {std::move(values[slot_to_key_order[SlotIndex]])...};
   }
@@ -611,7 +612,8 @@ class PerfectMap {
   template <std::size_t... Index>
   static constexpr auto materialize_staged_values(
       std::array<std::optional<T>, size()> staged,
-      std::index_sequence<Index...>) -> std::array<T, size()> {
+      std::index_sequence<Index...>) noexcept(std::is_nothrow_move_constructible_v<T>)
+      -> std::array<T, size()> {
     return {std::move(*staged[Index])...};
   }
 

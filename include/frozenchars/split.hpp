@@ -1,6 +1,7 @@
 #pragma once
 
 #include "frozen_string.hpp"
+#include "number_conv.hpp"
 #include "detail/split_impl.hpp"
 #include <array>
 #include <concepts>
@@ -131,38 +132,17 @@ auto consteval split() noexcept {
   return res;
 }
 
-// Simple integer parser to satisfy split_numbers
-namespace detail {
-  template <typename T, size_t N>
-  consteval T parse_int_simple(FrozenString<N> const& str) {
-    T res = 0;
-    bool neg = false;
-    size_t i = 0;
-    if (str.length > 0 && str.buffer[0] == '-') {
-      neg = true;
-      i = 1;
-    } else if (str.length > 0 && str.buffer[0] == '+') {
-      i = 1;
-    }
-    for (; i < str.length; ++i) {
-      if (str.buffer[i] < '0' || str.buffer[i] > '9') break;
-      res = res * 10 + (str.buffer[i] - '0');
-    }
-    return neg ? -res : res;
-  }
-}
-
 /**
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する
  */
-template <auto IsDelimiter = detail::is_any_whitespace, Numeric Int = int, size_t N>
+template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = int, size_t N>
 auto consteval split_numbers(FrozenString<N> const& str) {
   using Result = std::remove_cv_t<Int>;
   auto res = std::array<Result, N>{};
   auto const token_count = split_count<IsDelimiter>(str);
   auto const tokens = split<N, IsDelimiter>(str);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = detail::parse_int_simple<Result>(tokens[i]);
+    res[i] = frozenchars::parse_number<Result>(tokens[i]);
   }
   return res;
 }
@@ -170,14 +150,14 @@ auto consteval split_numbers(FrozenString<N> const& str) {
 /**
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する（実行時引数版）
  */
-template <typename Pred, Numeric Int = int, size_t N>
+template <typename Pred, ParseNumberTarget Int = int, size_t N>
 auto consteval split_numbers(FrozenString<N> const& str, Pred is_delimiter) {
   using Result = std::remove_cv_t<Int>;
   auto res = std::array<Result, N>{};
   auto const token_count = split_count(str, is_delimiter);
   auto const tokens = split<N>(str, is_delimiter);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = detail::parse_int_simple<Result>(tokens[i]);
+    res[i] = frozenchars::parse_number<Result>(tokens[i]);
   }
   return res;
 }
@@ -185,7 +165,7 @@ auto consteval split_numbers(FrozenString<N> const& str, Pred is_delimiter) {
 /**
  * @brief 文字列を空白区切りで分割し指定数値型配列へ変換する
  */
-template <Numeric Int, size_t N>
+template <ParseNumberTarget Int, size_t N>
 auto consteval split_numbers(FrozenString<N> const& str) {
   return split_numbers<detail::is_any_whitespace, Int>(str);
 }
@@ -193,7 +173,7 @@ auto consteval split_numbers(FrozenString<N> const& str) {
 /**
  * @brief 文字列リテラルを区切り判定関数で分割し数値配列へ変換する
  */
-template <auto IsDelimiter = detail::is_any_whitespace, Numeric Int = int, size_t N>
+template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = int, size_t N>
 auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<IsDelimiter, Int>(FrozenString{str});
 }
@@ -201,7 +181,7 @@ auto consteval split_numbers(char const (&str)[N]) noexcept {
 /**
  * @brief 文字列リテラルを空白区切りで分割し指定数値型配列へ変換する
  */
-template <Numeric Int, size_t N>
+template <ParseNumberTarget Int, size_t N>
 auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<detail::is_any_whitespace, Int>(FrozenString{str});
 }

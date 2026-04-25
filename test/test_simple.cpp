@@ -713,3 +713,21 @@ TEST_CASE("pipe operator join pad replace adaptors") {
     | fops::replace<"foo", "bar">;
   static_assert(replaced_fixed.sv() == "bar");
 }
+
+TEST_CASE("split_numbers float and double") {
+  auto constexpr fvalues = split_numbers<float>("1.5 -2.25 +3.0"_fs);
+  static_assert(fvalues[0] == 1.5f);
+  static_assert(fvalues[1] == -2.25f);
+  static_assert(fvalues[2] == 3.0f);
+  REQUIRE(fvalues[0] == 1.5f);
+  REQUIRE(fvalues[1] == -2.25f);
+  REQUIRE(fvalues[2] == 3.0f);
+
+  auto constexpr dvalues = split_numbers<is_comma, double>("1e2,-2.5e1,3.125"_fs);
+  static_assert(dvalues[0] == 100.0);
+  static_assert(dvalues[1] == -25.0);
+  static_assert(dvalues[2] == 3.125);
+  REQUIRE(dvalues[0] == 100.0);
+  REQUIRE(dvalues[1] == -25.0);
+  REQUIRE(dvalues[2] == 3.125);
+}
