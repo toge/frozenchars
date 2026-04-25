@@ -57,3 +57,9 @@ assert_perfect_map_compile_fail(
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_make_perfect_map_bad_value.cpp
   EXPECTED_TEXT "PerfectMap entry value must be constructible as mapped_type"
 )
+
+assert_perfect_map_compile_fail(
+  NAME join_lines_sep_too_long
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
+  EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
+)

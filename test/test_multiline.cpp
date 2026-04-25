@@ -158,6 +158,43 @@ TEST_CASE("join_lines") {
   REQUIRE(res_pipe_sep.sv() == "line1 line2   line3 line4");
 }
 
+TEST_CASE("join_lines NTTP version") {
+  using namespace frozenchars::literals;
+  namespace fops = frozenchars::ops;
+
+  // 基本動作
+  auto constexpr r1 = frozenchars::join_lines<", "_fs>("line1\nline2\nline3"_fs);
+  static_assert(r1.sv() == "line1, line2, line3");
+  REQUIRE(r1.sv() == "line1, line2, line3");
+
+  // 末尾改行あり
+  auto constexpr r2 = frozenchars::join_lines<" | "_fs>("a\nb\n"_fs);
+  static_assert(r2.sv() == "a | b");
+  REQUIRE(r2.sv() == "a | b");
+
+  // 空文字列
+  auto constexpr r3 = frozenchars::join_lines<","_fs>(""_fs);
+  static_assert(r3.sv() == "");
+  REQUIRE(r3.sv() == "");
+
+  // 1行のみ
+  auto constexpr r4 = frozenchars::join_lines<","_fs>("only"_fs);
+  static_assert(r4.sv() == "only");
+  REQUIRE(r4.sv() == "only");
+
+  // パイプ演算子
+  auto constexpr r5 = "line1\nline2"_fs | fops::join_lines_nttp<" :: "_fs>;
+  static_assert(r5.sv() == "line1 :: line2");
+  REQUIRE(r5.sv() == "line1 :: line2");
+
+  // 正確なバッファサイズ版
+  auto constexpr r6 = frozenchars::join_lines<"a\nb\nc"_fs, " | "_fs>();
+  static_assert(r6.sv() == "a | b | c");
+  static_assert(r6.length == 9uz);
+  // OUT_CAP (N) = length + 1 = 10
+  static_assert(sizeof(r6.buffer) == 10uz);
+}
+
 TEST_CASE("trim_trailing_spaces") {
   auto constexpr src = "line1  \nline2\t\nline3 "_fs;
   auto constexpr res = trim_trailing_spaces(src);

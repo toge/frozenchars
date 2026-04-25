@@ -185,12 +185,20 @@ struct join_lines_adaptor : pipe_adaptor_base {
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  consteval auto operator()(FrozenString<N> const& str) const {
     return frozenchars::join_lines(str, sep);
   }
 
   consteval auto operator()(std::string_view s) const noexcept {
     return join_lines_adaptor{s};
+  }
+};
+
+template <FrozenString Sep>
+struct join_lines_nttp_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::join_lines<Sep>(str);
   }
 };
 
@@ -280,6 +288,8 @@ inline constexpr to_snake_case_adaptor to_snake_case{};
 inline constexpr to_camel_case_adaptor to_camel_case{};
 inline constexpr to_pascal_case_adaptor to_pascal_case{};
 inline constexpr join_lines_adaptor join_lines{};
+template <FrozenString Sep>
+inline constexpr join_lines_nttp_adaptor<Sep> join_lines_nttp{};
 inline constexpr trim_trailing_spaces_adaptor trim_trailing_spaces{};
 inline constexpr remove_empty_lines_adaptor remove_empty_lines{};
 inline constexpr url_encode_adaptor url_encode{};

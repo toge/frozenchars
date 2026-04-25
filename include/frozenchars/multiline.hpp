@@ -1,10 +1,55 @@
 #pragma once
 
 #include "frozen_string.hpp"
+#include "string_ops.hpp"
 #include "detail/char_utils.hpp"
 #include <cstddef>
 #include <stdexcept>
 #include <string_view>
+
+namespace frozenchars::detail {
+
+/**
+ * @brief 文字列中の改行文字 '\n' の数を数える
+ *
+ * @tparam Str カウント対象の FrozenString 値
+ * @return std::size_t 改行文字の数
+ */
+template <auto Str>
+  requires is_frozen_string_v<decltype(Str)>
+consteval auto count_newlines() noexcept -> std::size_t {
+  auto count = 0uz;
+  for (auto i = 0uz; i < Str.length; ++i) {
+    if (Str.buffer[i] == '\n') {
+      ++count;
+    }
+  }
+  return count;
+}
+
+/**
+ * @brief join_lines で結合されたときの論理行数を返す
+ * 末尾が '\n' で終わる行は空行として数えない
+ *
+ * @tparam Str カウント対象の FrozenString 値
+ * @return std::size_t 論理行数
+ */
+template <auto Str>
+  requires is_frozen_string_v<decltype(Str)>
+consteval auto count_logical_lines() noexcept -> std::size_t {
+  if (Str.length == 0) {
+    return 0uz;
+  }
+  auto count = 1uz;
+  for (auto i = 0uz; i + 1 < Str.length; ++i) {
+    if (Str.buffer[i] == '\n') {
+      ++count;
+    }
+  }
+  return count;
+}
+
+} // namespace frozenchars::detail
 
 namespace frozenchars {
 
@@ -310,9 +355,12 @@ auto consteval remove_range_comments(char const (&str)[N], std::string_view star
  * @return auto 結合結果
  */
 template <size_t N>
-auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") noexcept {
+auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") {
   constexpr auto MAX_SEP_LEN = 32uz;
-  constexpr auto OUT_CAP = N + (N * MAX_SEP_LEN);
+  if (sep.size() > MAX_SEP_LEN) {
+    throw "join_lines: separator exceeds MAX_SEP_LEN (32). Use join_lines<Sep>(str) for longer separators.";
+  }
+  constexpr auto OUT_CAP = N + (N * MAX_SEP_LEN) + 1;
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -339,8 +387,72 @@ auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "")
 }
 
 template <size_t N>
-auto consteval join_lines(char const (&str)[N], std::string_view sep = "") noexcept {
+auto consteval join_lines(char const (&str)[N], std::string_view sep = "") {
   return join_lines(FrozenString{str}, sep);
+}
+
+/**
+ * @brief 文字列の全行を FrozenString セパレータで結合する（NTTP版）
+ *
+ * @tparam Sep セパレータ文字列（FrozenString NTTP）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 結合文字列
+ */
+template <auto Sep, size_t N>
+  requires detail::is_frozen_string_v<decltype(Sep)>
+auto consteval join_lines(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = N + (N * Sep.length) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto first_line = true;
+
+  while (i < str.length) {
+    if (!first_line) {
+      for (auto const c : Sep.sv()) {
+        res.buffer[offset++] = c;
+      }
+    }
+    while (i < str.length && str.buffer[i] != '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+    if (i < str.length && str.buffer[i] == '\n') {
+      ++i;
+    }
+    first_line = false;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列の全行を FrozenString セパレータで結合する（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 対象文字列（FrozenString NTTP）
+ * @tparam Sep セパレータ文字列（FrozenString NTTP）
+ * @return auto 結合文字列
+ */
+template <auto Str, auto Sep>
+  requires (detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(Sep)>)
+auto consteval join_lines() noexcept {
+  return shrink_to_fit<join_lines<Sep>(Str)>();
+}
+
+/**
+ * @brief 文字列リテラルの全行を FrozenString セパレータで結合する（NTTP版）
+ *
+ * @tparam Sep セパレータ文字列（FrozenString NTTP）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 結合文字列
+ */
+template <auto Sep, size_t N>
+  requires detail::is_frozen_string_v<decltype(Sep)>
+auto consteval join_lines(char const (&str)[N]) noexcept {
+  return join_lines<Sep>(FrozenString{str});
 }
 
 /**
