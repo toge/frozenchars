@@ -49,8 +49,10 @@ TEST_CASE("PerfectMap lookup and miss handling", "[perfect_map]") {
 
   REQUIRE(map["timeout"] == 30);
   REQUIRE(map["retry"] == 5);
-  REQUIRE(map.at("timeout")->get() == 30);
-  REQUIRE_FALSE(map.at("missing").has_value());
+  REQUIRE(map.at("timeout") == 30);
+  REQUIRE(map.get("timeout")->get() == 30);
+  REQUIRE_FALSE(map.get("missing").has_value());
+  REQUIRE_THROWS_AS(map.at("missing"), std::out_of_range);
   REQUIRE_THROWS_AS(map["missing"], std::out_of_range);
 }
 
@@ -76,8 +78,10 @@ static_assert(requires { { IntPerfectMap::size() } -> std::same_as<IntPerfectMap
 static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
   { map.find("timeout") };
   { cmap.find("timeout") };
-  { map.at("timeout") };
-  { cmap.at("timeout") };
+  { map.at("timeout") } -> std::same_as<int&>;
+  { cmap.at("timeout") } -> std::same_as<int const&>;
+  { map.get("timeout") } -> std::same_as<std::optional<std::reference_wrapper<int>>>;
+  { cmap.get("timeout") } -> std::same_as<std::optional<std::reference_wrapper<int const>>>;
   { cmap.contains("timeout") } -> std::same_as<bool>;
   { cmap.count("timeout") } -> std::same_as<IntPerfectMap::size_type>;
 });
@@ -325,8 +329,9 @@ TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {
     std::array<int, 3>{30, 7, 2}
   };
 
-  static_assert(std::same_as<decltype(map.at("timeout")->get()), int const&>);
-  REQUIRE(map.at("timeout")->get() == 30);
+  static_assert(std::same_as<decltype(map.at("timeout")), int const&>);
+  REQUIRE(map.at("timeout") == 30);
+  REQUIRE(map.get("timeout")->get() == 30);
   REQUIRE(map["timeout"] == 30);
 }
 
