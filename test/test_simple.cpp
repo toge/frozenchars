@@ -587,7 +587,7 @@ TEST_CASE("comment removal") {
   auto constexpr no_slash = remove_comments(no_hash, "//");
   auto constexpr no_range = remove_range_comments(no_slash, "/*", "*/");
   auto constexpr cleaned = remove_comment_lines(no_range, "#"); // Already handled but for test
-  
+
   (void)cleaned;
 }
 

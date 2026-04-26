@@ -445,7 +445,21 @@ auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_
 }
 
 /**
- * @brief 文字列の部分文字列を生成する（NTTP版）
+ * @brief 文字列の部分文字列を生成する（NTTP版・正確なサイズ）
+ *
+ * @tparam Str 対象文字列（FrozenString NTTP）
+ * @tparam Pos 開始位置
+ * @tparam Len 文字数
+ * @return auto 縮小された FrozenString
+ */
+template <auto Str, size_t Pos, std::ptrdiff_t Len>
+  requires detail::is_frozen_string_v<decltype(Str)>
+auto consteval substr() noexcept {
+  return shrink_to_fit<substr(Str, Pos, Len)>();
+}
+
+/**
+ * @brief 文字列の部分文字列を生成する（NTTP引数版）
  */
 template <size_t Pos, std::ptrdiff_t Len, size_t N>
 auto consteval substr(FrozenString<N> const& str) noexcept {

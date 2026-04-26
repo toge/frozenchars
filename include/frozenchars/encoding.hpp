@@ -192,7 +192,7 @@ auto consteval base64_encode(char const (&str)[N]) noexcept {
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
 auto consteval base64_encode() noexcept {
-  return base64_encode(Str);
+  return shrink_to_fit<base64_encode(Str)>();
 }
 
 /**
