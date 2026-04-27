@@ -73,6 +73,30 @@ auto ctre_match(std::string_view const text) noexcept {
   return ctre::match<frozenchars::to_ctre<Pattern>()>(text);
 }
 
+/**
+ * @brief CTREのsearch_all関数をFrozenStringリテラルで呼び出す
+ *
+ * @tparam Pattern FrozenStringリテラル
+ * @param text 検索対象の文字列
+ * @return auto CTREのsearch_all関数の戻り値
+ */
+template <frozenchars::FrozenString Pattern>
+auto ctre_search_all(std::string_view const text) noexcept {
+  return ctre::search_all<frozenchars::to_ctre<Pattern>()>(text);
+}
+
+/**
+ * @brief CTREのrange関数をFrozenStringリテラルで呼び出す
+ *
+ * @tparam Pattern FrozenStringリテラル
+ * @param text 検索対象の文字列
+ * @return auto CTREのrange関数の戻り値
+ */
+template <frozenchars::FrozenString Pattern>
+auto ctre_range(std::string_view const text) noexcept {
+  return ctre::range<frozenchars::to_ctre<Pattern>()>(text);
+}
+
 } // namespace frozenchars
 
 #endif // __has_include (<ctll/fixed_string.hpp>)
