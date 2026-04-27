@@ -50,18 +50,6 @@ consteval auto to_ctre() noexcept {
 }
 
 /**
- * @brief CTREのsearch関数をFrozenStringリテラルで呼び出す
- *
- * @tparam Pattern FrozenStringリテラル
- * @param text 検索対象の文字列
- * @return auto CTREのsearch関数の戻り値
- */
-template <frozenchars::FrozenString Pattern>
-auto ctre_search(std::string_view const text) noexcept {
-  return ctre::search<frozenchars::to_ctre<Pattern>()>(text);
-}
-
-/**
  * @brief CTREのmatch関数をFrozenStringリテラルで呼び出す
  *
  * @tparam Pattern FrozenStringリテラル
@@ -69,20 +57,32 @@ auto ctre_search(std::string_view const text) noexcept {
  * @return auto CTREのsearch関数の戻り値
  */
 template <frozenchars::FrozenString Pattern>
-auto ctre_match(std::string_view const text) noexcept {
+auto ctre_match(auto&& text) noexcept {
   return ctre::match<frozenchars::to_ctre<Pattern>()>(text);
 }
 
 /**
- * @brief CTREのsearch_all関数をFrozenStringリテラルで呼び出す
+ * @brief CTREのsearch関数をFrozenStringリテラルで呼び出す
  *
  * @tparam Pattern FrozenStringリテラル
  * @param text 検索対象の文字列
- * @return auto CTREのsearch_all関数の戻り値
+ * @return auto CTREのsearch関数の戻り値
  */
 template <frozenchars::FrozenString Pattern>
-auto ctre_search_all(std::string_view const text) noexcept {
-  return ctre::search_all<frozenchars::to_ctre<Pattern>()>(text);
+auto ctre_search(auto&& text) noexcept {
+  return ctre::search<frozenchars::to_ctre<Pattern>()>(text);
+}
+
+/**
+ * @brief CTREのstarts_with関数をFrozenStringリテラルで呼び出す
+ *
+ * @tparam Pattern FrozenStringリテラル
+ * @param text 検索対象の文字列
+ * @return auto CTREのstarts_with関数の戻り値
+ */
+template <frozenchars::FrozenString Pattern>
+auto ctre_starts_with(auto&& text) noexcept {
+  return ctre::starts_with<frozenchars::to_ctre<Pattern>()>(text);
 }
 
 /**
@@ -93,8 +93,44 @@ auto ctre_search_all(std::string_view const text) noexcept {
  * @return auto CTREのrange関数の戻り値
  */
 template <frozenchars::FrozenString Pattern>
-auto ctre_range(std::string_view const text) noexcept {
+auto ctre_range(auto&& text) noexcept {
   return ctre::range<frozenchars::to_ctre<Pattern>()>(text);
+}
+
+/**
+ * @brief CTREのtokenize関数をFrozenStringリテラルで呼び出す
+ *
+ * @tparam Pattern FrozenStringリテラル
+ * @param text 検索対象の文字列
+ * @return auto CTREのtokenize関数の戻り値
+ */
+template <frozenchars::FrozenString Pattern>
+auto ctre_tokenize(auto&& text) noexcept {
+  return ctre::tokenize<frozenchars::to_ctre<Pattern>()>(text);
+}
+
+/**
+ * @brief CTREのsplit関数をFrozenStringリテラルで呼び出す
+ *
+ * @tparam Pattern FrozenStringリテラル
+ * @param text 検索対象の文字列
+ * @return auto CTREのsplit関数の戻り値
+ */
+template <frozenchars::FrozenString Pattern>
+auto ctre_split(auto&& text) noexcept {
+  return ctre::split<frozenchars::to_ctre<Pattern>()>(text);
+}
+
+/**
+ * @brief CTREのsearch_all関数をFrozenStringリテラルで呼び出す
+ *
+ * @tparam Pattern FrozenStringリテラル
+ * @param text 検索対象の文字列
+ * @return auto CTREのsearch_all関数の戻り値
+ */
+template <frozenchars::FrozenString Pattern>
+auto ctre_search_all(auto&& text) noexcept {
+  return ctre::search_all<frozenchars::to_ctre<Pattern>()>(text);
 }
 
 } // namespace frozenchars

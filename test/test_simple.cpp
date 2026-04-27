@@ -647,6 +647,21 @@ TEST_CASE("pipe operator basic") {
   REQUIRE(result.sv() == "HELLO");
 }
 
+TEST_CASE("pipe operator data") {
+  namespace fops = frozenchars::ops;
+
+  auto constexpr input = "Hello"_fs;
+  static_assert(std::same_as<decltype(input | fops::data), char const*>);
+  static_assert((input | fops::data) == input.data());
+
+  auto value = FrozenString{"Hello"};
+  auto const& const_value = value;
+  static_assert(std::same_as<decltype(value | fops::data), char*>);
+
+  REQUIRE((value | fops::data) == value.data());
+  REQUIRE((const_value | fops::data) == const_value.data());
+}
+
 TEST_CASE("pipe operator complex") {
   namespace fops = frozenchars::ops;
   auto constexpr input = "  apple, banana, cherry  "_fs;

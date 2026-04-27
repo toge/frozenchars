@@ -78,14 +78,39 @@ TEST_CASE("to_ctre<S>() template: shrink_to_fit と組み合わせ") {
   REQUIRE_FALSE(ctre::match<ctre_tmpl_hi>("hello"));
 }
 
+TEST_CASE("ctre_match<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_match<pattern>("abcde"));
+}
+
 TEST_CASE("ctre_search<S>() template") {
   static constexpr auto pattern = FrozenString{"abcde"};
   REQUIRE(ctre_search<pattern>("abcdef"));
 }
 
-TEST_CASE("ctre_match<S>() template") {
+TEST_CASE("ctre_starts_with<S>() template") {
   static constexpr auto pattern = FrozenString{"abcde"};
-  REQUIRE(ctre_match<pattern>("abcde"));
+  REQUIRE(ctre_starts_with<pattern>("abcdef"));
+}
+
+TEST_CASE("ctre_range<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_range<pattern>("abcdef").begin() != ctre_range<pattern>("abcdef").end());
+}
+
+TEST_CASE("ctre_tokenize<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_tokenize<pattern>("abcdef").begin() != ctre_tokenize<pattern>("abcdef").end());
+}
+
+TEST_CASE("ctre_split<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_split<pattern>("abcdef").begin() != ctre_split<pattern>("abcdef").end());
+}
+
+TEST_CASE("ctre_search_all<S>() template") {
+  static constexpr auto pattern = FrozenString{"abcde"};
+  REQUIRE(ctre_search_all<pattern>("abcdef").begin() != ctre_search_all<pattern>("abcdef").end());
 }
 
 #endif // __has_include(<ctll/fixed_string.hpp>)
