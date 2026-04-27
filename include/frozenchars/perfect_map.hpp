@@ -169,6 +169,10 @@ constexpr decltype(auto) get(PerfectMapConstReference<T> ref) noexcept {
 
 template <typename T, FrozenString... Keys>
 class PerfectMap {
+ private:
+  template <typename Ref>
+  struct arrow_proxy_t;
+
  public:
   /**
    * @note キーはコンパイル時に固定される。バリューは実行時に更新可能。

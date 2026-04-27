@@ -10,6 +10,15 @@ struct Target {
   explicit Target(int) = delete;
 };
 
-auto bad_map = frozenchars::make_perfect_map<Target, "timeout"_fs>(
-  std::pair{"timeout", 30}
+template <typename EntryLike>
+concept valid_perfect_map_entry =
+  requires(EntryLike&& entry) {
+    frozenchars::make_perfect_map<Target, "timeout"_fs>(
+      std::forward<EntryLike>(entry)
+    );
+  };
+
+static_assert(
+  valid_perfect_map_entry<std::pair<char const*, int>>,
+  "PerfectMap entry value must be constructible as mapped_type"
 );

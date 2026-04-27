@@ -73,6 +73,12 @@ static_assert(std::default_initializable<
   PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator>);
 static_assert(std::default_initializable<
   PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator>);
+static_assert(std::same_as<
+  decltype(std::declval<PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator const&>().operator->()),
+  PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator::arrow_proxy>);
+static_assert(std::same_as<
+  decltype(std::declval<PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator const&>().operator->()),
+  PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator::arrow_proxy>);
 using IntPerfectMap = PerfectMap<int, "timeout"_fs, "retry"_fs>;
 static_assert(requires { { IntPerfectMap::size() } -> std::same_as<IntPerfectMap::size_type>; });
 static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
