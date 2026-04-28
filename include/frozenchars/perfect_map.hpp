@@ -123,6 +123,31 @@ struct PerfectMapEntry {
   T value;
 };
 
+/**
+ * @brief コンパイル時キー/値エントリを表す補助型
+ * @tparam T 値型
+ * @tparam N キー文字列長 (終端 '\0' を含む)
+ * @note `make_perfect_map_kv()` / `make_kv_map()` のテンプレート実引数として使う。
+ * @note 値もテンプレート実引数として保持するため、主に整数・enum などの
+ *       compile-time 値向け。実行時値や move-only 値は `make_perfect_map()` を使う。
+ */
+template <typename T, std::size_t N>
+struct kv {
+  using perfect_map_kv_tag = void;
+  using mapped_type = T;
+
+  FrozenString<N> key{};
+  T value{};
+
+  consteval kv(char const (&key_literal)[N], T value_in) noexcept(
+      std::is_nothrow_move_constructible_v<T>)
+  : key{key_literal}, value{std::move(value_in)} {
+  }
+};
+
+template <std::size_t N, typename T>
+kv(char const (&)[N], T) -> kv<T, N>;
+
 template <typename T>
 struct PerfectMapReference {
   std::string_view key;
@@ -652,6 +677,39 @@ constexpr auto make_perfect_map(EntryLike&&... entries) -> PerfectMap<T, Keys...
   return PerfectMap<T, Keys...>{
     std::array<PerfectMapEntry<T>, sizeof...(Keys)>{
       detail::to_perfect_map_entry<T>(std::forward<EntryLike>(entries))...
+    }
+  };
+}
+
+namespace detail {
+
+template <typename Entry>
+concept PerfectMapKVLike = requires {
+  typename std::remove_cvref_t<Entry>::perfect_map_kv_tag;
+  typename std::remove_cvref_t<Entry>::mapped_type;
+};
+
+} // namespace detail
+
+/**
+ * @brief コンパイル時キー/値エントリ列から PerfectMap を構築する
+ * @tparam T 値型
+ * @tparam Entries `kv{"key", value}` 形式の固定エントリ列
+ * @return PerfectMap<T, Entries.key...> 初期化済みマップ
+ * @note `{"key", value}` のような裸の braced-init-list を
+ *       テンプレート実引数に置くことは難しいため、`kv{"key", value}` を使う。
+ * @note 値も NTTP に載るため、この API は compile-time 値向け。
+ *       実行時値・非 structural type・move-only 型は `make_perfect_map()` を使う。
+ */
+template <typename T, auto... Entries>
+  requires ((detail::PerfectMapKVLike<decltype(Entries)> &&
+              std::constructible_from<
+                  T,
+                  typename std::remove_cvref_t<decltype(Entries)>::mapped_type>) && ...)
+constexpr auto make_perfect_map_kv() -> PerfectMap<T, Entries.key...> {
+  return PerfectMap<T, Entries.key...>{
+    std::array<PerfectMapEntry<T>, sizeof...(Entries)>{
+      PerfectMapEntry<T>{Entries.key.sv(), T{Entries.value}}...
     }
   };
 }

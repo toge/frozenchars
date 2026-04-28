@@ -319,6 +319,21 @@ TEST_CASE("PerfectMap make_perfect_map accepts std::tuple entries", "[perfect_ma
   REQUIRE(map["retry"] == 5);
 }
 
+TEST_CASE("PerfectMap make_perfect_map_kv builds from compile-time kv entries", "[perfect_map]") {
+  auto map = make_perfect_map_kv<int,
+    kv{"retry", 5},
+    kv{"timeout", 30},
+    kv{"backoff", 2}
+  >();
+
+  static_assert(std::same_as<
+    decltype(map),
+    PerfectMap<int, "retry"_fs, "timeout"_fs, "backoff"_fs>>);
+  REQUIRE(map["timeout"] == 30);
+  REQUIRE(map["retry"] == 5);
+  REQUIRE(map["backoff"] == 2);
+}
+
 TEST_CASE("PerfectMap example supports make_perfect_map", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", 5},

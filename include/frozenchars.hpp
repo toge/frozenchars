@@ -16,3 +16,4 @@
 #include "frozenchars/url.hpp"
 #include "frozenchars/number_conv.hpp"
 #include "frozenchars/ctre.hpp"
+#include "frozenchars/perfect_map.hpp"

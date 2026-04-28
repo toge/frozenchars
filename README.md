@@ -399,6 +399,57 @@ auto constexpr q2 = make_querystring(std::tuple{"name", "Alice & Bob"});
 static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 ```
 
+## `PerfectMap`（固定キーの軽量マップ）
+
+`PerfectMap` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
+
+- キー集合を明示したい場合は `make_perfect_map(...)`
+- キーと値の両方をコンパイル時に書き切りたい場合は `make_perfect_map_kv(...)`
+- 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
+
+### pair-like エントリから作る基本形
+
+```cpp
+#include "frozenchars/perfect_map.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+  std::pair{"retry", 5},
+  std::pair{"timeout", 30}
+);
+
+static_assert(decltype(map)::size() == 2);
+```
+
+### コンパイル時のキー/値列から作る短縮形
+
+```cpp
+#include "frozenchars.hpp"
+
+using namespace frozenchars;
+
+auto map = make_perfect_map_kv<int,
+  kv{"aaa", 5},
+  kv{"bbb", 3},
+  kv{"ccc", 1},
+  kv{"ddd", 0},
+  kv{"eee", 3}
+>();
+
+static_assert(map["aaa"] == 5);
+static_assert(map["ddd"] == 0);
+```
+
+`{"aaa", 5}` のような裸の初期化子リストをテンプレート実引数にそのまま置くのは難しいため、
+コンパイル時APIでは `kv{"aaa", 5}` 形式を使います。
+
+> 注意:
+> `make_perfect_map_kv(...)`は、値もテンプレート実引数として保持するため、
+> 主に整数・列挙型などのコンパイル時値向けです。実行時値、ムーブ専用型、NTTPに載せにくい型を
+> 扱いたい場合は `make_perfect_map(...)` を使ってください。
+
 ## マルチライン文字列の処理
 
 複数行を含む文字列（`\n` で区切られた文字列）に対して、行単位での加工を行うスタンドアロン関数です。`FrozenString` と文字列リテラルの両方を受け取ります。
