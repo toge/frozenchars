@@ -3,7 +3,7 @@ find_package(ctre REQUIRED CONFIG)
 
 file(GLOB test_src test_*.cpp)
 
-add_executable(all_test main.cpp ${test_src})
+add_executable(all_test ${test_src})
 
 target_link_libraries(all_test PRIVATE
   frozenchars::frozenchars
