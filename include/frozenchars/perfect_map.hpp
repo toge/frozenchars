@@ -7,9 +7,11 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <iterator>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -464,6 +466,19 @@ class PerfectMap {
   }
 
   /**
+   * @brief 宣言順の値リストからマップを初期化する
+   * @param values キー宣言順に並んだ値リスト
+   * @throw std::invalid_argument 要素数がキー数と一致しない場合
+   * @note braced-init-list から自然に書ける ergonomic overload。
+   */
+  constexpr explicit PerfectMap(std::initializer_list<T> values)
+    requires std::constructible_from<T, T const&>
+  : values_{materialize_staged_values(
+      stage_initializer_list_values(values),
+      std::make_index_sequence<size()>{})} {
+  }
+
+  /**
    * @brief キー付きの値配列からマップを初期化する
    * @param entries キーと値の組を含む配列
    */
@@ -616,6 +631,29 @@ class PerfectMap {
       -> std::array<T, size()> {
     constexpr auto slot_to_key_order = make_slot_to_key_order();
     return {std::move(values[slot_to_key_order[SlotIndex]])...};
+  }
+
+  static constexpr auto stage_initializer_list_values(std::initializer_list<T> values)
+      -> std::array<std::optional<T>, size()>
+    requires std::constructible_from<T, T const&> {
+    if (values.size() != size()) {
+      throw std::invalid_argument(
+        "PerfectMap initializer_list size mismatch: expected " +
+        std::to_string(size()) +
+        " values (one per key), got " +
+        std::to_string(values.size())
+      );
+    }
+
+    constexpr auto key_order_to_slot = make_key_order_to_slot();
+    std::array<std::optional<T>, size()> staged{};
+    auto index = 0uz;
+    for (auto const& value : values) {
+      staged[key_order_to_slot[index]].emplace(value);
+      ++index;
+    }
+
+    return staged;
   }
 
   static constexpr auto stage_keyed_entries(std::array<PerfectMapEntry<T>, size()> entries)

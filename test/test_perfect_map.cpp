@@ -3,6 +3,7 @@
 #include <concepts>
 #include <iterator>
 #include <ranges>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -387,6 +388,57 @@ TEST_CASE("PerfectMap iterates with key and value access", "[perfect_map]") {
   REQUIRE(index == 3);
   REQUIRE(std::ranges::find(values, 30) != values.end());
   REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
+}
+
+TEST_CASE("PerfectMap iterates with key and value access (string)", "[perfect_map]") {
+  PerfectMap<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    std::array<std::string_view, 3>{"100", "200", "300"}
+  };
+
+  std::array<std::string_view, 3> keys{};
+  std::array<std::string_view, 3> values{};
+  auto index = 0uz;
+
+  for (auto&& [key, value] : map) {
+    keys[index] = key;
+    values[index] = value;
+    ++index;
+  }
+
+  REQUIRE(index == 3);
+  REQUIRE(std::ranges::find(values, std::string_view{"300"}) != values.end());
+  REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
+}
+
+TEST_CASE("PerfectMap supports std::string declaration-order initialization", "[perfect_map]") {
+  PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    std::array<std::string, 3>{"100", "200", "300"}
+  };
+
+  REQUIRE(map["timeout"] == "100");
+  REQUIRE(map["retry"] == "200");
+  REQUIRE(map["backoff"] == "300");
+}
+
+TEST_CASE("PerfectMap supports std::string initializer_list initialization", "[perfect_map]") {
+  PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    "100", "200", "300"
+  };
+
+  REQUIRE(map["timeout"] == "100");
+  REQUIRE(map["retry"] == "200");
+  REQUIRE(map["backoff"] == "300");
+}
+
+TEST_CASE("PerfectMap initializer_list initialization rejects wrong size", "[perfect_map]") {
+  REQUIRE_THROWS_WITH(
+    (PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs>{
+      "100", "200"
+    }),
+    Catch::Matchers::ContainsSubstring(
+      "expected 3 values (one per key), got 2"
+    )
+  );
 }
 
 TEST_CASE("PerfectMap structured bindings mutate mapped value", "[perfect_map]") {

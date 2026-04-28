@@ -403,9 +403,38 @@ static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 
 `PerfectMap` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
 
+- 宣言順の値をそのまま書きたい場合は `PerfectMap{...}`
 - キー集合を明示したい場合は `make_perfect_map(...)`
 - キーと値の両方をコンパイル時に書き切りたい場合は `make_perfect_map_kv(...)`
 - 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
+
+### 宣言順の値を braced-init-list で書く
+
+```cpp
+#include "frozenchars/perfect_map.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+  "30", "5", "2"
+};
+
+assert(map["timeout"] == "30");
+assert(map["retry"] == "5");
+assert(map["backoff"] == "2");
+
+PerfectMap<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
+  "30", "5", "2"
+};
+
+assert(view_map["timeout"] == "30");
+```
+
+要素数がキー数と一致しない場合は、実行時に `std::invalid_argument` を送出します。
+
+`std::string_view` は non-owning なので、保持先の寿命には注意してください。Context7 で確認した `cppreference` の通り、
+文字列リテラルを渡すのは安全ですが、一時 `std::string` をそのまま渡すとダングリング参照になります。
 
 ### pair-like エントリから作る基本形
 
