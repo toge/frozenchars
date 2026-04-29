@@ -42,3 +42,12 @@ TEST_CASE("remove_regex_comment strips an end-of-pattern comment without a trail
   static_assert(pattern.sv() == "foo");
   REQUIRE(pattern.sv() == "foo");
 }
+
+TEST_CASE("remove_regex_comment pipe adaptor normalizes an extended regex pattern") {
+  namespace fops = frozenchars::ops;
+
+  auto constexpr pattern = "(?x)^ a\\ b\\# [ # ] c # trailing comment\n $"_fs | fops::remove_regex_comment;
+
+  static_assert(pattern.sv() == "^a\\ b\\#[ # ]c$");
+  REQUIRE(pattern.sv() == "^a\\ b\\#[ # ]c$");
+}

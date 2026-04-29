@@ -5,6 +5,7 @@
 #include "case_conv.hpp"
 #include "multiline.hpp"
 #include "encoding.hpp"
+#include "regex_comment.hpp"
 #include <array>
 #include <cstddef>
 #include <string_view>
@@ -180,6 +181,18 @@ struct remove_range_comments_adaptor : pipe_adaptor_base {
   }
 };
 
+struct remove_regex_comment_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::remove_regex_comment(str);
+  }
+
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::remove_regex_comment(FrozenString{str});
+  }
+};
+
 struct join_lines_adaptor : pipe_adaptor_base {
   std::string_view sep;
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
@@ -298,6 +311,7 @@ inline constexpr base64_encode_adaptor base64_encode{};
 inline constexpr base64_decode_adaptor base64_decode{};
 inline constexpr remove_leading_spaces_adaptor<> remove_leading_spaces{};
 inline constexpr remove_trailing_spaces_adaptor<> remove_trailing_spaces{};
+inline constexpr remove_regex_comment_adaptor remove_regex_comment{};
 
 struct data_t {};
 
