@@ -20,5 +20,5 @@ concept valid_perfect_map_entry =
 
 static_assert(
   valid_perfect_map_entry<std::pair<char const*, int>>,
-  "PerfectMap entry value must be constructible as mapped_type"
+  "perfect_map entry value must be constructible as mapped_type"
 );

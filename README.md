@@ -399,11 +399,11 @@ auto constexpr q2 = make_querystring(std::tuple{"name", "Alice & Bob"});
 static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 ```
 
-## `PerfectMap`（固定キーの軽量マップ）
+## `perfect_map`（固定キーの軽量マップ）
 
-`PerfectMap` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
+`perfect_map` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
 
-- 宣言順の値をそのまま書きたい場合は `PerfectMap{...}`
+- 宣言順の値をそのまま書きたい場合は `perfect_map{...}`
 - キー集合を明示したい場合は `make_perfect_map(...)`
 - キーと値の両方をコンパイル時に書き切りたい場合は `make_perfect_map_kv(...)`
 - 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
@@ -416,7 +416,7 @@ static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+perfect_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
   "30", "5", "2"
 };
 
@@ -424,7 +424,7 @@ assert(map["timeout"] == "30");
 assert(map["retry"] == "5");
 assert(map["backoff"] == "2");
 
-PerfectMap<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
+perfect_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
   "30", "5", "2"
 };
 
@@ -451,6 +451,26 @@ auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
 
 static_assert(decltype(map)::size() == 2);
 ```
+
+### `to<Result>()` で STL コンテナへ変換する
+
+```cpp
+auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>(
+  std::pair{"retry", 5},
+  std::pair{"timeout", 30},
+  std::pair{"backoff", 2}
+);
+
+auto ordered = map.to<std::map<std::string, int>>();
+auto hashed = map.to<std::unordered_map<std::string_view, int>>();
+auto slots = map.to<std::array<std::pair<std::string_view, int>, 3>>();
+
+auto moved = std::move(map).to<std::unordered_map<std::string, int>>();
+```
+
+`to<Result>()` は `std::map` / `std::unordered_map` / `std::array<std::pair<...>, N>` を受け付けます。
+`const&` からは値をコピーし、`&&` からは値をムーブします。
+`std::array` の並び順は宣言順ではなく、`begin()` / `end()` と同じハッシュスロット順です。
 
 ### コンパイル時のキー/値列から作る短縮形
 

@@ -3,4 +3,4 @@
 
 using namespace frozenchars::literals;
 
-auto duplicate_map = frozenchars::PerfectMap<int, "dup"_fs, "dup"_fs>{};
+auto duplicate_map = frozenchars::perfect_map<int, "dup"_fs, "dup"_fs>{};

@@ -25,19 +25,19 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 assert_perfect_map_compile_fail(
   NAME perfect_map_duplicate_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_duplicate_keys.cpp
-  EXPECTED_TEXT "PerfectMap keys must be unique"
+  EXPECTED_TEXT "perfect_map keys must be unique"
 )
 
 assert_perfect_map_compile_fail(
   NAME perfect_map_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_empty_keys.cpp
-  EXPECTED_TEXT "PerfectMap requires at least one key"
+  EXPECTED_TEXT "perfect_map requires at least one key"
 )
 
 assert_perfect_map_compile_fail(
   NAME perfect_map_seed_limit_zero
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_seed_limit_zero.cpp
-  EXPECTED_TEXT "PerfectMap seed search exhausted"
+  EXPECTED_TEXT "perfect_map seed search exhausted"
 )
 
 assert_perfect_map_compile_fail(
@@ -49,13 +49,13 @@ assert_perfect_map_compile_fail(
 assert_perfect_map_compile_fail(
   NAME perfect_map_make_perfect_map_bad_key
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_make_perfect_map_bad_key.cpp
-  EXPECTED_TEXT "PerfectMap entry key must be convertible to std::string_view"
+  EXPECTED_TEXT "perfect_map entry key must be convertible to std::string_view"
 )
 
 assert_perfect_map_compile_fail(
   NAME perfect_map_make_perfect_map_bad_value
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_make_perfect_map_bad_value.cpp
-  EXPECTED_TEXT "PerfectMap entry value must be constructible as mapped_type"
+  EXPECTED_TEXT "perfect_map entry value must be constructible as mapped_type"
 )
 
 assert_perfect_map_compile_fail(

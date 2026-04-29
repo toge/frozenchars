@@ -17,5 +17,5 @@ concept valid_perfect_map_entry =
 
 static_assert(
   valid_perfect_map_entry<std::pair<BadKey, int>>,
-  "PerfectMap entry key must be convertible to std::string_view"
+  "perfect_map entry key must be convertible to std::string_view"
 );

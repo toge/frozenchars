@@ -1,10 +1,13 @@
 #include "catch2/catch_all.hpp"
 
+#include <array>
 #include <concepts>
 #include <iterator>
+#include <map>
 #include <ranges>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 #include "frozenchars/literals.hpp"
@@ -13,17 +16,45 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-TEST_CASE("PerfectMap basic shape", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("perfect_map basic shape", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs> map{};
 
-  static_assert(PerfectMap<int, "timeout"_fs, "retry"_fs>::size() == 2);
+  static_assert(perfect_map<int, "timeout"_fs, "retry"_fs>::size() == 2);
   REQUIRE(map.contains("timeout"));
   REQUIRE(map.contains("retry"));
   REQUIRE_FALSE(map.contains("other"));
 }
 
-TEST_CASE("PerfectMap exposes container-like type aliases and size helpers", "[perfect_map]") {
-  using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+TEST_CASE("perfect_map converts to requested STL containers by explicit result type",
+    "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    std::array<int, 3>{30, 7, 2}
+  };
+
+  auto const ordered = map.to<std::map<std::string, int>>();
+  auto const hashed = map.to<std::unordered_map<std::string_view, int>>();
+  auto const array =
+      map.to<std::array<std::pair<std::string_view, int>, 3>>();
+
+  REQUIRE(ordered == std::map<std::string, int>{
+    {"backoff", 2},
+    {"retry", 7},
+    {"timeout", 30},
+  });
+  REQUIRE(hashed == std::unordered_map<std::string_view, int>{
+    {"timeout", 30},
+    {"retry", 7},
+    {"backoff", 2},
+  });
+  REQUIRE(array == std::array<std::pair<std::string_view, int>, 3>{
+    std::pair<std::string_view, int>{"timeout", 30},
+    std::pair<std::string_view, int>{"backoff", 2},
+    std::pair<std::string_view, int>{"retry", 7},
+  });
+}
+
+TEST_CASE("perfect_map exposes container-like type aliases and size helpers", "[perfect_map]") {
+  using Map = perfect_map<int, "timeout"_fs, "retry"_fs>;
 
   static_assert(std::same_as<Map::key_type, std::string_view>);
   static_assert(std::same_as<Map::mapped_type, int>);
@@ -34,7 +65,7 @@ TEST_CASE("PerfectMap exposes container-like type aliases and size helpers", "[p
   static_assert(!Map::empty());
 }
 
-TEST_CASE("PerfectMap derives compile-time seed metadata", "[perfect_map]") {
+TEST_CASE("perfect_map derives compile-time seed metadata", "[perfect_map]") {
   static_assert(detail::fnv1a_hash("timeout", 0) == 6954259676504937608ull);
   static_assert(detail::find_seed<1'000'001, "timeout"_fs, "retry"_fs, "backoff"_fs>() == 13u);
   static_assert(detail::fnv1a_hash("timeout", 13) % 3 == 0);
@@ -42,8 +73,8 @@ TEST_CASE("PerfectMap derives compile-time seed metadata", "[perfect_map]") {
   static_assert(detail::fnv1a_hash("backoff", 13) % 3 == 1);
 }
 
-TEST_CASE("PerfectMap lookup and miss handling", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("perfect_map lookup and miss handling", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs> map{};
 
   map["timeout"] = 30;
   map["retry"] = 5;
@@ -57,8 +88,8 @@ TEST_CASE("PerfectMap lookup and miss handling", "[perfect_map]") {
   REQUIRE_THROWS_AS(map["missing"], std::out_of_range);
 }
 
-TEST_CASE("PerfectMap supports find and count", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("perfect_map supports find and count", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs> map{};
   map["timeout"] = 30;
 
   auto const found = map.find("timeout");
@@ -71,16 +102,16 @@ TEST_CASE("PerfectMap supports find and count", "[perfect_map]") {
 }
 
 static_assert(std::default_initializable<
-  PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator>);
+  perfect_map<int, "timeout"_fs, "retry"_fs>::iterator>);
 static_assert(std::default_initializable<
-  PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator>);
+  perfect_map<int, "timeout"_fs, "retry"_fs>::const_iterator>);
 static_assert(std::same_as<
-  decltype(std::declval<PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator const&>().operator->()),
-  PerfectMap<int, "timeout"_fs, "retry"_fs>::iterator::arrow_proxy>);
+  decltype(std::declval<perfect_map<int, "timeout"_fs, "retry"_fs>::iterator const&>().operator->()),
+  perfect_map<int, "timeout"_fs, "retry"_fs>::iterator::arrow_proxy>);
 static_assert(std::same_as<
-  decltype(std::declval<PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator const&>().operator->()),
-  PerfectMap<int, "timeout"_fs, "retry"_fs>::const_iterator::arrow_proxy>);
-using IntPerfectMap = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+  decltype(std::declval<perfect_map<int, "timeout"_fs, "retry"_fs>::const_iterator const&>().operator->()),
+  perfect_map<int, "timeout"_fs, "retry"_fs>::const_iterator::arrow_proxy>);
+using IntPerfectMap = perfect_map<int, "timeout"_fs, "retry"_fs>;
 static_assert(requires { { IntPerfectMap::size() } -> std::same_as<IntPerfectMap::size_type>; });
 static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
   { map.find("timeout") };
@@ -93,19 +124,19 @@ static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
   { cmap.count("timeout") } -> std::same_as<IntPerfectMap::size_type>;
 });
 
-TEST_CASE("PerfectMap iterators model forward_iterator", "[perfect_map]") {
-  using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+TEST_CASE("perfect_map iterators model forward_iterator", "[perfect_map]") {
+  using Map = perfect_map<int, "timeout"_fs, "retry"_fs>;
   static_assert(std::forward_iterator<Map::iterator>);
   static_assert(std::forward_iterator<Map::const_iterator>);
 }
 
-TEST_CASE("PerfectMap default-constructed iterators compare equal by type", "[perfect_map]") {
-  using Map = PerfectMap<int, "timeout"_fs, "retry"_fs>;
+TEST_CASE("perfect_map default-constructed iterators compare equal by type", "[perfect_map]") {
+  using Map = perfect_map<int, "timeout"_fs, "retry"_fs>;
   REQUIRE(Map::iterator{} == Map::iterator{});
   REQUIRE(Map::const_iterator{} == Map::const_iterator{});
 }
 
-TEST_CASE("PerfectMap iterator operator-> exposes key and value", "[perfect_map]") {
+TEST_CASE("perfect_map iterator operator-> exposes key and value", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", 5},
     std::pair{"timeout", 30}
@@ -117,7 +148,7 @@ TEST_CASE("PerfectMap iterator operator-> exposes key and value", "[perfect_map]
   REQUIRE(it->value == 30);
 }
 
-TEST_CASE("PerfectMap const_iterator operator-> exposes key and value", "[perfect_map]") {
+TEST_CASE("perfect_map const_iterator operator-> exposes key and value", "[perfect_map]") {
   auto const map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", 5},
     std::pair{"timeout", 30}
@@ -129,7 +160,7 @@ TEST_CASE("PerfectMap const_iterator operator-> exposes key and value", "[perfec
   REQUIRE(it->value == 30);
 }
 
-TEST_CASE("PerfectMap iterator operator-> preserves writable mapped access", "[perfect_map]") {
+TEST_CASE("perfect_map iterator operator-> preserves writable mapped access", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", 5},
     std::pair{"timeout", 30}
@@ -163,6 +194,18 @@ struct MoveOnly {
 
   int value;
 };
+
+TEST_CASE("perfect_map moves values when converting rvalues", "[perfect_map]") {
+  auto map = make_perfect_map<MoveOnly, "timeout"_fs, "retry"_fs>(
+    std::pair{"retry", MoveOnly{5}},
+    std::pair{"timeout", MoveOnly{30}}
+  );
+
+  auto moved = std::move(map).to<std::unordered_map<std::string, MoveOnly>>();
+
+  REQUIRE(moved.at("timeout").value == 30);
+  REQUIRE(moved.at("retry").value == 5);
+}
 
 template <typename T>
 struct PairLikeEntry {
@@ -221,8 +264,8 @@ struct tuple_element<1, PairLikeEntry<T>> {
 
 } // namespace std
 
-TEST_CASE("PerfectMap supports declaration-order initialization", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("perfect_map supports declaration-order initialization", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     std::array<int, 3>{30, 7, 2}
   };
 
@@ -231,12 +274,12 @@ TEST_CASE("PerfectMap supports declaration-order initialization", "[perfect_map]
   REQUIRE(map["backoff"] == 2);
 }
 
-TEST_CASE("PerfectMap supports keyed entry initialization", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("perfect_map supports keyed entry initialization", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     std::array{
-      PerfectMapEntry<int>{"retry", 7},
-      PerfectMapEntry<int>{"backoff", 2},
-      PerfectMapEntry<int>{"timeout", 30},
+      perfect_map_entry<int>{"retry", 7},
+      perfect_map_entry<int>{"backoff", 2},
+      perfect_map_entry<int>{"timeout", 30},
     }
   };
 
@@ -245,7 +288,7 @@ TEST_CASE("PerfectMap supports keyed entry initialization", "[perfect_map]") {
   REQUIRE(map["backoff"] == 2);
 }
 
-TEST_CASE("PerfectMap make_perfect_map builds from pair-like entries", "[perfect_map]") {
+TEST_CASE("perfect_map make_perfect_map builds from pair-like entries", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", 5},
     std::pair{"timeout", 30}
@@ -255,31 +298,31 @@ TEST_CASE("PerfectMap make_perfect_map builds from pair-like entries", "[perfect
   REQUIRE(map["retry"] == 5);
 }
 
-TEST_CASE("PerfectMap keyed initialization rejects unknown keys", "[perfect_map]") {
+TEST_CASE("perfect_map keyed initialization rejects unknown keys", "[perfect_map]") {
   REQUIRE_THROWS_AS(
-    (PerfectMap<int, "timeout"_fs, "retry"_fs>{
+    (perfect_map<int, "timeout"_fs, "retry"_fs>{
       std::array{
-        PerfectMapEntry<int>{"timeout", 30},
-        PerfectMapEntry<int>{"other", 5},
+        perfect_map_entry<int>{"timeout", 30},
+        perfect_map_entry<int>{"other", 5},
       }
     }),
     std::invalid_argument
   );
 }
 
-TEST_CASE("PerfectMap keyed initialization rejects duplicate keys", "[perfect_map]") {
+TEST_CASE("perfect_map keyed initialization rejects duplicate keys", "[perfect_map]") {
   REQUIRE_THROWS_AS(
-    (PerfectMap<int, "timeout"_fs, "retry"_fs>{
+    (perfect_map<int, "timeout"_fs, "retry"_fs>{
       std::array{
-        PerfectMapEntry<int>{"timeout", 30},
-        PerfectMapEntry<int>{"timeout", 5},
+        perfect_map_entry<int>{"timeout", 30},
+        perfect_map_entry<int>{"timeout", 5},
       }
     }),
     std::invalid_argument
   );
 }
 
-TEST_CASE("PerfectMap keyed initialization supports non-default-constructible values",
+TEST_CASE("perfect_map keyed initialization supports non-default-constructible values",
     "[perfect_map]") {
   auto map = make_perfect_map<NoDefault, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", NoDefault{5}},
@@ -290,7 +333,7 @@ TEST_CASE("PerfectMap keyed initialization supports non-default-constructible va
   REQUIRE(map["retry"].value == 5);
 }
 
-TEST_CASE("PerfectMap keyed initialization supports move-only values", "[perfect_map]") {
+TEST_CASE("perfect_map keyed initialization supports move-only values", "[perfect_map]") {
   auto map = make_perfect_map<MoveOnly, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", MoveOnly{5}},
     std::pair{"timeout", MoveOnly{30}}
@@ -300,7 +343,7 @@ TEST_CASE("PerfectMap keyed initialization supports move-only values", "[perfect
   REQUIRE(map["retry"].value == 5);
 }
 
-TEST_CASE("PerfectMap make_perfect_map accepts pair-like entries", "[perfect_map]") {
+TEST_CASE("perfect_map make_perfect_map accepts pair-like entries", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     PairLikeEntry<int>{"retry", 5},
     PairLikeEntry<int>{"timeout", 30}
@@ -310,7 +353,7 @@ TEST_CASE("PerfectMap make_perfect_map accepts pair-like entries", "[perfect_map
   REQUIRE(map["retry"] == 5);
 }
 
-TEST_CASE("PerfectMap make_perfect_map accepts std::tuple entries", "[perfect_map]") {
+TEST_CASE("perfect_map make_perfect_map accepts std::tuple entries", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::tuple{"retry", 5},
     std::tuple{"timeout", 30}
@@ -320,7 +363,7 @@ TEST_CASE("PerfectMap make_perfect_map accepts std::tuple entries", "[perfect_ma
   REQUIRE(map["retry"] == 5);
 }
 
-TEST_CASE("PerfectMap make_perfect_map_kv builds from compile-time kv entries", "[perfect_map]") {
+TEST_CASE("perfect_map make_perfect_map_kv builds from compile-time kv entries", "[perfect_map]") {
   auto map = make_perfect_map_kv<int,
     kv{"retry", 5},
     kv{"timeout", 30},
@@ -329,13 +372,13 @@ TEST_CASE("PerfectMap make_perfect_map_kv builds from compile-time kv entries", 
 
   static_assert(std::same_as<
     decltype(map),
-    PerfectMap<int, "retry"_fs, "timeout"_fs, "backoff"_fs>>);
+    perfect_map<int, "retry"_fs, "timeout"_fs, "backoff"_fs>>);
   REQUIRE(map["timeout"] == 30);
   REQUIRE(map["retry"] == 5);
   REQUIRE(map["backoff"] == 2);
 }
 
-TEST_CASE("PerfectMap example supports make_perfect_map", "[perfect_map]") {
+TEST_CASE("perfect_map example supports make_perfect_map", "[perfect_map]") {
   auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"retry", 5},
     std::pair{"timeout", 30}
@@ -346,8 +389,8 @@ TEST_CASE("PerfectMap example supports make_perfect_map", "[perfect_map]") {
   REQUIRE(map["retry"] == 5);
 }
 
-TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {
-  auto const map = PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
+TEST_CASE("perfect_map const access returns const references", "[perfect_map]") {
+  auto const map = perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
     std::array<int, 3>{30, 7, 2}
   };
 
@@ -357,10 +400,10 @@ TEST_CASE("PerfectMap const access returns const references", "[perfect_map]") {
   REQUIRE(map["timeout"] == 30);
 }
 
-static_assert(!std::default_initializable<PerfectMap<NoDefault, "timeout"_fs>>);
+static_assert(!std::default_initializable<perfect_map<NoDefault, "timeout"_fs>>);
 
-TEST_CASE("PerfectMap example flow", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("perfect_map example flow", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs> map{};
   map["timeout"] = 30;
   map["retry"] = 5;
 
@@ -370,8 +413,8 @@ TEST_CASE("PerfectMap example flow", "[perfect_map]") {
   REQUIRE(timeout == 30);
 }
 
-TEST_CASE("PerfectMap iterates with key and value access", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("perfect_map iterates with key and value access", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     std::array<int, 3>{30, 7, 2}
   };
 
@@ -390,8 +433,8 @@ TEST_CASE("PerfectMap iterates with key and value access", "[perfect_map]") {
   REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
 }
 
-TEST_CASE("PerfectMap iterates with key and value access (string)", "[perfect_map]") {
-  PerfectMap<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("perfect_map iterates with key and value access (string)", "[perfect_map]") {
+  perfect_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     std::array<std::string_view, 3>{"100", "200", "300"}
   };
 
@@ -410,8 +453,8 @@ TEST_CASE("PerfectMap iterates with key and value access (string)", "[perfect_ma
   REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
 }
 
-TEST_CASE("PerfectMap supports std::string declaration-order initialization", "[perfect_map]") {
-  PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("perfect_map supports std::string declaration-order initialization", "[perfect_map]") {
+  perfect_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     std::array<std::string, 3>{"100", "200", "300"}
   };
 
@@ -420,8 +463,8 @@ TEST_CASE("PerfectMap supports std::string declaration-order initialization", "[
   REQUIRE(map["backoff"] == "300");
 }
 
-TEST_CASE("PerfectMap supports std::string initializer_list initialization", "[perfect_map]") {
-  PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+TEST_CASE("perfect_map supports std::string initializer_list initialization", "[perfect_map]") {
+  perfect_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
     "100", "200", "300"
   };
 
@@ -430,9 +473,9 @@ TEST_CASE("PerfectMap supports std::string initializer_list initialization", "[p
   REQUIRE(map["backoff"] == "300");
 }
 
-TEST_CASE("PerfectMap initializer_list initialization rejects wrong size", "[perfect_map]") {
+TEST_CASE("perfect_map initializer_list initialization rejects wrong size", "[perfect_map]") {
   REQUIRE_THROWS_WITH(
-    (PerfectMap<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs>{
+    (perfect_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs>{
       "100", "200"
     }),
     Catch::Matchers::ContainsSubstring(
@@ -441,8 +484,8 @@ TEST_CASE("PerfectMap initializer_list initialization rejects wrong size", "[per
   );
 }
 
-TEST_CASE("PerfectMap structured bindings mutate mapped value", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("perfect_map structured bindings mutate mapped value", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs> map{};
 
   for (auto&& [key, value] : map) {
     if (key == "timeout") {
@@ -453,8 +496,8 @@ TEST_CASE("PerfectMap structured bindings mutate mapped value", "[perfect_map]")
   REQUIRE(map["timeout"] == 42);
 }
 
-TEST_CASE("PerfectMap const iteration uses cbegin and cend", "[perfect_map]") {
-  auto const map = PerfectMap<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
+TEST_CASE("perfect_map const iteration uses cbegin and cend", "[perfect_map]") {
+  auto const map = perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>{
     std::array<int, 3>{30, 7, 2}
   };
 
@@ -466,8 +509,8 @@ TEST_CASE("PerfectMap const iteration uses cbegin and cend", "[perfect_map]") {
   REQUIRE((value == 30 || value == 7 || value == 2));
 }
 
-TEST_CASE("PerfectMap example supports find and iterator loops", "[perfect_map]") {
-  PerfectMap<int, "timeout"_fs, "retry"_fs> map{};
+TEST_CASE("perfect_map example supports find and iterator loops", "[perfect_map]") {
+  perfect_map<int, "timeout"_fs, "retry"_fs> map{};
   map["timeout"] = 30;
   map["retry"] = 5;
 

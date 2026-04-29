@@ -9,18 +9,20 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 
 namespace frozenchars {
 
 template <typename T>
-struct PerfectMapEntry;
+struct perfect_map_entry;
 
 namespace detail {
 
@@ -56,9 +58,9 @@ consteval auto has_duplicate_keys() -> bool {
 template <std::uint32_t MaxSeedExclusive, FrozenString... Keys>
 consteval auto find_seed() -> std::uint32_t {
   static_assert(!has_duplicate_keys<Keys...>(),
-    "PerfectMap keys must be unique");
+    "perfect_map keys must be unique");
   static_assert(MaxSeedExclusive > 0,
-    "PerfectMap seed search exhausted");
+    "perfect_map seed search exhausted");
 
   constexpr std::array key_views{
     std::string_view{Keys.buffer.data(), Keys.length}...
@@ -83,7 +85,7 @@ consteval auto find_seed() -> std::uint32_t {
     }
   }
 
-  throw "PerfectMap seed search exhausted";
+  throw "perfect_map seed search exhausted";
 }
 
 template <typename EntryLike>
@@ -99,7 +101,7 @@ constexpr decltype(auto) pair_like_get(EntryLike&& entry) {
 }
 
 template <typename T, typename EntryLike>
-concept PerfectMapEntryLike =
+concept perfect_map_entry_like =
     PairLikeEntry<EntryLike> &&
     requires(EntryLike&& entry) {
       { pair_like_get<0>(std::forward<EntryLike>(entry)) }
@@ -109,18 +111,87 @@ concept PerfectMapEntryLike =
     };
 
 template <typename T, typename EntryLike>
-  requires PerfectMapEntryLike<T, EntryLike>
-constexpr auto to_perfect_map_entry(EntryLike&& entry) -> PerfectMapEntry<T> {
-  return PerfectMapEntry<T>{
+  requires perfect_map_entry_like<T, EntryLike>
+constexpr auto to_perfect_map_entry(EntryLike&& entry) -> perfect_map_entry<T> {
+  return perfect_map_entry<T>{
     std::string_view{pair_like_get<0>(std::forward<EntryLike>(entry))},
     T{pair_like_get<1>(std::forward<EntryLike>(entry))}
   };
 }
 
+template <typename Result>
+inline constexpr auto always_false_v = false;
+
+template <typename Result>
+struct is_std_array : std::false_type {
+};
+
+template <typename Value, std::size_t N>
+struct is_std_array<std::array<Value, N>> : std::true_type {
+};
+
+template <typename Result>
+inline constexpr auto is_std_array_v =
+    is_std_array<std::remove_cvref_t<Result>>::value;
+
+template <typename Result>
+struct is_std_map : std::false_type {
+};
+
+template <typename Key, typename Mapped, typename Compare, typename Allocator>
+struct is_std_map<std::map<Key, Mapped, Compare, Allocator>> : std::true_type {
+};
+
+template <typename Result>
+inline constexpr auto is_std_map_v =
+    is_std_map<std::remove_cvref_t<Result>>::value;
+
+template <typename Result>
+struct is_std_unordered_map : std::false_type {
+};
+
+template <typename Key, typename Mapped, typename Hash, typename KeyEqual, typename Allocator>
+struct is_std_unordered_map<std::unordered_map<Key, Mapped, Hash, KeyEqual, Allocator>>
+  : std::true_type {
+};
+
+template <typename Result>
+inline constexpr auto is_std_unordered_map_v =
+    is_std_unordered_map<std::remove_cvref_t<Result>>::value;
+
+template <typename Self, typename T>
+using forward_like_t = decltype(std::forward_like<Self>(std::declval<T&>()));
+
+template <typename Result, typename ValueArg>
+concept perfect_map_associative_result =
+    (is_std_map_v<Result> || is_std_unordered_map_v<Result>) &&
+    std::default_initializable<std::remove_cvref_t<Result>> &&
+    std::constructible_from<typename std::remove_cvref_t<Result>::key_type, std::string_view> &&
+    std::constructible_from<typename std::remove_cvref_t<Result>::mapped_type, ValueArg> &&
+    requires(std::remove_cvref_t<Result>& result,
+        typename std::remove_cvref_t<Result>::key_type key,
+        typename std::remove_cvref_t<Result>::mapped_type value) {
+      result.emplace(std::move(key), std::move(value));
+    };
+
+template <typename Result, std::size_t ExpectedSize, typename ValueArg>
+concept perfect_map_array_result =
+    is_std_array_v<Result> &&
+    std::tuple_size_v<std::remove_cvref_t<Result>> == ExpectedSize &&
+    PairLikeEntry<typename std::remove_cvref_t<Result>::value_type> &&
+    std::constructible_from<typename std::remove_cvref_t<Result>::value_type,
+        std::string_view,
+        ValueArg>;
+
+template <typename Result, std::size_t ExpectedSize, typename ValueArg>
+concept perfect_map_result =
+    perfect_map_associative_result<Result, ValueArg> ||
+    perfect_map_array_result<Result, ExpectedSize, ValueArg>;
+
 } // namespace detail
 
 template <typename T>
-struct PerfectMapEntry {
+struct perfect_map_entry {
   std::string_view key;
   T value;
 };
@@ -151,7 +222,7 @@ template <std::size_t N, typename T>
 kv(char const (&)[N], T) -> kv<T, N>;
 
 template <typename T>
-struct PerfectMapReference {
+struct perfect_map_reference {
   std::string_view key;
   T& value;
 
@@ -165,7 +236,7 @@ struct PerfectMapReference {
 };
 
 template <typename T>
-struct PerfectMapConstReference {
+struct perfect_map_const_reference {
   std::string_view key;
   T const& value;
 
@@ -175,7 +246,7 @@ struct PerfectMapConstReference {
 };
 
 template <std::size_t I, typename T>
-constexpr decltype(auto) get(PerfectMapReference<T> ref) noexcept {
+constexpr decltype(auto) get(perfect_map_reference<T> ref) noexcept {
   static_assert(I < 2);
   if constexpr (I == 0) {
     return ref.key;
@@ -185,7 +256,7 @@ constexpr decltype(auto) get(PerfectMapReference<T> ref) noexcept {
 }
 
 template <std::size_t I, typename T>
-constexpr decltype(auto) get(PerfectMapConstReference<T> ref) noexcept {
+constexpr decltype(auto) get(perfect_map_const_reference<T> ref) noexcept {
   static_assert(I < 2);
   if constexpr (I == 0) {
     return ref.key;
@@ -195,7 +266,7 @@ constexpr decltype(auto) get(PerfectMapConstReference<T> ref) noexcept {
 }
 
 template <typename T, FrozenString... Keys>
-class PerfectMap {
+class perfect_map {
  private:
   template <typename Ref>
   struct arrow_proxy_t;
@@ -210,8 +281,8 @@ class PerfectMap {
   using value_type = std::pair<key_type, mapped_type>;
   using size_type = std::size_t;
   using difference_type = std::ptrdiff_t;
-  using reference = PerfectMapReference<mapped_type>;
-  using const_reference = PerfectMapConstReference<mapped_type>;
+  using reference = perfect_map_reference<mapped_type>;
+  using const_reference = perfect_map_const_reference<mapped_type>;
 
   class const_iterator;
 
@@ -219,12 +290,12 @@ class PerfectMap {
    public:
     using iterator_category = std::forward_iterator_tag;
     using iterator_concept = std::forward_iterator_tag;
-    using value_type = PerfectMap::value_type;
-    using difference_type = PerfectMap::difference_type;
-    using reference = PerfectMap::reference;
+    using value_type = perfect_map::value_type;
+    using difference_type = perfect_map::difference_type;
+    using reference = perfect_map::reference;
     using pointer = void;
 
-    using arrow_proxy = PerfectMap::arrow_proxy_t<PerfectMap::reference>;
+    using arrow_proxy = perfect_map::arrow_proxy_t<perfect_map::reference>;
 
     constexpr iterator() noexcept = default;
 
@@ -269,12 +340,12 @@ class PerfectMap {
     }
 
    private:
-     friend class PerfectMap;
-     constexpr iterator(PerfectMap* owner, size_type index) noexcept
+     friend class perfect_map;
+     constexpr iterator(perfect_map* owner, size_type index) noexcept
      : owner_{owner}, index_{index} {
      }
 
-     PerfectMap* owner_{nullptr};
+     perfect_map* owner_{nullptr};
      size_type index_{0};
    };
 
@@ -282,12 +353,12 @@ class PerfectMap {
    public:
     using iterator_category = std::forward_iterator_tag;
     using iterator_concept = std::forward_iterator_tag;
-    using value_type = PerfectMap::value_type;
-    using difference_type = PerfectMap::difference_type;
-    using reference = PerfectMap::const_reference;
+    using value_type = perfect_map::value_type;
+    using difference_type = perfect_map::difference_type;
+    using reference = perfect_map::const_reference;
     using pointer = void;
 
-    using arrow_proxy = PerfectMap::arrow_proxy_t<PerfectMap::const_reference>;
+    using arrow_proxy = perfect_map::arrow_proxy_t<perfect_map::const_reference>;
 
     constexpr const_iterator() noexcept = default;
 
@@ -331,13 +402,13 @@ class PerfectMap {
     }
 
    private:
-     friend class PerfectMap;
+     friend class perfect_map;
      friend class iterator;
-     constexpr const_iterator(PerfectMap const* owner, size_type index) noexcept
+     constexpr const_iterator(perfect_map const* owner, size_type index) noexcept
      : owner_{owner}, index_{index} {
      }
 
-     PerfectMap const* owner_{nullptr};
+     perfect_map const* owner_{nullptr};
      size_type index_{0};
    };
 
@@ -345,7 +416,7 @@ class PerfectMap {
    * @brief 固定キー集合の要素数を返す
    * @return std::size_t キー数
    */
-  static_assert(sizeof...(Keys) > 0, "PerfectMap requires at least one key");
+  static_assert(sizeof...(Keys) > 0, "perfect_map requires at least one key");
 
   [[nodiscard]] static constexpr auto size() noexcept -> size_type {
     return sizeof...(Keys);
@@ -453,14 +524,14 @@ class PerfectMap {
   /**
    * @brief 値をデフォルト構築してマップを初期化する
    */
-  constexpr PerfectMap() noexcept
+  constexpr perfect_map() noexcept
     requires std::default_initializable<T> = default;
 
   /**
    * @brief 宣言順の値配列からマップを初期化する
    * @param values キー宣言順に並んだ値配列
    */
-  constexpr explicit PerfectMap(std::array<T, size()> values) noexcept(
+  constexpr explicit perfect_map(std::array<T, size()> values) noexcept(
       std::is_nothrow_move_constructible_v<T>)
   : values_{reorder_to_slots(std::move(values), std::make_index_sequence<size()>{})} {
   }
@@ -471,7 +542,7 @@ class PerfectMap {
    * @throw std::invalid_argument 要素数がキー数と一致しない場合
    * @note braced-init-list から自然に書ける ergonomic overload。
    */
-  constexpr explicit PerfectMap(std::initializer_list<T> values)
+  constexpr explicit perfect_map(std::initializer_list<T> values)
     requires std::constructible_from<T, T const&>
   : values_{materialize_staged_values(
       stage_initializer_list_values(values),
@@ -482,7 +553,7 @@ class PerfectMap {
    * @brief キー付きの値配列からマップを初期化する
    * @param entries キーと値の組を含む配列
    */
-  constexpr explicit PerfectMap(std::array<PerfectMapEntry<T>, size()> entries)
+  constexpr explicit perfect_map(std::array<perfect_map_entry<T>, size()> entries)
   : values_{materialize_staged_values(
       stage_keyed_entries(std::move(entries)),
       std::make_index_sequence<size()>{})} {
@@ -506,7 +577,7 @@ class PerfectMap {
     if (auto const slot = find_slot(key); slot.has_value()) [[likely]] {
       return values_[*slot];
     }
-    throw std::out_of_range("PerfectMap key not found");
+    throw std::out_of_range("perfect_map key not found");
   }
 
   /**
@@ -518,7 +589,7 @@ class PerfectMap {
     if (auto const slot = find_slot(key); slot.has_value()) [[likely]] {
       return values_[*slot];
     }
-    throw std::out_of_range("PerfectMap key not found");
+    throw std::out_of_range("perfect_map key not found");
   }
 
   /**
@@ -563,6 +634,24 @@ class PerfectMap {
    */
   constexpr auto operator[](std::string_view key) const -> T const& {
     return at(key);
+  }
+
+  template <typename Result>
+    requires detail::perfect_map_result<
+        Result,
+        size(),
+        detail::forward_like_t<perfect_map const&, mapped_type>>
+  [[nodiscard]] constexpr auto to() const& -> Result {
+    return to_result<Result>(*this);
+  }
+
+  template <typename Result>
+    requires detail::perfect_map_result<
+        Result,
+        size(),
+        detail::forward_like_t<perfect_map&&, mapped_type>>
+  [[nodiscard]] constexpr auto to() && -> Result {
+    return to_result<Result>(std::move(*this));
   }
 
  private:
@@ -638,7 +727,7 @@ class PerfectMap {
     requires std::constructible_from<T, T const&> {
     if (values.size() != size()) {
       throw std::invalid_argument(
-        "PerfectMap initializer_list size mismatch: expected " +
+        "perfect_map initializer_list size mismatch: expected " +
         std::to_string(size()) +
         " values (one per key), got " +
         std::to_string(values.size())
@@ -656,7 +745,7 @@ class PerfectMap {
     return staged;
   }
 
-  static constexpr auto stage_keyed_entries(std::array<PerfectMapEntry<T>, size()> entries)
+  static constexpr auto stage_keyed_entries(std::array<perfect_map_entry<T>, size()> entries)
       -> std::array<std::optional<T>, size()> {
     std::array<std::optional<T>, size()> staged{};
     std::array<bool, size()> seen{};
@@ -664,10 +753,10 @@ class PerfectMap {
     for (auto& entry : entries) {
       auto const slot = find_slot(entry.key);
       if (!slot.has_value()) {
-        throw std::invalid_argument("PerfectMap key not found during initialization");
+        throw std::invalid_argument("perfect_map key not found during initialization");
       }
       if (seen[*slot]) {
-        throw std::invalid_argument("PerfectMap key specified more than once");
+        throw std::invalid_argument("perfect_map key specified more than once");
       }
       staged[*slot].emplace(std::move(entry.value));
       seen[*slot] = true;
@@ -675,7 +764,7 @@ class PerfectMap {
 
     for (auto const present : seen) {
       if (!present) {
-        throw std::invalid_argument("PerfectMap requires every key to be initialized");
+        throw std::invalid_argument("perfect_map requires every key to be initialized");
       }
     }
 
@@ -690,30 +779,79 @@ class PerfectMap {
     return {std::move(*staged[Index])...};
   }
 
+  template <typename Self>
+  static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) {
+    return std::forward_like<Self>(self.values_[index]);
+  }
+
+  template <typename Result, typename Self, std::size_t... Index>
+  static constexpr auto to_array_result(
+      Self&& self,
+      std::index_sequence<Index...>) -> Result {
+    return Result{
+      typename Result::value_type{
+        slot_key_views_[Index],
+        forward_mapped<Self>(std::forward<Self>(self), Index)
+      }...
+    };
+  }
+
+  template <typename Result, typename Self>
+  static constexpr auto to_associative_result(Self&& self) -> Result {
+    Result result{};
+    for (auto index = 0uz; index < size(); ++index) {
+      std::ignore = result.emplace(
+        typename Result::key_type{slot_key_views_[index]},
+        typename Result::mapped_type{forward_mapped<Self>(std::forward<Self>(self), index)}
+      );
+    }
+    return result;
+  }
+
+  template <typename Result, typename Self>
+  static constexpr auto to_result(Self&& self) -> Result {
+    using value_arg = detail::forward_like_t<Self, mapped_type>;
+
+    if constexpr (detail::perfect_map_array_result<Result, size(), value_arg>) {
+      return to_array_result<Result>(
+        std::forward<Self>(self),
+        std::make_index_sequence<size()>{}
+      );
+    } else if constexpr (detail::perfect_map_associative_result<Result, value_arg>) {
+      return to_associative_result<Result>(std::forward<Self>(self));
+    } else {
+      static_assert(
+        detail::always_false_v<Result>,
+        "perfect_map::to<Result>() supports std::map, std::unordered_map, and "
+        "std::array<pair-like, size()> results only"
+      );
+    }
+  }
+
   std::array<T, size()> values_{};
 };
 
 template <typename T, FrozenString... Keys>
-constexpr PerfectMap<T, Keys...>::iterator::operator
-    PerfectMap<T, Keys...>::const_iterator() const noexcept {
-  return typename PerfectMap<T, Keys...>::const_iterator{owner_, index_};
+constexpr perfect_map<T, Keys...>::iterator::operator
+    perfect_map<T, Keys...>::const_iterator() const noexcept {
+  return typename perfect_map<T, Keys...>::const_iterator{owner_, index_};
 }
 
 /**
- * @brief pair-like なエントリ列から PerfectMap を構築する
+ * @brief pair-like なエントリ列から perfect_map を構築する
  * @tparam T 値型
  * @tparam Keys 固定キー列
  * @param entries キーと値の組
- * @return PerfectMap<T, Keys...> 初期化済みマップ
+ * @return perfect_map<T, Keys...> 初期化済みマップ
  */
 template <typename T, FrozenString... Keys, typename... EntryLike>
-  requires (detail::PerfectMapEntryLike<T, EntryLike> && ...)
-constexpr auto make_perfect_map(EntryLike&&... entries) -> PerfectMap<T, Keys...> {
+  requires (detail::perfect_map_entry_like<T, EntryLike> && ...)
+constexpr auto make_perfect_map(EntryLike&&... entries) -> perfect_map<T, Keys...> {
   static_assert(sizeof...(EntryLike) == sizeof...(Keys),
     "make_perfect_map requires exactly one entry per key");
 
-  return PerfectMap<T, Keys...>{
-    std::array<PerfectMapEntry<T>, sizeof...(Keys)>{
+  return perfect_map<T, Keys...>{
+    std::array<perfect_map_entry<T>, sizeof...(Keys)>{
       detail::to_perfect_map_entry<T>(std::forward<EntryLike>(entries))...
     }
   };
@@ -722,7 +860,7 @@ constexpr auto make_perfect_map(EntryLike&&... entries) -> PerfectMap<T, Keys...
 namespace detail {
 
 template <typename Entry>
-concept PerfectMapKVLike = requires {
+concept perfect_map_kv_like = requires {
   typename std::remove_cvref_t<Entry>::perfect_map_kv_tag;
   typename std::remove_cvref_t<Entry>::mapped_type;
 };
@@ -730,24 +868,24 @@ concept PerfectMapKVLike = requires {
 } // namespace detail
 
 /**
- * @brief コンパイル時キー/値エントリ列から PerfectMap を構築する
+ * @brief コンパイル時キー/値エントリ列から perfect_map を構築する
  * @tparam T 値型
  * @tparam Entries `kv{"key", value}` 形式の固定エントリ列
- * @return PerfectMap<T, Entries.key...> 初期化済みマップ
+ * @return perfect_map<T, Entries.key...> 初期化済みマップ
  * @note `{"key", value}` のような裸の braced-init-list を
  *       テンプレート実引数に置くことは難しいため、`kv{"key", value}` を使う。
  * @note 値も NTTP に載るため、この API は compile-time 値向け。
  *       実行時値・非 structural type・move-only 型は `make_perfect_map()` を使う。
  */
 template <typename T, auto... Entries>
-  requires ((detail::PerfectMapKVLike<decltype(Entries)> &&
+  requires ((detail::perfect_map_kv_like<decltype(Entries)> &&
               std::constructible_from<
                   T,
                   typename std::remove_cvref_t<decltype(Entries)>::mapped_type>) && ...)
-constexpr auto make_perfect_map_kv() -> PerfectMap<T, Entries.key...> {
-  return PerfectMap<T, Entries.key...>{
-    std::array<PerfectMapEntry<T>, sizeof...(Entries)>{
-      PerfectMapEntry<T>{Entries.key.sv(), T{Entries.value}}...
+constexpr auto make_perfect_map_kv() -> perfect_map<T, Entries.key...> {
+  return perfect_map<T, Entries.key...>{
+    std::array<perfect_map_entry<T>, sizeof...(Entries)>{
+      perfect_map_entry<T>{Entries.key.sv(), T{Entries.value}}...
     }
   };
 }
@@ -758,7 +896,7 @@ namespace std {
 
 template <typename T>
 struct common_reference<
-    frozenchars::PerfectMapReference<T>&&,
+    frozenchars::perfect_map_reference<T>&&,
     std::pair<std::string_view, T>&> {
   using type = std::pair<std::string_view, T&>;
 };
@@ -766,13 +904,13 @@ struct common_reference<
 template <typename T>
 struct common_reference<
     std::pair<std::string_view, T>&,
-    frozenchars::PerfectMapReference<T>&&> {
+    frozenchars::perfect_map_reference<T>&&> {
   using type = std::pair<std::string_view, T&>;
 };
 
 template <typename T>
 struct common_reference<
-    frozenchars::PerfectMapReference<T>&&,
+    frozenchars::perfect_map_reference<T>&&,
     std::pair<std::string_view, T> const&> {
   using type = std::pair<std::string_view, T const&>;
 };
@@ -780,13 +918,13 @@ struct common_reference<
 template <typename T>
 struct common_reference<
     std::pair<std::string_view, T> const&,
-    frozenchars::PerfectMapReference<T>&&> {
+    frozenchars::perfect_map_reference<T>&&> {
   using type = std::pair<std::string_view, T const&>;
 };
 
 template <typename T>
 struct common_reference<
-    frozenchars::PerfectMapConstReference<T>&&,
+    frozenchars::perfect_map_const_reference<T>&&,
     std::pair<std::string_view, T>&> {
   using type = std::pair<std::string_view, T const&>;
 };
@@ -794,13 +932,13 @@ struct common_reference<
 template <typename T>
 struct common_reference<
     std::pair<std::string_view, T>&,
-    frozenchars::PerfectMapConstReference<T>&&> {
+    frozenchars::perfect_map_const_reference<T>&&> {
   using type = std::pair<std::string_view, T const&>;
 };
 
 template <typename T>
 struct common_reference<
-    frozenchars::PerfectMapConstReference<T>&&,
+    frozenchars::perfect_map_const_reference<T>&&,
     std::pair<std::string_view, T> const&> {
   using type = std::pair<std::string_view, T const&>;
 };
@@ -808,37 +946,37 @@ struct common_reference<
 template <typename T>
 struct common_reference<
     std::pair<std::string_view, T> const&,
-    frozenchars::PerfectMapConstReference<T>&&> {
+    frozenchars::perfect_map_const_reference<T>&&> {
   using type = std::pair<std::string_view, T const&>;
 };
 
 template <typename T>
-struct tuple_size<frozenchars::PerfectMapReference<T>>
+struct tuple_size<frozenchars::perfect_map_reference<T>>
   : integral_constant<std::size_t, 2> {
 };
 
 template <typename T>
-struct tuple_size<frozenchars::PerfectMapConstReference<T>>
+struct tuple_size<frozenchars::perfect_map_const_reference<T>>
   : integral_constant<std::size_t, 2> {
 };
 
 template <typename T>
-struct tuple_element<0, frozenchars::PerfectMapReference<T>> {
+struct tuple_element<0, frozenchars::perfect_map_reference<T>> {
   using type = std::string_view;
 };
 
 template <typename T>
-struct tuple_element<1, frozenchars::PerfectMapReference<T>> {
+struct tuple_element<1, frozenchars::perfect_map_reference<T>> {
   using type = T&;
 };
 
 template <typename T>
-struct tuple_element<0, frozenchars::PerfectMapConstReference<T>> {
+struct tuple_element<0, frozenchars::perfect_map_const_reference<T>> {
   using type = std::string_view;
 };
 
 template <typename T>
-struct tuple_element<1, frozenchars::PerfectMapConstReference<T>> {
+struct tuple_element<1, frozenchars::perfect_map_const_reference<T>> {
   using type = T const&;
 };
 
