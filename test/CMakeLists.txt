@@ -22,43 +22,43 @@ add_test(NAME example_smoke COMMAND example_smoke)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
-assert_perfect_map_compile_fail(
-  NAME perfect_map_duplicate_keys
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_duplicate_keys.cpp
-  EXPECTED_TEXT "perfect_map keys must be unique"
+assert_frozen_map_compile_fail(
+  NAME frozen_map_duplicate_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_duplicate_keys.cpp
+  EXPECTED_TEXT "frozen_map keys must be unique"
 )
 
-assert_perfect_map_compile_fail(
-  NAME perfect_map_empty_keys
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_empty_keys.cpp
-  EXPECTED_TEXT "perfect_map requires at least one key"
+assert_frozen_map_compile_fail(
+  NAME frozen_map_empty_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_empty_keys.cpp
+  EXPECTED_TEXT "frozen_map requires at least one key"
 )
 
-assert_perfect_map_compile_fail(
-  NAME perfect_map_seed_limit_zero
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_seed_limit_zero.cpp
-  EXPECTED_TEXT "perfect_map seed search exhausted"
+assert_frozen_map_compile_fail(
+  NAME frozen_map_seed_limit_zero
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_seed_limit_zero.cpp
+  EXPECTED_TEXT "frozen_map seed search exhausted"
 )
 
-assert_perfect_map_compile_fail(
-  NAME perfect_map_make_perfect_map_wrong_arity
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_make_perfect_map_wrong_arity.cpp
-  EXPECTED_TEXT "make_perfect_map requires exactly one entry per key"
+assert_frozen_map_compile_fail(
+  NAME frozen_map_make_frozen_map_wrong_arity
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_wrong_arity.cpp
+  EXPECTED_TEXT "make_frozen_map requires exactly one entry per key"
 )
 
-assert_perfect_map_compile_fail(
-  NAME perfect_map_make_perfect_map_bad_key
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_make_perfect_map_bad_key.cpp
-  EXPECTED_TEXT "perfect_map entry key must be convertible to std::string_view"
+assert_frozen_map_compile_fail(
+  NAME frozen_map_make_frozen_map_bad_key
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_bad_key.cpp
+  EXPECTED_TEXT "frozen_map entry key must be convertible to std::string_view"
 )
 
-assert_perfect_map_compile_fail(
-  NAME perfect_map_make_perfect_map_bad_value
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/perfect_map_make_perfect_map_bad_value.cpp
-  EXPECTED_TEXT "perfect_map entry value must be constructible as mapped_type"
+assert_frozen_map_compile_fail(
+  NAME frozen_map_make_frozen_map_bad_value
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_bad_value.cpp
+  EXPECTED_TEXT "frozen_map entry value must be constructible as mapped_type"
 )
 
-assert_perfect_map_compile_fail(
+assert_frozen_map_compile_fail(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"

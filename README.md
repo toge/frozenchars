@@ -399,24 +399,24 @@ auto constexpr q2 = make_querystring(std::tuple{"name", "Alice & Bob"});
 static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 ```
 
-## `perfect_map`（固定キーの軽量マップ）
+## `frozen_map`（固定キーの軽量マップ）
 
-`perfect_map` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
+`frozen_map` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
 
-- 宣言順の値をそのまま書きたい場合は `perfect_map{...}`
-- キー集合を明示したい場合は `make_perfect_map(...)`
-- キーと値の両方をコンパイル時に書き切りたい場合は `make_perfect_map_kv(...)`
+- 宣言順の値をそのまま書きたい場合は `frozen_map{...}`
+- キー集合を明示したい場合は `make_frozen_map(...)`
+- キーと値の両方をコンパイル時に書き切りたい場合は `make_frozen_map_kv(...)`
 - 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
 
 ### 宣言順の値を braced-init-list で書く
 
 ```cpp
-#include "frozenchars/perfect_map.hpp"
+#include "frozenchars/frozen_map.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-perfect_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
   "30", "5", "2"
 };
 
@@ -424,7 +424,7 @@ assert(map["timeout"] == "30");
 assert(map["retry"] == "5");
 assert(map["backoff"] == "2");
 
-perfect_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
+frozen_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
   "30", "5", "2"
 };
 
@@ -439,12 +439,12 @@ assert(view_map["timeout"] == "30");
 ### pair-like エントリから作る基本形
 
 ```cpp
-#include "frozenchars/perfect_map.hpp"
+#include "frozenchars/frozen_map.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs>(
+auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
   std::pair{"retry", 5},
   std::pair{"timeout", 30}
 );
@@ -455,7 +455,7 @@ static_assert(decltype(map)::size() == 2);
 ### `to<Result>()` で STL コンテナへ変換する
 
 ```cpp
-auto map = make_perfect_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>(
+auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>(
   std::pair{"retry", 5},
   std::pair{"timeout", 30},
   std::pair{"backoff", 2}
@@ -479,7 +479,7 @@ auto moved = std::move(map).to<std::unordered_map<std::string, int>>();
 
 using namespace frozenchars;
 
-auto map = make_perfect_map_kv<int,
+auto map = make_frozen_map_kv<int,
   kv{"aaa", 5},
   kv{"bbb", 3},
   kv{"ccc", 1},
@@ -495,9 +495,9 @@ static_assert(map["ddd"] == 0);
 コンパイル時APIでは `kv{"aaa", 5}` 形式を使います。
 
 > 注意:
-> `make_perfect_map_kv(...)`は、値もテンプレート実引数として保持するため、
+> `make_frozen_map_kv(...)`は、値もテンプレート実引数として保持するため、
 > 主に整数・列挙型などのコンパイル時値向けです。実行時値、ムーブ専用型、NTTPに載せにくい型を
-> 扱いたい場合は `make_perfect_map(...)` を使ってください。
+> 扱いたい場合は `make_frozen_map(...)` を使ってください。
 
 ## マルチライン文字列の処理
 
