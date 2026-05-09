@@ -101,7 +101,7 @@ constexpr decltype(auto) pair_like_get(EntryLike&& entry) {
 }
 
 template <typename T, typename EntryLike>
-concept frozen_map_entry_like =
+concept is_frozen_map_entry_like =
     PairLikeEntry<EntryLike> &&
     requires(EntryLike&& entry) {
       { pair_like_get<0>(std::forward<EntryLike>(entry)) }
@@ -109,6 +109,13 @@ concept frozen_map_entry_like =
       { pair_like_get<1>(std::forward<EntryLike>(entry)) }
           -> std::convertible_to<T>;
     };
+
+template <typename T, typename EntryLike>
+concept frozen_map_entry_like = is_frozen_map_entry_like<T, EntryLike> || []<typename U>() {
+  static_assert(is_frozen_map_entry_like<T, U>,
+    "frozen_map のエントリ型として不正です。{std::string_view, T} に変換可能なペアを指定してください。");
+  return false;
+}.template operator()<EntryLike>();
 
 template <typename T, typename EntryLike>
   requires frozen_map_entry_like<T, EntryLike>
@@ -163,7 +170,7 @@ template <typename Self, typename T>
 using forward_like_t = decltype(std::forward_like<Self>(std::declval<T&>()));
 
 template <typename Result, typename ValueArg>
-concept frozen_map_associative_result =
+concept is_frozen_map_associative_result =
     (is_std_map_v<Result> || is_std_unordered_map_v<Result>) &&
     std::default_initializable<std::remove_cvref_t<Result>> &&
     std::constructible_from<typename std::remove_cvref_t<Result>::key_type, std::string_view> &&
@@ -174,14 +181,28 @@ concept frozen_map_associative_result =
       result.emplace(std::move(key), std::move(value));
     };
 
+template <typename Result, typename ValueArg>
+concept frozen_map_associative_result = is_frozen_map_associative_result<Result, ValueArg> || []<typename R>() {
+  static_assert(is_frozen_map_associative_result<R, ValueArg>,
+    "frozen_map::to<Result>() に渡された型は std::map または std::unordered_map として要件を満たしません。");
+  return false;
+}.template operator()<Result>();
+
 template <typename Result, std::size_t ExpectedSize, typename ValueArg>
-concept frozen_map_array_result =
+concept is_frozen_map_array_result =
     is_std_array_v<Result> &&
     std::tuple_size_v<std::remove_cvref_t<Result>> == ExpectedSize &&
     PairLikeEntry<typename std::remove_cvref_t<Result>::value_type> &&
     std::constructible_from<typename std::remove_cvref_t<Result>::value_type,
         std::string_view,
         ValueArg>;
+
+template <typename Result, std::size_t ExpectedSize, typename ValueArg>
+concept frozen_map_array_result = is_frozen_map_array_result<Result, ExpectedSize, ValueArg> || []<typename R>() {
+  static_assert(is_frozen_map_array_result<R, ExpectedSize, ValueArg>,
+    "frozen_map::to<Result>() に渡された型は std::array として要件を満たしません（サイズ、値型などを確認してください）。");
+  return false;
+}.template operator()<Result>();
 
 template <typename Result, std::size_t ExpectedSize, typename ValueArg>
 concept frozen_map_result =

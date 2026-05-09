@@ -18,10 +18,19 @@ struct FrozenString;
 struct pipe_adaptor_base {};
 
 /**
- * @brief パイプアダプタのコンセプト
+ * @brief パイプアダプタのコンセプト（内部用）
  */
 template <typename T>
-concept PipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_base>;
+concept IsPipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_base>;
+
+/**
+ * @brief パイプアダプタのコンセプト（診断メッセージ付き）
+ */
+template <typename T>
+concept PipeAdaptor = IsPipeAdaptor<T> || []<typename U>() {
+  static_assert(IsPipeAdaptor<U>, "指定された型は PipeAdaptor ではありません。pipe_adaptor_base を継承していることを確認してください。");
+  return false;
+}.template operator()<T>();
 
 namespace detail {
 
