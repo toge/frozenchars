@@ -27,10 +27,7 @@ concept IsPipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_b
  * @brief パイプアダプタのコンセプト（診断メッセージ付き）
  */
 template <typename T>
-concept PipeAdaptor = IsPipeAdaptor<T> || []<typename U>() {
-  static_assert(IsPipeAdaptor<U>, "指定された型は PipeAdaptor ではありません。pipe_adaptor_base を継承していることを確認してください。");
-  return false;
-}.template operator()<T>();
+concept PipeAdaptor = IsPipeAdaptor<T>;
 
 namespace detail {
 

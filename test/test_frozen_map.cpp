@@ -48,9 +48,10 @@ TEST_CASE("frozen_map converts to requested STL containers by explicit result ty
   });
   REQUIRE(array == std::array<std::pair<std::string_view, int>, 3>{
     std::pair<std::string_view, int>{"timeout", 30},
-    std::pair<std::string_view, int>{"backoff", 2},
     std::pair<std::string_view, int>{"retry", 7},
+    std::pair<std::string_view, int>{"backoff", 2},
   });
+
 }
 
 TEST_CASE("frozen_map exposes container-like type aliases and size helpers", "[frozen_map]") {
@@ -430,7 +431,7 @@ TEST_CASE("frozen_map iterates with key and value access", "[frozen_map]") {
 
   REQUIRE(index == 3);
   REQUIRE(std::ranges::find(values, 30) != values.end());
-  REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
+  REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "retry", "backoff"});
 }
 
 TEST_CASE("frozen_map iterates with key and value access (string)", "[frozen_map]") {
@@ -450,7 +451,7 @@ TEST_CASE("frozen_map iterates with key and value access (string)", "[frozen_map
 
   REQUIRE(index == 3);
   REQUIRE(std::ranges::find(values, std::string_view{"300"}) != values.end());
-  REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "backoff", "retry"});
+  REQUIRE(keys == std::array<std::string_view, 3>{"timeout", "retry", "backoff"});
 }
 
 TEST_CASE("frozen_map supports std::string declaration-order initialization", "[frozen_map]") {
