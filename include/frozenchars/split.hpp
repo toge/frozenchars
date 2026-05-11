@@ -3,10 +3,13 @@
 #include "frozen_string.hpp"
 #include "number_conv.hpp"
 #include "detail/split_impl.hpp"
+#include "detail/char_utils.hpp"
+#include "concepts.hpp"
 #include <array>
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
+#include <algorithm>
 
 namespace frozenchars {
 
@@ -106,31 +109,44 @@ auto consteval split(char const (&str)[N]) noexcept {
   return split<Count, IsDelimiter>(FrozenString{str});
 }
 
+namespace detail {
+  /**
+   * @brief split の結果を型レベルで保持するためのヘルパー
+   */
+  template <auto Str, auto IsDelim>
+  struct split_result {
+    static constexpr auto token_count = detail::split_count_impl<IsDelim>(Str);
+    static constexpr auto max_len     = detail::max_token_len_impl<IsDelim>(Str);
+    
+    static constexpr auto get_value() {
+        auto res = std::array<FrozenString<max_len + 1>, token_count>{};
+        for (auto& token : res) token.length = 0;
+        auto src = 0uz;
+        auto dst = 0uz;
+        while (src < Str.length && dst < token_count) {
+          while (src < Str.length && IsDelim(Str.buffer[src])) ++src;
+          if (src >= Str.length) break;
+          auto token_len = 0uz;
+          while (src < Str.length && !IsDelim(Str.buffer[src])) {
+            res[dst].buffer[token_len++] = Str.buffer[src++];
+          }
+          res[dst].buffer[token_len] = '\0';
+          res[dst].length = token_len;
+          ++dst;
+        }
+        return res;
+    }
+    static constexpr auto value = get_value();
+  };
+}
+
 /**
  * @brief 文字列をNTTPとして受け取り、正確なサイズの配列に分割する
  */
-template <auto Str, auto IsDelimiter = detail::is_any_whitespace>
+template <auto Str, auto IsDelim = detail::is_any_whitespace>
   requires (detail::is_frozen_string_v<decltype(Str)>
-            && std::predicate<decltype(IsDelimiter), char>)
-auto consteval split() noexcept {
-  constexpr auto token_count = detail::split_count_impl<IsDelimiter>(Str);
-  constexpr auto max_len     = detail::max_token_len_impl<IsDelimiter>(Str);
-  auto res = std::array<FrozenString<max_len + 1>, token_count>{};
-  auto src = 0uz;
-  auto dst = 0uz;
-  while (src < Str.length && dst < token_count) {
-    while (src < Str.length && IsDelimiter(Str.buffer[src])) ++src;
-    if (src >= Str.length) break;
-    auto token_len = 0uz;
-    while (src < Str.length && !IsDelimiter(Str.buffer[src])) {
-      res[dst].buffer[token_len++] = Str.buffer[src++];
-    }
-    res[dst].buffer[token_len] = '\0';
-    res[dst].length = token_len;
-    ++dst;
-  }
-  return res;
-}
+            && std::predicate<decltype(IsDelim), char>)
+inline constexpr auto split_v = detail::split_result<Str, IsDelim>::value;
 
 /**
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する
