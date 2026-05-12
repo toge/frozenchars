@@ -19,6 +19,7 @@ auto consteval operator""_fs() noexcept {
     res.buffer[i] = s[i];
   }
   res.buffer[s.size()] = '\0';
+  res.length = s.size();
   return res;
 }
 

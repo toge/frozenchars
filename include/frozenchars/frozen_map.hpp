@@ -69,34 +69,43 @@ namespace crc32c {
  * @brief ハッシュアルゴリズム: ハードウェア命令（SSE4.2 / ARM CRC32）を使用、そうでなければソフトウェア実装
  */
 constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> std::uint64_t {
-  if (!std::is_constant_evaluated()) {
+  auto h = [key, seed] {
+    if (!std::is_constant_evaluated()) {
 #if defined(__SSE4_2__)
-    std::uint64_t crc = seed;
-    auto const n = key.size();
-    auto const d = key.data();
-    std::size_t i = 0;
-    for (; i + 8 <= n; i += 8) {
-        std::uint64_t chunk;
-        std::memcpy(&chunk, d + i, 8);
-        crc = _mm_crc32_u64(crc, chunk);
-    }
-    for (; i < n; ++i) crc = _mm_crc32_u8(static_cast<std::uint32_t>(crc), static_cast<std::uint8_t>(d[i]));
-    return crc;
+      std::uint64_t crc = seed;
+      auto const n = key.size();
+      auto const d = key.data();
+      std::size_t i = 0;
+      for (; i + 8 <= n; i += 8) {
+          std::uint64_t chunk;
+          std::memcpy(&chunk, d + i, 8);
+          crc = _mm_crc32_u64(crc, chunk);
+      }
+      for (; i < n; ++i) crc = _mm_crc32_u8(static_cast<std::uint32_t>(crc), static_cast<std::uint8_t>(d[i]));
+      return crc;
 #elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
-    std::uint32_t crc = seed;
-    auto const n = key.size();
-    auto const d = reinterpret_cast<const std::uint8_t*>(key.data());
-    std::size_t i = 0;
-    for (; i + 8 <= n; i += 8) {
-        std::uint64_t chunk;
-        std::memcpy(&chunk, d + i, 8);
-        crc = __crc32cd(crc, chunk);
-    }
-    for (; i < n; ++i) crc = __crc32cb(crc, d[i]);
-    return crc;
+      std::uint32_t crc = seed;
+      auto const n = key.size();
+      auto const d = reinterpret_cast<const std::uint8_t*>(key.data());
+      std::size_t i = 0;
+      for (; i + 8 <= n; i += 8) {
+          std::uint64_t chunk;
+          std::memcpy(&chunk, d + i, 8);
+          crc = __crc32cd(crc, chunk);
+      }
+      for (; i < n; ++i) crc = __crc32cb(crc, d[i]);
+      return static_cast<std::uint64_t>(crc);
 #endif
-  }
-  return crc32c::hash_software(key, seed);
+    }
+    return static_cast<std::uint64_t>(crc32c::hash_software(key, seed));
+  }();
+  // Finalizer to break CRC32 linearity and effectively use the seed for same-length strings
+  h ^= h >> 33;
+  h *= 0xff51afd7ed558ccdull;
+  h ^= h >> 33;
+  h *= 0xc4ceb9fe1a85ec53ull;
+  h ^= h >> 33;
+  return h;
 }
 
 inline constexpr auto k_fnv_offset_basis = 14695981039346656037ull;
