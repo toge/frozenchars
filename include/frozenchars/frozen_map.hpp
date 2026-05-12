@@ -2,6 +2,7 @@
 
 #include "frozen_string.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -21,6 +22,7 @@
 #include <utility>
 #include <cstring>
 #include <ranges>
+#include <span>
 
 #if defined(__SSE4_2__)
 #include <nmmintrin.h>
@@ -302,6 +304,12 @@ class frozen_map {
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
   static constexpr auto max_size() noexcept -> size_type { return size(); }
   [[nodiscard]] static constexpr auto empty() noexcept -> bool { return false; }
+  /**
+   * @brief 辞書順にソートされたキー配列を取得する
+   */
+  [[nodiscard]] static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
+    return sorted_key_views_;
+  }
   [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator { if (auto const index = find_index_opt(key); index) return iterator{this, *index}; return end(); }
   [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator { if (auto const index = find_index_opt(key); index) return const_iterator{this, *index}; return end(); }
   [[nodiscard]] constexpr auto count(std::string_view key) const noexcept -> size_type { return find_index_opt(key).has_value() ? 1uz : 0uz; }
@@ -329,6 +337,12 @@ class frozen_map {
  private:
   /// キー文字列のビュー配列
   static constexpr std::array<std::string_view, size()> key_views_{ std::string_view{Keys.buffer.data(), Keys.length}... };
+  /// 辞書順にソートされたキー文字列のビュー配列
+  static constexpr std::array<std::string_view, size()> sorted_key_views_ = [] {
+    auto res = key_views_;
+    std::ranges::sort(res);
+    return res;
+  }();
   /// 高速ルックアップテーブルを使用するかどうかのしきい値。11キー以上はコンパイル時間を考慮し線形探索にフォールバック。
   static constexpr auto k_lookup_threshold = 10uz;
   /// ルックアップテーブルを使用するかどうかのフラグ

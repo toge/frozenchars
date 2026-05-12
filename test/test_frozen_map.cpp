@@ -1,5 +1,6 @@
 #include "catch2/catch_all.hpp"
 
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <iterator>
@@ -542,4 +543,11 @@ TEST_CASE("frozen_map supports more than 10 keys (linear search fallback)", "[fr
   REQUIRE(map["k11"] == 11);
   REQUIRE(map["k12"] == 12);
   REQUIRE_FALSE(map.contains("k13"));
+}
+
+TEST_CASE("frozen_map sorted keys", "[frozen_map]") {
+  using Map = frozen_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>;
+  auto keys = Map::keys();
+  std::array<std::string_view, 3> expected{"backoff", "retry", "timeout"};
+  REQUIRE(std::ranges::equal(keys, expected));
 }
