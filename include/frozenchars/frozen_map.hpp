@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <utility>
 #include <cstring>
+#include <ranges>
 
 #if defined(__SSE4_2__)
 #include <nmmintrin.h>
@@ -133,26 +134,42 @@ consteval auto has_duplicate_keys() -> bool {
   }
 }
 
-template <std::size_t Size>
-using index_type_t = std::conditional_t<(Size < 127), std::int8_t,
-                    std::conditional_t<(Size < 32767), std::int16_t, std::int32_t>>;
+/**
+ * @brief テーブルサイズに応じた適切なインデックス型を選択する
+ */
+template <std::size_t TableSize>
+using index_type_t = std::conditional_t<(TableSize < 127), std::int8_t,
+                    std::conditional_t<(TableSize < 32767), std::int16_t, std::int32_t>>;
 
+/**
+ * @brief ルックアップテーブルのメタデータとシード値の探索結果
+ */
+template <std::size_t TableSize, std::size_t KeyCount>
+struct lookup_seed_result {
+  using index_t = index_type_t<KeyCount>;
+  std::uint32_t seed;              ///< 衝突を回避するためのハッシュシード
+  std::array<index_t, TableSize> table; ///< インデックス値を格納するルックアップテーブル
+};
+
+/**
+ * @brief 完全衝突ゼロのルックアップテーブルを構築するためのシード値を探索する
+ * キー数が多い場合、コンパイル時の計算量制限を回避するためにこの関数の呼び出しはスキップされる必要がある。
+ */
 template <std::size_t TableSize, FrozenString... Keys>
 consteval auto find_lookup_seed() {
-  using index_t = index_type_t<sizeof...(Keys)>;
-  struct Result { std::uint32_t seed; std::array<index_t, TableSize> table; };
-  static_assert(!has_duplicate_keys<Keys...>(), "frozen_map keys must be unique");
+  using result_t = lookup_seed_result<TableSize, sizeof...(Keys)>;
+  using index_t = typename result_t::index_t;
   constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
   constexpr auto mask = TableSize - 1;
   for (auto seed = 0u; seed < 1'000'000u; ++seed) {
-    std::array<index_t, TableSize> table; table.fill(-1);
+    std::array<index_t, TableSize> table; table.fill(static_cast<index_t>(-1));
     auto collision = false;
     for (auto i = 0uz; i < sizeof...(Keys); ++i) {
       auto const slot = static_cast<std::size_t>(hash_impl(key_views[i], seed) & mask);
-      if (table[slot] != -1) { collision = true; break; }
+      if (table[slot] != static_cast<index_t>(-1)) { collision = true; break; }
       table[slot] = static_cast<index_t>(i);
     }
-    if (!collision) return Result{seed, table};
+    if (!collision) return result_t{seed, table};
   }
   throw "frozen_map seed search exhausted";
 }
@@ -281,6 +298,7 @@ class frozen_map {
   using const_iterator = iterator_base<frozen_map const, const_reference>;
 
   static_assert(sizeof...(Keys) > 0, "frozen_map requires at least one key");
+  static_assert(!detail::has_duplicate_keys<Keys...>(), "frozen_map keys must be unique");
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
   static constexpr auto max_size() noexcept -> size_type { return size(); }
   [[nodiscard]] static constexpr auto empty() noexcept -> bool { return false; }
@@ -309,46 +327,89 @@ class frozen_map {
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map&&, mapped_type>>
   [[nodiscard]] constexpr auto to() && -> Result { return to_result<Result>(std::move(*this)); }
  private:
+  /// キー文字列のビュー配列
   static constexpr std::array<std::string_view, size()> key_views_{ std::string_view{Keys.buffer.data(), Keys.length}... };
-  static constexpr auto table_size_ = detail::next_pow2(size() * 2);
+  /// 高速ルックアップテーブルを使用するかどうかのしきい値。11キー以上はコンパイル時間を考慮し線形探索にフォールバック。
+  static constexpr auto k_lookup_threshold = 10uz;
+  /// ルックアップテーブルを使用するかどうかのフラグ
+  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
+  /// ルックアップテーブルのサイズ（2のべき乗）。使用しない場合は最小サイズ。
+  static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 2) : 1uz;
+  /// スロット選択用のマスク
   static constexpr auto mask_ = table_size_ - 1;
-  static constexpr auto metadata_ = detail::find_lookup_seed<table_size_, Keys...>();
+
+  /**
+   * @brief ルックアップ用のメタデータを生成する。キー数が多い場合は探索をスキップする。
+   */
+  static consteval auto make_lookup_metadata() {
+    if constexpr (use_lookup_table_) {
+      return detail::find_lookup_seed<table_size_, Keys...>();
+    } else {
+      using index_t = detail::index_type_t<size()>;
+      return detail::lookup_seed_result<table_size_, size()>{ 0, { static_cast<index_t>(-1) } };
+    }
+  }
+  static constexpr auto metadata_ = make_lookup_metadata();
   static constexpr auto k_seed = metadata_.seed;
   static constexpr auto lookup_table_ = metadata_.table;
+
+  /// 全てのキーが16文字以下であるかどうかのフラグ
   static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);
+  /// 短いキー比較の最適化用構造体
   struct alignas(16) PaddedKey { std::uint64_t data[2]{0, 0}; std::uint8_t len = 0; };
+  /**
+   * @brief 短いキー比較を高速化するためのパディング済みキーデータを生成する
+   */
   static consteval auto make_padded_keys() {
-      std::array<PaddedKey, size()> res{}; std::size_t idx = 0;
-      ([&]{ res[idx].len = static_cast<std::uint8_t>(Keys.length);
-          for (std::size_t i = 0; i < Keys.length; ++i) res[idx].data[i / 8] |= (static_cast<std::uint64_t>(static_cast<unsigned char>(Keys.buffer[i])) << ((i % 8) * 8));
-          idx++; }(), ...); return res;
+    std::array<PaddedKey, size()> res{}; std::size_t idx = 0;
+    ([&]{ res[idx].len = static_cast<std::uint8_t>(Keys.length);
+        for (std::size_t i = 0; i < Keys.length; ++i) res[idx].data[i / 8] |= (static_cast<std::uint64_t>(static_cast<unsigned char>(Keys.buffer[i])) << ((i % 8) * 8));
+        idx++; }(), ...); return res;
   }
   static constexpr auto padded_keys_ = make_padded_keys();
-  [[nodiscard]] static constexpr auto find_index_opt(std::string_view key) noexcept -> std::optional<size_type> {
-    auto const h = detail::hash_impl(key, k_seed);
-    auto const slot = static_cast<std::size_t>(h & mask_);
-    auto const index = lookup_table_[slot];
-    if (index == -1) return std::nullopt;
+
+  /**
+   * @brief 与えられたキーが指定インデックスのキーと一致するか判定する
+   * 短いキー最適化が有効な場合はパディング済みデータで比較を行う。
+   */
+  [[nodiscard]] static constexpr auto key_equals(std::string_view key, size_type index) noexcept -> bool {
     if constexpr (all_keys_short) {
-        if (key.size() > 16) return std::nullopt;
-        auto const& pk = padded_keys_[index];
-        if (key.size() != pk.len) return std::nullopt;
-        std::uint64_t low = 0, high = 0;
-        auto const d = key.data(); auto const n = key.size();
-        if (!std::is_constant_evaluated()) {
-            if (n >= 8) { std::memcpy(&low, d, 8); if (n > 8) std::memcpy(&high, d + 8, n - 8); }
-            else std::memcpy(&low, d, n);
-        } else {
-            for (std::size_t i = 0; i < n; ++i) {
-                if (i < 8) low |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << (i * 8));
-                else high |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << ((i - 8) * 8));
-            }
+      if (key.size() > 16) return false;
+      auto const& pk = padded_keys_[index];
+      if (key.size() != pk.len) return false;
+      std::uint64_t low = 0, high = 0;
+      auto const d = key.data(); auto const n = key.size();
+      if (!std::is_constant_evaluated()) {
+        if (n >= 8) { std::memcpy(&low, d, 8); if (n > 8) std::memcpy(&high, d + 8, n - 8); }
+        else std::memcpy(&low, d, n);
+      } else {
+        for (std::size_t i = 0; i < n; ++i) {
+          if (i < 8) low |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << (i * 8));
+          else high |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << ((i - 8) * 8));
         }
-        if (low == pk.data[0] && high == pk.data[1]) [[likely]] return static_cast<size_type>(index);
-        return std::nullopt;
+      }
+      return (low == pk.data[0] && high == pk.data[1]);
     }
-    if (key_views_[index] == key) [[likely]] return static_cast<size_type>(index);
-    return std::nullopt;
+    return key_views_[index] == key;
+  }
+
+  /**
+   * @brief キーに対応するインデックスを探索する。サイズに応じてルックアップテーブルまたは線形探索を使い分ける。
+   */
+  [[nodiscard]] static constexpr auto find_index_opt(std::string_view key) noexcept -> std::optional<size_type> {
+    if constexpr (use_lookup_table_) {
+      auto const h = detail::hash_impl(key, k_seed);
+      auto const slot = static_cast<std::size_t>(h & mask_);
+      auto const index = lookup_table_[slot];
+      if (index == static_cast<decltype(index)>(-1)) return std::nullopt;
+      if (key_equals(key, static_cast<size_type>(index))) [[likely]] return static_cast<size_type>(index);
+      return std::nullopt;
+    } else {
+      for (auto const i : std::views::iota(0uz, size())) {
+        if (key_equals(key, i)) return i;
+      }
+      return std::nullopt;
+    }
   }
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
     if (values.size() != size()) throw std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size()));

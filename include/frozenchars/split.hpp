@@ -149,6 +149,16 @@ template <auto Str, auto IsDelim = detail::is_any_whitespace>
 inline constexpr auto split_v = detail::split_result<Str, IsDelim>::value;
 
 /**
+ * @brief 文字列をNTTPとして受け取り、正確なサイズの配列に分割する
+ */
+template <auto Str, auto IsDelim = detail::is_any_whitespace>
+  requires (detail::is_frozen_string_v<decltype(Str)>
+            && std::predicate<decltype(IsDelim), char>)
+auto consteval split() noexcept {
+  return split_v<Str, IsDelim>;
+}
+
+/**
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する
  */
 template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = int, size_t N>

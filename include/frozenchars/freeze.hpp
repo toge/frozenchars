@@ -12,19 +12,6 @@
 
 namespace frozenchars {
 
-namespace detail {
-
-template <typename T>
-struct is_frozen_string : std::false_type {};
-
-template <size_t N>
-struct is_frozen_string<FrozenString<N>> : std::true_type {};
-
-template <typename T>
-inline constexpr auto is_frozen_string_v = is_frozen_string<std::remove_cvref_t<T>>::value;
-
-} // namespace detail
-
 /*===============================================================================*\
  * 各種データ型に対応したfreeze関数の定義
 \*===============================================================================*/

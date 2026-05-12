@@ -527,3 +527,19 @@ TEST_CASE("frozen_map example supports find and iterator loops", "[frozen_map]")
 
   REQUIRE(total == 35);
 }
+
+TEST_CASE("frozen_map supports more than 10 keys (linear search fallback)", "[frozen_map]") {
+  frozen_map<int, 
+    "k1"_fs, "k2"_fs, "k3"_fs, "k4"_fs, "k5"_fs,
+    "k6"_fs, "k7"_fs, "k8"_fs, "k9"_fs, "k10"_fs,
+    "k11"_fs, "k12"_fs> map{
+    std::array<int, 12>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+  };
+
+  REQUIRE(map.size() == 12);
+  REQUIRE(map["k1"] == 1);
+  REQUIRE(map["k10"] == 10);
+  REQUIRE(map["k11"] == 11);
+  REQUIRE(map["k12"] == 12);
+  REQUIRE_FALSE(map.contains("k13"));
+}
