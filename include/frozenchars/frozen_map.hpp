@@ -412,8 +412,8 @@ private:
     std::ranges::sort(res);
     return res;
   }();
-  /// 高速ルックアップテーブルを使用するかどうかのしきい値。11キー以上はコンパイル時間を考慮し線形探索にフォールバック。
-  static constexpr auto k_lookup_threshold = 10uz;
+  /// 高速ルックアップテーブルを使用するかどうかのしきい値。26キー以上はコンパイル時間を考慮し線形探索にフォールバック。
+  static constexpr auto k_lookup_threshold = 25uz;
   /// ルックアップテーブルを使用するかどうかのフラグ
   static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
   /// ルックアップテーブルのサイズ（2のべき乗）。使用しない場合は最小サイズ。
