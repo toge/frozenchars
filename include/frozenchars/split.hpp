@@ -117,7 +117,7 @@ namespace detail {
   struct split_result {
     static constexpr auto token_count = detail::split_count_impl<IsDelim>(Str);
     static constexpr auto max_len     = detail::max_token_len_impl<IsDelim>(Str);
-    
+
     static constexpr auto get_value() {
         auto res = std::array<FrozenString<max_len + 1>, token_count>{};
         for (auto& token : res) token.length = 0;

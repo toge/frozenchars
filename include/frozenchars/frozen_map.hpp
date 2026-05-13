@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <cstddef>
 #include <concepts>
 #include <cstdint>
@@ -47,26 +46,31 @@ using forward_like_t = decltype(std::forward_like<Self>(std::declval<T&>()));
  * @brief ソフトウェア版 CRC32C (Castagnoli) 実装 (Constexpr用)
  */
 namespace crc32c {
-  static constexpr std::uint32_t k_polynomial = 0x82F63B78;
-  consteval auto make_table() {
-    std::array<std::uint32_t, 256> table{};
-    for (std::uint32_t i = 0; i < 256; ++i) {
-      std::uint32_t res = i;
-      for (int j = 0; j < 8; ++j) res = (res >> 1) ^ (res & 1 ? k_polynomial : 0);
-      table[i] = res;
-    }
-    return table;
+
+static constexpr std::uint32_t k_polynomial = 0x82F63B78;
+
+consteval auto make_table() {
+  std::array<std::uint32_t, 256> table{};
+  for (std::uint32_t i = 0; i < 256; ++i) {
+    std::uint32_t res = i;
+    for (int j = 0; j < 8; ++j) res = (res >> 1) ^ (res & 1 ? k_polynomial : 0);
+    table[i] = res;
   }
-  static constexpr auto k_table = make_table();
-  constexpr auto update_byte(std::uint32_t crc, std::uint8_t byte) noexcept -> std::uint32_t {
-    return (crc >> 8) ^ k_table[(crc ^ byte) & 0xFF];
-  }
-  constexpr auto hash_software(std::string_view key, std::uint32_t seed) noexcept -> std::uint32_t {
-    std::uint32_t crc = seed;
-    for (auto const c : key) crc = update_byte(crc, static_cast<std::uint8_t>(c));
-    return crc;
-  }
+  return table;
 }
+
+static constexpr auto k_table = make_table();
+constexpr auto update_byte(std::uint32_t crc, std::uint8_t byte) noexcept -> std::uint32_t {
+  return (crc >> 8) ^ k_table[(crc ^ byte) & 0xFF];
+}
+
+constexpr auto hash_software(std::string_view key, std::uint32_t seed) noexcept -> std::uint32_t {
+  std::uint32_t crc = seed;
+  for (auto const c : key) crc = update_byte(crc, static_cast<std::uint8_t>(c));
+  return crc;
+}
+
+} // namespace crc32c
 
 /**
  * @brief ハッシュアルゴリズム: ハードウェア命令（SSE4.2 / ARM CRC32）を使用、そうでなければソフトウェア実装
@@ -196,12 +200,14 @@ consteval auto find_seed() -> std::uint32_t {
   }
 }
 
-template <typename EntryLike> concept PairLikeEntry = requires {
+template <typename EntryLike>
+concept PairLikeEntry = requires {
   typename std::tuple_size<std::remove_cvref_t<EntryLike>>::type;
   requires std::tuple_size_v<std::remove_cvref_t<EntryLike>> == 2;
 };
 
-template <std::size_t Index, typename EntryLike> constexpr decltype(auto) pair_like_get(EntryLike&& entry) {
+template <std::size_t Index, typename EntryLike>
+constexpr decltype(auto) pair_like_get(EntryLike&& entry) {
   using std::get; return get<Index>(std::forward<EntryLike>(entry));
 }
 
@@ -225,12 +231,17 @@ concept is_frozen_map_associative_result = (is_std_map_v<Result> || is_std_unord
       result.emplace(std::move(key), std::move(value));
     };
 
-template <typename Result, typename ValueArg> concept frozen_map_associative_result = is_frozen_map_associative_result<Result, ValueArg>;
+template <typename Result, typename ValueArg>
+concept frozen_map_associative_result = is_frozen_map_associative_result<Result, ValueArg>;
+
 template <typename Result, std::size_t ExpectedSize, typename ValueArg>
 concept is_frozen_map_array_result = is_std_array_v<Result> && std::tuple_size_v<std::remove_cvref_t<Result>> == ExpectedSize &&
     PairLikeEntry<typename std::remove_cvref_t<Result>::value_type> &&
     std::constructible_from<typename std::remove_cvref_t<Result>::value_type, std::string_view, ValueArg>;
-template <typename Result, std::size_t ExpectedSize, typename ValueArg> concept frozen_map_array_result = is_frozen_map_array_result<Result, ExpectedSize, ValueArg>;
+
+template <typename Result, std::size_t ExpectedSize, typename ValueArg>
+concept frozen_map_array_result = is_frozen_map_array_result<Result, ExpectedSize, ValueArg>;
+
 template <typename Result, std::size_t ExpectedSize, typename ValueArg>
 concept frozen_map_result = frozen_map_associative_result<Result, ValueArg> || frozen_map_array_result<Result, ExpectedSize, ValueArg>;
 
@@ -238,7 +249,7 @@ concept frozen_map_result = frozen_map_associative_result<Result, ValueArg> || f
 
 template <typename T, FrozenString... Keys>
 class frozen_map {
- public:
+public:
   using key_type = std::string_view;
   using mapped_type = T;
   using size_type = std::size_t;
@@ -259,11 +270,11 @@ class frozen_map {
 
   template <typename Owner, typename Ref>
   class iterator_base {
-   public:
+  public:
     using iterator_category = std::random_access_iterator_tag;
     using value_type = frozen_map::value_type;
     using difference_type = std::ptrdiff_t;
-    
+
     struct arrow_proxy_impl {
         Ref ref_v;
         std::string_view& key;
@@ -292,7 +303,7 @@ class frozen_map {
     friend constexpr auto operator-(iterator_base a, iterator_base b) noexcept -> difference_type { return static_cast<difference_type>(a.index_) - static_cast<difference_type>(b.index_); }
     friend constexpr bool operator==(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ == b.index_; }
     friend constexpr auto operator<=>(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ <=> b.index_; }
-   private:
+  private:
     Owner* owner_{nullptr}; size_type index_{0};
   };
 
@@ -310,9 +321,17 @@ class frozen_map {
   [[nodiscard]] static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
     return sorted_key_views_;
   }
-  [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator { if (auto const index = find_index_opt(key); index) return iterator{this, *index}; return end(); }
-  [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator { if (auto const index = find_index_opt(key); index) return const_iterator{this, *index}; return end(); }
-  [[nodiscard]] constexpr auto count(std::string_view key) const noexcept -> size_type { return find_index_opt(key).has_value() ? 1uz : 0uz; }
+  [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator {
+    auto const i = find_index_raw(key);
+    return i != size() ? iterator{this, i} : end();
+  }
+  [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator {
+    auto const i = find_index_raw(key);
+    return i != size() ? const_iterator{this, i} : end();
+  }
+  [[nodiscard]] constexpr auto count(std::string_view key) const noexcept -> size_type {
+    return find_index_raw(key) != size() ? 1uz : 0uz;
+  }
   constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
   constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
   constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
@@ -323,9 +342,19 @@ class frozen_map {
   constexpr explicit frozen_map(std::array<T, size()> values) noexcept(std::is_nothrow_move_constructible_v<T>) : values_{std::move(values)} {}
   constexpr explicit frozen_map(std::initializer_list<T> values) requires std::constructible_from<T, T const&> : values_{copy_initializer_list(values)} {}
   constexpr explicit frozen_map(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
-  [[nodiscard]] constexpr auto contains(std::string_view key) const noexcept -> bool { return find_index_opt(key).has_value(); }
-  [[nodiscard]] constexpr auto at(std::string_view key) -> T& { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; throw std::out_of_range("frozen_map key not found"); }
-  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; throw std::out_of_range("frozen_map key not found"); }
+  [[nodiscard]] constexpr auto contains(std::string_view key) const noexcept -> bool {
+    return find_index_raw(key) != size();
+  }
+  [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
+    auto const i = find_index_raw(key);
+    if (i != size()) [[likely]] return values_[i];
+    throw std::out_of_range("frozen_map key not found");
+  }
+  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
+    auto const i = find_index_raw(key);
+    if (i != size()) [[likely]] return values_[i];
+    throw std::out_of_range("frozen_map key not found");
+  }
   [[nodiscard]] constexpr auto get(std::string_view key) noexcept -> std::optional<std::reference_wrapper<T>> { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; return std::nullopt; }
   [[nodiscard]] constexpr auto get(std::string_view key) const noexcept -> std::optional<std::reference_wrapper<T const>> { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; return std::nullopt; }
   constexpr auto operator[](std::string_view key) -> T& { return at(key); }
@@ -334,9 +363,49 @@ class frozen_map {
   [[nodiscard]] constexpr auto to() const& -> Result { return to_result<Result>(*this); }
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map&&, mapped_type>>
   [[nodiscard]] constexpr auto to() && -> Result { return to_result<Result>(std::move(*this)); }
- private:
+private:
   /// キー文字列のビュー配列
   static constexpr std::array<std::string_view, size()> key_views_{ std::string_view{Keys.buffer.data(), Keys.length}... };
+
+  /// 全キーの最大長
+  static constexpr auto k_max_key_len_ = std::max({Keys.length...});
+
+  /**
+   * @brief 有効なキー長を示すビットセット（ブール配列）
+   * @details インデックス i が true であるとき、長さ i のキーが少なくとも1つ存在することを意味する。
+   *          サイズは k_max_key_len_ + 1。
+   */
+  static constexpr auto valid_lengths_ = [] {
+    std::array<bool, k_max_key_len_ + 1> table{};
+    ((table[Keys.length] = true), ...);
+    return table;
+  }();
+
+  /**
+   * @brief 全キーの長さが互いに異なるかどうかのフラグ
+   * @note true の場合、長さからインデックスを O(1) で引けるため、ハッシュ計算が不要となる。
+   */
+  static constexpr auto all_lengths_unique_ = [] {
+    std::array<std::size_t, size()> lens{ Keys.length... };
+    std::ranges::sort(lens);
+    return std::ranges::adjacent_find(lens) == lens.end();
+  }();
+
+  /**
+   * @brief キー長 → キー配列インデックスのルックアップテーブル
+   * @details all_lengths_unique_ == true の場合のみ有効。
+   *          インデックス i に対して、長さ i のキーが存在すればそのインデックスを、
+   *          存在しなければ static_cast<index_t>(-1) を格納する。
+   *          サイズは k_max_key_len_ + 1。
+   */
+  static constexpr auto length_to_index_ = [] {
+    using index_t = detail::index_type_t<size()>;
+    std::array<index_t, k_max_key_len_ + 1> table{};
+    table.fill(static_cast<index_t>(-1));
+    std::size_t idx = 0;
+    (([&]{ table[Keys.length] = static_cast<index_t>(idx++); }()), ...);
+    return table;
+  }();
   /// 辞書順にソートされたキー文字列のビュー配列
   static constexpr std::array<std::string_view, size()> sorted_key_views_ = [] {
     auto res = key_views_;
@@ -408,22 +477,49 @@ class frozen_map {
   }
 
   /**
-   * @brief キーに対応するインデックスを探索する。サイズに応じてルックアップテーブルまたは線形探索を使い分ける。
+   * @brief キーに対応するインデックスをセンチネル値で返す内部実装
+   * @param key 検索するキー
+   * @return 見つかった場合はそのインデックス（0 以上 size() 未満）、
+   *         見つからない場合は size()（センチネル値）
+   * @note この関数は std::optional を生成しないため、ホットパスでの使用に適している。
+   *       呼び出し元は戻り値 == size() を「見つからない」と解釈すること。
    */
-  [[nodiscard]] static constexpr auto find_index_opt(std::string_view key) noexcept -> std::optional<size_type> {
+  [[nodiscard]] static constexpr auto find_index_raw(std::string_view key) noexcept -> size_type {
     if constexpr (use_lookup_table_) {
+      auto const len = key.size();
+
+      // ② ハッシュレスルックアップ（全キー長が一意の場合）
+      if constexpr (all_lengths_unique_) {
+        if (len > k_max_key_len_) return size();
+        auto const index = length_to_index_[len];
+        if (index == static_cast<decltype(index)>(-1)) return size();
+        if (key_equals(key, static_cast<size_type>(index))) [[likely]]
+          return static_cast<size_type>(index);
+        return size();
+      }
+
+      // ① 長さフィルタリング（ハッシュ計算より先に実行）
+      if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
+
       auto const h = detail::hash_impl(key, k_seed);
       auto const slot = static_cast<std::size_t>(h & mask_);
       auto const index = lookup_table_[slot];
-      if (index == static_cast<decltype(index)>(-1)) return std::nullopt;
-      if (key_equals(key, static_cast<size_type>(index))) [[likely]] return static_cast<size_type>(index);
-      return std::nullopt;
+      if (index == static_cast<decltype(index)>(-1)) return size();
+      if (key_equals(key, static_cast<size_type>(index))) [[likely]]
+        return static_cast<size_type>(index);
+      return size();
     } else {
       for (auto const i : std::views::iota(0uz, size())) {
         if (key_equals(key, i)) return i;
       }
-      return std::nullopt;
+      return size();
     }
+  }
+
+  [[nodiscard]] static constexpr auto find_index_opt(std::string_view key) noexcept
+      -> std::optional<size_type> {
+    auto const i = find_index_raw(key);
+    return i != size() ? std::optional<size_type>{i} : std::nullopt;
   }
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
     if (values.size() != size()) throw std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size()));
@@ -479,8 +575,17 @@ constexpr auto make_frozen_map_kv() -> frozen_map<T, KVs.key...> {
 } // namespace frozenchars
 
 namespace std {
-template <typename T> struct tuple_size<frozenchars::frozen_map_entry<T>> : std::integral_constant<std::size_t, 2> {};
-template <std::size_t I, typename T> struct tuple_element<I, frozenchars::frozen_map_entry<T>> { using type = std::conditional_t<I == 0, std::string_view, T>; };
-template <std::size_t N, typename V> struct tuple_size<frozenchars::kv<N, V>> : std::integral_constant<std::size_t, 2> {};
-template <std::size_t I, std::size_t N, typename V> struct tuple_element<I, frozenchars::kv<N, V>> { using type = std::conditional_t<I == 0, std::string_view, V>; };
+
+template <typename T>
+struct tuple_size<frozenchars::frozen_map_entry<T>> : std::integral_constant<std::size_t, 2> {};
+
+template <std::size_t I, typename T>
+struct tuple_element<I, frozenchars::frozen_map_entry<T>> { using type = std::conditional_t<I == 0, std::string_view, T>; };
+
+template <std::size_t N, typename V>
+struct tuple_size<frozenchars::kv<N, V>> : std::integral_constant<std::size_t, 2> {};
+
+template <std::size_t I, std::size_t N, typename V>
+struct tuple_element<I, frozenchars::kv<N, V>> { using type = std::conditional_t<I == 0, std::string_view, V>; };
+
 } // namespace std

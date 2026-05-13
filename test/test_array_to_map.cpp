@@ -1,7 +1,7 @@
+#include "catch2/catch_all.hpp"
 #include "frozenchars/frozen_map.hpp"
 #include "frozenchars/split.hpp"
 #include "frozenchars/literals.hpp"
-#include <iostream>
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -28,21 +28,16 @@ struct map_helper<T, key_list<Keys...>> {
 template <typename T, typename KeyList>
 using map_from_key_list = typename map_helper<T, KeyList>::type;
 
-int main() {
+TEST_CASE("Array to Map transformation", "[frozen_map]") {
     static constexpr auto keys = split_v<"apple,banana,cherry"_fs, detail::is_char<','>>;
-    
+
     using Keys = key_list_from_array<keys>;
     using MapType = map_from_key_list<int, Keys>;
-    
+
     MapType map{1, 2, 3};
 
-    std::cout << "apple: " << map["apple"] << "\n";
-    std::cout << "banana: " << map["banana"] << "\n";
-    std::cout << "cherry: " << map["cherry"] << "\n";
-
-    if (map.contains("banana") && map["apple"] == 1) {
-        std::cout << "SUCCESS: Array to Map transformation works.\n";
-        return 0;
-    }
-    return 1;
+    REQUIRE(map["apple"] == 1);
+    REQUIRE(map["banana"] == 2);
+    REQUIRE(map["cherry"] == 3);
+    REQUIRE(map.contains("banana"));
 }
