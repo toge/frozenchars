@@ -10,7 +10,7 @@ template <auto Str, auto IsDelim>
 struct split_tester {
     static constexpr auto token_count = detail::split_count_impl<IsDelim>(Str);
     static constexpr auto max_len     = detail::max_token_len_impl<IsDelim>(Str);
-    
+
     static constexpr auto get_value() {
         std::array<FrozenString<max_len + 1>, token_count> res{};
         std::size_t src = 0;
@@ -38,11 +38,11 @@ struct comma_delim {
 int main() {
     static constexpr auto fs = FrozenString<20>("apple,banana,cherry");
     using Tester = split_tester<fs, comma_delim{}>;
-    
+
     std::cout << "Tester Token Count: " << Tester::token_count << "\n";
     std::cout << "Tester Max Len: " << Tester::max_len << "\n";
     std::cout << "Result Size: " << Tester::value.size() << "\n";
-    
+
     for (auto const& s : Tester::value) {
         std::cout << "Token: [" << s.sv() << "]\n";
     }

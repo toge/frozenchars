@@ -1,8 +1,5 @@
 #pragma once
 
-#include "frozen_string.hpp"
-#include "template_value.hpp"
-
 #include <array>
 #include <cctype>
 #include <cstddef>
@@ -13,29 +10,63 @@
 #include <tuple>
 #include <vector>
 
+#include "frozen_string.hpp"
+#include "template_value.hpp"
+
 namespace frozenchars::detail {
 
-constexpr auto k_template_max_nodes = std::size_t{1024};
+/**
+ * @brief テンプレートで保持する最大ノード数。
+ */
+constexpr auto k_template_max_nodes = std::size_t{2048};
 
+/**
+ * @brief テンプレート構文ノードの種類。
+ */
 enum class template_node_kind : std::uint8_t { text, expr, if_stmt, else_stmt, endif_stmt, for_stmt, endfor_stmt };
 
+/**
+ * @brief パース済みテンプレートの単一ノード。
+ */
 struct template_node {
+  /// ノード種別
   template_node_kind kind{};
+  /// 元テンプレート中の開始位置（半開区間）
   std::size_t begin{};
+  /// 元テンプレート中の終了位置（半開区間）
   std::size_t end{};
+  /// if ノードに紐づく else ノード位置
   std::size_t else_index{std::numeric_limits<std::size_t>::max()};
+  /// if / for ノードに紐づく閉じノード位置
   std::size_t end_index{std::numeric_limits<std::size_t>::max()};
 };
 
-struct template_program {
+/**
+ * @brief consteval パースで生成されるバイトコード相当データ。
+ *
+ * 現状は命令配列ではなく、実行に必要なノード列を保持する。
+ */
+struct template_bytecode {
+  /// ノード列
   std::array<template_node, k_template_max_nodes> nodes{};
+  /// 使用ノード数
   std::size_t count{};
 };
 
+/**
+ * @brief 空白文字判定（テンプレート用）。
+ * @param c 判定対象文字
+ * @return 空白なら true
+ */
 [[nodiscard]] constexpr auto is_space(char c) -> bool {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
 }
 
+/**
+ * @brief 文字列ビューの前後空白を除去する。
+ * @param s 入力文字列ビュー
+ * @return trim 後のビュー
+ */
 [[nodiscard]] constexpr auto trim_view(std::string_view s) -> std::string_view {
   auto begin = std::size_t{0};
   auto end = s.size();
@@ -48,10 +79,18 @@ struct template_program {
   return s.substr(begin, end - begin);
 }
 
+/**
+ * @brief テンプレート本体を consteval でパースして内部バイトコードを構築する。
+ * @tparam Src FrozenString NTTP
+ * @return パース済みバイトコード
+ *
+ * @throw consteval 文脈で文字列リテラル例外を投げる。
+ * 不正構文（未閉鎖タグ、ネスト不整合、未対応文）で失敗する。
+ */
 template <auto Src>
-consteval auto parse_program() -> template_program {
-  auto program = template_program{};
-  auto const src = Src.sv();
+consteval auto parse_program() -> template_bytecode {
+  auto constexpr src = Src.sv();
+  auto program = template_bytecode{};
   auto stack = std::array<std::size_t, k_template_max_nodes>{};
   auto stack_kind = std::array<template_node_kind, k_template_max_nodes>{};
   auto stack_size = std::size_t{0};
@@ -65,6 +104,9 @@ consteval auto parse_program() -> template_program {
     return index;
   };
 
+  // 1. text ブロックを先に切り出す
+  // 2. {{ }}, {# #}, {% %} を識別してノード化
+  // 3. if/for の対応関係は stack で後方解決
   auto pos = std::size_t{0};
   while (pos < src.size()) {
     auto tag = src.find('{', pos);
@@ -106,6 +148,7 @@ consteval auto parse_program() -> template_program {
         throw "template parse error: unclosed statement tag";
       }
       auto stmt = trim_view(src.substr(tag + 2, close - (tag + 2)));
+      // statement 系はここで分岐し、if/for の境界ノードを接続する。
       if (stmt.starts_with("if ")) {
         auto const idx = push_node(template_node_kind::if_stmt, tag + 2, close);
         stack[stack_size] = idx;
@@ -131,6 +174,7 @@ consteval auto parse_program() -> template_program {
         auto const end_idx = push_node(template_node_kind::endif_stmt, tag + 2, close);
         auto const top_idx = stack[stack_size - 1];
         if (top_kind == template_node_kind::else_stmt) {
+          // else -> endif を確定しつつ、対応する if の end_index も逆探索で埋める。
           program.nodes[top_idx].end_index = end_idx;
           for (auto i = end_idx; i > 0; --i) {
             auto const candidate = i - 1;
@@ -176,6 +220,11 @@ consteval auto parse_program() -> template_program {
   return program;
 }
 
+/**
+ * @brief template_value を数値（double）として扱えるか試す。
+ * @param v 対象値
+ * @return 数値化できる場合は値、できない場合は std::nullopt
+ */
 [[nodiscard]] inline auto try_as_double(template_value const& v) -> std::optional<double> {
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     return static_cast<double>(*p);
@@ -186,6 +235,12 @@ consteval auto parse_program() -> template_program {
   return std::nullopt;
 }
 
+/**
+ * @brief テンプレート言語の等価比較を行う。
+ * @param lhs 左辺
+ * @param rhs 右辺
+ * @return 等しい場合 true
+ */
 [[nodiscard]] inline auto equals_value(template_value const& lhs, template_value const& rhs) -> bool {
   if (lhs.storage.index() == rhs.storage.index()) {
     if (std::holds_alternative<template_null>(lhs.storage)) {
@@ -210,6 +265,13 @@ consteval auto parse_program() -> template_program {
   return lnum.has_value() && rnum.has_value() && *lnum == *rnum;
 }
 
+/**
+ * @brief テンプレート言語の大小比較（<）を行う。
+ * @param lhs 左辺
+ * @param rhs 右辺
+ * @return lhs < rhs の結果
+ * @throws template_render_error 比較不能な型の組み合わせ
+ */
 [[nodiscard]] inline auto less_value(template_value const& lhs, template_value const& rhs) -> bool {
   if (auto const lnum = try_as_double(lhs); lnum.has_value()) {
     auto const rnum = try_as_double(rhs);
@@ -224,11 +286,24 @@ consteval auto parse_program() -> template_program {
   throw template_render_error{"comparison requires same type"};
 }
 
+/**
+ * @brief 実行時式評価器（簡易再帰下降パーサ）。
+ */
 class expr_parser {
 public:
+  /**
+   * @brief 評価器を初期化する。
+   * @param text 式文字列
+   * @param scopes 変数探索スコープ（内側 -> 外側）
+   */
   expr_parser(std::string_view text, std::vector<template_object> const& scopes)
     : text_(text), scopes_(scopes) {}
 
+  /**
+   * @brief 式を評価する。
+   * @param evaluate false のときは短絡用に副作用なしで走査だけ行う
+   * @return 評価結果
+   */
   [[nodiscard]] auto parse(bool evaluate = true) -> template_value {
     auto v = parse_or(evaluate);
     skip_space();
@@ -243,12 +318,23 @@ private:
   std::size_t pos_{};
   std::vector<template_object> const& scopes_;
 
+  /**
+   * @brief 現在位置から空白を読み飛ばす。
+   */
   auto skip_space() -> void {
     while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_])) != 0) {
       ++pos_;
     }
   }
 
+  /**
+   * @brief 指定トークンを消費する。
+   *
+   * 英字トークン（and/or/not/in など）は後続識別子と連結しないよう境界を確認する。
+   *
+   * @param token 期待トークン
+   * @return 消費に成功した場合 true
+   */
   [[nodiscard]] auto consume(std::string_view token) -> bool {
     skip_space();
     if (text_.substr(pos_, token.size()) == token) {
@@ -267,6 +353,11 @@ private:
     return false;
   }
 
+  /**
+   * @brief OR 優先順位レベルを評価する。
+   * @param evaluate 短絡時の評価フラグ
+   * @return 評価結果
+   */
   [[nodiscard]] auto parse_or(bool evaluate) -> template_value {
     auto lhs = parse_and(evaluate);
     while (consume("or")) {
@@ -279,6 +370,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief AND 優先順位レベルを評価する。
+   */
   [[nodiscard]] auto parse_and(bool evaluate) -> template_value {
     auto lhs = parse_in(evaluate);
     while (consume("and")) {
@@ -291,6 +385,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief IN 演算レベルを評価する。
+   */
   [[nodiscard]] auto parse_in(bool evaluate) -> template_value {
     auto lhs = parse_eq(evaluate);
     while (consume("in")) {
@@ -320,6 +417,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief 等価比較レベルを評価する。
+   */
   [[nodiscard]] auto parse_eq(bool evaluate) -> template_value {
     auto lhs = parse_rel(evaluate);
     while (true) {
@@ -340,6 +440,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief 関係比較レベルを評価する。
+   */
   [[nodiscard]] auto parse_rel(bool evaluate) -> template_value {
     auto lhs = parse_add(evaluate);
     while (true) {
@@ -370,6 +473,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief 加減算レベルを評価する。
+   */
   [[nodiscard]] auto parse_add(bool evaluate) -> template_value {
     auto lhs = parse_mul(evaluate);
     while (true) {
@@ -406,6 +512,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief 乗除余演算レベルを評価する。
+   */
   [[nodiscard]] auto parse_mul(bool evaluate) -> template_value {
     auto lhs = parse_unary(evaluate);
     while (true) {
@@ -444,6 +553,9 @@ private:
     return lhs;
   }
 
+  /**
+   * @brief 単項演算レベルを評価する。
+   */
   [[nodiscard]] auto parse_unary(bool evaluate) -> template_value {
     if (consume("not")) {
       auto v = parse_unary(evaluate);
@@ -463,6 +575,12 @@ private:
     return parse_primary(evaluate);
   }
 
+  /**
+   * @brief 識別子（a.b.c 形式を含む）をスコープから解決する。
+   * @param name 識別子
+   * @param evaluate 評価フラグ
+   * @return 解決した値
+   */
   [[nodiscard]] auto resolve_name(std::string_view name, bool evaluate) -> template_value {
     if (!evaluate) {
       return template_value{};
@@ -503,6 +621,9 @@ private:
     return *current;
   }
 
+  /**
+   * @brief リテラル・括弧式・識別子を評価する。
+   */
   [[nodiscard]] auto parse_primary(bool evaluate) -> template_value {
     skip_space();
     if (consume("(")) {
@@ -573,13 +694,26 @@ private:
   }
 };
 
+/**
+ * @brief for 文ヘッダを分解した結果。
+ */
 struct for_header {
+  /// key 変数名（key,value 形式時のみ使用）
   std::string key_name{};
+  /// value 変数名
   std::string value_name{};
+  /// 反復対象式
   std::string expr{};
+  /// key,value 形式かどうか
   bool has_key{};
 };
 
+/**
+ * @brief `{% for ... in ... %}` 文ヘッダを解析する。
+ * @param stmt ステートメント本体
+ * @return 分解済みヘッダ
+ * @throws template_render_error 構文が不正な場合
+ */
 [[nodiscard]] inline auto parse_for_header(std::string_view stmt) -> for_header {
   auto body = trim_view(stmt);
   if (!body.starts_with("for ")) {
@@ -612,95 +746,117 @@ struct for_header {
   return header;
 }
 
+/**
+ * @brief パース済みバイトコードを実行して文字列を生成する。
+ * @tparam Src 元テンプレート文字列
+ * @param program consteval で生成済みの内部プログラム
+ * @param root ルートスコープ
+ * @return レンダリング結果
+ *
+ * @note 長いメソッドのため、以下の3フェーズに分けて読めるようにしている。
+ * - ノード走査
+ * - ノード種別ごとの評価
+ * - if/for 制御の分岐・反復
+ */
 template <auto Src>
-auto render_program(template_object const& root) -> std::string {
-  auto constexpr program = parse_program<Src>();
-  auto const src = Src.sv();
+auto render_program(template_bytecode const& program, template_object const& root) -> std::string {
+  auto constexpr src = Src.sv();
   auto out = std::string{};
   auto scopes = std::vector<template_object>{root};
 
-  auto render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
+  // begin/end は program.nodes の半開区間。
+  auto const render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
     auto i = begin;
     while (i < end) {
       auto const& node = program.nodes[i];
+      // ノード種別ごとに分岐し、必要に応じて i をジャンプ更新する
       switch (node.kind) {
-        case template_node_kind::text: {
-          out.append(src.substr(node.begin, node.end - node.begin));
-          ++i;
-          break;
+      // text ノードはそのまま出力に追加する
+      case template_node_kind::text: {
+        out.append(src.substr(node.begin, node.end - node.begin));
+        ++i;
+        break;
+      }
+
+      // expr ノードは式を評価して出力に追加する
+      case template_node_kind::expr: {
+        auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto value = expr_parser{expr, scopes}.parse();
+        out.append(template_to_string(value));
+        ++i;
+        break;
+      }
+
+      // cond を評価し、then または else 節の範囲だけを再帰実行する
+      case template_node_kind::if_stmt: {
+        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto const cond_expr = trim_view(stmt.substr(2));
+        auto const cond = expr_parser{cond_expr, scopes}.parse();
+        auto const then_end = (node.else_index != std::numeric_limits<std::size_t>::max()) ? node.else_index : node.end_index;
+        if (template_truthy(cond)) {
+          self(i + 1, then_end);
+        } else if (node.else_index != std::numeric_limits<std::size_t>::max()) {
+          self(node.else_index + 1, node.end_index);
         }
-        case template_node_kind::expr: {
-          auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
-          auto value = expr_parser{expr, scopes}.parse();
-          out.append(template_to_string(value));
-          ++i;
-          break;
-        }
-        case template_node_kind::if_stmt: {
-          auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
-          auto const cond_expr = trim_view(stmt.substr(2));
-          auto const cond = expr_parser{cond_expr, scopes}.parse();
-          auto const then_end = (node.else_index != std::numeric_limits<std::size_t>::max()) ? node.else_index : node.end_index;
-          if (template_truthy(cond)) {
-            self(i + 1, then_end);
-          } else if (node.else_index != std::numeric_limits<std::size_t>::max()) {
-            self(node.else_index + 1, node.end_index);
+        i = node.end_index + 1;
+        break;
+      }
+
+      // 配列反復とオブジェクト反復で束縛方法を切り替える
+      case template_node_kind::for_stmt: {
+        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto const header = parse_for_header(stmt);
+        auto iterable = expr_parser{header.expr, scopes}.parse();
+        auto const body_begin = i + 1;
+        auto const body_end = node.end_index;
+        if (std::holds_alternative<template_array>(iterable.storage)) {
+          auto const& arr = std::get<template_array>(iterable.storage);
+          for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
+            auto frame = template_object{};
+            frame.insert_or_assign(header.value_name, arr[idx]);
+            auto loop_obj = template_object{};
+            loop_obj.insert_or_assign("index", template_value{static_cast<std::int64_t>(idx)});
+            loop_obj.insert_or_assign("index1", template_value{static_cast<std::int64_t>(idx + 1)});
+            loop_obj.insert_or_assign("is_first", template_value{idx == 0});
+            loop_obj.insert_or_assign("is_last", template_value{idx + 1 == arr.size()});
+            frame.insert_or_assign("loop", template_value{std::move(loop_obj)});
+            scopes.push_back(std::move(frame));
+            self(body_begin, body_end);
+            scopes.pop_back();
           }
-          i = node.end_index + 1;
-          break;
-        }
-        case template_node_kind::for_stmt: {
-          auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
-          auto const header = parse_for_header(stmt);
-          auto iterable = expr_parser{header.expr, scopes}.parse();
-          auto const body_begin = i + 1;
-          auto const body_end = node.end_index;
-          if (std::holds_alternative<template_array>(iterable.storage)) {
-            auto const& arr = std::get<template_array>(iterable.storage);
-            for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
-              auto frame = template_object{};
-              frame.insert_or_assign(header.value_name, arr[idx]);
-              auto loop_obj = template_object{};
-              loop_obj.insert_or_assign("index", template_value{static_cast<std::int64_t>(idx)});
-              loop_obj.insert_or_assign("index1", template_value{static_cast<std::int64_t>(idx + 1)});
-              loop_obj.insert_or_assign("is_first", template_value{idx == 0});
-              loop_obj.insert_or_assign("is_last", template_value{idx + 1 == arr.size()});
-              frame.insert_or_assign("loop", template_value{std::move(loop_obj)});
-              scopes.push_back(std::move(frame));
-              self(body_begin, body_end);
-              scopes.pop_back();
+        } else if (std::holds_alternative<template_object>(iterable.storage)) {
+          auto const& obj = std::get<template_object>(iterable.storage);
+          auto idx = std::size_t{0};
+          for (auto const& [k, v] : obj) {
+            auto frame = template_object{};
+            if (header.has_key) {
+              frame.insert_or_assign(header.key_name, template_value{k});
             }
-          } else if (std::holds_alternative<template_object>(iterable.storage)) {
-            auto const& obj = std::get<template_object>(iterable.storage);
-            auto idx = std::size_t{0};
-            for (auto const& [k, v] : obj) {
-              auto frame = template_object{};
-              if (header.has_key) {
-                frame.insert_or_assign(header.key_name, template_value{k});
-              }
-              frame.insert_or_assign(header.value_name, v);
-              auto loop_obj = template_object{};
-              loop_obj.insert_or_assign("index", template_value{static_cast<std::int64_t>(idx)});
-              loop_obj.insert_or_assign("index1", template_value{static_cast<std::int64_t>(idx + 1)});
-              loop_obj.insert_or_assign("is_first", template_value{idx == 0});
-              loop_obj.insert_or_assign("is_last", template_value{idx + 1 == obj.size()});
-              frame.insert_or_assign("loop", template_value{std::move(loop_obj)});
-              scopes.push_back(std::move(frame));
-              self(body_begin, body_end);
-              scopes.pop_back();
-              ++idx;
-            }
-          } else {
-            throw template_render_error{"for target must be array or object"};
+            frame.insert_or_assign(header.value_name, v);
+            auto loop_obj = template_object{};
+            loop_obj.insert_or_assign("index", template_value{static_cast<std::int64_t>(idx)});
+            loop_obj.insert_or_assign("index1", template_value{static_cast<std::int64_t>(idx + 1)});
+            loop_obj.insert_or_assign("is_first", template_value{idx == 0});
+            loop_obj.insert_or_assign("is_last", template_value{idx + 1 == obj.size()});
+            frame.insert_or_assign("loop", template_value{std::move(loop_obj)});
+            scopes.push_back(std::move(frame));
+            self(body_begin, body_end);
+            scopes.pop_back();
+            ++idx;
           }
-          i = node.end_index + 1;
-          break;
+        } else {
+          throw template_render_error{"for target must be array or object"};
         }
-        case template_node_kind::else_stmt:
-        case template_node_kind::endif_stmt:
-        case template_node_kind::endfor_stmt:
-          ++i;
-          break;
+        i = node.end_index + 1;
+        break;
+      }
+
+      // ブロックの終了は無視する
+      case template_node_kind::else_stmt:
+      case template_node_kind::endif_stmt:
+      case template_node_kind::endfor_stmt:
+        ++i;
+        break;
       }
     }
   };
@@ -713,16 +869,33 @@ auto render_program(template_object const& root) -> std::string {
 
 namespace frozenchars {
 
+/**
+ * @brief テンプレートをレンダリングする高水準API。
+ * @tparam Src テンプレート文字列
+ * @param root ルートコンテキスト（object 必須）
+ * @return 出力文字列
+ */
 template <auto Src>
 auto render_template(template_value const& root) -> std::string {
   if (!std::holds_alternative<template_object>(root.storage)) {
     throw template_render_error{"root context must be object"};
   }
-  return detail::render_program<Src>(std::get<template_object>(root.storage));
+  auto constexpr program = detail::parse_program<Src>();
+  static_assert(program.count >= 0, "invalid program size");
+  return detail::render_program<Src>(program, std::get<template_object>(root.storage));
 }
 
+/**
+ * @brief `Src` 固定のテンプレートVMラッパ。
+ * @tparam Src テンプレート文字列
+ */
 template <auto Src>
 struct template_vm {
+  /**
+   * @brief レンダリングを実行する。
+   * @param root ルートコンテキスト
+   * @return 出力文字列
+   */
   static auto render(template_value const& root) -> std::string {
     return render_template<Src>(root);
   }
