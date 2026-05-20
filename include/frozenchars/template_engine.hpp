@@ -1240,6 +1240,34 @@ struct for_header {
     }
     return fn_isEmpty(args[0]);
   }
+
+  if (func_name == "default") {
+    if (args.size() != 2) {
+      throw template_render_error{"default() expects 2 arguments"};
+    }
+    return fn_default(args[0], args[1]);
+  }
+
+  if (func_name == "at") {
+    if (args.size() != 2) {
+      throw template_render_error{"at() expects 2 arguments"};
+    }
+    return fn_at(args[0], args[1]);
+  }
+
+  if (func_name == "exists") {
+    if (args.size() != 1) {
+      throw template_render_error{"exists() expects 1 argument"};
+    }
+    return fn_exists(args[0]);
+  }
+
+  if (func_name == "existsIn") {
+    if (args.size() != 2) {
+      throw template_render_error{"existsIn() expects 2 arguments"};
+    }
+    return fn_existsIn(args[0], args[1]);
+  }
   
   throw template_render_error{"unknown function: " + std::string{func_name}};
 }

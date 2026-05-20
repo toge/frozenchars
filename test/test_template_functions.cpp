@@ -784,3 +784,338 @@ TEST_CASE("template functions - divisibleBy arg count error", "[template_functio
   auto const ctx = make_template_object({});
   REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
 }
+
+// ============ Utility Functions Tests ============
+
+// default() tests
+TEST_CASE("template functions - default with non-empty string", "[template_functions][default]") {
+  constexpr auto src = "{{ default(text, \"fallback\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", "hello"},
+  });
+  REQUIRE(render_template<src>(ctx) == "hello");
+}
+
+TEST_CASE("template functions - default with empty string", "[template_functions][default]") {
+  constexpr auto src = "{{ default(text, \"fallback\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", ""},
+  });
+  REQUIRE(render_template<src>(ctx) == "fallback");
+}
+
+TEST_CASE("template functions - default with null", "[template_functions][default]") {
+  constexpr auto src = "{{ default(val, 42) }}"_fs;
+  auto const ctx = make_template_object({
+    {"val", nullptr},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("template functions - default with zero", "[template_functions][default]") {
+  constexpr auto src = "{{ default(num, 10) }}"_fs;
+  auto const ctx = make_template_object({
+    {"num", 0},
+  });
+  REQUIRE(render_template<src>(ctx) == "0");
+}
+
+TEST_CASE("template functions - default with false", "[template_functions][default]") {
+  constexpr auto src = "{{ default(flag, true) }}"_fs;
+  auto const ctx = make_template_object({
+    {"flag", false},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - default with empty array", "[template_functions][default]") {
+  constexpr auto src = "{{ default(arr, fallback_val) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", template_array{}},
+    {"fallback_val", "empty"},
+  });
+  REQUIRE(render_template<src>(ctx) == "empty");
+}
+
+TEST_CASE("template functions - default with empty object", "[template_functions][default]") {
+  constexpr auto src = "{{ default(obj, fallback_val) }}"_fs;
+  auto const ctx = make_template_object({
+    {"obj", template_object{}},
+    {"fallback_val", "empty"},
+  });
+  REQUIRE(render_template<src>(ctx) == "empty");
+}
+
+TEST_CASE("template functions - default with string literal", "[template_functions][default]") {
+  constexpr auto src = "{{ default(\"hello\", \"world\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "hello");
+}
+
+TEST_CASE("template functions - default with empty string literal", "[template_functions][default]") {
+  constexpr auto src = "{{ default(\"\", \"fallback\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "fallback");
+}
+
+// at() tests
+TEST_CASE("template functions - at array index 0", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, 0) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+TEST_CASE("template functions - at array index 1", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, 1) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "2");
+}
+
+TEST_CASE("template functions - at array index 2", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, 2) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - at array negative index -1", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, -1) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - at array negative index -2", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, -2) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "2");
+}
+
+TEST_CASE("template functions - at array negative index -3", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, -3) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+TEST_CASE("template functions - at string array", "[template_functions][at]") {
+  constexpr auto src = "{{ at(arr, 1) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({"a", "b", "c"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "b");
+}
+
+TEST_CASE("template functions - at empty array error", "[template_functions][at_error]") {
+  constexpr auto src = "{{ at(arr, 0) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", template_array{}},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - at out of bounds error", "[template_functions][at_error]") {
+  constexpr auto src = "{{ at(arr, 5) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - at negative out of bounds error", "[template_functions][at_error]") {
+  constexpr auto src = "{{ at(arr, -10) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - at non-integer index error", "[template_functions][at_error]") {
+  constexpr auto src = "{{ at(arr, 1.5) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - at non-array error", "[template_functions][at_error]") {
+  constexpr auto src = "{{ at(\"string\", 0) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// exists() tests
+TEST_CASE("template functions - exists non-empty array", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - exists empty array", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", template_array{}},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - exists non-empty object", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(obj) }}"_fs;
+  auto const ctx = make_template_object({
+    {"obj", make_template_object({{"key", "value"}})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - exists empty object", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(obj) }}"_fs;
+  auto const ctx = make_template_object({
+    {"obj", template_object{}},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - exists string returns false", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(text) }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", "string"},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - exists null returns false", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(val) }}"_fs;
+  auto const ctx = make_template_object({
+    {"val", nullptr},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - exists number returns false", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(num) }}"_fs;
+  auto const ctx = make_template_object({
+    {"num", 42},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - exists bool returns false", "[template_functions][exists]") {
+  constexpr auto src = "{{ exists(flag) }}"_fs;
+  auto const ctx = make_template_object({
+    {"flag", true},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+// existsIn() tests
+TEST_CASE("template functions - existsIn array found", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(2, arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - existsIn array not found", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(5, arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - existsIn object value found", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(\"b\", obj) }}"_fs;
+  auto const ctx = make_template_object({
+    {"obj", make_template_object({{"a", "b"}, {"c", "d"}})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - existsIn object value not found", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(\"c\", obj) }}"_fs;
+  auto const ctx = make_template_object({
+    {"obj", make_template_object({{"a", "b"}})},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - existsIn int matches double", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(2, arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({2.0, 3.0})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - existsIn double matches int", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(2.0, arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - existsIn bool found", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(true, arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({false, true})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - existsIn string found", "[template_functions][existsIn]") {
+  constexpr auto src = "{{ existsIn(\"hello\", arr) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({"world", "hello"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - existsIn non-array/object error", "[template_functions][existsIn_error]") {
+  constexpr auto src = "{{ existsIn(2, \"string\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - existsIn number container error", "[template_functions][existsIn_error]") {
+  constexpr auto src = "{{ existsIn(2, 42) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Integration tests
+TEST_CASE("template functions - default with conditional", "[template_functions][integration]") {
+  constexpr auto src = "{% if exists(arr) %}{{ at(arr, 0) }}{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({42})},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("template functions - at with mixed types", "[template_functions][integration]") {
+  constexpr auto src = "{{ at(arr, 1) }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, "string", 3.14})},
+  });
+  REQUIRE(render_template<src>(ctx) == "string");
+}
+
+TEST_CASE("template functions - default with function call", "[template_functions][integration]") {
+  constexpr auto src = "{{ default(\"\", upper(fallback)) }}"_fs;
+  auto const ctx = make_template_object({
+    {"fallback", "hello"},
+  });
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}

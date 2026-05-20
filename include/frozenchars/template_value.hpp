@@ -826,4 +826,139 @@ public:
   return template_value{false};
 }
 
+// ============ Utility Functions ============
+
+/// @brief Helper to check if a value is considered "empty" for the default function
+/// @param val Input value
+/// @return true if value is null or empty container/string
+[[nodiscard]] inline auto is_empty_value(template_value const& val) -> bool {
+  if (std::holds_alternative<template_null>(val.storage)) {
+    return true;
+  }
+  if (auto const* p = std::get_if<std::string>(&val.storage)) {
+    return p->empty();
+  }
+  if (auto const* p = std::get_if<template_array>(&val.storage)) {
+    return p->empty();
+  }
+  if (auto const* p = std::get_if<template_object>(&val.storage)) {
+    return p->empty();
+  }
+  return false;
+}
+
+/// @brief Helper to check if two template_values are equal
+/// @param lhs Left hand side value
+/// @param rhs Right hand side value
+/// @return true if values are equal
+[[nodiscard]] inline auto values_equal(template_value const& lhs, template_value const& rhs) -> bool {
+  if (std::holds_alternative<template_null>(lhs.storage) && std::holds_alternative<template_null>(rhs.storage)) {
+    return true;
+  }
+  if (auto const* p = std::get_if<bool>(&lhs.storage)) {
+    if (auto const* q = std::get_if<bool>(&rhs.storage)) {
+      return *p == *q;
+    }
+  }
+  if (auto const* p = std::get_if<std::int64_t>(&lhs.storage)) {
+    if (auto const* q = std::get_if<std::int64_t>(&rhs.storage)) {
+      return *p == *q;
+    }
+    if (auto const* q = std::get_if<double>(&rhs.storage)) {
+      return static_cast<double>(*p) == *q;
+    }
+  }
+  if (auto const* p = std::get_if<double>(&lhs.storage)) {
+    if (auto const* q = std::get_if<double>(&rhs.storage)) {
+      return *p == *q;
+    }
+    if (auto const* q = std::get_if<std::int64_t>(&rhs.storage)) {
+      return *p == static_cast<double>(*q);
+    }
+  }
+  if (auto const* p = std::get_if<std::string>(&lhs.storage)) {
+    if (auto const* q = std::get_if<std::string>(&rhs.storage)) {
+      return *p == *q;
+    }
+  }
+  return false;
+}
+
+/// @brief Returns value if not empty, otherwise returns fallback
+/// @param val Input value to test
+/// @param fallback Fallback value if val is empty
+/// @return val if non-empty, fallback otherwise
+[[nodiscard]] inline auto fn_default(template_value const& val, template_value const& fallback) noexcept(false) -> template_value {
+  return is_empty_value(val) ? fallback : val;
+}
+
+/// @brief Gets element from array at index (0-based)
+/// @param arr Array to access
+/// @param index Index to retrieve (supports negative indices from end)
+/// @return Element at index
+/// @throws template_render_error on invalid input or out of bounds
+[[nodiscard]] inline auto fn_at(template_value const& arr, template_value const& index) noexcept(false) -> template_value {
+  if (!std::holds_alternative<template_array>(arr.storage)) {
+    throw template_render_error{"at() expects array as first argument"};
+  }
+  
+  if (!std::holds_alternative<std::int64_t>(index.storage)) {
+    throw template_render_error{"at() expects integer as index"};
+  }
+  
+  auto const& array = std::get<template_array>(arr.storage);
+  auto idx = std::get<std::int64_t>(index.storage);
+  auto const size = static_cast<std::int64_t>(array.size());
+  
+  if (idx < 0) {
+    idx = size + idx;
+  }
+  
+  if (idx < 0 || idx >= size) {
+    throw template_render_error{"at() index out of bounds"};
+  }
+  
+  return array[static_cast<std::size_t>(idx)];
+}
+
+/// @brief Checks if array or object is not empty
+/// @param val Array or object to check
+/// @return true if val is non-empty array or object, false otherwise
+[[nodiscard]] inline auto fn_exists(template_value const& val) noexcept(false) -> template_value {
+  if (auto const* p = std::get_if<template_array>(&val.storage)) {
+    return template_value{!p->empty()};
+  }
+  if (auto const* p = std::get_if<template_object>(&val.storage)) {
+    return template_value{!p->empty()};
+  }
+  return template_value{false};
+}
+
+/// @brief Checks if value exists in array or matches value in object
+/// @param val Value to search for
+/// @param container Array or object to search in
+/// @return true if value found in array or matches any object value
+/// @throws template_render_error if container is not array/object
+[[nodiscard]] inline auto fn_existsIn(template_value const& val, template_value const& container) noexcept(false) -> template_value {
+  if (auto const* p = std::get_if<template_array>(&container.storage)) {
+    for (auto const& elem : *p) {
+      if (values_equal(val, elem)) {
+        return template_value{true};
+      }
+    }
+    return template_value{false};
+  }
+  
+  if (auto const* p = std::get_if<template_object>(&container.storage)) {
+    for (auto const& [k, v] : *p) {
+      if (values_equal(val, v)) {
+        return template_value{true};
+      }
+    }
+    return template_value{false};
+  }
+  
+  throw template_render_error{"existsIn() expects array or object as second argument"};
+}
+
 } // namespace frozenchars
