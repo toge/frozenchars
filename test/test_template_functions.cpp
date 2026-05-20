@@ -134,3 +134,24 @@ TEST_CASE("template functions - in for loop", "[template_functions][loop]") {
   REQUIRE(out.find("HELLO;") != std::string::npos);
   REQUIRE(out.find("WORLD;") != std::string::npos);
 }
+
+TEST_CASE("function calls in short-circuit or context", "[functions][short_circuit]") {
+  constexpr auto src = "{{ true or upper(name) }}"_fs;
+  auto const ctx = make_template_object({{"name", "hello"}});
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out == "true");
+}
+
+TEST_CASE("function calls in short-circuit and context", "[functions][short_circuit]") {
+  constexpr auto src = "{{ false and upper(name) }}"_fs;
+  auto const ctx = make_template_object({{"name", "hello"}});
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out == "false");
+}
+
+TEST_CASE("function calls evaluated when not short-circuited in and", "[functions][short_circuit]") {
+  constexpr auto src = "{{ true and upper(name) }}"_fs;
+  auto const ctx = make_template_object({{"name", "hello"}});
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out == "true");
+}

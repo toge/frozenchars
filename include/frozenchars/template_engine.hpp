@@ -864,6 +864,18 @@ private:
     // Check if this is a function call (identifier followed by '(')
     skip_space();
     if (pos_ < text_.size() && text_[pos_] == '(') {
+      // If we're in a non-evaluation context (short-circuit), skip to closing paren
+      if (!evaluate) {
+        auto paren_depth = 1;
+        ++pos_;  // skip opening paren
+        while (pos_ < text_.size() && paren_depth > 0) {
+          if (text_[pos_] == '(') ++paren_depth;
+          else if (text_[pos_] == ')') --paren_depth;
+          ++pos_;
+        }
+        return template_value{};
+      }
+      
       ++pos_;  // consume '('
       
       // Parse function arguments
