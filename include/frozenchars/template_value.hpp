@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ankerl/unordered_dense.h>
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
@@ -9,6 +8,14 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+#ifndef FROZENCHARS_OBJECT_MAP_HEADER
+#include <unordered_map>
+#define FROZENCHARS_OBJECT_MAP_HEADER
+#define FROZENCHARS_OBJECT_MAP std::unordered_map
+#else
+#include <ankerl/unordered_dense.h>
+#endif
 
 namespace frozenchars {
 
@@ -29,8 +36,12 @@ using template_array = std::vector<template_value>;
 
 /**
  * @brief テンプレートオブジェクト値の実体型。
+ *
+ * FROZENCHARS_OBJECT_MAP マクロで選択可能（デフォルト: std::unordered_map）
+ * コンパイル時に -DFROZENCHARS_OBJECT_MAP_HEADER や define で指定してカスタマイズ可能。
+ * 例: -DFROZENCHARS_OBJECT_MAP=ankerl::unordered_dense::map
  */
-using template_object = ankerl::unordered_dense::map<std::string, template_value>;
+using template_object = FROZENCHARS_OBJECT_MAP<std::string, template_value>;
 
 /**
  * @brief テンプレート言語で扱う値の共用体ラッパ。
