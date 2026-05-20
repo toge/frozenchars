@@ -13,6 +13,51 @@
 #include "frozen_string.hpp"
 #include "template_value.hpp"
 
+namespace frozenchars {
+
+/**
+ * @brief テンプレート区切り文字を保持する型。
+ *
+ * inja/Jinja と同様に、式・文・コメント・行文プレフィックスを
+ * テンプレート引数で切り替えるために使用する。
+ */
+template <
+  auto ExprOpen,
+  auto ExprClose,
+  auto StmtOpen,
+  auto StmtClose,
+  auto CommentOpen,
+  auto CommentClose,
+  auto LineStmtPrefix>
+struct template_delimiters {
+  static constexpr auto expression_open = ExprOpen;
+  static constexpr auto expression_close = ExprClose;
+  static constexpr auto statement_open = StmtOpen;
+  static constexpr auto statement_close = StmtClose;
+  static constexpr auto comment_open = CommentOpen;
+  static constexpr auto comment_close = CommentClose;
+  static constexpr auto line_statement_prefix = LineStmtPrefix;
+};
+
+inline constexpr auto default_expr_open = FrozenString<3>{"{{"};
+inline constexpr auto default_expr_close = FrozenString<3>{"}}"};
+inline constexpr auto default_stmt_open = FrozenString<3>{"{%"};
+inline constexpr auto default_stmt_close = FrozenString<3>{"%}"};
+inline constexpr auto default_comment_open = FrozenString<3>{"{#"};
+inline constexpr auto default_comment_close = FrozenString<3>{"#}"};
+inline constexpr auto default_line_stmt_prefix = FrozenString<3>{"##"};
+
+using default_template_delimiters = template_delimiters<
+  default_expr_open,
+  default_expr_close,
+  default_stmt_open,
+  default_stmt_close,
+  default_comment_open,
+  default_comment_close,
+  default_line_stmt_prefix>;
+
+} // namespace frozenchars
+
 namespace frozenchars::detail {
 
 /**
@@ -79,6 +124,76 @@ struct template_bytecode {
   return s.substr(begin, end - begin);
 }
 
+enum class template_open_kind : std::uint8_t {
+  expression,
+  statement,
+  comment,
+  line_statement,
+  none,
+};
+
+struct template_open_match {
+  std::size_t pos{std::string_view::npos};
+  template_open_kind kind{template_open_kind::none};
+};
+
+template <typename Delims>
+[[nodiscard]] constexpr auto find_line_statement(std::string_view src, std::size_t from) -> std::size_t {
+  auto const prefix = Delims::line_statement_prefix.sv();
+  if (prefix.empty()) {
+    return std::string_view::npos;
+  }
+  auto pos = src.find(prefix, from);
+  while (pos != std::string_view::npos) {
+    if (pos == 0 || src[pos - 1] == '\n') {
+      return pos;
+    }
+    pos = src.find(prefix, pos + 1);
+  }
+  return std::string_view::npos;
+}
+
+template <typename Delims>
+[[nodiscard]] constexpr auto find_next_open(std::string_view src, std::size_t from) -> template_open_match {
+  auto best = template_open_match{};
+
+  auto consider = [&](std::size_t pos, template_open_kind kind) constexpr {
+    if (pos == std::string_view::npos) {
+      return;
+    }
+    if (best.pos == std::string_view::npos || pos < best.pos) {
+      best = {pos, kind};
+      return;
+    }
+    if (pos == best.pos) {
+      auto const priority = [&](template_open_kind k) constexpr -> int {
+        switch (k) {
+          case template_open_kind::expression:
+            return 0;
+          case template_open_kind::statement:
+            return 1;
+          case template_open_kind::comment:
+            return 2;
+          case template_open_kind::line_statement:
+            return 3;
+          case template_open_kind::none:
+            return 4;
+        }
+        return 4;
+      };
+      if (priority(kind) < priority(best.kind)) {
+        best = {pos, kind};
+      }
+    }
+  };
+
+  consider(src.find(Delims::expression_open.sv(), from), template_open_kind::expression);
+  consider(src.find(Delims::statement_open.sv(), from), template_open_kind::statement);
+  consider(src.find(Delims::comment_open.sv(), from), template_open_kind::comment);
+  consider(find_line_statement<Delims>(src, from), template_open_kind::line_statement);
+  return best;
+}
+
 /**
  * @brief テンプレート本体を consteval でパースして内部バイトコードを構築する。
  * @tparam Src FrozenString NTTP
@@ -87,10 +202,22 @@ struct template_bytecode {
  * @throw consteval 文脈で文字列リテラル例外を投げる。
  * 不正構文（未閉鎖タグ、ネスト不整合、未対応文）で失敗する。
  */
-template <auto Src>
+template <auto Src, typename Delims = frozenchars::default_template_delimiters>
 consteval auto parse_program() -> template_bytecode {
   auto constexpr src = Src.sv();
   auto program = template_bytecode{};
+  auto constexpr expr_open = Delims::expression_open.sv();
+  auto constexpr expr_close = Delims::expression_close.sv();
+  auto constexpr stmt_open = Delims::statement_open.sv();
+  auto constexpr stmt_close = Delims::statement_close.sv();
+  auto constexpr comment_open = Delims::comment_open.sv();
+  auto constexpr comment_close = Delims::comment_close.sv();
+  auto constexpr line_stmt_prefix = Delims::line_statement_prefix.sv();
+
+  if (expr_open.empty() || expr_close.empty() || stmt_open.empty() || stmt_close.empty() || comment_open.empty() || comment_close.empty()) {
+    throw "template parse error: delimiters must not be empty";
+  }
+
   auto stack = std::array<std::size_t, k_template_max_nodes>{};
   auto stack_kind = std::array<template_node_kind, k_template_max_nodes>{};
   auto stack_size = std::size_t{0};
@@ -107,9 +234,77 @@ consteval auto parse_program() -> template_bytecode {
   // 1. text ブロックを先に切り出す
   // 2. {{ }}, {# #}, {% %} を識別してノード化
   // 3. if/for の対応関係は stack で後方解決
+  auto process_statement = [&](std::string_view stmt, std::size_t begin, std::size_t end) consteval {
+    if (stmt.starts_with("if ")) {
+      auto const idx = push_node(template_node_kind::if_stmt, begin, end);
+      stack[stack_size] = idx;
+      stack_kind[stack_size] = template_node_kind::if_stmt;
+      ++stack_size;
+      return;
+    }
+    if (stmt == "else") {
+      if (stack_size == 0 || stack_kind[stack_size - 1] != template_node_kind::if_stmt) {
+        throw "template parse error: unexpected else";
+      }
+      auto const if_idx = stack[stack_size - 1];
+      auto const else_idx = push_node(template_node_kind::else_stmt, begin, end);
+      program.nodes[if_idx].else_index = else_idx;
+      stack[stack_size - 1] = else_idx;
+      stack_kind[stack_size - 1] = template_node_kind::else_stmt;
+      return;
+    }
+    if (stmt == "endif") {
+      if (stack_size == 0) {
+        throw "template parse error: unexpected endif";
+      }
+      auto const top_kind = stack_kind[stack_size - 1];
+      if (top_kind != template_node_kind::if_stmt && top_kind != template_node_kind::else_stmt) {
+        throw "template parse error: unexpected endif";
+      }
+      auto const end_idx = push_node(template_node_kind::endif_stmt, begin, end);
+      auto const top_idx = stack[stack_size - 1];
+      if (top_kind == template_node_kind::else_stmt) {
+        program.nodes[top_idx].end_index = end_idx;
+        for (auto i = end_idx; i > 0; --i) {
+          auto const candidate = i - 1;
+          if (program.nodes[candidate].kind == template_node_kind::if_stmt && program.nodes[candidate].else_index == top_idx) {
+            program.nodes[candidate].end_index = end_idx;
+            break;
+          }
+        }
+      } else {
+        program.nodes[top_idx].end_index = end_idx;
+      }
+      --stack_size;
+      return;
+    }
+    if (stmt.starts_with("for ")) {
+      if (stmt.find(" in ") == std::string_view::npos) {
+        throw "template parse error: invalid for statement";
+      }
+      auto const idx = push_node(template_node_kind::for_stmt, begin, end);
+      stack[stack_size] = idx;
+      stack_kind[stack_size] = template_node_kind::for_stmt;
+      ++stack_size;
+      return;
+    }
+    if (stmt == "endfor") {
+      if (stack_size == 0 || stack_kind[stack_size - 1] != template_node_kind::for_stmt) {
+        throw "template parse error: unexpected endfor";
+      }
+      auto const for_idx = stack[stack_size - 1];
+      auto const end_idx = push_node(template_node_kind::endfor_stmt, begin, end);
+      program.nodes[for_idx].end_index = end_idx;
+      --stack_size;
+      return;
+    }
+    throw "template parse error: unsupported statement";
+  };
+
   auto pos = std::size_t{0};
   while (pos < src.size()) {
-    auto tag = src.find('{', pos);
+    auto const next = find_next_open<Delims>(src, pos);
+    auto const tag = next.pos;
     if (tag == std::string_view::npos) {
       if (pos < src.size()) {
         std::ignore = push_node(template_node_kind::text, pos, src.size());
@@ -119,99 +314,49 @@ consteval auto parse_program() -> template_bytecode {
     if (tag > pos) {
       std::ignore = push_node(template_node_kind::text, pos, tag);
     }
-    if (tag + 1 >= src.size()) {
-      std::ignore = push_node(template_node_kind::text, tag, src.size());
-      break;
-    }
-
-    auto const open2 = src.substr(tag, 2);
-    if (open2 == "{{") {
-      auto close = src.find("}}", tag + 2);
-      if (close == std::string_view::npos) {
-        throw "template parse error: unclosed expression tag";
+    switch (next.kind) {
+      case template_open_kind::expression: {
+        auto const content_begin = tag + expr_open.size();
+        auto const close = src.find(expr_close, content_begin);
+        if (close == std::string_view::npos) {
+          throw "template parse error: unclosed expression tag";
+        }
+        std::ignore = push_node(template_node_kind::expr, content_begin, close);
+        pos = close + expr_close.size();
+        break;
       }
-      std::ignore = push_node(template_node_kind::expr, tag + 2, close);
-      pos = close + 2;
-      continue;
-    }
-    if (open2 == "{#") {
-      auto close = src.find("#}", tag + 2);
-      if (close == std::string_view::npos) {
-        throw "template parse error: unclosed comment tag";
+      case template_open_kind::comment: {
+        auto const content_begin = tag + comment_open.size();
+        auto const close = src.find(comment_close, content_begin);
+        if (close == std::string_view::npos) {
+          throw "template parse error: unclosed comment tag";
+        }
+        pos = close + comment_close.size();
+        break;
       }
-      pos = close + 2;
-      continue;
-    }
-    if (open2 == "{%") {
-      auto close = src.find("%}", tag + 2);
-      if (close == std::string_view::npos) {
-        throw "template parse error: unclosed statement tag";
+      case template_open_kind::statement: {
+        auto const content_begin = tag + stmt_open.size();
+        auto const close = src.find(stmt_close, content_begin);
+        if (close == std::string_view::npos) {
+          throw "template parse error: unclosed statement tag";
+        }
+        auto const stmt = trim_view(src.substr(content_begin, close - content_begin));
+        process_statement(stmt, content_begin, close);
+        pos = close + stmt_close.size();
+        break;
       }
-      auto stmt = trim_view(src.substr(tag + 2, close - (tag + 2)));
-      // statement 系はここで分岐し、if/for の境界ノードを接続する。
-      if (stmt.starts_with("if ")) {
-        auto const idx = push_node(template_node_kind::if_stmt, tag + 2, close);
-        stack[stack_size] = idx;
-        stack_kind[stack_size] = template_node_kind::if_stmt;
-        ++stack_size;
-      } else if (stmt == "else") {
-        if (stack_size == 0 || stack_kind[stack_size - 1] != template_node_kind::if_stmt) {
-          throw "template parse error: unexpected else";
-        }
-        auto const if_idx = stack[stack_size - 1];
-        auto const else_idx = push_node(template_node_kind::else_stmt, tag + 2, close);
-        program.nodes[if_idx].else_index = else_idx;
-        stack[stack_size - 1] = else_idx;
-        stack_kind[stack_size - 1] = template_node_kind::else_stmt;
-      } else if (stmt == "endif") {
-        if (stack_size == 0) {
-          throw "template parse error: unexpected endif";
-        }
-        auto const top_kind = stack_kind[stack_size - 1];
-        if (top_kind != template_node_kind::if_stmt && top_kind != template_node_kind::else_stmt) {
-          throw "template parse error: unexpected endif";
-        }
-        auto const end_idx = push_node(template_node_kind::endif_stmt, tag + 2, close);
-        auto const top_idx = stack[stack_size - 1];
-        if (top_kind == template_node_kind::else_stmt) {
-          // else -> endif を確定しつつ、対応する if の end_index も逆探索で埋める。
-          program.nodes[top_idx].end_index = end_idx;
-          for (auto i = end_idx; i > 0; --i) {
-            auto const candidate = i - 1;
-            if (program.nodes[candidate].kind == template_node_kind::if_stmt && program.nodes[candidate].else_index == top_idx) {
-              program.nodes[candidate].end_index = end_idx;
-              break;
-            }
-          }
-        } else {
-          program.nodes[top_idx].end_index = end_idx;
-        }
-        --stack_size;
-      } else if (stmt.starts_with("for ")) {
-        if (stmt.find(" in ") == std::string_view::npos) {
-          throw "template parse error: invalid for statement";
-        }
-        auto const idx = push_node(template_node_kind::for_stmt, tag + 2, close);
-        stack[stack_size] = idx;
-        stack_kind[stack_size] = template_node_kind::for_stmt;
-        ++stack_size;
-      } else if (stmt == "endfor") {
-        if (stack_size == 0 || stack_kind[stack_size - 1] != template_node_kind::for_stmt) {
-          throw "template parse error: unexpected endfor";
-        }
-        auto const for_idx = stack[stack_size - 1];
-        auto const end_idx = push_node(template_node_kind::endfor_stmt, tag + 2, close);
-        program.nodes[for_idx].end_index = end_idx;
-        --stack_size;
-      } else {
-        throw "template parse error: unsupported statement";
+      case template_open_kind::line_statement: {
+        auto const content_begin = tag + line_stmt_prefix.size();
+        auto const line_end = src.find('\n', content_begin);
+        auto const content_end = (line_end == std::string_view::npos) ? src.size() : line_end;
+        auto const stmt = trim_view(src.substr(content_begin, content_end - content_begin));
+        process_statement(stmt, content_begin, content_end);
+        pos = (line_end == std::string_view::npos) ? src.size() : line_end + 1;
+        break;
       }
-      pos = close + 2;
-      continue;
+      case template_open_kind::none:
+        throw "template parse error: internal opener resolution failure";
     }
-
-    std::ignore = push_node(template_node_kind::text, tag, tag + 1);
-    pos = tag + 1;
   }
 
   if (stack_size != 0) {
@@ -758,7 +903,7 @@ struct for_header {
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
-template <auto Src>
+template <auto Src, typename Delims = frozenchars::default_template_delimiters>
 auto render_program(template_bytecode const& program, template_object const& root) -> std::string {
   auto constexpr src = Src.sv();
   auto out = std::string{};
@@ -875,21 +1020,20 @@ namespace frozenchars {
  * @param root ルートコンテキスト（object 必須）
  * @return 出力文字列
  */
-template <auto Src>
+template <auto Src, typename Delims = frozenchars::default_template_delimiters>
 auto render_template(template_value const& root) -> std::string {
   if (!std::holds_alternative<template_object>(root.storage)) {
     throw template_render_error{"root context must be object"};
   }
-  auto constexpr program = detail::parse_program<Src>();
-  static_assert(program.count >= 0, "invalid program size");
-  return detail::render_program<Src>(program, std::get<template_object>(root.storage));
+  auto constexpr program = detail::parse_program<Src, Delims>();
+  return detail::render_program<Src, Delims>(program, std::get<template_object>(root.storage));
 }
 
 /**
  * @brief `Src` 固定のテンプレートVMラッパ。
  * @tparam Src テンプレート文字列
  */
-template <auto Src>
+template <auto Src, typename Delims = frozenchars::default_template_delimiters>
 struct template_vm {
   /**
    * @brief レンダリングを実行する。
@@ -897,7 +1041,7 @@ struct template_vm {
    * @return 出力文字列
    */
   static auto render(template_value const& root) -> std::string {
-    return render_template<Src>(root);
+    return render_template<Src, Delims>(root);
   }
 };
 

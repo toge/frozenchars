@@ -68,3 +68,40 @@ TEST_CASE("template_vm public API", "[template_vm][api]") {
   auto const ctx = make_template_object({{"x", 9}});
   REQUIRE(template_vm<src>::render(ctx) == "X=9");
 }
+
+TEST_CASE("template runtime supports line statements", "[template_vm][line_statement]") {
+  constexpr auto src = "## if ok\nYES\n## else\nNO\n## endif\n"_fs;
+  auto const ctx = make_template_object({{"ok", true}});
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out.find("YES") != std::string::npos);
+  REQUIRE(out.find("NO") == std::string::npos);
+}
+
+TEST_CASE("template runtime supports custom delimiters", "[template_vm][delimiters]") {
+  constexpr auto expr_open = "[["_fs;
+  constexpr auto expr_close = "]]"_fs;
+  constexpr auto stmt_open = "(%"_fs;
+  constexpr auto stmt_close = "%)"_fs;
+  constexpr auto comment_open = "(#"_fs;
+  constexpr auto comment_close = "#)"_fs;
+  constexpr auto line_stmt_prefix = "%%"_fs;
+
+  using custom_delims = template_delimiters<
+    expr_open,
+    expr_close,
+    stmt_open,
+    stmt_close,
+    comment_open,
+    comment_close,
+    line_stmt_prefix>;
+
+  constexpr auto src = "Hello [[ name ]]\n%% if ok\nOK\n%% endif\n(# hidden #)\n"_fs;
+  auto const ctx = make_template_object({
+    {"name", "Tom"},
+    {"ok", true},
+  });
+  auto const out = render_template<src, custom_delims>(ctx);
+  REQUIRE(out.find("Hello Tom") != std::string::npos);
+  REQUIRE(out.find("OK") != std::string::npos);
+  REQUIRE(out.find("hidden") == std::string::npos);
+}
