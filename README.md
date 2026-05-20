@@ -16,17 +16,17 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 
 ```cpp
 #include "frozenchars.hpp"
-using namespace frozenchars;
+using namespace frozenchars::inja;
 using namespace frozenchars::literals;
 
 constexpr auto tpl = "Hello {{ name }}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
 
-auto const ctx = make_template_object({
+auto const ctx = object({
   {"name", "A"},
-  {"items", make_template_array({1, 2, 3})},
+  {"items", array({1, 2, 3})},
 });
 
-auto const out = render_template<tpl>(ctx); // "Hello A:123"
+auto const out = render<tpl>(ctx); // "Hello A:123"
 ```
 
 対応構文（コア）:

@@ -245,13 +245,13 @@ public:
 }
 
 /**
- * @brief inja 互換寄りの真偽値変換を行う。
- *
- * false 扱い: null / false / 0 / 0.0 / 空文字 / 空配列 / 空オブジェクト
- * true 扱い: 上記以外
- *
- * @param v 対象値
- * @return 真偽値
+* @brief inja 互換寄りの真偽値変換を行う。
+*
+* false 扱い: null / false / 0 / 0.0 / 空文字 / 空配列 / 空オブジェクト
+* true 扱い: 上記以外
+*
+* @param v 対象値
+* @return 真偽値
  */
 [[nodiscard]] inline auto template_truthy(template_value const& v) -> bool {
   if (std::holds_alternative<template_null>(v.storage)) {
@@ -275,14 +275,43 @@ public:
   return !std::get<template_object>(v.storage).empty();
 }
 
+} // namespace frozenchars
+
+namespace frozenchars::inja {
+
 /**
- * @brief 値をテンプレート出力用文字列に変換する。
- *
- * 配列とオブジェクトは現状の簡易表現（`[array]`, `{object}`）を返す。
- *
- * @param v 対象値
- * @return 出力文字列
- */
+* @brief 初期化リストから配列値を生成する。
+* @param items 要素列
+* @return template_value(配列)
+*/
+[[nodiscard]] inline auto array(std::initializer_list<template_value> items) -> template_value {
+  return make_template_array(items);
+}
+
+/**
+* @brief 初期化リストからオブジェクト値を生成する。
+*
+* メモ: 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
+*
+* @param items キー・値列
+* @return template_value(オブジェクト)
+*/
+[[nodiscard]] inline auto object(std::initializer_list<std::pair<std::string, template_value>> items) -> template_value {
+  return make_template_object(items);
+}
+
+} // namespace frozenchars::inja
+
+namespace frozenchars {
+
+/**
+* @brief 値をテンプレート出力用文字列に変換する。
+*
+* 配列とオブジェクトは現状の簡易表現（`[array]`, `{object}`）を返す。
+*
+* @param v 対象値
+* @return 出力文字列
+*/
 [[nodiscard]] inline auto template_to_string(template_value const& v) -> std::string {
   if (std::holds_alternative<template_null>(v.storage)) {
     return "null";
@@ -964,3 +993,7 @@ public:
 }
 
 } // namespace frozenchars
+
+namespace frozenchars::inja {
+
+} // namespace frozenchars::inja

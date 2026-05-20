@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -11,7 +12,7 @@
 #include <vector>
 
 #include "frozen_string.hpp"
-#include "template_value.hpp"
+#include "inja_value.hpp"
 
 namespace frozenchars {
 
@@ -530,7 +531,7 @@ private:
   [[nodiscard]] auto parse_or(bool evaluate) -> template_value {
     auto lhs = parse_and(evaluate);
     while (consume("or")) {
-      auto const lhs_truth = evaluate && template_truthy(lhs);
+      auto const lhs_truth = evaluate && frozenchars::template_truthy(lhs);
       auto rhs = parse_and(evaluate && !lhs_truth);
       if (evaluate) {
         lhs = template_value{lhs_truth || template_truthy(rhs)};
@@ -545,10 +546,10 @@ private:
   [[nodiscard]] auto parse_and(bool evaluate) -> template_value {
     auto lhs = parse_in(evaluate);
     while (consume("and")) {
-      auto const lhs_truth = evaluate && template_truthy(lhs);
+      auto const lhs_truth = evaluate && frozenchars::template_truthy(lhs);
       auto rhs = parse_in(evaluate && lhs_truth);
       if (evaluate) {
-        lhs = template_value{lhs_truth && template_truthy(rhs)};
+        lhs = template_value{lhs_truth && frozenchars::template_truthy(rhs)};
       }
     }
     return lhs;
@@ -1361,6 +1362,111 @@ struct for_header {
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_template_delimiters>
+auto render_program(template_bytecode const& program, template_object const& root, OutputBuffer& out) -> void {
+  auto constexpr src = Src.sv();
+  auto scopes = std::vector<template_object>{root};
+
+  // begin/end は program.nodes の半開区間。
+  auto const render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
+    auto i = begin;
+    while (i < end) {
+      auto const& node = program.nodes[i];
+      // ノード種別ごとに分岐し、必要に応じて i をジャンプ更新する
+      switch (node.kind) {
+      // text ノードはそのまま出力に追加する
+      case template_node_kind::text: {
+        out.append(src.substr(node.begin, node.end - node.begin));
+        ++i;
+        break;
+      }
+
+      // expr ノードは式を評価して出力に追加する
+      case template_node_kind::expr: {
+        auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto value = expr_parser{expr, scopes}.parse();
+        out.append(frozenchars::template_to_string(value));
+        ++i;
+        break;
+      }
+
+      // cond を評価し、then または else 節の範囲だけを再帰実行する
+      case template_node_kind::if_stmt: {
+        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto const cond_expr = trim_view(stmt.substr(2));
+        auto const cond = expr_parser{cond_expr, scopes}.parse();
+        auto const then_end = (node.else_index != std::numeric_limits<std::size_t>::max()) ? node.else_index : node.end_index;
+        if (frozenchars::template_truthy(cond)) {
+          self(i + 1, then_end);
+        } else if (node.else_index != std::numeric_limits<std::size_t>::max()) {
+          self(node.else_index + 1, node.end_index);
+        }
+        i = node.end_index + 1;
+        break;
+      }
+
+      // 配列反復とオブジェクト反復で束縛方法を切り替える
+      case template_node_kind::for_stmt: {
+        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto const header = parse_for_header(stmt);
+        auto iterable = expr_parser{header.expr, scopes}.parse();
+        auto const body_begin = i + 1;
+        auto const body_end = node.end_index;
+        if (std::holds_alternative<template_array>(iterable.storage)) {
+          auto const& arr = std::get<template_array>(iterable.storage);
+          for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
+            auto frame = template_object{};
+            frame.insert_or_assign(header.value_name, arr[idx]);
+            auto loop_obj = template_object{};
+            loop_obj.insert_or_assign("index", template_value{static_cast<std::int64_t>(idx)});
+            loop_obj.insert_or_assign("index1", template_value{static_cast<std::int64_t>(idx + 1)});
+            loop_obj.insert_or_assign("is_first", template_value{idx == 0});
+            loop_obj.insert_or_assign("is_last", template_value{idx + 1 == arr.size()});
+            frame.insert_or_assign("loop", template_value{std::move(loop_obj)});
+            scopes.push_back(std::move(frame));
+            self(body_begin, body_end);
+            scopes.pop_back();
+          }
+        } else if (std::holds_alternative<template_object>(iterable.storage)) {
+          auto const& obj = std::get<template_object>(iterable.storage);
+          auto idx = std::size_t{0};
+          for (auto const& [k, v] : obj) {
+            auto frame = template_object{};
+            if (header.has_key) {
+              frame.insert_or_assign(header.key_name, template_value{k});
+            }
+            frame.insert_or_assign(header.value_name, v);
+            auto loop_obj = template_object{};
+            loop_obj.insert_or_assign("index", template_value{static_cast<std::int64_t>(idx)});
+            loop_obj.insert_or_assign("index1", template_value{static_cast<std::int64_t>(idx + 1)});
+            loop_obj.insert_or_assign("is_first", template_value{idx == 0});
+            loop_obj.insert_or_assign("is_last", template_value{idx + 1 == obj.size()});
+            frame.insert_or_assign("loop", template_value{std::move(loop_obj)});
+            scopes.push_back(std::move(frame));
+            self(body_begin, body_end);
+            scopes.pop_back();
+            ++idx;
+          }
+        } else {
+          throw template_render_error{"for target must be array or object"};
+        }
+        i = node.end_index + 1;
+        break;
+      }
+
+      // ブロックの終了は無視する
+      case template_node_kind::else_stmt:
+      case template_node_kind::endif_stmt:
+      case template_node_kind::endfor_stmt:
+        ++i;
+        break;
+      }
+    }
+  };
+
+  render_range(0, program.count);
+}
+
 template <auto Src, typename Delims = frozenchars::default_template_delimiters>
 auto render_program(template_bytecode const& program, template_object const& root) -> std::string {
   auto constexpr src = Src.sv();
@@ -1385,7 +1491,7 @@ auto render_program(template_bytecode const& program, template_object const& roo
       case template_node_kind::expr: {
         auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
         auto value = expr_parser{expr, scopes}.parse();
-        out.append(template_to_string(value));
+        out.append(frozenchars::template_to_string(value));
         ++i;
         break;
       }
@@ -1396,7 +1502,7 @@ auto render_program(template_bytecode const& program, template_object const& roo
         auto const cond_expr = trim_view(stmt.substr(2));
         auto const cond = expr_parser{cond_expr, scopes}.parse();
         auto const then_end = (node.else_index != std::numeric_limits<std::size_t>::max()) ? node.else_index : node.end_index;
-        if (template_truthy(cond)) {
+        if (frozenchars::template_truthy(cond)) {
           self(i + 1, then_end);
         } else if (node.else_index != std::numeric_limits<std::size_t>::max()) {
           self(node.else_index + 1, node.end_index);
@@ -1488,6 +1594,32 @@ auto render_template(template_value const& root) -> std::string {
 }
 
 /**
+ * @brief テンプレートをレンダリングし、カスタム出力バッファへ結果を追加する。
+ * 
+ * @tparam Src テンプレート文字列
+ * @tparam OutputBuffer append() と result() メソッドを持つクラス
+ * @tparam Delims テンプレート区切り文字
+ * @param root ルートコンテキスト（object 必須）
+ * @param output 出力バッファ（append() メソッドを呼び出される）
+ * @return 成功時は void、エラー時は std::string のエラーメッセージ
+ */
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_template_delimiters>
+auto render_template(template_value const& root, OutputBuffer& output) -> std::expected<void, std::string> {
+  try {
+    if (!std::holds_alternative<template_object>(root.storage)) {
+      return std::unexpected(std::string{"root context must be object"});
+    }
+    auto constexpr program = detail::parse_program<Src, Delims>();
+    detail::render_program<Src, OutputBuffer, Delims>(program, std::get<template_object>(root.storage), output);
+    return {};
+  } catch (std::exception const& e) {
+    return std::unexpected(std::string{e.what()});
+  } catch (...) {
+    return std::unexpected(std::string{"unknown error during template rendering"});
+  }
+}
+
+/**
  * @brief `Src` 固定のテンプレートVMラッパ。
  * @tparam Src テンプレート文字列
  */
@@ -1504,3 +1636,49 @@ struct template_vm {
 };
 
 } // namespace frozenchars
+
+namespace frozenchars::inja {
+
+/**
+ * @brief テンプレートをレンダリングする高水準API。
+ * @tparam Src テンプレート文字列
+ * @param root ルートコンテキスト（object 必須）
+ * @return 出力文字列
+ */
+template <auto Src, typename Delims = frozenchars::default_template_delimiters>
+auto render(template_value const& root) -> std::string {
+  return frozenchars::render_template<Src, Delims>(root);
+}
+
+/**
+ * @brief テンプレートをレンダリングし、カスタム出力バッファへ結果を追加する。
+ * 
+ * @tparam Src テンプレート文字列
+ * @tparam OutputBuffer append() と result() メソッドを持つクラス
+ * @tparam Delims テンプレート区切り文字
+ * @param root ルートコンテキスト（object 必須）
+ * @param output 出力バッファ（append() メソッドを呼び出される）
+ * @return 成功時は void、エラー時は std::string のエラーメッセージ
+ */
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_template_delimiters>
+auto render(template_value const& root, OutputBuffer& output) -> std::expected<void, std::string> {
+  return frozenchars::render_template<Src, OutputBuffer, Delims>(root, output);
+}
+
+/**
+ * @brief `Src` 固定のテンプレートVMラッパ。
+ * @tparam Src テンプレート文字列
+ */
+template <auto Src, typename Delims = frozenchars::default_template_delimiters>
+struct template_vm {
+  /**
+   * @brief レンダリングを実行する。
+   * @param root ルートコンテキスト
+   * @return 出力文字列
+   */
+  static auto render(template_value const& root) -> std::string {
+    return frozenchars::inja::render<Src, Delims>(root);
+  }
+};
+
+} // namespace frozenchars::inja

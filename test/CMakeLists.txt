@@ -21,6 +21,11 @@ target_link_libraries(example_smoke PRIVATE frozenchars::frozenchars)
 target_compile_features(example_smoke PUBLIC ${STD_CPP})
 add_test(NAME example_smoke COMMAND example_smoke)
 
+add_executable(example_render_with_output_buffer ../example_render_with_output_buffer.cpp)
+target_link_libraries(example_render_with_output_buffer PRIVATE frozenchars::frozenchars)
+target_compile_features(example_render_with_output_buffer PUBLIC ${STD_CPP})
+add_test(NAME example_render_with_output_buffer COMMAND example_render_with_output_buffer)
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
 assert_frozen_map_compile_fail(
