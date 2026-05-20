@@ -22,13 +22,14 @@ namespace frozenchars {
  * テンプレート引数で切り替えるために使用する。
  */
 template <
-  auto ExprOpen,
-  auto ExprClose,
-  auto StmtOpen,
-  auto StmtClose,
-  auto CommentOpen,
-  auto CommentClose,
-  auto LineStmtPrefix>
+  auto ExprOpen,      // 式開始
+  auto ExprClose,     // 式終了
+  auto StmtOpen,      // 文開始
+  auto StmtClose,     // 文終了
+  auto CommentOpen,   // コメント開始
+  auto CommentClose,  // コメント終了
+  auto LineStmtPrefix // 行文プレフィックス
+>
 struct template_delimiters {
   static constexpr auto expression_open = ExprOpen;
   static constexpr auto expression_close = ExprClose;
@@ -54,7 +55,8 @@ using default_template_delimiters = template_delimiters<
   default_stmt_close,
   default_comment_open,
   default_comment_close,
-  default_line_stmt_prefix>;
+  default_line_stmt_prefix
+>;
 
 } // namespace frozenchars
 
@@ -125,11 +127,11 @@ struct template_bytecode {
 }
 
 enum class template_open_kind : std::uint8_t {
-  expression,
-  statement,
-  comment,
-  line_statement,
-  none,
+  expression,      // 式
+  statement,       // 文
+  comment,         // コメント
+  line_statement,  // 行文
+  none,            // 該当なし
 };
 
 struct template_open_match {
@@ -137,6 +139,14 @@ struct template_open_match {
   template_open_kind kind{template_open_kind::none};
 };
 
+/**
+ * @brief 行文プレフィックスを検索する。
+ *
+ * @tparam Delims デリミタ型
+ * @param src 入力文字列ビュー
+ * @param from 検索開始位置
+ * @return 見つかった位置、見つからなければ std::string_view::npos
+ */
 template <typename Delims>
 [[nodiscard]] constexpr auto find_line_statement(std::string_view src, std::size_t from) -> std::size_t {
   auto const prefix = Delims::line_statement_prefix.sv();
@@ -153,6 +163,14 @@ template <typename Delims>
   return std::string_view::npos;
 }
 
+/**
+ * @brief 次のタグオープンを検索する。
+ *
+ * @tparam Delims デリミタ型
+ * @param src 入力文字列ビュー
+ * @param from 検索開始位置
+ * @return 見つかったタグオープン情報
+ */
 template <typename Delims>
 [[nodiscard]] constexpr auto find_next_open(std::string_view src, std::size_t from) -> template_open_match {
   auto best = template_open_match{};
@@ -168,16 +186,16 @@ template <typename Delims>
     if (pos == best.pos) {
       auto const priority = [&](template_open_kind k) constexpr -> int {
         switch (k) {
-          case template_open_kind::expression:
-            return 0;
-          case template_open_kind::statement:
-            return 1;
-          case template_open_kind::comment:
-            return 2;
-          case template_open_kind::line_statement:
-            return 3;
-          case template_open_kind::none:
-            return 4;
+        case template_open_kind::expression:
+          return 0;
+        case template_open_kind::statement:
+          return 1;
+        case template_open_kind::comment:
+          return 2;
+        case template_open_kind::line_statement:
+          return 3;
+        case template_open_kind::none:
+          return 4;
         }
         return 4;
       };
@@ -315,47 +333,52 @@ consteval auto parse_program() -> template_bytecode {
       std::ignore = push_node(template_node_kind::text, pos, tag);
     }
     switch (next.kind) {
-      case template_open_kind::expression: {
-        auto const content_begin = tag + expr_open.size();
-        auto const close = src.find(expr_close, content_begin);
-        if (close == std::string_view::npos) {
-          throw "template parse error: unclosed expression tag";
-        }
-        std::ignore = push_node(template_node_kind::expr, content_begin, close);
-        pos = close + expr_close.size();
-        break;
+    // 式
+    case template_open_kind::expression: {
+      auto const content_begin = tag + expr_open.size();
+      auto const close = src.find(expr_close, content_begin);
+      if (close == std::string_view::npos) {
+        throw "template parse error: unclosed expression tag";
       }
-      case template_open_kind::comment: {
-        auto const content_begin = tag + comment_open.size();
-        auto const close = src.find(comment_close, content_begin);
-        if (close == std::string_view::npos) {
-          throw "template parse error: unclosed comment tag";
-        }
-        pos = close + comment_close.size();
-        break;
+      std::ignore = push_node(template_node_kind::expr, content_begin, close);
+      pos = close + expr_close.size();
+      break;
+    }
+    // コメント
+    case template_open_kind::comment: {
+      auto const content_begin = tag + comment_open.size();
+      auto const close = src.find(comment_close, content_begin);
+      if (close == std::string_view::npos) {
+        throw "template parse error: unclosed comment tag";
       }
-      case template_open_kind::statement: {
-        auto const content_begin = tag + stmt_open.size();
-        auto const close = src.find(stmt_close, content_begin);
-        if (close == std::string_view::npos) {
-          throw "template parse error: unclosed statement tag";
-        }
-        auto const stmt = trim_view(src.substr(content_begin, close - content_begin));
-        process_statement(stmt, content_begin, close);
-        pos = close + stmt_close.size();
-        break;
+      pos = close + comment_close.size();
+      break;
+    }
+    // 文
+    case template_open_kind::statement: {
+      auto const content_begin = tag + stmt_open.size();
+      auto const close = src.find(stmt_close, content_begin);
+      if (close == std::string_view::npos) {
+        throw "template parse error: unclosed statement tag";
       }
-      case template_open_kind::line_statement: {
-        auto const content_begin = tag + line_stmt_prefix.size();
-        auto const line_end = src.find('\n', content_begin);
-        auto const content_end = (line_end == std::string_view::npos) ? src.size() : line_end;
-        auto const stmt = trim_view(src.substr(content_begin, content_end - content_begin));
-        process_statement(stmt, content_begin, content_end);
-        pos = (line_end == std::string_view::npos) ? src.size() : line_end + 1;
-        break;
-      }
-      case template_open_kind::none:
-        throw "template parse error: internal opener resolution failure";
+      auto const stmt = trim_view(src.substr(content_begin, close - content_begin));
+      process_statement(stmt, content_begin, close);
+      pos = close + stmt_close.size();
+      break;
+    }
+    // 行文
+    case template_open_kind::line_statement: {
+      auto const content_begin = tag + line_stmt_prefix.size();
+      auto const line_end = src.find('\n', content_begin);
+      auto const content_end = (line_end == std::string_view::npos) ? src.size() : line_end;
+      auto const stmt = trim_view(src.substr(content_begin, content_end - content_begin));
+      process_statement(stmt, content_begin, content_end);
+      pos = (line_end == std::string_view::npos) ? src.size() : line_end + 1;
+      break;
+    }
+    // 該当なし
+    case template_open_kind::none:
+      throw "template parse error: internal opener resolution failure";
     }
   }
 
@@ -482,20 +505,18 @@ private:
    */
   [[nodiscard]] auto consume(std::string_view token) -> bool {
     skip_space();
-    if (text_.substr(pos_, token.size()) == token) {
-      auto const next = pos_ + token.size();
-      if (!token.empty() && std::isalpha(static_cast<unsigned char>(token.back())) != 0) {
-        if (next < text_.size()) {
-          auto const c = text_[next];
-          if ((std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_') {
-            return false;
-          }
-        }
-      }
-      pos_ = next;
-      return true;
+    if (text_.substr(pos_, token.size()) != token) {
+      return false;
     }
-    return false;
+    auto const next = pos_ + token.size();
+    if (!token.empty() && std::isalpha(static_cast<unsigned char>(token.back())) != 0 && next < text_.size()) {
+      auto const c = text_[next];
+      if (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_') {
+        return false;
+      }
+    }
+    pos_ = next;
+    return true;
   }
 
   /**
