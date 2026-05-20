@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
@@ -352,6 +353,148 @@ public:
   auto result = std::string{str};
   if (auto const pos = result.find(old_str); pos != std::string::npos) {
     result.replace(pos, old_str.length(), new_str);
+  }
+  return result;
+}
+
+/// @brief Get length of array
+/// @param arr Input array
+/// @return Number of elements
+[[nodiscard]] inline auto fn_length(template_array const& arr) -> std::int64_t {
+  return static_cast<std::int64_t>(arr.size());
+}
+
+/// @brief Get first element of array
+/// @param arr Input array
+/// @return First element (throws if empty)
+[[nodiscard]] inline auto fn_first(template_array const& arr) -> template_value {
+  if (arr.empty()) {
+    throw template_render_error{"first() called on empty array"};
+  }
+  return arr[0];
+}
+
+/// @brief Get last element of array
+/// @param arr Input array
+/// @return Last element (throws if empty)
+[[nodiscard]] inline auto fn_last(template_array const& arr) -> template_value {
+  if (arr.empty()) {
+    throw template_render_error{"last() called on empty array"};
+  }
+  return arr[arr.size() - 1];
+}
+
+/// @brief Join array elements into string with separator
+/// @param arr Input array
+/// @param sep Separator string
+/// @return Joined string
+[[nodiscard]] inline auto fn_join(template_array const& arr, std::string_view sep) -> std::string {
+  if (arr.empty()) {
+    return "";
+  }
+
+  auto result = std::string{};
+  for (auto i = std::size_t{0}; i < arr.size(); ++i) {
+    if (i > 0) {
+      result += sep;
+    }
+
+    auto const& elem = arr[i];
+    if (std::holds_alternative<std::string>(elem.storage)) {
+      result += std::get<std::string>(elem.storage);
+    } else if (std::holds_alternative<std::int64_t>(elem.storage)) {
+      result += std::to_string(std::get<std::int64_t>(elem.storage));
+    } else if (std::holds_alternative<double>(elem.storage)) {
+      result += std::to_string(std::get<double>(elem.storage));
+    } else if (std::holds_alternative<bool>(elem.storage)) {
+      result += std::get<bool>(elem.storage) ? "true" : "false";
+    } else {
+      result += "null";
+    }
+  }
+  return result;
+}
+
+/// @brief Sort array (creates new sorted copy)
+/// @param arr Input array
+/// @return New sorted array
+[[nodiscard]] inline auto fn_sort(template_array const& arr) -> template_array {
+  auto result = arr;
+  std::sort(result.begin(), result.end(), [](template_value const& a, template_value const& b) {
+    // Helper lambda to convert to double if possible
+    auto to_double = [](template_value const& v) -> std::optional<double> {
+      if (std::holds_alternative<double>(v.storage)) {
+        return std::get<double>(v.storage);
+      }
+      if (std::holds_alternative<std::int64_t>(v.storage)) {
+        return static_cast<double>(std::get<std::int64_t>(v.storage));
+      }
+      return std::nullopt;
+    };
+
+    auto a_num = to_double(a);
+    auto b_num = to_double(b);
+
+    if (a_num && b_num) {
+      return *a_num < *b_num;
+    }
+
+    // String comparison
+    if (std::holds_alternative<std::string>(a.storage) && std::holds_alternative<std::string>(b.storage)) {
+      return std::get<std::string>(a.storage) < std::get<std::string>(b.storage);
+    }
+
+    // If types differ, numbers come before strings
+    if (a_num && std::holds_alternative<std::string>(b.storage)) {
+      return true;
+    }
+    if (std::holds_alternative<std::string>(a.storage) && b_num) {
+      return false;
+    }
+
+    return false;
+  });
+  return result;
+}
+
+/// @brief Generate range of integers
+/// @param end Upper bound (exclusive)
+/// @return Array [0, 1, 2, ..., end-1]
+[[nodiscard]] inline auto fn_range(std::int64_t end) -> template_array {
+  auto result = template_array{};
+  for (auto i = std::int64_t{0}; i < end; ++i) {
+    result.push_back(template_value{i});
+  }
+  return result;
+}
+
+/// @brief Generate range of integers with start and end
+/// @param start Start value (inclusive)
+/// @param end End value (exclusive)
+/// @return Array [start, start+1, ..., end-1]
+[[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end) -> template_array {
+  auto result = template_array{};
+  for (auto i = start; i < end; ++i) {
+    result.push_back(template_value{i});
+  }
+  return result;
+}
+
+/// @brief Generate range of integers with start, end, and step
+/// @param start Start value (inclusive)
+/// @param end End value (exclusive)
+/// @param step Step value
+/// @return Array with values spaced by step
+[[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end, std::int64_t step) -> template_array {
+  auto result = template_array{};
+  if (step > 0) {
+    for (auto i = start; i < end; i += step) {
+      result.push_back(template_value{i});
+    }
+  } else if (step < 0) {
+    for (auto i = start; i > end; i += step) {
+      result.push_back(template_value{i});
+    }
   }
   return result;
 }

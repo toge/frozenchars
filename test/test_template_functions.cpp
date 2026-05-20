@@ -155,3 +155,250 @@ TEST_CASE("function calls evaluated when not short-circuited in and", "[function
   auto const out = render_template<src>(ctx);
   REQUIRE(out == "true");
 }
+
+// ============ List functions tests ============
+
+// length() tests
+TEST_CASE("template functions - length", "[template_functions][length]") {
+  constexpr auto src = "{{ length(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - length empty", "[template_functions][length]") {
+  constexpr auto src = "{{ length(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE(render_template<src>(ctx) == "0");
+}
+
+TEST_CASE("template functions - length single element", "[template_functions][length]") {
+  constexpr auto src = "{{ length(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"hello"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+// first() tests
+TEST_CASE("template functions - first", "[template_functions][first]") {
+  constexpr auto src = "{{ first(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+TEST_CASE("template functions - first single element", "[template_functions][first]") {
+  constexpr auto src = "{{ first(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"hello"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "hello");
+}
+
+TEST_CASE("template functions - first empty throws", "[template_functions][first]") {
+  constexpr auto src = "{{ first(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// last() tests
+TEST_CASE("template functions - last", "[template_functions][last]") {
+  constexpr auto src = "{{ last(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - last single element", "[template_functions][last]") {
+  constexpr auto src = "{{ last(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"world"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "world");
+}
+
+TEST_CASE("template functions - last empty throws", "[template_functions][last]") {
+  constexpr auto src = "{{ last(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// join() tests
+TEST_CASE("template functions - join basic", "[template_functions][join]") {
+  constexpr auto src = "{{ join(items, \", \") }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1, 2, 3");
+}
+
+TEST_CASE("template functions - join with strings", "[template_functions][join]") {
+  constexpr auto src = "{{ join(items, \",\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"a", "b", "c"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "a,b,c");
+}
+
+TEST_CASE("template functions - join empty", "[template_functions][join]") {
+  constexpr auto src = "{{ join(items, \", \") }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE(render_template<src>(ctx) == "");
+}
+
+TEST_CASE("template functions - join single element", "[template_functions][join]") {
+  constexpr auto src = "{{ join(items, \",\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"hello"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "hello");
+}
+
+TEST_CASE("template functions - join mixed types", "[template_functions][join]") {
+  constexpr auto src = "{{ join(items, \"-\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, "hello", true})},
+  });
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out.find("1") != std::string::npos);
+  REQUIRE(out.find("hello") != std::string::npos);
+  REQUIRE(out.find("true") != std::string::npos);
+}
+
+TEST_CASE("template functions - sort integers", "[template_functions][sort]") {
+  constexpr auto src = "{{ sort(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({3, 1, 2})},
+  });
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out.find("[array]") != std::string::npos);
+}
+
+TEST_CASE("template functions - sort strings", "[template_functions][sort]") {
+  constexpr auto src = "{{ sort(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"zebra", "apple", "mango"})},
+  });
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out.find("[array]") != std::string::npos);
+}
+
+TEST_CASE("template functions - sort empty", "[template_functions][sort]") {
+  constexpr auto src = "{{ sort(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out.find("[array]") != std::string::npos);
+}
+
+TEST_CASE("template functions - sort single element", "[template_functions][sort]") {
+  constexpr auto src = "{{ sort(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({42})},
+  });
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out.find("[array]") != std::string::npos);
+}
+
+TEST_CASE("template functions - sort preserves original", "[template_functions][sort]") {
+  // Test by verifying first and last elements of sorted vs original
+  constexpr auto src = "{{ first(items) }}-{{ first(sort(items)) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({3, 1, 2})},
+  });
+  auto const out = render_template<src>(ctx);
+  REQUIRE(out == "3-1");
+}
+
+// range() tests
+TEST_CASE("template functions - range single arg", "[template_functions][range]") {
+  constexpr auto src = "{{ length(range(5)) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("template functions - range two args", "[template_functions][range]") {
+  constexpr auto src = "{{ length(range(2, 5)) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - range three args", "[template_functions][range]") {
+  constexpr auto src = "{{ length(range(0, 10, 2)) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("template functions - range three args negative step", "[template_functions][range]") {
+  constexpr auto src = "{{ length(range(10, 0, step)) }}"_fs;
+  auto const ctx = make_template_object({
+    {"step", std::int64_t{-2}},
+  });
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("template functions - range zero", "[template_functions][range]") {
+  constexpr auto src = "{{ length(range(0)) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "0");
+}
+
+TEST_CASE("template functions - range large", "[template_functions][range]") {
+  constexpr auto src = "{{ length(range(100)) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "100");
+}
+
+// Error cases for list functions
+TEST_CASE("template functions - type error length on string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ length(\"hello\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - type error first on string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ first(\"hello\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - type error join second arg", "[template_functions][type_error]") {
+  constexpr auto src = "{{ join(items, 42) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - wrong arg count length", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ length() }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - wrong arg count join", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ join(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - wrong arg count range", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ range(1, 2, 3, 4) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}

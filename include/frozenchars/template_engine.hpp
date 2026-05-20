@@ -1016,6 +1016,93 @@ struct for_header {
     )};
   }
   
+  if (func_name == "length") {
+    if (args.size() != 1) {
+      throw template_render_error{"length() expects 1 argument"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"length() expects array argument"};
+    }
+    return template_value{fn_length(std::get<template_array>(args[0].storage))};
+  }
+  
+  if (func_name == "first") {
+    if (args.size() != 1) {
+      throw template_render_error{"first() expects 1 argument"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"first() expects array argument"};
+    }
+    return fn_first(std::get<template_array>(args[0].storage));
+  }
+  
+  if (func_name == "last") {
+    if (args.size() != 1) {
+      throw template_render_error{"last() expects 1 argument"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"last() expects array argument"};
+    }
+    return fn_last(std::get<template_array>(args[0].storage));
+  }
+  
+  if (func_name == "join") {
+    if (args.size() != 2) {
+      throw template_render_error{"join() expects 2 arguments"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"join() expects first argument to be array"};
+    }
+    if (!std::holds_alternative<std::string>(args[1].storage)) {
+      throw template_render_error{"join() expects second argument to be string"};
+    }
+    return template_value{fn_join(
+      std::get<template_array>(args[0].storage),
+      std::get<std::string>(args[1].storage)
+    )};
+  }
+  
+  if (func_name == "sort") {
+    if (args.size() != 1) {
+      throw template_render_error{"sort() expects 1 argument"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"sort() expects array argument"};
+    }
+    return template_value{fn_sort(std::get<template_array>(args[0].storage))};
+  }
+  
+  if (func_name == "range") {
+    if (args.size() == 1) {
+      if (!std::holds_alternative<std::int64_t>(args[0].storage)) {
+        throw template_render_error{"range() expects integer argument"};
+      }
+      return template_value{fn_range(std::get<std::int64_t>(args[0].storage))};
+    } else if (args.size() == 2) {
+      if (!std::holds_alternative<std::int64_t>(args[0].storage) ||
+          !std::holds_alternative<std::int64_t>(args[1].storage)) {
+        throw template_render_error{"range() expects integer arguments"};
+      }
+      return template_value{fn_range(
+        std::get<std::int64_t>(args[0].storage),
+        std::get<std::int64_t>(args[1].storage)
+      )};
+    } else if (args.size() == 3) {
+      if (!std::holds_alternative<std::int64_t>(args[0].storage) ||
+          !std::holds_alternative<std::int64_t>(args[1].storage) ||
+          !std::holds_alternative<std::int64_t>(args[2].storage)) {
+        throw template_render_error{"range() expects integer arguments"};
+      }
+      return template_value{fn_range(
+        std::get<std::int64_t>(args[0].storage),
+        std::get<std::int64_t>(args[1].storage),
+        std::get<std::int64_t>(args[2].storage)
+      )};
+    } else {
+      throw template_render_error{"range() expects 1, 2, or 3 arguments"};
+    }
+  }
+  
   throw template_render_error{"unknown function: " + std::string{func_name}};
 }
 
