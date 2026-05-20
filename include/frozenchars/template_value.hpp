@@ -353,8 +353,10 @@ public:
 /// @return String with first occurrence replaced
 [[nodiscard]] inline auto fn_replace(std::string_view str, std::string_view old_str, std::string_view new_str) -> std::string {
   auto result = std::string{str};
-  if (auto const pos = result.find(old_str); pos != std::string::npos) {
+  auto pos = size_t{0};
+  while ((pos = result.find(old_str, pos)) != std::string::npos) {
     result.replace(pos, old_str.length(), new_str);
+    pos += new_str.length();
   }
   return result;
 }

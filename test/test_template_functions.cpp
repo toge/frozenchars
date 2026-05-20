@@ -44,7 +44,7 @@ TEST_CASE("template functions - replace", "[template_functions][replace]") {
     {"old", "l"},
     {"new", "L"},
   });
-  REQUIRE(render_template<src>(ctx) == "heLlo");
+  REQUIRE(render_template<src>(ctx) == "heLLo");
 }
 
 TEST_CASE("template functions - replace not found", "[template_functions][replace]") {
@@ -78,7 +78,7 @@ TEST_CASE("template functions - capitalize with string literal", "[template_func
 TEST_CASE("template functions - replace with string literals", "[template_functions][replace]") {
   constexpr auto src = "{{ replace(\"hello\", \"l\", \"L\") }}"_fs;
   auto const ctx = make_template_object({});
-  REQUIRE(render_template<src>(ctx) == "heLlo");
+  REQUIRE(render_template<src>(ctx) == "heLLo");
 }
 
 TEST_CASE("template functions - type error upper on number", "[template_functions][type_error]") {
@@ -1219,7 +1219,7 @@ TEST_CASE("pipe - replace with arguments", "[pipe][function_args]") {
 TEST_CASE("pipe - replace multiple t", "[pipe][function_args]") {
   constexpr auto src = "{{ \"test\" | replace(\"t\", \"T\") }}"_fs;
   auto const ctx = make_template_object({});
-  REQUIRE(render_template<src>(ctx) == "Test");
+  REQUIRE(render_template<src>(ctx) == "TesT");
 }
 
 TEST_CASE("pipe - join with separator", "[pipe][function_args]") {
@@ -1368,7 +1368,7 @@ TEST_CASE("pipe with variable and function args", "[pipe][mixed]") {
     {"old", "l"},
     {"new", "L"},
   });
-  REQUIRE(render_template<src>(ctx) == "heLlo");
+  REQUIRE(render_template<src>(ctx) == "heLLo");
 }
 
 TEST_CASE("pipe chain with literal and variable", "[pipe][mixed]") {
@@ -1377,5 +1377,5 @@ TEST_CASE("pipe chain with literal and variable", "[pipe][mixed]") {
     {"pattern", "l"},
     {"repl", "L"},
   });
-  REQUIRE(render_template<src>(ctx) == "heLlo");
+  REQUIRE(render_template<src>(ctx) == "heLLo");
 }
