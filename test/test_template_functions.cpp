@@ -1379,3 +1379,64 @@ TEST_CASE("pipe chain with literal and variable", "[pipe][mixed]") {
   });
   REQUIRE(render_template<src>(ctx) == "heLLo");
 }
+
+// Operator + Pipe precedence tests
+TEST_CASE("multiplication with pipe", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 2 * 3 | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "6");
+}
+
+TEST_CASE("division with pipe", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 6 / 2 | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("subtraction with pipe on right operand", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 10 - -5 | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("addition with pipe on right operand", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 2 + 3 | int }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("modulo with pipe on right operand", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 100 % 30 | int }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "10");
+}
+
+TEST_CASE("chained pipes on right operand", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 10 - -3 | int | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "7");
+}
+
+TEST_CASE("multiplication with negative right operand pipe", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 2 * -3 | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "6");
+}
+
+TEST_CASE("division with chained pipes on right operand", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 6 / -2 | int | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("complex arithmetic with pipes on operand", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 5 * -2 | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "10");
+}
+
+TEST_CASE("pipe on left side of addition", "[pipe][operator_precedence]") {
+  constexpr auto src = "{{ 5 | abs + 3 }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "8");
+}

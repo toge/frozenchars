@@ -688,7 +688,7 @@ private:
     auto lhs = parse_postfix(evaluate);
     while (true) {
       if (consume("*")) {
-        auto rhs = parse_unary(evaluate);
+        auto rhs = parse_postfix(evaluate);
         if (evaluate) {
           auto const lnum = try_as_double(lhs);
           auto const rnum = try_as_double(rhs);
@@ -698,7 +698,7 @@ private:
           lhs = template_value{*lnum * *rnum};
         }
       } else if (consume("/")) {
-        auto rhs = parse_unary(evaluate);
+        auto rhs = parse_postfix(evaluate);
         if (evaluate) {
           auto const lnum = try_as_double(lhs);
           auto const rnum = try_as_double(rhs);
@@ -708,7 +708,7 @@ private:
           lhs = template_value{*lnum / *rnum};
         }
       } else if (consume("%")) {
-        auto rhs = parse_unary(evaluate);
+        auto rhs = parse_postfix(evaluate);
         if (evaluate) {
           if (!std::holds_alternative<std::int64_t>(lhs.storage) || !std::holds_alternative<std::int64_t>(rhs.storage)) {
             throw template_render_error{"invalid operands for %"};
