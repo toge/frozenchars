@@ -10,6 +10,33 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 // msg.sv() == "answer=42, hex=0xff"
 ```
 
+## inja風テンプレート（constexprパース + 実行時レンダリング）
+
+`FrozenString` をNTTPとして渡すと、テンプレート構造をコンパイル時に解析し、実行時に値を与えてレンダリングできます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+constexpr auto tpl = "Hello {{ name }}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
+
+auto const ctx = make_template_object({
+  {"name", "A"},
+  {"items", make_template_array({1, 2, 3})},
+});
+
+auto const out = render_template<tpl>(ctx); // "Hello A:123"
+```
+
+対応構文（コア）:
+
+- `{{ expr }}`
+- `{% if ... %} ... {% else %} ... {% endif %}`
+- `{% for item in items %} ... {% endfor %}`
+- `{% for key, value in object %} ... {% endfor %}`
+- `{# comment #}`
+
 ### 最小コンパイル例（1コマンド）
 
 `example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
