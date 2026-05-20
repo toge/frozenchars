@@ -780,4 +780,536 @@ auto consteval collapse_spaces(char const (&str)[N]) noexcept {
   return collapse_spaces(FrozenString{str});
 }
 
+namespace detail {
+
+/**
+ * @brief HTML/XML 向けの空白文字判定を行う
+ *
+ * @param c 判定対象文字
+ * @return auto 空白文字なら true
+ */
+auto constexpr is_markup_space(char c) noexcept {
+  return is_any_whitespace(c);
+}
+
+/**
+ * @brief SQL で前後空白の削除対象にできる記号か判定する
+ *
+ * @param c 判定対象文字
+ * @return auto 記号なら true
+ */
+auto constexpr is_sql_punct(char c) noexcept {
+  return c == ',' || c == ';' || c == '(' || c == ')' || c == '='
+    || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>';
+}
+
+/**
+ * @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装
+ *
+ * 文字列リテラル内の文字は保持し、タグ周辺の不要空白と
+ * コメント（`<!-- ... -->`）を除去します。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 入力文字列
+ * @return auto 圧縮後の文字列
+ */
+template <size_t N>
+auto consteval minify_markup(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto in_tag = false;
+  auto in_quote = '\0';
+  auto pending_space = false;
+
+  while (i < str.length) {
+    // HTML/XML コメントブロックをスキップする
+    if (in_quote == '\0' && i + 3 < str.length
+        && str.buffer[i] == '<'
+        && str.buffer[i + 1] == '!'
+        && str.buffer[i + 2] == '-'
+        && str.buffer[i + 3] == '-') {
+      i += 4;
+      while (i + 2 < str.length
+             && !(str.buffer[i] == '-'
+                  && str.buffer[i + 1] == '-'
+                  && str.buffer[i + 2] == '>')) {
+        ++i;
+      }
+      if (i + 2 < str.length) {
+        i += 3;
+      }
+      pending_space = true;
+      continue;
+    }
+
+    auto const c = str.buffer[i];
+
+    // クォート内は内容をそのまま保持する
+    if (in_quote != '\0') {
+      res.buffer[offset++] = c;
+      if (c == in_quote) {
+        in_quote = '\0';
+      }
+      ++i;
+      continue;
+    }
+
+    if (c == '"' || c == '\'') {
+      if (pending_space) {
+        auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
+        if (prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/') {
+          res.buffer[offset++] = ' ';
+        }
+        pending_space = false;
+      }
+      in_quote = c;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+
+    // タグ境界の前後空白は削除し、タグ内では単一空白に正規化する
+    if (c == '<') {
+      if (offset > 0 && res.buffer[offset - 1] == ' ') {
+        --offset;
+      }
+      in_tag = true;
+      pending_space = false;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+
+    if (c == '>') {
+      if (offset > 0 && res.buffer[offset - 1] == ' ') {
+        --offset;
+      }
+      in_tag = false;
+      pending_space = false;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+
+    if (is_markup_space(c)) {
+      pending_space = true;
+      ++i;
+      continue;
+    }
+
+    // 連続空白は1つに集約し、記号の前後には不要空白を入れない
+    if (pending_space) {
+      auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
+      auto const next = c;
+      auto const should_emit_space =
+        prev != '\0'
+        && prev != '<'
+        && prev != '>'
+        && prev != '='
+        && prev != '/'
+        && next != '>'
+        && next != '='
+        && next != '/';
+      if (should_emit_space) {
+        res.buffer[offset++] = ' ';
+      }
+      pending_space = false;
+    }
+    res.buffer[offset++] = c;
+    ++i;
+  }
+
+  if (offset > 0 && res.buffer[offset - 1] == ' ') {
+    --offset;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+} // namespace detail
+
+/**
+ * @brief HTML 文字列を minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_html(FrozenString<N> const& str) noexcept {
+  return detail::minify_markup(str);
+}
+
+/**
+ * @brief HTML 文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_html(char const (&str)[N]) noexcept {
+  return minify_html(FrozenString{str});
+}
+
+/**
+ * @brief XML 文字列を minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_xml(FrozenString<N> const& str) noexcept {
+  return detail::minify_markup(str);
+}
+
+/**
+ * @brief XML 文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_xml(char const (&str)[N]) noexcept {
+  return minify_xml(FrozenString{str});
+}
+
+/**
+ * @brief JSON 文字列を minify する
+ *
+ * 文字列リテラル内は保持し、リテラル外の空白とコメント
+ * （行コメント `//` およびブロックコメント）を除去します。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_json(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto in_string = false;
+  auto escaped = false;
+
+  while (i < str.length) {
+    auto const c = str.buffer[i];
+    // JSON 文字列内ではエスケープ状態を維持しつつそのままコピーする
+    if (in_string) {
+      res.buffer[offset++] = c;
+      if (escaped) {
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else if (c == '"') {
+        in_string = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (c == '"') {
+      in_string = true;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+
+    // コメントと空白は文字列外でのみ削除する
+    if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '/') {
+      i += 2;
+      while (i < str.length && str.buffer[i] != '\n') {
+        ++i;
+      }
+      continue;
+    }
+
+    if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '*') {
+      i += 2;
+      while (i + 1 < str.length && !(str.buffer[i] == '*' && str.buffer[i + 1] == '/')) {
+        ++i;
+      }
+      if (i + 1 < str.length) {
+        i += 2;
+      }
+      continue;
+    }
+
+    if (detail::is_any_whitespace(c)) {
+      ++i;
+      continue;
+    }
+
+    res.buffer[offset++] = c;
+    ++i;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief JSON 文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_json(char const (&str)[N]) noexcept {
+  return minify_json(FrozenString{str});
+}
+
+/**
+ * @brief YAML 文字列を minify する
+ *
+ * インデント構造を壊さない範囲で、行末空白とコメントを削除します。
+ * （引用符内の `#` は保持）
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto line_start = 0uz;
+  auto last_non_space = std::string_view::npos;
+  auto in_single = false;
+  auto in_double = false;
+  auto escaped = false;
+
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    // 非クォート領域の '#' 以降をコメントとして除去する
+    if (!in_single && !in_double && c == '#') {
+      while (i < str.length && str.buffer[i] != '\n') {
+        ++i;
+      }
+      if (i >= str.length) {
+        break;
+      }
+    }
+
+    // 行末空白を落としてから改行を出力する（空行は圧縮）
+    if (i < str.length && str.buffer[i] == '\n') {
+      if (last_non_space == std::string_view::npos) {
+        offset = line_start;
+      } else {
+        offset = last_non_space + 1;
+        res.buffer[offset++] = '\n';
+      }
+      line_start = offset;
+      last_non_space = std::string_view::npos;
+      in_single = false;
+      in_double = false;
+      escaped = false;
+      continue;
+    }
+
+    if (i >= str.length) {
+      break;
+    }
+
+    auto const current = str.buffer[i];
+    res.buffer[offset++] = current;
+
+    // クォート状態を更新し、引用符内の # はコメント扱いしない
+    if (in_double) {
+      if (escaped) {
+        escaped = false;
+      } else if (current == '\\') {
+        escaped = true;
+      } else if (current == '"') {
+        in_double = false;
+      }
+    } else if (in_single) {
+      if (current == '\'') {
+        in_single = false;
+      }
+    } else {
+      if (current == '"') {
+        in_double = true;
+      } else if (current == '\'') {
+        in_single = true;
+      }
+    }
+
+    if (current != ' ' && current != '\t' && current != '\r') {
+      last_non_space = offset - 1;
+    }
+  }
+
+  if (last_non_space == std::string_view::npos) {
+    offset = line_start;
+  } else {
+    offset = last_non_space + 1;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief YAML 文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_yaml(char const (&str)[N]) noexcept {
+  return minify_yaml(FrozenString{str});
+}
+
+/**
+ * @brief SQL 文字列を minify する
+ *
+ * 文字列リテラル・識別子引用を保持しつつ、コメントと不要空白を削除します。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_sql(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto in_single = false;
+  auto in_double = false;
+  auto in_backtick = false;
+  auto in_bracket = false;
+  auto pending_space = false;
+
+  while (i < str.length) {
+    auto const c = str.buffer[i];
+
+    // SQL 文字列・識別子引用の内部はそのまま保持する
+    if (in_single) {
+      res.buffer[offset++] = c;
+      if (c == '\'') {
+        if (i + 1 < str.length && str.buffer[i + 1] == '\'') {
+          res.buffer[offset++] = '\'';
+          i += 2;
+          continue;
+        }
+        in_single = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (in_double) {
+      res.buffer[offset++] = c;
+      if (c == '"') {
+        if (i + 1 < str.length && str.buffer[i + 1] == '"') {
+          res.buffer[offset++] = '"';
+          i += 2;
+          continue;
+        }
+        in_double = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (in_backtick) {
+      res.buffer[offset++] = c;
+      if (c == '`') {
+        in_backtick = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (in_bracket) {
+      res.buffer[offset++] = c;
+      if (c == ']') {
+        in_bracket = false;
+      }
+      ++i;
+      continue;
+    }
+
+    // ラインコメント/ブロックコメントを削除する
+    if (c == '-' && i + 1 < str.length && str.buffer[i + 1] == '-') {
+      i += 2;
+      while (i < str.length && str.buffer[i] != '\n') {
+        ++i;
+      }
+      pending_space = true;
+      continue;
+    }
+
+    if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '*') {
+      i += 2;
+      while (i + 1 < str.length && !(str.buffer[i] == '*' && str.buffer[i + 1] == '/')) {
+        ++i;
+      }
+      if (i + 1 < str.length) {
+        i += 2;
+      }
+      pending_space = true;
+      continue;
+    }
+
+    // 空白は遅延出力し、前後が記号でない場合のみ1文字出力する
+    if (detail::is_any_whitespace(c)) {
+      pending_space = true;
+      ++i;
+      continue;
+    }
+
+    if (pending_space) {
+      auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
+      auto const prev_is_punct = detail::is_sql_punct(prev);
+      auto const next_is_punct = detail::is_sql_punct(c);
+      if (prev != '\0' && !prev_is_punct && !next_is_punct) {
+        res.buffer[offset++] = ' ';
+      }
+      pending_space = false;
+    }
+
+    if (c == '\'') {
+      in_single = true;
+    } else if (c == '"') {
+      in_double = true;
+    } else if (c == '`') {
+      in_backtick = true;
+    } else if (c == '[') {
+      in_bracket = true;
+    }
+
+    res.buffer[offset++] = c;
+    ++i;
+  }
+
+  if (offset > 0 && res.buffer[offset - 1] == ' ') {
+    --offset;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief SQL 文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+auto consteval minify_sql(char const (&str)[N]) noexcept {
+  return minify_sql(FrozenString{str});
+}
+
 } // namespace frozenchars

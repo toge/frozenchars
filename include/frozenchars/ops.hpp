@@ -290,6 +290,76 @@ struct base64_decode_adaptor : pipe_adaptor_base {
   }
 };
 
+/**
+ * @brief HTML minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_html_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_html(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_html(FrozenString{str});
+  }
+};
+
+/**
+ * @brief XML minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_xml_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_xml(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_xml(FrozenString{str});
+  }
+};
+
+/**
+ * @brief JSON minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_json_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_json(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_json(FrozenString{str});
+  }
+};
+
+/**
+ * @brief YAML minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_yaml_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_yaml(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_yaml(FrozenString{str});
+  }
+};
+
+/**
+ * @brief SQL minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_sql_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_sql(str);
+  }
+  template <size_t N>
+  consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_sql(FrozenString{str});
+  }
+};
+
 inline constexpr trim_adaptor<> trim{};
 inline constexpr ltrim_adaptor<> ltrim{};
 inline constexpr rtrim_adaptor<> rtrim{};
@@ -309,6 +379,11 @@ inline constexpr url_encode_adaptor url_encode{};
 inline constexpr url_decode_adaptor url_decode{};
 inline constexpr base64_encode_adaptor base64_encode{};
 inline constexpr base64_decode_adaptor base64_decode{};
+inline constexpr minify_html_adaptor minify_html{};
+inline constexpr minify_xml_adaptor minify_xml{};
+inline constexpr minify_json_adaptor minify_json{};
+inline constexpr minify_yaml_adaptor minify_yaml{};
+inline constexpr minify_sql_adaptor minify_sql{};
 inline constexpr remove_leading_spaces_adaptor<> remove_leading_spaces{};
 inline constexpr remove_trailing_spaces_adaptor<> remove_trailing_spaces{};
 inline constexpr remove_regex_comment_adaptor remove_regex_comment{};

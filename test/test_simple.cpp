@@ -746,3 +746,46 @@ TEST_CASE("split_numbers float and double") {
   REQUIRE(dvalues[1] == -25.0);
   REQUIRE(dvalues[2] == 3.125);
 }
+
+TEST_CASE("minify helpers") {
+  auto constexpr html = minify_html(
+    "<div class = \"x\"  >\n"
+    "  <span>  hi  </span>\n"
+    "  <!-- ignore -->\n"
+    "</div>"_fs);
+  static_assert(html.sv() == "<div class=\"x\"><span>hi</span></div>");
+  REQUIRE(html.sv() == "<div class=\"x\"><span>hi</span></div>");
+
+  auto constexpr xml = minify_xml(
+    "<root>\n"
+    "  <!-- comment -->\n"
+    "  <item id = \"1\" > value </item>\n"
+    "</root>"_fs);
+  static_assert(xml.sv() == "<root><item id=\"1\">value</item></root>");
+  REQUIRE(xml.sv() == "<root><item id=\"1\">value</item></root>");
+
+  auto constexpr json = minify_json(
+    "{\n"
+    "  \"k\": \"a b\",\n"
+    "  \"n\": 1, // comment\n"
+    "  \"x\": true\n"
+    "}"_fs);
+  static_assert(json.sv() == "{\"k\":\"a b\",\"n\":1,\"x\":true}");
+  REQUIRE(json.sv() == "{\"k\":\"a b\",\"n\":1,\"x\":true}");
+
+  auto constexpr yaml = minify_yaml(
+    "key: value   # comment\n"
+    "list:\n"
+    "  - one  \n"
+    "  - \"two # keep\"   # drop\n"
+    "\n"_fs);
+  static_assert(yaml.sv() == "key: value\nlist:\n  - one\n  - \"two # keep\"\n");
+  REQUIRE(yaml.sv() == "key: value\nlist:\n  - one\n  - \"two # keep\"\n");
+
+  auto constexpr sql = minify_sql(
+    "SELECT  a,  b  -- comment\n"
+    "FROM  tbl\n"
+    "WHERE  c = 'x  y'  AND d = 1 ;"_fs);
+  static_assert(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
+  REQUIRE(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
+}
