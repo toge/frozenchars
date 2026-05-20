@@ -1120,6 +1120,428 @@ TEST_CASE("template functions - default with function call", "[template_function
   REQUIRE(render_template<src>(ctx) == "HELLO");
 }
 
+// ============ Comprehensive Integration Tests ============
+
+// 1. Data Processing Pipeline
+TEST_CASE("integration - data pipeline with length and int", "[integration][data_processing]") {
+  constexpr auto src = "{{ items | length | int }} people"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({make_template_object({{"name", "Alice"}, {"age", 25}}),
+                                   make_template_object({{"name", "Bob"}, {"age", 30}})})},
+  });
+  REQUIRE(render_template<src>(ctx) == "2 people");
+}
+
+TEST_CASE("integration - array first with exists", "[integration][data_processing]") {
+  constexpr auto src = "{{ items | first | exists }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+// 2. String Transformation Chains
+TEST_CASE("integration - string chain upper replace lower", "[integration][string_chain]") {
+  constexpr auto src = "{{ \"hello world\" | upper | replace(\"WORLD\", \"THERE\") | lower }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "hello there");
+}
+
+TEST_CASE("integration - string chain capitalize upper", "[integration][string_chain]") {
+  constexpr auto src = "{{ \"hello\" | capitalize | upper }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}
+
+TEST_CASE("integration - complex string transform", "[integration][string_chain]") {
+  constexpr auto src = "{{ text | upper | replace(\"HELLO\", \"HI\") | lower | capitalize }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", "hello world"},
+  });
+  REQUIRE(render_template<src>(ctx) == "Hi world");
+}
+
+// 3. Array Operations
+TEST_CASE("integration - array sort and join", "[integration][array_ops]") {
+  constexpr auto src = "{{ arr | sort | join(\",\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({3, 1, 4, 1, 5, 9, 2, 6})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1,1,2,3,4,5,6,9");
+}
+
+TEST_CASE("integration - array first with int and abs", "[integration][array_ops]") {
+  constexpr auto src = "{{ arr | first | int | abs }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({10, 20, 30})},
+  });
+  REQUIRE(render_template<src>(ctx) == "10");
+}
+
+TEST_CASE("integration - array operations pipeline", "[integration][array_ops]") {
+  constexpr auto src = "{{ nums | sort | last | int }}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({5, 2, 8, 1, 9})},
+  });
+  REQUIRE(render_template<src>(ctx) == "9");
+}
+
+// 4. Type Checking and Conversion
+TEST_CASE("integration - type check with conditional", "[integration][type_conversion]") {
+  constexpr auto src = "{% if value | isNumber %}{{ value | int }}{% else %}N/A{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"value", 42},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("integration - type check with conditional false", "[integration][type_conversion]") {
+  constexpr auto src = "{% if value | isNumber %}{{ value | int }}{% else %}N/A{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"value", "hello"},
+  });
+  REQUIRE(render_template<src>(ctx) == "N/A");
+}
+
+TEST_CASE("integration - array type checking", "[integration][type_conversion]") {
+  constexpr auto src = "{{ arr | first | isInteger }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, "two", 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+// 5. Conditional Logic with Functions
+TEST_CASE("integration - conditional with array operations", "[integration][conditional]") {
+  constexpr auto src = "{% if items | length > 0 %}{% for item in items %}{{ item | upper }} {% endfor %}{% else %}No items{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({"alice", "bob"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "ALICE BOB ");
+}
+
+TEST_CASE("integration - conditional empty array", "[integration][conditional]") {
+  constexpr auto src = "{% if items | length > 0 %}Has items{% else %}No items{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE(render_template<src>(ctx) == "No items");
+}
+
+TEST_CASE("integration - nested conditional with functions", "[integration][conditional]") {
+  constexpr auto src = "{% if items | exists %}{% if items | length > 1 %}Multiple{% else %}Single{% endif %}{% else %}None{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "Multiple");
+}
+
+// 6. Default Values and Fallbacks
+TEST_CASE("integration - default with null value", "[integration][default]") {
+  constexpr auto src = "{{ null | default(\"N/A\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "N/A");
+}
+
+TEST_CASE("integration - default with empty string", "[integration][default]") {
+  constexpr auto src = "{{ \"\" | default(\"empty\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "empty");
+}
+
+TEST_CASE("integration - default with empty array length", "[integration][default]") {
+  constexpr auto src = "{{ arr | default(arr_default) | length }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({})},
+    {"arr_default", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+// 7. Complex Data Extraction
+TEST_CASE("integration - extract first element exists", "[integration][data_extraction]") {
+  constexpr auto src = "{{ users | first | exists }}"_fs;
+  auto const ctx = make_template_object({
+    {"users", make_template_array({make_template_object({{"name", "Alice"}})})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("integration - array at with isArray", "[integration][data_extraction]") {
+  constexpr auto src = "{{ data | at(0) | isArray }}"_fs;
+  auto const ctx = make_template_object({
+    {"data", make_template_array({make_template_array({1, 2, 3})})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+// 8. Chained Function Calls
+TEST_CASE("integration - string to int to abs to float", "[integration][chained]") {
+  constexpr auto src = "{{ \"42\" | int | abs | float }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("integration - array length with default and conversion", "[integration][chained]") {
+  constexpr auto src = "{{ items | length | default(0) | int | even }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("integration - complex multi-step conversion", "[integration][chained]") {
+  constexpr auto src = "{{ value | abs | float | int }}"_fs;
+  auto const ctx = make_template_object({
+    {"value", -42},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+// 9. Nested Operations
+TEST_CASE("integration - nested string operations in for loop", "[integration][nested]") {
+  constexpr auto src = "{% for item in list | sort %}{{ item | capitalize | upper }} {% endfor %}"_fs;
+  auto const ctx = make_template_object({
+    {"list", make_template_array({"charlie", "alice", "bob"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "ALICE BOB CHARLIE ");
+}
+
+TEST_CASE("integration - nested array operations", "[integration][nested]") {
+  constexpr auto src = "{{ items | first | at(0) | upper }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({make_template_array({"hello", "world"})})},
+  });
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}
+
+// 10. Real-world Complete Template
+TEST_CASE("integration - user summary template", "[integration][realistic]") {
+  constexpr auto src = "{% if users | exists %}Total: {{ users | length }}{% for user in users | sort %}Name: {{ user | upper }}{% endfor %}{% else %}Empty{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"users", make_template_array({"charlie", "alice", "bob"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "Total: 3Name: ALICEName: BOBName: CHARLIE");
+}
+
+TEST_CASE("integration - data processing pipeline", "[integration][realistic]") {
+  constexpr auto src = "Numbers: {{ nums | sort | join(\",\") }} Min: {{ nums | min }} Max: {{ nums | max }}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({5, 2, 8, 1, 9})},
+  });
+  REQUIRE(render_template<src>(ctx) == "Numbers: 1,2,5,8,9 Min: 1 Max: 9");
+}
+
+// 11. Performance Test - No exponential complexity
+TEST_CASE("integration - large array sort performance", "[integration][performance]") {
+  constexpr auto src = "{{ arr | sort | length }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({100, 99, 98, 97, 96, 95, 94, 93, 92, 91,
+                                 90, 89, 88, 87, 86, 85, 84, 83, 82, 81,
+                                 80, 79, 78, 77, 76, 75, 74, 73, 72, 71,
+                                 70, 69, 68, 67, 66, 65, 64, 63, 62, 61,
+                                 60, 59, 58, 57, 56, 55, 54, 53, 52, 51,
+                                 50, 49, 48, 47, 46, 45, 44, 43, 42, 41,
+                                 40, 39, 38, 37, 36, 35, 34, 33, 32, 31,
+                                 30, 29, 28, 27, 26, 25, 24, 23, 22, 21,
+                                 20, 19, 18, 17, 16, 15, 14, 13, 12, 11,
+                                 10, 9, 8, 7, 6, 5, 4, 3, 2, 1})},
+  });
+  REQUIRE(render_template<src>(ctx) == "100");
+}
+
+TEST_CASE("integration - long string chain performance", "[integration][performance]") {
+  constexpr auto src = "{{ text | upper | lower | upper | lower | upper | lower | upper }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", "hello"},
+  });
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}
+
+// 12. Error Handling in Context
+TEST_CASE("integration - error propagation in conditional", "[integration][error_handling]") {
+  constexpr auto src = "{% if arr | exists %}{{ arr | first }}{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({42})},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+// 13. Multi-step Transformations
+TEST_CASE("integration - transform pipeline with multiple stages", "[integration][transformation]") {
+  constexpr auto src = "{{ text | upper | replace(\"HELLO\", \"HI\") | lower | capitalize }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", "hello world"},
+  });
+  REQUIRE(render_template<src>(ctx) == "Hi world");
+}
+
+TEST_CASE("integration - numeric transformation pipeline", "[integration][transformation]") {
+  constexpr auto src = "{{ value | abs | round(2) | float }}"_fs;
+  auto const ctx = make_template_object({
+    {"value", -3.14159},
+  });
+  REQUIRE(render_template<src>(ctx) == "3.14");
+}
+
+// 14. Array and Conditional Combinations
+TEST_CASE("integration - conditional array processing", "[integration][array_conditional]") {
+  constexpr auto src = "{% if items | length > 1 %}{{ items | sort | join(\"-\") }}{% else %}Single{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({3, 1, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1-2-3");
+}
+
+TEST_CASE("integration - filter with default fallback", "[integration][array_conditional]") {
+  constexpr auto src = "{{ empty_list | length | default(5) | int }}"_fs;
+  auto const ctx = make_template_object({
+    {"empty_list", make_template_array({})},
+  });
+  REQUIRE(render_template<src>(ctx) == "0");
+}
+
+// 15. String and Type Operations
+TEST_CASE("integration - string to array operations", "[integration][string_type]") {
+  constexpr auto src = "{{ items | length | float }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 2, 3, 4})},
+  });
+  REQUIRE(render_template<src>(ctx) == "4");
+}
+
+TEST_CASE("integration - numeric string conversion", "[integration][string_type]") {
+  constexpr auto src = "{{ \"123\" | int | even }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+// 16. For Loop with Function Chains
+TEST_CASE("integration - for loop with nested functions", "[integration][for_loop]") {
+  constexpr auto src = "{% for n in nums | sort %}{{ n | abs | even }}, {% endfor %}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({-4, -1, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true, false, true, ");
+}
+
+TEST_CASE("integration - for loop with string transformation", "[integration][for_loop]") {
+  constexpr auto src = "{% for word in words %}{{ word | upper | capitalize }},{% endfor %}"_fs;
+  auto const ctx = make_template_object({
+    {"words", make_template_array({"apple", "banana", "cherry"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "APPLE,BANANA,CHERRY,");
+}
+
+// 17. Complex Mixed Operations
+TEST_CASE("integration - max with conditional", "[integration][mixed]") {
+  constexpr auto src = "{% if nums | max | even %}Even{% else %}Odd{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({1, 2, 3, 4, 5})},
+  });
+  REQUIRE(render_template<src>(ctx) == "Odd");
+}
+
+TEST_CASE("integration - min with transformation", "[integration][mixed]") {
+  constexpr auto src = "{{ nums | min | abs | float }}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({-10, 5, -3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "10");
+}
+
+// 18. Default with Complex Chains
+TEST_CASE("integration - default in chain", "[integration][default_chain]") {
+  constexpr auto src = "{{ arr | first | default(0) | int }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// 19. Multiple Array Operations
+TEST_CASE("integration - sort and reverse via last", "[integration][array_multi]") {
+  constexpr auto src = "{{ nums | sort | last }}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({3, 1, 4, 1, 5})},
+  });
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("integration - first and last extraction", "[integration][array_multi]") {
+  constexpr auto src = "First: {{ arr | first }} Last: {{ arr | last }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({10, 20, 30})},
+  });
+  REQUIRE(render_template<src>(ctx) == "First: 10 Last: 30");
+}
+
+// 20. Range with Other Operations
+TEST_CASE("integration - range with join", "[integration][range]") {
+  constexpr auto src = "{{ range(1, 4) | join(\"-\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "1-2-3");
+}
+
+TEST_CASE("integration - range with sort", "[integration][range]") {
+  constexpr auto src = "{{ range(1, 4) | sort | join(\",\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "1,2,3");
+}
+
+// 21. Exists Checks with Operations
+TEST_CASE("integration - exists with nested access", "[integration][exists]") {
+  constexpr auto src = "{{ items | first | exists }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({make_template_object({{"x", 1}})})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("integration - at with exists check", "[integration][exists]") {
+  constexpr auto src = "{% if arr | exists %}{{ arr | at(0) }}{% else %}No{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({42, 99})},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+// 22. Divisibility with Control Flow
+TEST_CASE("integration - divisibility in conditional", "[integration][divisibility]") {
+  constexpr auto src = "{% if divisibleBy(num, 3) %}Divisible{% else %}Not{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"num", 15},
+  });
+  REQUIRE(render_template<src>(ctx) == "Divisible");
+}
+
+// 23. Odd/Even in Processing
+TEST_CASE("integration - odd even in array filter via loop", "[integration][odd_even]") {
+  constexpr auto src = "{% for n in nums %}{% if even(n) %}{{ n }},{% endif %}{% endfor %}"_fs;
+  auto const ctx = make_template_object({
+    {"nums", make_template_array({1, 2, 3, 4, 5})},
+  });
+  REQUIRE(render_template<src>(ctx) == "2,4,");
+}
+
+// 24. Replace in Loops
+TEST_CASE("integration - replace in array iteration", "[integration][replace_loop]") {
+  constexpr auto src = "{% for word in words %}{{ replace(word, \"a\", \"@\") }}, {% endfor %}"_fs;
+  auto const ctx = make_template_object({
+    {"words", make_template_array({"apple", "banana", "apricot"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "@pple, b@n@n@, @pricot, ");
+}
+
+// 25. Complex Nested Pipes
+TEST_CASE("integration - pipe in array operations", "[integration][pipe_complex]") {
+  constexpr auto src = "{{ arr | sort | first | upper }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({"zebra", "apple", "mango"})},
+  });
+  REQUIRE(render_template<src>(ctx) == "APPLE");
+}
+
 // ==================== Pipe Syntax Tests ====================
 
 // Basic pipe tests
