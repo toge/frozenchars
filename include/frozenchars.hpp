@@ -18,5 +18,6 @@
 #include "frozenchars/ctre.hpp"
 #include "frozenchars/regex_comment.hpp"
 #include "frozenchars/frozen_map.hpp"
+#include "frozenchars/glaze_frozen_map.hpp"
 #include "frozenchars/template_value.hpp"
 #include "frozenchars/template_engine.hpp"

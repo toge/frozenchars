@@ -13,9 +13,42 @@
 
 #include "frozenchars/literals.hpp"
 #include "frozenchars/frozen_map.hpp"
+#include "frozenchars/glaze_frozen_map.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
+
+#if defined(__has_include) && __has_include(<glaze/json.hpp>)
+#include <glaze/json.hpp>
+
+TEST_CASE("frozen_map glaze read_json ignores unknown keys", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"timeout", 30},
+    std::pair{"retry", 5}
+  );
+
+  auto const ec = glz::read_json(map, R"({"timeout":45,"retry":9,"unknown":100})");
+  REQUIRE(!ec);
+  REQUIRE(map.at("timeout") == 45);
+  REQUIRE(map.at("retry") == 9);
+}
+
+TEST_CASE("frozen_map glaze write_json emits known keys", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"timeout", 45},
+    std::pair{"retry", 9}
+  );
+
+  auto json = std::string{};
+  auto const ec = glz::write_json(map, json);
+  REQUIRE(!ec);
+
+  auto decoded = std::unordered_map<std::string, int>{};
+  auto const decode_ec = glz::read_json(decoded, json);
+  REQUIRE(!decode_ec);
+  REQUIRE(decoded == std::unordered_map<std::string, int>{{"timeout", 45}, {"retry", 9}});
+}
+#endif
 
 TEST_CASE("frozen_map basic shape", "[frozen_map]") {
   frozen_map<int, "timeout"_fs, "retry"_fs> map{};
