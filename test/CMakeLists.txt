@@ -1,6 +1,5 @@
 find_package(Catch2 REQUIRED CONFIG)
 find_package(ctre REQUIRED CONFIG)
-find_package(unordered_dense REQUIRED CONFIG)
 
 file(GLOB test_src test_*.cpp)
 list(FILTER test_src EXCLUDE REGEX "test_split_(direct|logic|tester|v_debug)\\.cpp$")
@@ -12,7 +11,6 @@ target_link_libraries(all_test PRIVATE
   Catch2::Catch2
   Catch2::Catch2WithMain
   ctre::ctre
-  unordered_dense::unordered_dense
 )
 target_compile_features(all_test PUBLIC ${STD_CPP})
 

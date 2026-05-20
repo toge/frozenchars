@@ -49,7 +49,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
-find_package(unordered_dense REQUIRED CONFIG)
 
 add_library(frozenchars INTERFACE)
 add_library(frozenchars::frozenchars ALIAS frozenchars)
@@ -60,7 +59,6 @@ target_include_directories(frozenchars
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(frozenchars INTERFACE unordered_dense::unordered_dense)
 
 install(TARGETS frozenchars
     EXPORT frozencharsTargets

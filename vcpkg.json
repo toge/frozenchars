@@ -2,7 +2,6 @@
   "dependencies": [
     "catch2",
     "ctre",
-    "simde",
-    "unordered-dense"
+    "simde"
   ]
 }

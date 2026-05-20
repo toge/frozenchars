@@ -9,10 +9,8 @@ function(assert_frozen_map_compile_fail)
   file(WRITE "${TEST_SOURCE_DIR}/CMakeLists.txt" "
 cmake_minimum_required(VERSION 3.25)
 project(frozen_map_compile_fail LANGUAGES CXX)
-find_package(unordered_dense REQUIRED CONFIG)
 add_library(compile_fail_case STATIC \"${ARG_SOURCE}\")
 target_include_directories(compile_fail_case PRIVATE \"\${FROZENCHARS_SOURCE_DIR}/include\")
-target_link_libraries(compile_fail_case PUBLIC unordered_dense::unordered_dense)
 target_compile_features(compile_fail_case PUBLIC ${STD_CPP})
 ")
 
