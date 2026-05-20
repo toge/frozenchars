@@ -1,7 +1,5 @@
 #pragma once
 
-#include "frozen_string.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -22,6 +20,8 @@
 #include <cstring>
 #include <ranges>
 #include <span>
+
+#include "frozen_string.hpp"
 
 #if defined(__SSE4_2__)
 #include <nmmintrin.h>
@@ -412,8 +412,8 @@ private:
     std::ranges::sort(res);
     return res;
   }();
-  /// 高速ルックアップテーブルを使用するかどうかのしきい値。26キー以上はコンパイル時間を考慮し線形探索にフォールバック。
-  static constexpr auto k_lookup_threshold = 25uz;
+  /// 高速ルックアップテーブルを使用するかどうかのしきい値。41キー以上はコンパイル時間を考慮し線形探索にフォールバック。
+  static constexpr auto k_lookup_threshold = 40uz;
   /// ルックアップテーブルを使用するかどうかのフラグ
   static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
   /// ルックアップテーブルのサイズ（2のべき乗）。使用しない場合は最小サイズ。
