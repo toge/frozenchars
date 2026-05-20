@@ -454,6 +454,9 @@ consteval auto parse_program() -> template_bytecode {
   throw template_render_error{"comparison requires same type"};
 }
 
+/// @brief Forward declaration of evaluate_function
+[[nodiscard]] inline auto evaluate_function(std::string_view func_name, std::vector<template_value> const& args) -> template_value;
+
 /**
  * @brief 実行時式評価器（簡易再帰下降パーサ）。
  */
@@ -856,7 +859,45 @@ private:
     if (start == pos_) {
       throw template_render_error{"unexpected token in expression"};
     }
-    return resolve_name(text_.substr(start, pos_ - start), evaluate);
+    auto const name = text_.substr(start, pos_ - start);
+    
+    // Check if this is a function call (identifier followed by '(')
+    skip_space();
+    if (pos_ < text_.size() && text_[pos_] == '(') {
+      ++pos_;  // consume '('
+      
+      // Parse function arguments
+      auto args = std::vector<template_value>{};
+      skip_space();
+      
+      // Check for empty argument list
+      if (pos_ < text_.size() && text_[pos_] != ')') {
+        while (true) {
+          args.push_back(parse_or(evaluate));
+          skip_space();
+          if (pos_ >= text_.size()) {
+            throw template_render_error{"unclosed function call"};
+          }
+          if (text_[pos_] == ')') {
+            break;
+          }
+          if (text_[pos_] != ',') {
+            throw template_render_error{"expected comma or closing parenthesis in function call"};
+          }
+          ++pos_;  // consume ','
+          skip_space();
+        }
+      }
+      
+      if (!consume(")")) {
+        throw template_render_error{"missing closing parenthesis in function call"};
+      }
+      
+      return evaluate_function(name, args);
+    }
+    
+    return resolve_name(name, evaluate);
+
   }
 };
 
@@ -910,6 +951,60 @@ struct for_header {
   }
   header.expr = std::string{rhs};
   return header;
+}
+
+/// @brief Evaluate function call by name with arguments
+/// @param func_name Function name (e.g., "upper", "lower")
+/// @param args Vector of evaluated arguments
+/// @return Result of function call
+[[nodiscard]] inline auto evaluate_function(std::string_view func_name, std::vector<template_value> const& args) -> template_value {
+  if (func_name == "upper") {
+    if (args.size() != 1) {
+      throw template_render_error{"upper() expects 1 argument"};
+    }
+    if (!std::holds_alternative<std::string>(args[0].storage)) {
+      throw template_render_error{"upper() expects string argument"};
+    }
+    return template_value{fn_upper(std::get<std::string>(args[0].storage))};
+  }
+  
+  if (func_name == "lower") {
+    if (args.size() != 1) {
+      throw template_render_error{"lower() expects 1 argument"};
+    }
+    if (!std::holds_alternative<std::string>(args[0].storage)) {
+      throw template_render_error{"lower() expects string argument"};
+    }
+    return template_value{fn_lower(std::get<std::string>(args[0].storage))};
+  }
+  
+  if (func_name == "capitalize") {
+    if (args.size() != 1) {
+      throw template_render_error{"capitalize() expects 1 argument"};
+    }
+    if (!std::holds_alternative<std::string>(args[0].storage)) {
+      throw template_render_error{"capitalize() expects string argument"};
+    }
+    return template_value{fn_capitalize(std::get<std::string>(args[0].storage))};
+  }
+  
+  if (func_name == "replace") {
+    if (args.size() != 3) {
+      throw template_render_error{"replace() expects 3 arguments"};
+    }
+    if (!std::holds_alternative<std::string>(args[0].storage) ||
+        !std::holds_alternative<std::string>(args[1].storage) ||
+        !std::holds_alternative<std::string>(args[2].storage)) {
+      throw template_render_error{"replace() expects 3 string arguments"};
+    }
+    return template_value{fn_replace(
+      std::get<std::string>(args[0].storage),
+      std::get<std::string>(args[1].storage),
+      std::get<std::string>(args[2].storage)
+    )};
+  }
+  
+  throw template_render_error{"unknown function: " + std::string{func_name}};
 }
 
 /**

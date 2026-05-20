@@ -309,4 +309,51 @@ public:
   return "{object}";
 }
 
+/// @brief Convert string to uppercase
+/// @param str Input string view
+/// @return Uppercase version of the string
+[[nodiscard]] inline auto fn_upper(std::string_view str) -> std::string {
+  auto result = std::string{str};
+  for (auto& c : result) {
+    c = std::toupper(static_cast<unsigned char>(c));
+  }
+  return result;
+}
+
+/// @brief Convert string to lowercase
+/// @param str Input string view
+/// @return Lowercase version of the string
+[[nodiscard]] inline auto fn_lower(std::string_view str) -> std::string {
+  auto result = std::string{str};
+  for (auto& c : result) {
+    c = std::tolower(static_cast<unsigned char>(c));
+  }
+  return result;
+}
+
+/// @brief Capitalize first character of string
+/// @param str Input string view
+/// @return String with first character capitalized
+[[nodiscard]] inline auto fn_capitalize(std::string_view str) -> std::string {
+  if (str.empty()) {
+    return std::string{str};
+  }
+  auto result = std::string{str};
+  result[0] = std::toupper(static_cast<unsigned char>(result[0]));
+  return result;
+}
+
+/// @brief Replace first occurrence of substring
+/// @param str Input string view
+/// @param old_str Substring to find
+/// @param new_str Replacement substring
+/// @return String with first occurrence replaced
+[[nodiscard]] inline auto fn_replace(std::string_view str, std::string_view old_str, std::string_view new_str) -> std::string {
+  auto result = std::string{str};
+  if (auto const pos = result.find(old_str); pos != std::string::npos) {
+    result.replace(pos, old_str.length(), new_str);
+  }
+  return result;
+}
+
 } // namespace frozenchars
