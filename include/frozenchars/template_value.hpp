@@ -226,13 +226,17 @@ public:
 
 /**
  * @brief 初期化リストからオブジェクト値を生成する。
+ *
+ * メモ: 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
+ *
  * @param items キー・値列
  * @return template_value(オブジェクト)
  */
 [[nodiscard]] inline auto make_template_object(std::initializer_list<std::pair<std::string, template_value>> items) -> template_value {
   auto out = template_object{};
+  out.reserve(items.size());
   for (auto const& [k, v] : items) {
-    out.insert_or_assign(k, v);
+    out.insert({k, v});
   }
   return template_value{std::move(out)};
 }
