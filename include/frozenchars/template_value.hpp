@@ -1,11 +1,11 @@
 #pragma once
 
+#include <ankerl/unordered_dense.h>
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -30,7 +30,7 @@ using template_array = std::vector<template_value>;
 /**
  * @brief テンプレートオブジェクト値の実体型。
  */
-using template_object = std::unordered_map<std::string, template_value>;
+using template_object = ankerl::unordered_dense::map<std::string, template_value>;
 
 /**
  * @brief テンプレート言語で扱う値の共用体ラッパ。
