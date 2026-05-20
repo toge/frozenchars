@@ -685,7 +685,7 @@ private:
    * @brief 乗除余演算レベルを評価する。
    */
   [[nodiscard]] auto parse_mul(bool evaluate) -> template_value {
-    auto lhs = parse_unary(evaluate);
+    auto lhs = parse_postfix(evaluate);
     while (true) {
       if (consume("*")) {
         auto rhs = parse_unary(evaluate);
@@ -722,9 +722,6 @@ private:
     return lhs;
   }
 
-  /**
-   * @brief 単項演算レベルを評価する。
-   */
   [[nodiscard]] auto parse_unary(bool evaluate) -> template_value {
     if (consume("not")) {
       auto v = parse_unary(evaluate);
@@ -745,6 +742,86 @@ private:
       return template_value{-*num};
     }
     return parse_primary(evaluate);
+  }
+
+  [[nodiscard]] auto parse_postfix(bool evaluate) -> template_value {
+    auto v = parse_unary(evaluate);
+    skip_space();
+    while (pos_ < text_.size() && text_[pos_] == '|') {
+      if (!evaluate) {
+        ++pos_;
+        while (pos_ < text_.size()) {
+          auto const c = text_[pos_];
+          if ((std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_') {
+            ++pos_;
+            continue;
+          }
+          break;
+        }
+        skip_space();
+        if (pos_ < text_.size() && text_[pos_] == '(') {
+          auto paren_depth = 1;
+          ++pos_;
+          while (pos_ < text_.size() && paren_depth > 0) {
+            if (text_[pos_] == '(') ++paren_depth;
+            else if (text_[pos_] == ')') --paren_depth;
+            ++pos_;
+          }
+        }
+        skip_space();
+        continue;
+      }
+
+      ++pos_;
+      skip_space();
+      auto start = pos_;
+      while (pos_ < text_.size()) {
+        auto const c = text_[pos_];
+        if ((std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_') {
+          ++pos_;
+          continue;
+        }
+        break;
+      }
+      if (start == pos_) {
+        throw template_render_error{"unexpected token after pipe operator"};
+      }
+      auto const func_name = text_.substr(start, pos_ - start);
+
+      skip_space();
+      auto args = std::vector<template_value>{};
+      if (pos_ < text_.size() && text_[pos_] == '(') {
+        ++pos_;
+        skip_space();
+
+        if (pos_ < text_.size() && text_[pos_] != ')') {
+          while (true) {
+            args.push_back(parse_or(evaluate));
+            skip_space();
+            if (pos_ >= text_.size()) {
+              throw template_render_error{"unclosed pipe function call"};
+            }
+            if (text_[pos_] == ')') {
+              break;
+            }
+            if (text_[pos_] != ',') {
+              throw template_render_error{"expected comma or closing parenthesis in pipe function call"};
+            }
+            ++pos_;
+            skip_space();
+          }
+        }
+
+        if (!consume(")")) {
+          throw template_render_error{"missing closing parenthesis in pipe function call"};
+        }
+      }
+
+      args.insert(args.begin(), v);
+      v = evaluate_function(func_name, args);
+      skip_space();
+    }
+    return v;
   }
 
   /**

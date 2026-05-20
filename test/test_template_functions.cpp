@@ -1119,3 +1119,263 @@ TEST_CASE("template functions - default with function call", "[template_function
   });
   REQUIRE(render_template<src>(ctx) == "HELLO");
 }
+
+// ==================== Pipe Syntax Tests ====================
+
+// Basic pipe tests
+TEST_CASE("pipe - basic upper", "[pipe][basic]") {
+  constexpr auto src = "{{ \"hello\" | upper }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}
+
+TEST_CASE("pipe - basic lower", "[pipe][basic]") {
+  constexpr auto src = "{{ \"HELLO\" | lower }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "hello");
+}
+
+TEST_CASE("pipe - basic capitalize", "[pipe][basic]") {
+  constexpr auto src = "{{ \"hello\" | capitalize }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "Hello");
+}
+
+TEST_CASE("pipe - basic with variable", "[pipe][basic]") {
+  constexpr auto src = "{{ name | upper }}"_fs;
+  auto const ctx = make_template_object({
+    {"name", "world"},
+  });
+  REQUIRE(render_template<src>(ctx) == "WORLD");
+}
+
+// Pipe with arrays
+TEST_CASE("pipe - array length", "[pipe][array]") {
+  constexpr auto src = "{{ arr | length }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("pipe - array first", "[pipe][array]") {
+  constexpr auto src = "{{ arr | first }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+TEST_CASE("pipe - array last", "[pipe][array]") {
+  constexpr auto src = "{{ arr | last }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("pipe - array sort and first", "[pipe][array]") {
+  constexpr auto src = "{{ arr | sort | first }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({3, 1, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+// Pipe chains (multiple pipes)
+TEST_CASE("pipe chain - upper then lower", "[pipe][chain]") {
+  constexpr auto src = "{{ \"hello\" | upper | lower }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "hello");
+}
+
+TEST_CASE("pipe chain - upper then capitalize", "[pipe][chain]") {
+  constexpr auto src = "{{ \"hello\" | upper | capitalize }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}
+
+TEST_CASE("pipe chain - triple pipe", "[pipe][chain]") {
+  constexpr auto src = "{{ \"hello\" | upper | lower | upper }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "HELLO");
+}
+
+TEST_CASE("pipe chain - sort join", "[pipe][chain]") {
+  constexpr auto src = "{{ arr | sort | join(\",\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({3, 1, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1,2,3");
+}
+
+// Pipes with function arguments
+TEST_CASE("pipe - replace with arguments", "[pipe][function_args]") {
+  constexpr auto src = "{{ \"hello world\" | replace(\"world\", \"there\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "hello there");
+}
+
+TEST_CASE("pipe - replace multiple t", "[pipe][function_args]") {
+  constexpr auto src = "{{ \"test\" | replace(\"t\", \"T\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "Test");
+}
+
+TEST_CASE("pipe - join with separator", "[pipe][function_args]") {
+  constexpr auto src = "{{ arr | join(\", \") }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1, 2, 3");
+}
+
+// Pipes with type conversions
+TEST_CASE("pipe - string to int", "[pipe][type_conversion]") {
+  constexpr auto src = "{{ \"42\" | int }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("pipe - float to int", "[pipe][type_conversion]") {
+  constexpr auto src = "{{ 3.14 | int }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("pipe - null to default string", "[pipe][type_conversion]") {
+  constexpr auto src = "{{ value | default(\"fallback\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"value", template_value{}},
+  });
+  REQUIRE(render_template<src>(ctx) == "fallback");
+}
+
+// Complex chains
+TEST_CASE("pipe chain - sort join with bar separator", "[pipe][complex]") {
+  constexpr auto src = "{{ arr | sort | join(\"|\") }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({5, 1, 3, 1, 4})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1|1|3|4|5");
+}
+
+TEST_CASE("pipe chain - upper replace upper", "[pipe][complex]") {
+  constexpr auto src = "{{ \"hello world\" | upper | replace(\"WORLD\", \"THERE\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "HELLO THERE");
+}
+
+TEST_CASE("pipe chain - sort length int", "[pipe][complex]") {
+  constexpr auto src = "{{ arr | sort | length | int }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+// Edge cases
+TEST_CASE("pipe - first of array with single element", "[pipe][edge]") {
+  constexpr auto src = "{{ arr | first }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({42})},
+  });
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("pipe - isString after pipe", "[pipe][type_check]") {
+  constexpr auto src = "{{ \"test\" | isString }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("pipe - isArray after pipe", "[pipe][type_check]") {
+  constexpr auto src = "{{ arr | isArray }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("pipe - even after sort", "[pipe][edge]") {
+  constexpr auto src = "{{ arr | sort | first | even }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({3, 2, 1})},
+  });
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+// Pipes in conditionals
+TEST_CASE("pipe in if condition - length check", "[pipe][conditional]") {
+  constexpr auto src = "{% if arr | length > 0 %}yes{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "yes");
+}
+
+TEST_CASE("pipe in if condition - empty array", "[pipe][conditional]") {
+  constexpr auto src = "{% if arr | length > 0 %}yes{% else %}no{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({})},
+  });
+  REQUIRE(render_template<src>(ctx) == "no");
+}
+
+TEST_CASE("pipe in if condition - isString check", "[pipe][conditional]") {
+  constexpr auto src = "{% if val | isString %}string{% else %}not string{% endif %}"_fs;
+  auto const ctx = make_template_object({
+    {"val", "hello"},
+  });
+  REQUIRE(render_template<src>(ctx) == "string");
+}
+
+// Pipes with abs and round
+TEST_CASE("pipe - abs negative number", "[pipe][math]") {
+  constexpr auto src = "{{ -42 | abs }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "42");
+}
+
+TEST_CASE("pipe - round float", "[pipe][math]") {
+  constexpr auto src = "{{ 3.7 | round }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "4");
+}
+
+// Pipes with max and min
+TEST_CASE("pipe - max of array", "[pipe][array_math]") {
+  constexpr auto src = "{{ arr | max }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({1, 5, 3, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("pipe - min then int", "[pipe][array_math]") {
+  constexpr auto src = "{{ arr | min | int }}"_fs;
+  auto const ctx = make_template_object({
+    {"arr", make_template_array({5, 1, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+// Complex mixed operations
+TEST_CASE("pipe with variable and function args", "[pipe][mixed]") {
+  constexpr auto src = "{{ text | replace(old, new) }}"_fs;
+  auto const ctx = make_template_object({
+    {"text", "hello"},
+    {"old", "l"},
+    {"new", "L"},
+  });
+  REQUIRE(render_template<src>(ctx) == "heLlo");
+}
+
+TEST_CASE("pipe chain with literal and variable", "[pipe][mixed]") {
+  constexpr auto src = "{{ \"HELLO\" | lower | replace(pattern, repl) }}"_fs;
+  auto const ctx = make_template_object({
+    {"pattern", "l"},
+    {"repl", "L"},
+  });
+  REQUIRE(render_template<src>(ctx) == "heLlo");
+}
