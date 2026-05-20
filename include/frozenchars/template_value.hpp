@@ -682,4 +682,148 @@ public:
   return template_value{val % div == 0};
 }
 
+/// @brief Convert value to integer
+/// @param val Input value (any type)
+/// @return Integer conversion
+/// @throws template_render_error if conversion is invalid (object type or non-convertible string)
+[[nodiscard]] inline auto fn_int(template_value const& val) noexcept(false) -> template_value {
+  if (std::holds_alternative<std::int64_t>(val.storage)) {
+    return val;
+  }
+  if (std::holds_alternative<double>(val.storage)) {
+    return template_value{static_cast<std::int64_t>(std::get<double>(val.storage))};
+  }
+  if (std::holds_alternative<bool>(val.storage)) {
+    return template_value{std::get<bool>(val.storage) ? 1 : 0};
+  }
+  if (std::holds_alternative<std::string>(val.storage)) {
+    auto const& str = std::get<std::string>(val.storage);
+    try {
+      auto const result = std::stoll(str, nullptr, 10);
+      return template_value{result};
+    } catch (...) {
+      throw template_render_error{"int() cannot convert string to integer"};
+    }
+  }
+  if (std::holds_alternative<template_array>(val.storage)) {
+    auto const& arr = std::get<template_array>(val.storage);
+    return template_value{static_cast<std::int64_t>(arr.size())};
+  }
+  if (std::holds_alternative<template_null>(val.storage)) {
+    return template_value{0};
+  }
+  throw template_render_error{"int() cannot convert object type"};
+}
+
+/// @brief Convert value to float
+/// @param val Input value (any type)
+/// @return Float conversion
+/// @throws template_render_error if conversion is invalid (object type or non-convertible string)
+[[nodiscard]] inline auto fn_float(template_value const& val) noexcept(false) -> template_value {
+  if (std::holds_alternative<double>(val.storage)) {
+    return val;
+  }
+  if (std::holds_alternative<std::int64_t>(val.storage)) {
+    return template_value{static_cast<double>(std::get<std::int64_t>(val.storage))};
+  }
+  if (std::holds_alternative<bool>(val.storage)) {
+    return template_value{std::get<bool>(val.storage) ? 1.0 : 0.0};
+  }
+  if (std::holds_alternative<std::string>(val.storage)) {
+    auto const& str = std::get<std::string>(val.storage);
+    try {
+      auto const result = std::stod(str);
+      return template_value{result};
+    } catch (...) {
+      throw template_render_error{"float() cannot convert string to float"};
+    }
+  }
+  if (std::holds_alternative<template_array>(val.storage)) {
+    auto const& arr = std::get<template_array>(val.storage);
+    return template_value{static_cast<double>(arr.size())};
+  }
+  if (std::holds_alternative<template_null>(val.storage)) {
+    return template_value{0.0};
+  }
+  throw template_render_error{"float() cannot convert object type"};
+}
+
+/// @brief Check if value is a string
+/// @param val Input value
+/// @return true if value is string type, false otherwise
+[[nodiscard]] inline auto fn_isString(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<std::string>(val.storage)};
+}
+
+/// @brief Check if value is an array
+/// @param val Input value
+/// @return true if value is array type, false otherwise
+[[nodiscard]] inline auto fn_isArray(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<template_array>(val.storage)};
+}
+
+/// @brief Check if value is numeric (int64_t or double)
+/// @param val Input value
+/// @return true if value is numeric type, false otherwise
+[[nodiscard]] inline auto fn_isNumber(template_value const& val) -> template_value {
+  return template_value{
+    std::holds_alternative<std::int64_t>(val.storage) || 
+    std::holds_alternative<double>(val.storage)
+  };
+}
+
+/// @brief Check if value is an object
+/// @param val Input value
+/// @return true if value is object type, false otherwise
+[[nodiscard]] inline auto fn_isObject(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<template_object>(val.storage)};
+}
+
+/// @brief Check if value is a boolean
+/// @param val Input value
+/// @return true if value is bool type, false otherwise
+[[nodiscard]] inline auto fn_isBoolean(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<bool>(val.storage)};
+}
+
+/// @brief Check if value is a float (double)
+/// @param val Input value
+/// @return true if value is double type, false otherwise
+[[nodiscard]] inline auto fn_isFloat(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<double>(val.storage)};
+}
+
+/// @brief Check if value is an integer (int64_t)
+/// @param val Input value
+/// @return true if value is int64_t type, false otherwise
+[[nodiscard]] inline auto fn_isInteger(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<std::int64_t>(val.storage)};
+}
+
+/// @brief Check if value is null
+/// @param val Input value
+/// @return true if value is null, false otherwise
+[[nodiscard]] inline auto fn_isNone(template_value const& val) -> template_value {
+  return template_value{std::holds_alternative<template_null>(val.storage)};
+}
+
+/// @brief Check if value is empty
+/// @param val Input value
+/// @return true if value is empty (empty string, empty array, empty object, or null)
+[[nodiscard]] inline auto fn_isEmpty(template_value const& val) -> template_value {
+  if (std::holds_alternative<template_null>(val.storage)) {
+    return template_value{true};
+  }
+  if (auto const* p = std::get_if<std::string>(&val.storage)) {
+    return template_value{p->empty()};
+  }
+  if (auto const* p = std::get_if<template_array>(&val.storage)) {
+    return template_value{p->empty()};
+  }
+  if (auto const* p = std::get_if<template_object>(&val.storage)) {
+    return template_value{p->empty()};
+  }
+  return template_value{false};
+}
+
 } // namespace frozenchars

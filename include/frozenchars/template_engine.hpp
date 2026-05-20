@@ -1163,6 +1163,83 @@ struct for_header {
     }
     return fn_divisibleBy(args[0], args[1]);
   }
+
+  if (func_name == "int") {
+    if (args.size() != 1) {
+      throw template_render_error{"int() expects 1 argument"};
+    }
+    return fn_int(args[0]);
+  }
+
+  if (func_name == "float") {
+    if (args.size() != 1) {
+      throw template_render_error{"float() expects 1 argument"};
+    }
+    return fn_float(args[0]);
+  }
+
+  if (func_name == "isString") {
+    if (args.size() != 1) {
+      throw template_render_error{"isString() expects 1 argument"};
+    }
+    return fn_isString(args[0]);
+  }
+
+  if (func_name == "isArray") {
+    if (args.size() != 1) {
+      throw template_render_error{"isArray() expects 1 argument"};
+    }
+    return fn_isArray(args[0]);
+  }
+
+  if (func_name == "isNumber") {
+    if (args.size() != 1) {
+      throw template_render_error{"isNumber() expects 1 argument"};
+    }
+    return fn_isNumber(args[0]);
+  }
+
+  if (func_name == "isObject") {
+    if (args.size() != 1) {
+      throw template_render_error{"isObject() expects 1 argument"};
+    }
+    return fn_isObject(args[0]);
+  }
+
+  if (func_name == "isBoolean") {
+    if (args.size() != 1) {
+      throw template_render_error{"isBoolean() expects 1 argument"};
+    }
+    return fn_isBoolean(args[0]);
+  }
+
+  if (func_name == "isFloat") {
+    if (args.size() != 1) {
+      throw template_render_error{"isFloat() expects 1 argument"};
+    }
+    return fn_isFloat(args[0]);
+  }
+
+  if (func_name == "isInteger") {
+    if (args.size() != 1) {
+      throw template_render_error{"isInteger() expects 1 argument"};
+    }
+    return fn_isInteger(args[0]);
+  }
+
+  if (func_name == "isNone") {
+    if (args.size() != 1) {
+      throw template_render_error{"isNone() expects 1 argument"};
+    }
+    return fn_isNone(args[0]);
+  }
+
+  if (func_name == "isEmpty") {
+    if (args.size() != 1) {
+      throw template_render_error{"isEmpty() expects 1 argument"};
+    }
+    return fn_isEmpty(args[0]);
+  }
   
   throw template_render_error{"unknown function: " + std::string{func_name}};
 }
