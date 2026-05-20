@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -497,6 +499,187 @@ public:
     }
   }
   return result;
+}
+
+/// @brief Get absolute value of a number
+/// @param num Input number (int64_t or double)
+/// @return Absolute value with same type as input
+[[nodiscard]] inline auto fn_abs(template_value const& num) -> template_value {
+ if (std::holds_alternative<std::int64_t>(num.storage)) {
+   auto const val = std::get<std::int64_t>(num.storage);
+   return template_value{std::abs(val)};
+ }
+ if (std::holds_alternative<double>(num.storage)) {
+   auto const val = std::get<double>(num.storage);
+   return template_value{std::abs(val)};
+ }
+ throw template_render_error{"abs() expects numeric argument"};
+}
+
+/// @brief Round a number to specified decimal places
+/// @param num Input number (int64_t or double)
+/// @param digits Number of decimal places (default 0)
+/// @return Rounded value as double
+[[nodiscard]] inline auto fn_round(template_value const& num, template_value const& digits) -> template_value {
+ double val = 0.0;
+ if (std::holds_alternative<std::int64_t>(num.storage)) {
+   val = static_cast<double>(std::get<std::int64_t>(num.storage));
+ } else if (std::holds_alternative<double>(num.storage)) {
+   val = std::get<double>(num.storage);
+ } else {
+   throw template_render_error{"round() expects numeric first argument"};
+ }
+
+ if (!std::holds_alternative<std::int64_t>(digits.storage)) {
+   throw template_render_error{"round() expects integer second argument"};
+ }
+
+ auto const places = std::get<std::int64_t>(digits.storage);
+ auto const factor = std::pow(10.0, static_cast<double>(places));
+ return template_value{std::round(val * factor) / factor};
+}
+
+/// @brief Round a number to 0 decimal places (overload for single argument)
+/// @param num Input number (int64_t or double)
+/// @return Rounded value as double
+[[nodiscard]] inline auto fn_round(template_value const& num) -> template_value {
+ double val = 0.0;
+ if (std::holds_alternative<std::int64_t>(num.storage)) {
+   val = static_cast<double>(std::get<std::int64_t>(num.storage));
+ } else if (std::holds_alternative<double>(num.storage)) {
+   val = std::get<double>(num.storage);
+ } else {
+   throw template_render_error{"round() expects numeric argument"};
+ }
+ return template_value{std::round(val)};
+}
+
+/// @brief Get maximum value from array of numbers
+/// @param arr Input array
+/// @return Maximum value (int64_t if all integers, double otherwise)
+[[nodiscard]] inline auto fn_max(template_array const& arr) -> template_value {
+ if (arr.empty()) {
+   throw template_render_error{"max() called on empty array"};
+ }
+
+ // First pass: determine if we have any doubles
+ auto has_double = false;
+ for (auto const& elem : arr) {
+   if (std::holds_alternative<double>(elem.storage)) {
+     has_double = true;
+     break;
+   }
+ }
+
+ if (has_double) {
+   auto max_val = -std::numeric_limits<double>::infinity();
+   for (auto const& elem : arr) {
+     if (std::holds_alternative<std::int64_t>(elem.storage)) {
+       max_val = std::max(max_val, static_cast<double>(std::get<std::int64_t>(elem.storage)));
+     } else if (std::holds_alternative<double>(elem.storage)) {
+       max_val = std::max(max_val, std::get<double>(elem.storage));
+     } else {
+       throw template_render_error{"max() array contains non-numeric value"};
+     }
+   }
+   return template_value{max_val};
+ } else {
+   auto max_int = std::numeric_limits<std::int64_t>::min();
+   for (auto const& elem : arr) {
+     if (std::holds_alternative<std::int64_t>(elem.storage)) {
+       max_int = std::max(max_int, std::get<std::int64_t>(elem.storage));
+     } else {
+       throw template_render_error{"max() array contains non-numeric value"};
+     }
+   }
+   return template_value{max_int};
+ }
+}
+
+/// @brief Get minimum value from array of numbers
+/// @param arr Input array
+/// @return Minimum value (int64_t if all integers, double otherwise)
+[[nodiscard]] inline auto fn_min(template_array const& arr) -> template_value {
+ if (arr.empty()) {
+   throw template_render_error{"min() called on empty array"};
+ }
+
+ // First pass: determine if we have any doubles
+ auto has_double = false;
+ for (auto const& elem : arr) {
+   if (std::holds_alternative<double>(elem.storage)) {
+     has_double = true;
+     break;
+   }
+ }
+
+ if (has_double) {
+   auto min_val = std::numeric_limits<double>::infinity();
+   for (auto const& elem : arr) {
+     if (std::holds_alternative<std::int64_t>(elem.storage)) {
+       min_val = std::min(min_val, static_cast<double>(std::get<std::int64_t>(elem.storage)));
+     } else if (std::holds_alternative<double>(elem.storage)) {
+       min_val = std::min(min_val, std::get<double>(elem.storage));
+     } else {
+       throw template_render_error{"min() array contains non-numeric value"};
+     }
+   }
+   return template_value{min_val};
+ } else {
+   auto min_int = std::numeric_limits<std::int64_t>::max();
+   for (auto const& elem : arr) {
+     if (std::holds_alternative<std::int64_t>(elem.storage)) {
+       min_int = std::min(min_int, std::get<std::int64_t>(elem.storage));
+     } else {
+       throw template_render_error{"min() array contains non-numeric value"};
+     }
+   }
+   return template_value{min_int};
+ }
+}
+
+/// @brief Check if a number is even
+/// @param num Input integer
+/// @return true if even, false if odd
+[[nodiscard]] inline auto fn_even(template_value const& num) -> template_value {
+ if (!std::holds_alternative<std::int64_t>(num.storage)) {
+   throw template_render_error{"even() expects integer argument"};
+ }
+ auto const val = std::get<std::int64_t>(num.storage);
+ return template_value{val % 2 == 0};
+}
+
+/// @brief Check if a number is odd
+/// @param num Input integer
+/// @return true if odd, false if even
+[[nodiscard]] inline auto fn_odd(template_value const& num) -> template_value {
+ if (!std::holds_alternative<std::int64_t>(num.storage)) {
+   throw template_render_error{"odd() expects integer argument"};
+ }
+ auto const val = std::get<std::int64_t>(num.storage);
+ return template_value{val % 2 != 0};
+}
+
+/// @brief Check if a number is divisible by another
+/// @param num Dividend (integer)
+/// @param divisor Divisor (integer, non-zero)
+/// @return true if divisible, false otherwise
+[[nodiscard]] inline auto fn_divisibleBy(template_value const& num, template_value const& divisor) -> template_value {
+ if (!std::holds_alternative<std::int64_t>(num.storage)) {
+   throw template_render_error{"divisibleBy() expects integer first argument"};
+ }
+ if (!std::holds_alternative<std::int64_t>(divisor.storage)) {
+   throw template_render_error{"divisibleBy() expects integer second argument"};
+ }
+
+ auto const val = std::get<std::int64_t>(num.storage);
+ auto const div = std::get<std::int64_t>(divisor.storage);
+
+ if (div == 0) {
+   throw template_render_error{"divisibleBy() divisor cannot be zero"};
+ }
+
+ return template_value{val % div == 0};
 }
 
 } // namespace frozenchars

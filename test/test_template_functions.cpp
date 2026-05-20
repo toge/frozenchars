@@ -402,3 +402,385 @@ TEST_CASE("template functions - wrong arg count range", "[template_functions][ar
   auto const ctx = make_template_object({});
   REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
 }
+
+// Numeric functions - abs tests
+TEST_CASE("template functions - abs positive integer", "[template_functions][abs]") {
+  constexpr auto src = "{{ abs(3) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - abs negative integer", "[template_functions][abs]") {
+  constexpr auto src = "{{ abs(-5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("template functions - abs zero", "[template_functions][abs]") {
+  constexpr auto src = "{{ abs(0) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "0");
+}
+
+TEST_CASE("template functions - abs positive double", "[template_functions][abs]") {
+  constexpr auto src = "{{ abs(3.14) }}"_fs;
+  auto const ctx = make_template_object({});
+  auto const result = render_template<src>(ctx);
+  REQUIRE(result == "3.14");
+}
+
+TEST_CASE("template functions - abs negative double", "[template_functions][abs]") {
+  constexpr auto src = "{{ abs(-3.14) }}"_fs;
+  auto const ctx = make_template_object({});
+  auto const result = render_template<src>(ctx);
+  REQUIRE(result == "3.14");
+}
+
+TEST_CASE("template functions - abs type error string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ abs(\"hello\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - abs arg count error", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ abs(1, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Numeric functions - round tests
+TEST_CASE("template functions - round default places", "[template_functions][round]") {
+  constexpr auto src = "{{ round(3.14159) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3");
+}
+
+TEST_CASE("template functions - round 2 places", "[template_functions][round]") {
+  constexpr auto src = "{{ round(3.14159, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3.14");
+}
+
+TEST_CASE("template functions - round negative 2 places", "[template_functions][round]") {
+  constexpr auto src = "{{ round(-3.14159, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "-3.14");
+}
+
+TEST_CASE("template functions - round 3 places", "[template_functions][round]") {
+  constexpr auto src = "{{ round(3.14159, 3) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "3.142");
+}
+
+TEST_CASE("template functions - round 0 places explicit", "[template_functions][round]") {
+  constexpr auto src = "{{ round(5.5, 0) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "6");
+}
+
+TEST_CASE("template functions - round integer input", "[template_functions][round]") {
+  constexpr auto src = "{{ round(5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("template functions - round type error string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ round(\"text\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - round type error non-integer places", "[template_functions][type_error]") {
+  constexpr auto src = "{{ round(3.14, \"places\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - round arg count error 3 args", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ round(1, 2, 3) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Numeric functions - max tests
+TEST_CASE("template functions - max integers", "[template_functions][max]") {
+  constexpr auto src = "{{ max(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 5, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "5");
+}
+
+TEST_CASE("template functions - max doubles", "[template_functions][max]") {
+  constexpr auto src = "{{ max(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1.5, 2.0})},
+  });
+  REQUIRE(render_template<src>(ctx) == "2");
+}
+
+TEST_CASE("template functions - max negative integers", "[template_functions][max]") {
+  constexpr auto src = "{{ max(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({-10, -5, -20})},
+  });
+  REQUIRE(render_template<src>(ctx) == "-5");
+}
+
+TEST_CASE("template functions - max mixed types", "[template_functions][max]") {
+  constexpr auto src = "{{ max(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 3.5, 2})},
+  });
+  auto const result = render_template<src>(ctx);
+  REQUIRE(result == "3.5");
+}
+
+TEST_CASE("template functions - max empty array", "[template_functions][type_error]") {
+  constexpr auto src = "{{ max(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - max non-array", "[template_functions][type_error]") {
+  constexpr auto src = "{{ max(\"not array\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - max array with string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ max(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, "string", 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - max arg count error", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ max(1, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Numeric functions - min tests
+TEST_CASE("template functions - min integers", "[template_functions][min]") {
+  constexpr auto src = "{{ min(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, 5, 3})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1");
+}
+
+TEST_CASE("template functions - min doubles", "[template_functions][min]") {
+  constexpr auto src = "{{ min(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1.5, 2.0})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1.5");
+}
+
+TEST_CASE("template functions - min negative integers", "[template_functions][min]") {
+  constexpr auto src = "{{ min(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({-10, -5, -20})},
+  });
+  REQUIRE(render_template<src>(ctx) == "-20");
+}
+
+TEST_CASE("template functions - min mixed types", "[template_functions][min]") {
+  constexpr auto src = "{{ min(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({3, 1.5, 2})},
+  });
+  REQUIRE(render_template<src>(ctx) == "1.5");
+}
+
+TEST_CASE("template functions - min empty array", "[template_functions][type_error]") {
+  constexpr auto src = "{{ min(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - min non-array", "[template_functions][type_error]") {
+  constexpr auto src = "{{ min(\"not array\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - min array with string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ min(items) }}"_fs;
+  auto const ctx = make_template_object({
+    {"items", make_template_array({1, "string", 3})},
+  });
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - min arg count error", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ min(1, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Numeric functions - even tests
+TEST_CASE("template functions - even positive", "[template_functions][even]") {
+  constexpr auto src = "{{ even(4) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - even odd positive", "[template_functions][even]") {
+  constexpr auto src = "{{ even(5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - even zero", "[template_functions][even]") {
+  constexpr auto src = "{{ even(0) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - even negative", "[template_functions][even]") {
+  constexpr auto src = "{{ even(-4) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - even odd negative", "[template_functions][even]") {
+  constexpr auto src = "{{ even(-5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - even type error float", "[template_functions][type_error]") {
+  constexpr auto src = "{{ even(3.5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - even type error string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ even(\"4\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - even arg count error", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ even(1, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Numeric functions - odd tests
+TEST_CASE("template functions - odd positive", "[template_functions][odd]") {
+  constexpr auto src = "{{ odd(5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - odd even positive", "[template_functions][odd]") {
+  constexpr auto src = "{{ odd(4) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - odd zero", "[template_functions][odd]") {
+  constexpr auto src = "{{ odd(0) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - odd negative", "[template_functions][odd]") {
+  constexpr auto src = "{{ odd(-5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - odd even negative", "[template_functions][odd]") {
+  constexpr auto src = "{{ odd(-4) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - odd type error float", "[template_functions][type_error]") {
+  constexpr auto src = "{{ odd(3.5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - odd type error string", "[template_functions][type_error]") {
+  constexpr auto src = "{{ odd(\"5\") }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - odd arg count error", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ odd(1, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+// Numeric functions - divisibleBy tests
+TEST_CASE("template functions - divisibleBy true", "[template_functions][divisibleBy]") {
+  constexpr auto src = "{{ divisibleBy(10, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - divisibleBy false", "[template_functions][divisibleBy]") {
+  constexpr auto src = "{{ divisibleBy(10, 3) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "false");
+}
+
+TEST_CASE("template functions - divisibleBy exact", "[template_functions][divisibleBy]") {
+  constexpr auto src = "{{ divisibleBy(15, 5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - divisibleBy negative dividend", "[template_functions][divisibleBy]") {
+  constexpr auto src = "{{ divisibleBy(-10, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - divisibleBy zero", "[template_functions][divisibleBy]") {
+  constexpr auto src = "{{ divisibleBy(0, 5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE(render_template<src>(ctx) == "true");
+}
+
+TEST_CASE("template functions - divisibleBy divide by zero", "[template_functions][type_error]") {
+  constexpr auto src = "{{ divisibleBy(10, 0) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - divisibleBy type error float dividend", "[template_functions][type_error]") {
+  constexpr auto src = "{{ divisibleBy(10.5, 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - divisibleBy type error string dividend", "[template_functions][type_error]") {
+  constexpr auto src = "{{ divisibleBy(\"10\", 2) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - divisibleBy type error float divisor", "[template_functions][type_error]") {
+  constexpr auto src = "{{ divisibleBy(10, 2.5) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}
+
+TEST_CASE("template functions - divisibleBy arg count error", "[template_functions][arg_error]") {
+  constexpr auto src = "{{ divisibleBy(10) }}"_fs;
+  auto const ctx = make_template_object({});
+  REQUIRE_THROWS_AS(render_template<src>(ctx), template_render_error);
+}

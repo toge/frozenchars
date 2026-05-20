@@ -735,6 +735,9 @@ private:
       if (!evaluate) {
         return template_value{};
       }
+      if (std::holds_alternative<std::int64_t>(v.storage)) {
+        return template_value{-std::get<std::int64_t>(v.storage)};
+      }
       auto const num = try_as_double(v);
       if (!num.has_value()) {
         throw template_render_error{"invalid operand for unary -"};
@@ -1101,6 +1104,64 @@ struct for_header {
     } else {
       throw template_render_error{"range() expects 1, 2, or 3 arguments"};
     }
+  }
+
+  if (func_name == "abs") {
+    if (args.size() != 1) {
+      throw template_render_error{"abs() expects 1 argument"};
+    }
+    return fn_abs(args[0]);
+  }
+
+  if (func_name == "round") {
+    if (args.size() == 1) {
+      return fn_round(args[0]);
+    } else if (args.size() == 2) {
+      return fn_round(args[0], args[1]);
+    } else {
+      throw template_render_error{"round() expects 1 or 2 arguments"};
+    }
+  }
+
+  if (func_name == "max") {
+    if (args.size() != 1) {
+      throw template_render_error{"max() expects 1 argument"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"max() expects array argument"};
+    }
+    return fn_max(std::get<template_array>(args[0].storage));
+  }
+
+  if (func_name == "min") {
+    if (args.size() != 1) {
+      throw template_render_error{"min() expects 1 argument"};
+    }
+    if (!std::holds_alternative<template_array>(args[0].storage)) {
+      throw template_render_error{"min() expects array argument"};
+    }
+    return fn_min(std::get<template_array>(args[0].storage));
+  }
+
+  if (func_name == "even") {
+    if (args.size() != 1) {
+      throw template_render_error{"even() expects 1 argument"};
+    }
+    return fn_even(args[0]);
+  }
+
+  if (func_name == "odd") {
+    if (args.size() != 1) {
+      throw template_render_error{"odd() expects 1 argument"};
+    }
+    return fn_odd(args[0]);
+  }
+
+  if (func_name == "divisibleBy") {
+    if (args.size() != 2) {
+      throw template_render_error{"divisibleBy() expects 2 arguments"};
+    }
+    return fn_divisibleBy(args[0], args[1]);
   }
   
   throw template_render_error{"unknown function: " + std::string{func_name}};
