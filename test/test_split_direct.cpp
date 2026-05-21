@@ -7,11 +7,11 @@ using namespace frozenchars;
 
 int main() {
     static constexpr auto fs = FrozenString<20>("apple,banana,cherry");
-    
+
     constexpr auto count = detail::split_count_impl<detail::is_char<','>>(fs);
-    
+
     std::cout << "Count with is_char: " << count << "\n";
-    
+
     if (count == 3) {
         std::cout << "SUCCESS\n";
         return 0;

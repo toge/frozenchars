@@ -23,8 +23,8 @@ int main() {
 
   // コンテキスト作成
   auto context = frozenchars::make_template_object({
-    {"name", frozenchars::template_value{"World"}},
-    {"count", frozenchars::template_value{42.0}},
+    {"name", frozenchars::inja_value{"World"}},
+    {"count", frozenchars::inja_value{42.0}},
   });
 
   // 方法1: 従来の render_template（std::string を返す）
@@ -46,7 +46,7 @@ int main() {
   }
 
   // エラーケースのテスト: root がオブジェクトでない場合
-  auto non_obj = frozenchars::template_value{123.0};
+  auto non_obj = frozenchars::inja_value{123.0};
   auto buffer_err = StringBuffer{};
   auto result_err = frozenchars::render_template<tmpl>(non_obj, buffer_err);
 

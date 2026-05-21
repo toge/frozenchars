@@ -11,7 +11,7 @@ struct comma_delim {
 
 int main() {
     constexpr auto fs = FrozenString<20>("apple,banana,cherry");
-    
+
     constexpr auto count = detail::split_count_impl<comma_delim{}>(fs);
     constexpr auto max_l = detail::max_token_len_impl<comma_delim{}>(fs);
 

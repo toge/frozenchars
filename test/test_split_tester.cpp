@@ -16,15 +16,15 @@ struct split_tester {
         std::size_t src = 0;
         std::size_t dst = 0;
         while (src < Str.length && dst < token_count) {
-          while (src < Str.length && IsDelim(Str.buffer[src])) ++src;
-          if (src >= Str.length) break;
-          std::size_t token_len = 0;
-          while (src < Str.length && !IsDelim(Str.buffer[src])) {
-            res[dst].buffer[token_len++] = Str.buffer[src++];
-          }
-          res[dst].buffer[token_len] = '\0';
-          res[dst].length = token_len;
-          ++dst;
+            while (src < Str.length && IsDelim(Str.buffer[src])) ++src;
+            if (src >= Str.length) break;
+            std::size_t token_len = 0;
+            while (src < Str.length && !IsDelim(Str.buffer[src])) {
+                res[dst].buffer[token_len++] = Str.buffer[src++];
+            }
+            res[dst].buffer[token_len] = '\0';
+            res[dst].length = token_len;
+            ++dst;
         }
         return res;
     }

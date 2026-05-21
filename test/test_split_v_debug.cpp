@@ -10,7 +10,7 @@ using namespace frozenchars::literals;
 int main() {
     // 1. 文字列を分割してキーの配列を作成
     constexpr auto keys = split_v<"apple,banana,cherry"_fs, detail::is_char<','>>;
-    
+
     std::cout << "Keys size: " << keys.size() << "\n";
     for (auto const& k : keys) {
         std::cout << "Key: [" << k.sv() << "] len=" << k.length << "\n";

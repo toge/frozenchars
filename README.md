@@ -21,10 +21,10 @@ using namespace frozenchars::literals;
 
 constexpr auto tpl = "Hello {{ name }}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
 
-auto const ctx = object({
-  {"name", "A"},
-  {"items", array({1, 2, 3})},
-});
+auto const ctx = frozenchars::make_frozen_map<frozenchars::inja_value, "name"_fs, "items"_fs>(
+  std::pair{"name", frozenchars::inja_value{"A"}},
+  std::pair{"items", frozenchars::array({1, 2, 3})}
+);
 
 auto const out = render<tpl>(ctx); // "Hello A:123"
 ```

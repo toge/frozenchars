@@ -30,12 +30,12 @@ struct template_null final {};
 /**
  * @brief テンプレート評価時に使う動的値型。
  */
-struct template_value;
+struct inja_value;
 
 /**
  * @brief テンプレート配列値の実体型。
  */
-using template_array = std::vector<template_value>;
+using template_array = std::vector<inja_value>;
 
 /**
  * @brief テンプレートオブジェクト値の実体型。
@@ -44,7 +44,7 @@ using template_array = std::vector<template_value>;
  * コンパイル時に -DFROZENCHARS_OBJECT_MAP_HEADER や define で指定してカスタマイズ可能。
  * 例: -DFROZENCHARS_OBJECT_MAP=ankerl::unordered_dense::map
  */
-using template_object = FROZENCHARS_OBJECT_MAP<std::string, template_value>;
+using inja_object = FROZENCHARS_OBJECT_MAP<std::string, inja_value>;
 
 /**
  * @brief テンプレート言語で扱う値の共用体ラッパ。
@@ -52,11 +52,11 @@ using template_object = FROZENCHARS_OBJECT_MAP<std::string, template_value>;
  * `null / bool / 整数 / 浮動小数 / 文字列 / 配列 / オブジェクト`
  * を単一の型で扱うためのコンテナ。
  */
-struct template_value {
+struct inja_value {
   /**
    * @brief 内部ストレージ型。
    */
-  using storage_type = std::variant<template_null, bool, std::int64_t, double, std::string, template_array, template_object>;
+  using storage_type = std::variant<template_null, bool, std::int64_t, double, std::string, template_array, inja_object>;
 
   /**
    * @brief 値の実体。
@@ -66,37 +66,37 @@ struct template_value {
   /**
    * @brief null 値で初期化する。
    */
-  template_value() : storage(template_null{}) {}
+  inja_value() : storage(template_null{}) {}
 
   /**
    * @brief nullptr を null 値として受け取る。
    */
-  template_value(std::nullptr_t) : storage(template_null{}) {}
+  inja_value(std::nullptr_t) : storage(template_null{}) {}
 
   /**
    * @brief 真偽値で初期化する。
    */
-  template_value(bool v) : storage(v) {}
+  inja_value(bool v) : storage(v) {}
 
   /**
    * @brief C 文字列を文字列値として初期化する。
    */
-  template_value(char const* v) : storage(std::string{v}) {}
+  inja_value(char const* v) : storage(std::string{v}) {}
 
   /**
    * @brief std::string で初期化する。
    */
-  template_value(std::string v) : storage(std::move(v)) {}
+  inja_value(std::string v) : storage(std::move(v)) {}
 
   /**
    * @brief 配列値で初期化する。
    */
-  template_value(template_array v) : storage(std::move(v)) {}
+  inja_value(template_array v) : storage(std::move(v)) {}
 
   /**
    * @brief オブジェクト値で初期化する。
    */
-  template_value(template_object v) : storage(std::move(v)) {}
+  inja_value(inja_object v) : storage(std::move(v)) {}
 
   /**
    * @brief 整数型を int64 値として保持する。
@@ -105,7 +105,7 @@ struct template_value {
    */
   template <typename Int>
   requires(std::is_integral_v<std::remove_cvref_t<Int>> && !std::is_same_v<std::remove_cvref_t<Int>, bool>)
-  template_value(Int v) : storage(static_cast<std::int64_t>(v)) {}
+  inja_value(Int v) : storage(static_cast<std::int64_t>(v)) {}
 
   /**
    * @brief 浮動小数型を double 値として保持する。
@@ -114,7 +114,7 @@ struct template_value {
    */
   template <typename Float>
   requires(std::is_floating_point_v<std::remove_cvref_t<Float>>)
-  template_value(Float v) : storage(static_cast<double>(v)) {}
+  inja_value(Float v) : storage(static_cast<double>(v)) {}
 };
 
 /**
@@ -130,7 +130,7 @@ public:
  * @param v 対象値
  * @return null なら true
  */
-[[nodiscard]] inline auto is_null(template_value const& v) -> bool {
+[[nodiscard]] inline auto is_null(inja_value const& v) -> bool {
   return std::holds_alternative<template_null>(v.storage);
 }
 
@@ -140,7 +140,7 @@ public:
  * @return bool 値
  * @throws template_render_error 型が不一致の場合
  */
-[[nodiscard]] inline auto as_bool(template_value const& v) -> bool {
+[[nodiscard]] inline auto as_bool(inja_value const& v) -> bool {
   if (auto const* p = std::get_if<bool>(&v.storage)) {
     return *p;
   }
@@ -153,7 +153,7 @@ public:
  * @return int64 値
  * @throws template_render_error 型が不一致の場合
  */
-[[nodiscard]] inline auto as_int(template_value const& v) -> std::int64_t {
+[[nodiscard]] inline auto as_int(inja_value const& v) -> std::int64_t {
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     return *p;
   }
@@ -169,7 +169,7 @@ public:
  * @return 数値
  * @throws template_render_error 数値型でない場合
  */
-[[nodiscard]] inline auto as_double(template_value const& v) -> double {
+[[nodiscard]] inline auto as_double(inja_value const& v) -> double {
   if (auto const* p = std::get_if<double>(&v.storage)) {
     return *p;
   }
@@ -185,7 +185,7 @@ public:
  * @return 文字列参照
  * @throws template_render_error 型が不一致の場合
  */
-[[nodiscard]] inline auto as_string(template_value const& v) -> std::string const& {
+[[nodiscard]] inline auto as_string(inja_value const& v) -> std::string const& {
   if (auto const* p = std::get_if<std::string>(&v.storage)) {
     return *p;
   }
@@ -198,7 +198,7 @@ public:
  * @return 配列参照
  * @throws template_render_error 型が不一致の場合
  */
-[[nodiscard]] inline auto as_array(template_value const& v) -> template_array const& {
+[[nodiscard]] inline auto as_array(inja_value const& v) -> template_array const& {
   if (auto const* p = std::get_if<template_array>(&v.storage)) {
     return *p;
   }
@@ -211,8 +211,8 @@ public:
  * @return オブジェクト参照
  * @throws template_render_error 型が不一致の場合
  */
-[[nodiscard]] inline auto as_object(template_value const& v) -> template_object const& {
-  if (auto const* p = std::get_if<template_object>(&v.storage)) {
+[[nodiscard]] inline auto as_object(inja_value const& v) -> inja_object const& {
+  if (auto const* p = std::get_if<inja_object>(&v.storage)) {
     return *p;
   }
   throw template_render_error{"value is not object"};
@@ -221,10 +221,10 @@ public:
 /**
  * @brief 初期化リストから配列値を生成する。
  * @param items 要素列
- * @return template_value(配列)
+ * @return inja_value(配列)
  */
-[[nodiscard]] inline auto make_template_array(std::initializer_list<template_value> items) -> template_value {
-  return template_value{template_array{items}};
+[[nodiscard]] inline auto make_template_array(std::initializer_list<inja_value> items) -> inja_value {
+  return inja_value{template_array{items}};
 }
 
 /**
@@ -233,15 +233,15 @@ public:
  * メモ: 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
  *
  * @param items キー・値列
- * @return template_value(オブジェクト)
+ * @return inja_value(オブジェクト)
  */
-[[nodiscard]] inline auto make_template_object(std::initializer_list<std::pair<std::string, template_value>> items) -> template_value {
-  auto out = template_object{};
+[[nodiscard]] inline auto make_template_object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
+  auto out = inja_object{};
   out.reserve(items.size());
   for (auto const& [k, v] : items) {
     out.insert({k, v});
   }
-  return template_value{std::move(out)};
+  return inja_value{std::move(out)};
 }
 
 /**
@@ -253,7 +253,7 @@ public:
 * @param v 対象値
 * @return 真偽値
  */
-[[nodiscard]] inline auto template_truthy(template_value const& v) -> bool {
+[[nodiscard]] inline auto template_truthy(inja_value const& v) -> bool {
   if (std::holds_alternative<template_null>(v.storage)) {
     return false;
   }
@@ -272,7 +272,7 @@ public:
   if (auto const* p = std::get_if<template_array>(&v.storage)) {
     return !p->empty();
   }
-  return !std::get<template_object>(v.storage).empty();
+  return !std::get<inja_object>(v.storage).empty();
 }
 
 } // namespace frozenchars
@@ -282,9 +282,9 @@ namespace frozenchars::inja {
 /**
 * @brief 初期化リストから配列値を生成する。
 * @param items 要素列
-* @return template_value(配列)
+* @return inja_value(配列)
 */
-[[nodiscard]] inline auto array(std::initializer_list<template_value> items) -> template_value {
+[[nodiscard]] inline auto array(std::initializer_list<inja_value> items) -> inja_value {
   return make_template_array(items);
 }
 
@@ -294,9 +294,9 @@ namespace frozenchars::inja {
 * メモ: 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
 *
 * @param items キー・値列
-* @return template_value(オブジェクト)
+* @return inja_value(オブジェクト)
 */
-[[nodiscard]] inline auto object(std::initializer_list<std::pair<std::string, template_value>> items) -> template_value {
+[[nodiscard]] inline auto object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
   return make_template_object(items);
 }
 
@@ -312,7 +312,7 @@ namespace frozenchars {
 * @param v 対象値
 * @return 出力文字列
 */
-[[nodiscard]] inline auto template_to_string(template_value const& v) -> std::string {
+[[nodiscard]] inline auto template_to_string(inja_value const& v) -> std::string {
   if (std::holds_alternative<template_null>(v.storage)) {
     return "null";
   }
@@ -400,7 +400,7 @@ namespace frozenchars {
 /// @brief Get first element of array
 /// @param arr Input array
 /// @return First element (throws if empty)
-[[nodiscard]] inline auto fn_first(template_array const& arr) -> template_value {
+[[nodiscard]] inline auto fn_first(template_array const& arr) -> inja_value {
   if (arr.empty()) {
     throw template_render_error{"first() called on empty array"};
   }
@@ -410,7 +410,7 @@ namespace frozenchars {
 /// @brief Get last element of array
 /// @param arr Input array
 /// @return Last element (throws if empty)
-[[nodiscard]] inline auto fn_last(template_array const& arr) -> template_value {
+[[nodiscard]] inline auto fn_last(template_array const& arr) -> inja_value {
   if (arr.empty()) {
     throw template_render_error{"last() called on empty array"};
   }
@@ -453,9 +453,9 @@ namespace frozenchars {
 /// @return New sorted array
 [[nodiscard]] inline auto fn_sort(template_array const& arr) -> template_array {
   auto result = arr;
-  std::sort(result.begin(), result.end(), [](template_value const& a, template_value const& b) {
+  std::sort(result.begin(), result.end(), [](inja_value const& a, inja_value const& b) {
     // Helper lambda to convert to double if possible
-    auto to_double = [](template_value const& v) -> std::optional<double> {
+    auto to_double = [](inja_value const& v) -> std::optional<double> {
       if (std::holds_alternative<double>(v.storage)) {
         return std::get<double>(v.storage);
       }
@@ -496,7 +496,7 @@ namespace frozenchars {
 [[nodiscard]] inline auto fn_range(std::int64_t end) -> template_array {
   auto result = template_array{};
   for (auto i = std::int64_t{0}; i < end; ++i) {
-    result.push_back(template_value{i});
+    result.push_back(inja_value{i});
   }
   return result;
 }
@@ -508,7 +508,7 @@ namespace frozenchars {
 [[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end) -> template_array {
   auto result = template_array{};
   for (auto i = start; i < end; ++i) {
-    result.push_back(template_value{i});
+    result.push_back(inja_value{i});
   }
   return result;
 }
@@ -522,11 +522,11 @@ namespace frozenchars {
   auto result = template_array{};
   if (step > 0) {
     for (auto i = start; i < end; i += step) {
-      result.push_back(template_value{i});
+      result.push_back(inja_value{i});
     }
   } else if (step < 0) {
     for (auto i = start; i > end; i += step) {
-      result.push_back(template_value{i});
+      result.push_back(inja_value{i});
     }
   }
   return result;
@@ -535,14 +535,14 @@ namespace frozenchars {
 /// @brief Get absolute value of a number
 /// @param num Input number (int64_t or double)
 /// @return Absolute value with same type as input
-[[nodiscard]] inline auto fn_abs(template_value const& num) -> template_value {
+[[nodiscard]] inline auto fn_abs(inja_value const& num) -> inja_value {
   if (std::holds_alternative<std::int64_t>(num.storage)) {
     auto const val = std::get<std::int64_t>(num.storage);
-    return template_value{std::abs(val)};
+    return inja_value{std::abs(val)};
   }
   if (std::holds_alternative<double>(num.storage)) {
     auto const val = std::get<double>(num.storage);
-    return template_value{std::abs(val)};
+    return inja_value{std::abs(val)};
   }
   throw template_render_error{"abs() expects numeric argument"};
 }
@@ -551,7 +551,7 @@ namespace frozenchars {
 /// @param num Input number (int64_t or double)
 /// @param digits Number of decimal places (default 0)
 /// @return Rounded value as double
-[[nodiscard]] inline auto fn_round(template_value const& num, template_value const& digits) -> template_value {
+[[nodiscard]] inline auto fn_round(inja_value const& num, inja_value const& digits) -> inja_value {
   double val = 0.0;
   if (std::holds_alternative<std::int64_t>(num.storage)) {
     val = static_cast<double>(std::get<std::int64_t>(num.storage));
@@ -567,13 +567,13 @@ namespace frozenchars {
 
   auto const places = std::get<std::int64_t>(digits.storage);
   auto const factor = std::pow(10.0, static_cast<double>(places));
-  return template_value{std::round(val * factor) / factor};
+  return inja_value{std::round(val * factor) / factor};
 }
 
 /// @brief Round a number to 0 decimal places (overload for single argument)
 /// @param num Input number (int64_t or double)
 /// @return Rounded value as double
-[[nodiscard]] inline auto fn_round(template_value const& num) -> template_value {
+[[nodiscard]] inline auto fn_round(inja_value const& num) -> inja_value {
   double val = 0.0;
   if (std::holds_alternative<std::int64_t>(num.storage)) {
     val = static_cast<double>(std::get<std::int64_t>(num.storage));
@@ -582,13 +582,13 @@ namespace frozenchars {
   } else {
     throw template_render_error{"round() expects numeric argument"};
   }
-  return template_value{std::round(val)};
+  return inja_value{std::round(val)};
 }
 
 /// @brief Get maximum value from array of numbers
 /// @param arr Input array
 /// @return Maximum value (int64_t if all integers, double otherwise)
-[[nodiscard]] inline auto fn_max(template_array const& arr) -> template_value {
+[[nodiscard]] inline auto fn_max(template_array const& arr) -> inja_value {
   if (arr.empty()) {
     throw template_render_error{"max() called on empty array"};
   }
@@ -613,7 +613,7 @@ namespace frozenchars {
         throw template_render_error{"max() array contains non-numeric value"};
       }
     }
-    return template_value{max_val};
+    return inja_value{max_val};
   } else {
     auto max_int = std::numeric_limits<std::int64_t>::min();
     for (auto const& elem : arr) {
@@ -623,14 +623,14 @@ namespace frozenchars {
         throw template_render_error{"max() array contains non-numeric value"};
       }
     }
-    return template_value{max_int};
+    return inja_value{max_int};
   }
 }
 
 /// @brief Get minimum value from array of numbers
 /// @param arr Input array
 /// @return Minimum value (int64_t if all integers, double otherwise)
-[[nodiscard]] inline auto fn_min(template_array const& arr) -> template_value {
+[[nodiscard]] inline auto fn_min(template_array const& arr) -> inja_value {
   if (arr.empty()) {
     throw template_render_error{"min() called on empty array"};
   }
@@ -655,7 +655,7 @@ namespace frozenchars {
         throw template_render_error{"min() array contains non-numeric value"};
       }
     }
-    return template_value{min_val};
+    return inja_value{min_val};
   } else {
     auto min_int = std::numeric_limits<std::int64_t>::max();
     for (auto const& elem : arr) {
@@ -665,37 +665,37 @@ namespace frozenchars {
         throw template_render_error{"min() array contains non-numeric value"};
       }
     }
-    return template_value{min_int};
+    return inja_value{min_int};
   }
 }
 
 /// @brief Check if a number is even
 /// @param num Input integer
 /// @return true if even, false if odd
-[[nodiscard]] inline auto fn_even(template_value const& num) -> template_value {
+[[nodiscard]] inline auto fn_even(inja_value const& num) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
     throw template_render_error{"even() expects integer argument"};
   }
   auto const val = std::get<std::int64_t>(num.storage);
-  return template_value{val % 2 == 0};
+  return inja_value{val % 2 == 0};
 }
 
 /// @brief Check if a number is odd
 /// @param num Input integer
 /// @return true if odd, false if even
-[[nodiscard]] inline auto fn_odd(template_value const& num) -> template_value {
+[[nodiscard]] inline auto fn_odd(inja_value const& num) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
     throw template_render_error{"odd() expects integer argument"};
   }
   auto const val = std::get<std::int64_t>(num.storage);
-  return template_value{val % 2 != 0};
+  return inja_value{val % 2 != 0};
 }
 
 /// @brief Check if a number is divisible by another
 /// @param num Dividend (integer)
 /// @param divisor Divisor (integer, non-zero)
 /// @return true if divisible, false otherwise
-[[nodiscard]] inline auto fn_divisibleBy(template_value const& num, template_value const& divisor) -> template_value {
+[[nodiscard]] inline auto fn_divisibleBy(inja_value const& num, inja_value const& divisor) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
     throw template_render_error{"divisibleBy() expects integer first argument"};
   }
@@ -710,38 +710,38 @@ namespace frozenchars {
     throw template_render_error{"divisibleBy() divisor cannot be zero"};
   }
 
-  return template_value{val % div == 0};
+  return inja_value{val % div == 0};
 }
 
 /// @brief Convert value to integer
 /// @param val Input value (any type)
 /// @return Integer conversion
 /// @throws template_render_error if conversion is invalid (object type or non-convertible string)
-[[nodiscard]] inline auto fn_int(template_value const& val) noexcept(false) -> template_value {
+[[nodiscard]] inline auto fn_int(inja_value const& val) noexcept(false) -> inja_value {
   if (std::holds_alternative<std::int64_t>(val.storage)) {
     return val;
   }
   if (std::holds_alternative<double>(val.storage)) {
-    return template_value{static_cast<std::int64_t>(std::get<double>(val.storage))};
+    return inja_value{static_cast<std::int64_t>(std::get<double>(val.storage))};
   }
   if (std::holds_alternative<bool>(val.storage)) {
-    return template_value{std::get<bool>(val.storage) ? 1 : 0};
+    return inja_value{std::get<bool>(val.storage) ? 1 : 0};
   }
   if (std::holds_alternative<std::string>(val.storage)) {
     auto const& str = std::get<std::string>(val.storage);
     try {
       auto const result = std::stoll(str, nullptr, 10);
-      return template_value{result};
+      return inja_value{result};
     } catch (...) {
       throw template_render_error{"int() cannot convert string to integer"};
     }
   }
   if (std::holds_alternative<template_array>(val.storage)) {
     auto const& arr = std::get<template_array>(val.storage);
-    return template_value{static_cast<std::int64_t>(arr.size())};
+    return inja_value{static_cast<std::int64_t>(arr.size())};
   }
   if (std::holds_alternative<template_null>(val.storage)) {
-    return template_value{0};
+    return inja_value{0};
   }
   throw template_render_error{"int() cannot convert object type"};
 }
@@ -750,31 +750,31 @@ namespace frozenchars {
 /// @param val Input value (any type)
 /// @return Float conversion
 /// @throws template_render_error if conversion is invalid (object type or non-convertible string)
-[[nodiscard]] inline auto fn_float(template_value const& val) noexcept(false) -> template_value {
+[[nodiscard]] inline auto fn_float(inja_value const& val) noexcept(false) -> inja_value {
   if (std::holds_alternative<double>(val.storage)) {
     return val;
   }
   if (std::holds_alternative<std::int64_t>(val.storage)) {
-    return template_value{static_cast<double>(std::get<std::int64_t>(val.storage))};
+    return inja_value{static_cast<double>(std::get<std::int64_t>(val.storage))};
   }
   if (std::holds_alternative<bool>(val.storage)) {
-    return template_value{std::get<bool>(val.storage) ? 1.0 : 0.0};
+    return inja_value{std::get<bool>(val.storage) ? 1.0 : 0.0};
   }
   if (std::holds_alternative<std::string>(val.storage)) {
     auto const& str = std::get<std::string>(val.storage);
     try {
       auto const result = std::stod(str);
-      return template_value{result};
+      return inja_value{result};
     } catch (...) {
       throw template_render_error{"float() cannot convert string to float"};
     }
   }
   if (std::holds_alternative<template_array>(val.storage)) {
     auto const& arr = std::get<template_array>(val.storage);
-    return template_value{static_cast<double>(arr.size())};
+    return inja_value{static_cast<double>(arr.size())};
   }
   if (std::holds_alternative<template_null>(val.storage)) {
-    return template_value{0.0};
+    return inja_value{0.0};
   }
   throw template_render_error{"float() cannot convert object type"};
 }
@@ -782,22 +782,22 @@ namespace frozenchars {
 /// @brief Check if value is a string
 /// @param val Input value
 /// @return true if value is string type, false otherwise
-[[nodiscard]] inline auto fn_isString(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<std::string>(val.storage)};
+[[nodiscard]] inline auto fn_isString(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<std::string>(val.storage)};
 }
 
 /// @brief Check if value is an array
 /// @param val Input value
 /// @return true if value is array type, false otherwise
-[[nodiscard]] inline auto fn_isArray(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<template_array>(val.storage)};
+[[nodiscard]] inline auto fn_isArray(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<template_array>(val.storage)};
 }
 
 /// @brief Check if value is numeric (int64_t or double)
 /// @param val Input value
 /// @return true if value is numeric type, false otherwise
-[[nodiscard]] inline auto fn_isNumber(template_value const& val) -> template_value {
-  return template_value{
+[[nodiscard]] inline auto fn_isNumber(inja_value const& val) -> inja_value {
+  return inja_value{
     std::holds_alternative<std::int64_t>(val.storage) || 
     std::holds_alternative<double>(val.storage)
   };
@@ -806,55 +806,55 @@ namespace frozenchars {
 /// @brief Check if value is an object
 /// @param val Input value
 /// @return true if value is object type, false otherwise
-[[nodiscard]] inline auto fn_isObject(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<template_object>(val.storage)};
+[[nodiscard]] inline auto fn_isObject(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<inja_object>(val.storage)};
 }
 
 /// @brief Check if value is a boolean
 /// @param val Input value
 /// @return true if value is bool type, false otherwise
-[[nodiscard]] inline auto fn_isBoolean(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<bool>(val.storage)};
+[[nodiscard]] inline auto fn_isBoolean(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<bool>(val.storage)};
 }
 
 /// @brief Check if value is a float (double)
 /// @param val Input value
 /// @return true if value is double type, false otherwise
-[[nodiscard]] inline auto fn_isFloat(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<double>(val.storage)};
+[[nodiscard]] inline auto fn_isFloat(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<double>(val.storage)};
 }
 
 /// @brief Check if value is an integer (int64_t)
 /// @param val Input value
 /// @return true if value is int64_t type, false otherwise
-[[nodiscard]] inline auto fn_isInteger(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<std::int64_t>(val.storage)};
+[[nodiscard]] inline auto fn_isInteger(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<std::int64_t>(val.storage)};
 }
 
 /// @brief Check if value is null
 /// @param val Input value
 /// @return true if value is null, false otherwise
-[[nodiscard]] inline auto fn_isNone(template_value const& val) -> template_value {
-  return template_value{std::holds_alternative<template_null>(val.storage)};
+[[nodiscard]] inline auto fn_isNone(inja_value const& val) -> inja_value {
+  return inja_value{std::holds_alternative<template_null>(val.storage)};
 }
 
 /// @brief Check if value is empty
 /// @param val Input value
 /// @return true if value is empty (empty string, empty array, empty object, or null)
-[[nodiscard]] inline auto fn_isEmpty(template_value const& val) -> template_value {
+[[nodiscard]] inline auto fn_isEmpty(inja_value const& val) -> inja_value {
   if (std::holds_alternative<template_null>(val.storage)) {
-    return template_value{true};
+    return inja_value{true};
   }
   if (auto const* p = std::get_if<std::string>(&val.storage)) {
-    return template_value{p->empty()};
+    return inja_value{p->empty()};
   }
   if (auto const* p = std::get_if<template_array>(&val.storage)) {
-    return template_value{p->empty()};
+    return inja_value{p->empty()};
   }
-  if (auto const* p = std::get_if<template_object>(&val.storage)) {
-    return template_value{p->empty()};
+  if (auto const* p = std::get_if<inja_object>(&val.storage)) {
+    return inja_value{p->empty()};
   }
-  return template_value{false};
+  return inja_value{false};
 }
 
 // ============ Utility Functions ============
@@ -862,7 +862,7 @@ namespace frozenchars {
 /// @brief Helper to check if a value is considered "empty" for the default function
 /// @param val Input value
 /// @return true if value is null or empty container/string
-[[nodiscard]] inline auto is_empty_value(template_value const& val) -> bool {
+[[nodiscard]] inline auto is_empty_value(inja_value const& val) -> bool {
   if (std::holds_alternative<template_null>(val.storage)) {
     return true;
   }
@@ -872,7 +872,7 @@ namespace frozenchars {
   if (auto const* p = std::get_if<template_array>(&val.storage)) {
     return p->empty();
   }
-  if (auto const* p = std::get_if<template_object>(&val.storage)) {
+  if (auto const* p = std::get_if<inja_object>(&val.storage)) {
     return p->empty();
   }
   return false;
@@ -882,7 +882,7 @@ namespace frozenchars {
 /// @param lhs Left hand side value
 /// @param rhs Right hand side value
 /// @return true if values are equal
-[[nodiscard]] inline auto values_equal(template_value const& lhs, template_value const& rhs) -> bool {
+[[nodiscard]] inline auto values_equal(inja_value const& lhs, inja_value const& rhs) -> bool {
   if (std::holds_alternative<template_null>(lhs.storage) && std::holds_alternative<template_null>(rhs.storage)) {
     return true;
   }
@@ -919,7 +919,7 @@ namespace frozenchars {
 /// @param val Input value to test
 /// @param fallback Fallback value if val is empty
 /// @return val if non-empty, fallback otherwise
-[[nodiscard]] inline auto fn_default(template_value const& val, template_value const& fallback) noexcept(false) -> template_value {
+[[nodiscard]] inline auto fn_default(inja_value const& val, inja_value const& fallback) noexcept(false) -> inja_value {
   return is_empty_value(val) ? fallback : val;
 }
 
@@ -928,7 +928,7 @@ namespace frozenchars {
 /// @param index Index to retrieve (supports negative indices from end)
 /// @return Element at index
 /// @throws template_render_error on invalid input or out of bounds
-[[nodiscard]] inline auto fn_at(template_value const& arr, template_value const& index) noexcept(false) -> template_value {
+[[nodiscard]] inline auto fn_at(inja_value const& arr, inja_value const& index) noexcept(false) -> inja_value {
   if (!std::holds_alternative<template_array>(arr.storage)) {
     throw template_render_error{"at() expects array as first argument"};
   }
@@ -955,14 +955,14 @@ namespace frozenchars {
 /// @brief Checks if array or object is not empty
 /// @param val Array or object to check
 /// @return true if val is non-empty array or object, false otherwise
-[[nodiscard]] inline auto fn_exists(template_value const& val) noexcept(false) -> template_value {
+[[nodiscard]] inline auto fn_exists(inja_value const& val) noexcept(false) -> inja_value {
   if (auto const* p = std::get_if<template_array>(&val.storage)) {
-    return template_value{!p->empty()};
+    return inja_value{!p->empty()};
   }
-  if (auto const* p = std::get_if<template_object>(&val.storage)) {
-    return template_value{!p->empty()};
+  if (auto const* p = std::get_if<inja_object>(&val.storage)) {
+    return inja_value{!p->empty()};
   }
-  return template_value{false};
+  return inja_value{false};
 }
 
 /// @brief Checks if value exists in array or matches value in object
@@ -970,23 +970,23 @@ namespace frozenchars {
 /// @param container Array or object to search in
 /// @return true if value found in array or matches any object value
 /// @throws template_render_error if container is not array/object
-[[nodiscard]] inline auto fn_existsIn(template_value const& val, template_value const& container) noexcept(false) -> template_value {
+[[nodiscard]] inline auto fn_existsIn(inja_value const& val, inja_value const& container) noexcept(false) -> inja_value {
   if (auto const* p = std::get_if<template_array>(&container.storage)) {
     for (auto const& elem : *p) {
       if (values_equal(val, elem)) {
-        return template_value{true};
+        return inja_value{true};
       }
     }
-    return template_value{false};
+    return inja_value{false};
   }
   
-  if (auto const* p = std::get_if<template_object>(&container.storage)) {
+  if (auto const* p = std::get_if<inja_object>(&container.storage)) {
     for (auto const& [k, v] : *p) {
       if (values_equal(val, v)) {
-        return template_value{true};
+        return inja_value{true};
       }
     }
-    return template_value{false};
+    return inja_value{false};
   }
   
   throw template_render_error{"existsIn() expects array or object as second argument"};

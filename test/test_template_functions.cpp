@@ -840,7 +840,7 @@ TEST_CASE("template functions - default with empty array", "[template_functions]
 TEST_CASE("template functions - default with empty object", "[template_functions][default]") {
   constexpr auto src = "{{ default(obj, fallback_val) }}"_fs;
   auto const ctx = make_template_object({
-    {"obj", template_object{}},
+    {"obj", inja_object{}},
     {"fallback_val", "empty"},
   });
   REQUIRE(render_template<src>(ctx) == "empty");
@@ -981,7 +981,7 @@ TEST_CASE("template functions - exists non-empty object", "[template_functions][
 TEST_CASE("template functions - exists empty object", "[template_functions][exists]") {
   constexpr auto src = "{{ exists(obj) }}"_fs;
   auto const ctx = make_template_object({
-    {"obj", template_object{}},
+    {"obj", inja_object{}},
   });
   REQUIRE(render_template<src>(ctx) == "false");
 }
@@ -1668,7 +1668,7 @@ TEST_CASE("pipe - float to int", "[pipe][type_conversion]") {
 TEST_CASE("pipe - null to default string", "[pipe][type_conversion]") {
   constexpr auto src = "{{ value | default(\"fallback\") }}"_fs;
   auto const ctx = make_template_object({
-    {"value", template_value{}},
+    {"value", inja_value{}},
   });
   REQUIRE(render_template<src>(ctx) == "fallback");
 }

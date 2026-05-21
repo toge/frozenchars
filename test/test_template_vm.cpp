@@ -5,10 +5,10 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-TEST_CASE("template_value basic types", "[template_vm][value]") {
-  auto const v_null = template_value{};
-  auto const v_num = template_value{std::int64_t{42}};
-  auto const v_str = template_value{std::string{"hello"}};
+TEST_CASE("inja_value basic types", "[template_vm][value]") {
+  auto const v_null = inja_value{};
+  auto const v_num = inja_value{std::int64_t{42}};
+  auto const v_str = inja_value{std::string{"hello"}};
   REQUIRE(is_null(v_null));
   REQUIRE(as_int(v_num) == 42);
   REQUIRE(as_string(v_str) == "hello");
@@ -65,8 +65,26 @@ TEST_CASE("template runtime errors", "[template_vm][runtime_error]") {
 
 TEST_CASE("template_vm public API", "[template_vm][api]") {
   constexpr auto src = "X={{ x }}"_fs;
-  auto const ctx = make_template_object({{"x", 9}});
-  REQUIRE(template_vm<src>::render(ctx) == "X=9");
+  auto const root = make_frozen_map<inja_value, "x"_fs>(
+    std::pair{"x", inja_value{9}}
+  );
+  REQUIRE(inja::template_vm<src>::render(root) == "X=9");
+}
+
+TEST_CASE("inja::render accepts frozen_map root", "[template_vm][api]") {
+  constexpr auto src = "X={{ x }}"_fs;
+  auto const root = make_frozen_map<inja_value, "x"_fs>(
+    std::pair{"x", inja_value{9}}
+  );
+  REQUIRE(inja::render<src>(root) == "X=9");
+}
+
+TEST_CASE("template runtime options callback uses inja_object", "[template_vm][api]") {
+  auto options = template_runtime_options{};
+  options.include_callback = [](std::string_view include_name, inja_object const&) -> std::string {
+    return std::string{"<"} + std::string{include_name} + ">";
+  };
+  REQUIRE(options.include_callback("name", inja_object{}).find("name") != std::string::npos);
 }
 
 TEST_CASE("template runtime supports line statements", "[template_vm][line_statement]") {
@@ -143,7 +161,7 @@ TEST_CASE("template runtime supports include callback", "[template_vm][include]"
   auto const ctx = make_template_object({{"include_name", "dynamic"}});
 
   auto options = template_runtime_options{};
-  options.include_callback = [](std::string_view include_name, template_object const&) -> std::string {
+  options.include_callback = [](std::string_view include_name, inja_object const&) -> std::string {
     return std::string{"<"} + std::string{include_name} + ">";
   };
 
@@ -155,11 +173,11 @@ TEST_CASE("template runtime supports custom function callbacks", "[template_vm][
   auto const ctx = make_template_object({{"value", 21}});
 
   auto options = template_runtime_options{};
-  options.add_function("twice", [](std::vector<template_value> const& args) -> template_value {
+  options.add_function("twice", [](std::vector<inja_value> const& args) -> inja_value {
     if (args.size() != 1) {
       throw template_render_error{"twice() expects 1 argument"};
     }
-    return template_value{as_int(args[0]) * 2};
+    return inja_value{as_int(args[0]) * 2};
   });
 
   REQUIRE(render_template<src>(ctx, options) == "42");
