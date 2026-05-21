@@ -220,3 +220,58 @@ TEST_CASE("remove_empty_lines") {
   static_assert(res_pipe.sv() == "line1\nline2\nline3\n");
   REQUIRE(res_pipe.sv() == "line1\nline2\nline3\n");
 }
+
+TEST_CASE("remove_leading_empty_lines") {
+  auto constexpr src = "\n\n\nline1\n\nline2\n"_fs;
+
+  auto constexpr res_all = remove_leading_empty_lines(src);
+  static_assert(res_all.sv() == "line1\n\nline2\n");
+  REQUIRE(res_all.sv() == "line1\n\nline2\n");
+
+  auto constexpr res_two = remove_leading_empty_lines(src, 2);
+  static_assert(res_two.sv() == "\nline1\n\nline2\n");
+  REQUIRE(res_two.sv() == "\nline1\n\nline2\n");
+
+  namespace fops = frozenchars::ops;
+  auto constexpr res_pipe_all = src | fops::remove_leading_empty_lines;
+  static_assert(res_pipe_all.sv() == "line1\n\nline2\n");
+  REQUIRE(res_pipe_all.sv() == "line1\n\nline2\n");
+
+  auto constexpr res_pipe_two = src | fops::remove_leading_empty_lines(2);
+  static_assert(res_pipe_two.sv() == "\nline1\n\nline2\n");
+  REQUIRE(res_pipe_two.sv() == "\nline1\n\nline2\n");
+}
+
+TEST_CASE("remove_trailing_empty_lines") {
+  auto constexpr src = "line1\n\nline2\n\n\n"_fs;
+
+  auto constexpr res_all = remove_trailing_empty_lines(src);
+  static_assert(res_all.sv() == "line1\n\nline2\n");
+  REQUIRE(res_all.sv() == "line1\n\nline2\n");
+
+  auto constexpr res_one = remove_trailing_empty_lines(src, 1);
+  static_assert(res_one.sv() == "line1\n\nline2\n\n");
+  REQUIRE(res_one.sv() == "line1\n\nline2\n\n");
+
+  namespace fops = frozenchars::ops;
+  auto constexpr res_pipe_all = src | fops::remove_trailing_empty_lines;
+  static_assert(res_pipe_all.sv() == "line1\n\nline2\n");
+  REQUIRE(res_pipe_all.sv() == "line1\n\nline2\n");
+
+  auto constexpr res_pipe_one = src | fops::remove_trailing_empty_lines(1);
+  static_assert(res_pipe_one.sv() == "line1\n\nline2\n\n");
+  REQUIRE(res_pipe_one.sv() == "line1\n\nline2\n\n");
+}
+
+TEST_CASE("collapse_empty_lines") {
+  auto constexpr src = "\n\nline1\n\n\nline2\n\n\n\nline3\n\n"_fs;
+
+  auto constexpr res = collapse_empty_lines(src);
+  static_assert(res.sv() == "\nline1\n\nline2\n\nline3\n\n");
+  REQUIRE(res.sv() == "\nline1\n\nline2\n\nline3\n\n");
+
+  namespace fops = frozenchars::ops;
+  auto constexpr res_pipe = src | fops::collapse_empty_lines;
+  static_assert(res_pipe.sv() == "\nline1\n\nline2\n\nline3\n\n");
+  REQUIRE(res_pipe.sv() == "\nline1\n\nline2\n\nline3\n\n");
+}

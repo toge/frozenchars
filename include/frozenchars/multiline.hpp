@@ -496,6 +496,163 @@ auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
 }
 
 /**
+ * @brief 先頭の空行を削除する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @param n 削除する空行の最大数 (0 の場合は先頭の連続空行をすべて削除)
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval remove_leading_empty_lines(FrozenString<N> const& str, size_t n = 0) noexcept {
+  auto copy_from = 0uz;
+  auto i = 0uz;
+  auto removed = 0uz;
+
+  while (i < str.length) {
+    auto const line_start = i;
+    while (i < str.length && str.buffer[i] != '\n') {
+      ++i;
+    }
+    auto const line_end = i;
+    auto const is_empty_line = line_start == line_end;
+    auto const can_remove = n == 0 || removed < n;
+
+    if (!is_empty_line || !can_remove) {
+      copy_from = line_start;
+      break;
+    }
+
+    ++removed;
+    if (i < str.length && str.buffer[i] == '\n') {
+      ++i;
+      copy_from = i;
+    } else {
+      copy_from = i;
+      break;
+    }
+  }
+
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  for (auto j = copy_from; j < str.length; ++j) {
+    res.buffer[offset++] = str.buffer[j];
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+auto consteval remove_leading_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
+  return remove_leading_empty_lines(FrozenString{str}, n);
+}
+
+/**
+ * @brief 末尾の空行を削除する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @param n 削除する空行の最大数 (0 の場合は末尾の連続空行をすべて削除)
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval remove_trailing_empty_lines(FrozenString<N> const& str, size_t n = 0) noexcept {
+  auto cut = str.length;
+  auto removed = 0uz;
+
+  while (cut > 0) {
+    auto line_end = cut;
+    if (str.buffer[line_end - 1] != '\n') {
+      break;
+    }
+    --line_end;
+
+    auto line_start = line_end;
+    while (line_start > 0 && str.buffer[line_start - 1] != '\n') {
+      --line_start;
+    }
+
+    auto const is_empty_line = line_start == line_end;
+    auto const can_remove = n == 0 || removed < n;
+    if (!is_empty_line || !can_remove) {
+      break;
+    }
+
+    ++removed;
+    cut = line_start;
+  }
+
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  for (auto j = 0uz; j < cut; ++j) {
+    res.buffer[offset++] = str.buffer[j];
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+auto consteval remove_trailing_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
+  return remove_trailing_empty_lines(FrozenString{str}, n);
+}
+
+/**
+ * @brief 連続した空行を1行にまとめる
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列
+ */
+template <size_t N>
+auto consteval collapse_empty_lines(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto previous_line_empty = false;
+
+  while (i < str.length) {
+    auto const line_start = i;
+    while (i < str.length && str.buffer[i] != '\n') {
+      ++i;
+    }
+    auto const line_end = i;
+    auto const has_newline = i < str.length && str.buffer[i] == '\n';
+    auto const is_empty_line = line_start == line_end;
+
+    if (!is_empty_line) {
+      for (auto j = line_start; j < line_end; ++j) {
+        res.buffer[offset++] = str.buffer[j];
+      }
+      if (has_newline) {
+        res.buffer[offset++] = '\n';
+        ++i;
+      }
+      previous_line_empty = false;
+      continue;
+    }
+
+    if (!previous_line_empty && has_newline) {
+      res.buffer[offset++] = '\n';
+    }
+    if (has_newline) {
+      ++i;
+    }
+    previous_line_empty = true;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+auto consteval collapse_empty_lines(char const (&str)[N]) noexcept {
+  return collapse_empty_lines(FrozenString{str});
+}
+
+/**
  * @brief 各行の先頭に文字列を追加する
  *
  * @tparam N 文字列の長さ

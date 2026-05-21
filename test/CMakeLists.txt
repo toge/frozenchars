@@ -69,3 +69,9 @@ assert_frozen_map_compile_fail(
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
 )
+
+# example_split executable
+add_executable(example_split ../example_split.cpp)
+target_compile_features(example_split PRIVATE ${STD_CPP})
+target_link_libraries(example_split PRIVATE frozenchars::frozenchars)
+add_test(NAME example_split COMMAND example_split)

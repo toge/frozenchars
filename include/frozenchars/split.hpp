@@ -212,4 +212,28 @@ auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<detail::is_any_whitespace, Int>(FrozenString{str});
 }
 
+/**
+ * @brief 文字列を単一の区切り文字で分割したときのトークン数を返す
+ */
+template <size_t N>
+auto consteval split_count(FrozenString<N> const& str, char delim) noexcept {
+  return split_count(str, [delim](char c) { return c == delim; });
+}
+
+/**
+ * @brief 文字列を単一の区切り文字で分割して std::array に変換する
+ */
+template <size_t Count, size_t N>
+auto consteval split(FrozenString<N> const& str, char delim) noexcept {
+  return split<Count>(str, [delim](char c) { return c == delim; });
+}
+
+/**
+ * @brief 文字列リテラルを単一の区切り文字で分割して std::array に変換する
+ */
+template <size_t Count, size_t N>
+auto consteval split(char const (&str)[N], char delim) noexcept {
+  return split<Count>(FrozenString{str}, delim);
+}
+
 } // namespace frozenchars

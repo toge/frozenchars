@@ -6,6 +6,7 @@
 #include "multiline.hpp"
 #include "encoding.hpp"
 #include "regex_comment.hpp"
+#include "split.hpp"
 #include <array>
 #include <cstddef>
 #include <string_view>
@@ -229,6 +230,41 @@ struct remove_empty_lines_adaptor : pipe_adaptor_base {
   }
 };
 
+struct remove_leading_empty_lines_adaptor : pipe_adaptor_base {
+  size_t n;
+  constexpr remove_leading_empty_lines_adaptor(size_t count = 0) noexcept : n(count) {}
+
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::remove_leading_empty_lines(str, n);
+  }
+
+  consteval auto operator()(size_t count) const noexcept {
+    return remove_leading_empty_lines_adaptor{count};
+  }
+};
+
+struct remove_trailing_empty_lines_adaptor : pipe_adaptor_base {
+  size_t n;
+  constexpr remove_trailing_empty_lines_adaptor(size_t count = 0) noexcept : n(count) {}
+
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::remove_trailing_empty_lines(str, n);
+  }
+
+  consteval auto operator()(size_t count) const noexcept {
+    return remove_trailing_empty_lines_adaptor{count};
+  }
+};
+
+struct collapse_empty_lines_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::collapse_empty_lines(str);
+  }
+};
+
 template <size_t M>
 struct prefix_lines_adaptor : pipe_adaptor_base {
   FrozenString<M> prefix;
@@ -375,6 +411,9 @@ template <FrozenString Sep>
 inline constexpr join_lines_nttp_adaptor<Sep> join_lines_nttp{};
 inline constexpr trim_trailing_spaces_adaptor trim_trailing_spaces{};
 inline constexpr remove_empty_lines_adaptor remove_empty_lines{};
+inline constexpr remove_leading_empty_lines_adaptor remove_leading_empty_lines{};
+inline constexpr remove_trailing_empty_lines_adaptor remove_trailing_empty_lines{};
+inline constexpr collapse_empty_lines_adaptor collapse_empty_lines{};
 inline constexpr url_encode_adaptor url_encode{};
 inline constexpr url_decode_adaptor url_decode{};
 inline constexpr base64_encode_adaptor base64_encode{};
