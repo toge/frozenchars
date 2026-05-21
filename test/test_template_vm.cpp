@@ -105,3 +105,62 @@ TEST_CASE("template runtime supports custom delimiters", "[template_vm][delimite
   REQUIRE(out.find("OK") != std::string::npos);
   REQUIRE(out.find("hidden") == std::string::npos);
 }
+
+TEST_CASE("template runtime supports else if chains", "[template_vm][else_if]") {
+  constexpr auto src = "{% if n > 10 %}large{% else if n > 5 %}mid{% else %}small{% endif %}"_fs;
+
+  auto const ctx_mid = make_template_object({{"n", 7}});
+  REQUIRE(render_template<src>(ctx_mid) == "mid");
+
+  auto const ctx_small = make_template_object({{"n", 3}});
+  REQUIRE(render_template<src>(ctx_small) == "small");
+}
+
+TEST_CASE("template runtime supports set assignment", "[template_vm][set]") {
+  constexpr auto src = "{% set title = upper(name) %}{{ title }}"_fs;
+  auto const ctx = make_template_object({{"name", "alice"}});
+  REQUIRE(render_template<src>(ctx) == "ALICE");
+}
+
+TEST_CASE("template runtime supports set nested assignment", "[template_vm][set]") {
+  constexpr auto src = "{% set user.name = \"Tom\" %}{{ user.name }}"_fs;
+  auto const ctx = make_template_object({{"user", make_template_object({})}});
+  REQUIRE(render_template<src>(ctx) == "Tom");
+}
+
+TEST_CASE("template runtime supports include template registry", "[template_vm][include]") {
+  constexpr auto src = "A{% include \"part\" %}B"_fs;
+  auto const ctx = make_template_object({});
+
+  auto options = template_runtime_options{};
+  options.add_include_template("part", "X");
+
+  REQUIRE(render_template<src>(ctx, options) == "AXB");
+}
+
+TEST_CASE("template runtime supports include callback", "[template_vm][include]") {
+  constexpr auto src = "{% include include_name %}"_fs;
+  auto const ctx = make_template_object({{"include_name", "dynamic"}});
+
+  auto options = template_runtime_options{};
+  options.include_callback = [](std::string_view include_name, template_object const&) -> std::string {
+    return std::string{"<"} + std::string{include_name} + ">";
+  };
+
+  REQUIRE(render_template<src>(ctx, options) == "<dynamic>");
+}
+
+TEST_CASE("template runtime supports custom function callbacks", "[template_vm][callback]") {
+  constexpr auto src = "{{ twice(value) }}"_fs;
+  auto const ctx = make_template_object({{"value", 21}});
+
+  auto options = template_runtime_options{};
+  options.add_function("twice", [](std::vector<template_value> const& args) -> template_value {
+    if (args.size() != 1) {
+      throw template_render_error{"twice() expects 1 argument"};
+    }
+    return template_value{as_int(args[0]) * 2};
+  });
+
+  REQUIRE(render_template<src>(ctx, options) == "42");
+}
