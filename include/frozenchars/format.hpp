@@ -20,7 +20,12 @@ struct formatter<frozenchars::FrozenString<N>, char> {
 
   template <typename FormatContext>
   auto format(frozenchars::FrozenString<N> const& value, FormatContext& ctx) const {
-    return delegate_.format(value.sv(), ctx);
+    auto const sv = value.sv();
+    auto const pos = sv.find('\0');
+    if (pos != std::string_view::npos) {
+      return delegate_.format(sv.substr(0, pos), ctx);
+    }
+    return delegate_.format(sv, ctx);
   }
 };
 

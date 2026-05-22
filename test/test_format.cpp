@@ -59,6 +59,34 @@ TEST_CASE("FrozenString ostream insertion respects logical length and formatting
   REQUIRE(empty_out.str().empty());
 }
 
+TEST_CASE("FrozenString output should not include null terminator", "[format]") {
+  // Create a FrozenString and force length to include a null terminator
+  auto fs_null = FrozenString<6>{};
+  for (size_t i = 0; i < 5; ++i) fs_null.buffer[i] = "hello"[i];
+  fs_null.buffer[5] = '\0';
+  fs_null.length = 6; // Force length to include the null
+
+  SECTION("ostream output") {
+    std::stringstream ss;
+    ss << fs_null;
+    std::string s = ss.str();
+    CHECK(s.length() == 5);
+    bool has_null = false;
+    for (char c : s) if (c == '\0') has_null = true;
+    CHECK_FALSE(has_null);
+  }
+
+#if defined(__cpp_lib_format)
+  SECTION("format output") {
+    std::string s = std::format("{}", fs_null);
+    CHECK(s.length() == 5);
+    bool has_null = false;
+    for (char c : s) if (c == '\0') has_null = true;
+    CHECK_FALSE(has_null);
+  }
+#endif
+}
+
 #ifdef __cpp_lib_print
 TEST_CASE("FrozenString works with std::print FILE output", "[format]") {
   auto constexpr prefix = "MyApp"_fs;

@@ -116,7 +116,12 @@ constexpr auto operator+(char const (&lhs)[N1], FrozenString<N2> const& rhs) noe
  */
 template <size_t N>
 std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
-  return os << str.sv();
+  auto const sv = str.sv();
+  auto const pos = sv.find('\0');
+  if (pos != std::string_view::npos) {
+    return os << sv.substr(0, pos);
+  }
+  return os << sv;
 }
 
 namespace detail {
