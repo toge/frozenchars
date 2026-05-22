@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -70,9 +71,9 @@ using include_callback = std::function<std::string(std::string_view, inja_object
  */
 struct runtime_options {
   // ユーザー定義関数の登録先
-  std::unordered_map<std::string, function_callback> function_call{};
+  std::unordered_map<std::string, function_callback, transparent_string_hash, std::equal_to<>> function_call{};
   // `{% include %}` 用の名前付きテンプレート本体
-  std::unordered_map<std::string, std::string> include_templates{};
+  std::unordered_map<std::string, std::string, transparent_string_hash, std::equal_to<>> include_templates{};
   // include 解決時のフォールバック
   include_callback include_call{};
 
@@ -80,8 +81,24 @@ struct runtime_options {
     function_call.insert_or_assign(std::move(name), std::move(callback));
   }
 
+  /**
+   * @brief 関数登録テーブルの事前容量を確保する。
+   * @param count 想定登録件数
+   */
+  auto reserve_functions(std::size_t count) -> void {
+    function_call.reserve(count);
+  }
+
   auto add_include(std::string name, std::string content) -> void {
     include_templates.insert_or_assign(std::move(name), std::move(content));
+  }
+
+  /**
+   * @brief include テンプレート登録テーブルの事前容量を確保する。
+   * @param count 想定登録件数
+   */
+  auto reserve_includes(std::size_t count) -> void {
+    include_templates.reserve(count);
   }
 };
 
@@ -616,7 +633,8 @@ private:
         lhs = inja_value{found};
       } else if (std::holds_alternative<inja_object>(rhs.storage) && std::holds_alternative<std::string>(lhs.storage)) {
         auto const& obj = std::get<inja_object>(rhs.storage);
-        lhs = inja_value{obj.contains(std::get<std::string>(lhs.storage))};
+        auto const key = std::string_view{std::get<std::string>(lhs.storage)};
+        lhs = inja_value{obj.find(key) != obj.end()};
       } else {
         throw render_error{"invalid operands for in"};
       }
@@ -885,7 +903,7 @@ private:
     }
     auto const* current = static_cast<inja_value const*>(nullptr);
     for (auto s = scopes_.rbegin(); s != scopes_.rend(); ++s) {
-      auto const it = s->find(std::string{path[0]});
+      auto const it = s->find(path[0]);
       if (it != s->end()) {
         current = &it->second;
         break;
@@ -899,7 +917,7 @@ private:
         throw render_error{"cannot resolve path: " + std::string{name}};
       }
       auto const& obj = std::get<inja_object>(current->storage);
-      auto const it = obj.find(std::string{path[i]});
+      auto const it = obj.find(path[i]);
       if (it == obj.end()) {
         throw render_error{"undefined variable: " + std::string{name}};
       }
@@ -952,18 +970,29 @@ private:
           ++pos_;
           continue;
         }
-        if (c == '.') {
+        if (c == '.' && !has_dot) {
           has_dot = true;
           ++pos_;
           continue;
         }
         break;
       }
-      auto const n = std::string{text_.substr(start, pos_ - start)};
+      auto const* first = text_.data() + static_cast<std::ptrdiff_t>(start);
+      auto const* last = text_.data() + static_cast<std::ptrdiff_t>(pos_);
       if (has_dot) {
-        return inja_value{std::stod(n)};
+        auto parsed = double{};
+        auto const result = std::from_chars(first, last, parsed);
+        if (result.ec != std::errc{} || result.ptr != last) {
+          throw render_error{"invalid floating-point literal"};
+        }
+        return inja_value{parsed};
       }
-      return inja_value{std::stoll(n)};
+      auto parsed = std::int64_t{};
+      auto const result = std::from_chars(first, last, parsed);
+      if (result.ec != std::errc{} || result.ptr != last) {
+        throw render_error{"invalid integer literal"};
+      }
+      return inja_value{parsed};
     }
     auto start = pos_;
     while (pos_ < text_.size()) {
@@ -1036,7 +1065,7 @@ struct for_header {
   /// value 変数名
   std::string value_name{};
   /// 反復対象式
-  std::string expr{};
+  std::string_view expr{};
   /// key,value 形式かどうか
   bool has_key{};
 };
@@ -1075,13 +1104,13 @@ struct for_header {
   if (header.value_name.empty() || (header.has_key && header.key_name.empty())) {
     throw render_error{"invalid for statement"};
   }
-  header.expr = std::string{rhs};
+  header.expr = rhs;
   return header;
 }
 
 struct set_statement {
-  std::string target{};
-  std::string expr{};
+  std::string_view target{};
+  std::string_view expr{};
 };
 
 /**
@@ -1102,7 +1131,7 @@ struct set_statement {
   if (target.empty() || expr.empty()) {
     throw render_error{"invalid set statement"};
   }
-  return set_statement{std::string{target}, std::string{expr}};
+  return set_statement{target, expr};
 }
 
 /**
@@ -1484,7 +1513,7 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
   // 組み込み関数で見つからない場合のみ、実行時登録コールバックを参照する。
   if (runtime_options.has_value()) {
     auto const& options = runtime_options->get();
-    auto const it = options.function_call.find(std::string{func_name});
+    auto const it = options.function_call.find(func_name);
     if (it != options.function_call.end()) {
       return it->second(args);
     }
@@ -1512,6 +1541,47 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
   auto constexpr src = Src.sv();
   auto scopes = std::vector<inja_object>{root};
 
+  // 各ノードの trim 済みステートメントを 1 回だけ作成し、レンダー中に再利用する。
+  auto stmt_views = std::array<std::string_view, MAX_NODES>{};
+  auto for_headers = std::array<std::optional<for_header>, MAX_NODES>{};
+  auto set_statements = std::array<std::optional<set_statement>, MAX_NODES>{};
+  auto if_conditions = std::array<std::string_view, MAX_NODES>{};
+  auto include_exprs = std::array<std::string_view, MAX_NODES>{};
+
+  for (auto n = std::size_t{0}; n < program.count; ++n) {
+    auto const& nd = program.nodes[n];
+    if (nd.kind == node_kind::text || nd.kind == node_kind::endif_stmt || nd.kind == node_kind::endfor_stmt) {
+      continue;
+    }
+
+    auto const stmt = trim_view(src.substr(nd.begin, nd.end - nd.begin));
+    stmt_views[n] = stmt;
+    switch (nd.kind) {
+    case node_kind::if_stmt:
+      if_conditions[n] = if_condition_expr(stmt);
+      break;
+    case node_kind::else_stmt:
+      if (stmt.starts_with("else if ")) {
+        if_conditions[n] = if_condition_expr(stmt);
+      }
+      break;
+    case node_kind::for_stmt:
+      for_headers[n] = parse_for_header(stmt);
+      break;
+    case node_kind::set_stmt:
+      set_statements[n] = parse_set_statement(stmt);
+      break;
+    case node_kind::include_stmt:
+      include_exprs[n] = trim_view(stmt.substr(8));
+      break;
+    case node_kind::expr:
+    case node_kind::text:
+    case node_kind::endif_stmt:
+    case node_kind::endfor_stmt:
+      break;
+    }
+  }
+
   // begin/end は program.nodes の半開区間。
   auto const render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
     auto i = begin;
@@ -1528,7 +1598,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       // expr ノードは式を評価して出力に追加する
       case node_kind::expr: {
-        auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
+        auto const expr = stmt_views[i];
         auto value = expr_parser{expr, scopes, runtime_options}.parse();
         out.append(frozenchars::inja::to_string(value));
         ++i;
@@ -1537,8 +1607,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       // cond を評価し、then または else 節の範囲だけを再帰実行する
       case node_kind::if_stmt: {
-        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
-        auto const cond = expr_parser{if_condition_expr(stmt), scopes, runtime_options}.parse();
+        auto const cond = expr_parser{if_conditions[i], scopes, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
@@ -1549,7 +1618,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
           auto else_idx = node.else_index;
           while (else_idx != std::numeric_limits<std::size_t>::max()) {
             auto const& else_node = program.nodes[else_idx];
-            auto const else_stmt = trim_view(src.substr(else_node.begin, else_node.end - else_node.begin));
+            auto const else_stmt = stmt_views[else_idx];
             auto const branch_end = else_node.else_index != std::numeric_limits<std::size_t>::max()
                                       ? else_node.else_index
                                       : node.end_index;
@@ -1558,7 +1627,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
               break;
             }
             if (else_stmt.starts_with("else if ")) {
-              auto const else_cond = expr_parser{if_condition_expr(else_stmt), scopes, runtime_options}.parse();
+              auto const else_cond = expr_parser{if_conditions[else_idx], scopes, runtime_options}.parse();
               if (frozenchars::inja::truthy(else_cond)) {
                 self(else_idx + 1, branch_end);
                 break;
@@ -1575,8 +1644,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       // 配列反復とオブジェクト反復で束縛方法を切り替える
       case node_kind::for_stmt: {
-        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
-        auto const header = parse_for_header(stmt);
+        auto const& header = *for_headers[i];
         auto iterable = expr_parser{header.expr, scopes, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
@@ -1624,8 +1692,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       case node_kind::set_stmt: {
         // set は式を評価して、現在のスコープ連鎖へ代入する。
-        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
-        auto const assignment = parse_set_statement(stmt);
+        auto const& assignment = *set_statements[i];
         auto value = expr_parser{assignment.expr, scopes, runtime_options}.parse();
         assign_to_scopes(scopes, assignment.target, std::move(value));
         ++i;
@@ -1634,9 +1701,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       case node_kind::include_stmt: {
         // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
-        auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
-        auto const include_expr = trim_view(stmt.substr(8));
-        auto include_name = expr_parser{include_expr, scopes, runtime_options}.parse();
+        auto include_name = expr_parser{include_exprs[i], scopes, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
           throw render_error{"include target must evaluate to string"};
         }

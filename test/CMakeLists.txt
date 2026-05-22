@@ -26,6 +26,10 @@ target_link_libraries(example_render_with_output_buffer PRIVATE frozenchars::fro
 target_compile_features(example_render_with_output_buffer PUBLIC ${STD_CPP})
 add_test(NAME example_render_with_output_buffer COMMAND example_render_with_output_buffer)
 
+add_executable(bench_inja_runtime benchmark_inja_runtime.cpp)
+target_link_libraries(bench_inja_runtime PRIVATE frozenchars::frozenchars)
+target_compile_features(bench_inja_runtime PUBLIC ${STD_CPP})
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
 assert_frozen_map_compile_fail(

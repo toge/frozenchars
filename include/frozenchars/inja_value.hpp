@@ -8,6 +8,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -15,7 +16,6 @@
 #ifndef FROZENCHARS_OBJECT_MAP_HEADER
 #include <unordered_map>
 #define FROZENCHARS_OBJECT_MAP_HEADER
-#define FROZENCHARS_OBJECT_MAP std::unordered_map
 #endif
 
 namespace frozenchars::inja {
@@ -38,11 +38,32 @@ using inja_array = std::vector<inja_value>;
 /**
  * @brief テンプレートオブジェクト値の実体型
  *
- * FROZENCHARS_OBJECT_MAP マクロで選択可能（デフォルト: std::unordered_map）
+ * FROZENCHARS_OBJECT_MAP マクロで選択可能。
+ * 未指定時は透過検索対応の `std::unordered_map` を利用する。
  * コンパイル時に -DFROZENCHARS_OBJECT_MAP_HEADER や define で指定してカスタマイズ可能。
  * 例: -DFROZENCHARS_OBJECT_MAP=ankerl::unordered_dense::map
  */
+#ifndef FROZENCHARS_OBJECT_MAP
+struct transparent_string_hash {
+  using is_transparent = void;
+
+  [[nodiscard]] auto operator()(std::string_view s) const noexcept -> std::size_t {
+    return std::hash<std::string_view>{}(s);
+  }
+
+  [[nodiscard]] auto operator()(std::string const& s) const noexcept -> std::size_t {
+    return std::hash<std::string_view>{}(s);
+  }
+
+  [[nodiscard]] auto operator()(char const* s) const noexcept -> std::size_t {
+    return std::hash<std::string_view>{}(s);
+  }
+};
+
+using inja_object = std::unordered_map<std::string, inja_value, transparent_string_hash, std::equal_to<>>;
+#else
 using inja_object = FROZENCHARS_OBJECT_MAP<std::string, inja_value>;
+#endif
 
 /**
  * @brief テンプレート言語で扱う値の共用体ラッパ
