@@ -10,33 +10,6 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 // msg.sv() == "answer=42, hex=0xff"
 ```
 
-## inja風テンプレート（constexprパース + 実行時レンダリング）
-
-`FrozenString` をNTTPとして渡すと、テンプレート構造をコンパイル時に解析し、実行時に値を与えてレンダリングできます。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars::inja;
-using namespace frozenchars::literals;
-
-constexpr auto tpl = "Hello {{ name }}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
-
-auto const ctx = frozenchars::make_frozen_map<frozenchars::inja_value, "name"_fs, "items"_fs>(
-  std::pair{"name", frozenchars::inja_value{"A"}},
-  std::pair{"items", frozenchars::array({1, 2, 3})}
-);
-
-auto const out = render<tpl>(ctx); // "Hello A:123"
-```
-
-対応構文（コア）:
-
-- `{{ expr }}`
-- `{% if ... %} ... {% else %} ... {% endif %}`
-- `{% for item in items %} ... {% endfor %}`
-- `{% for key, value in object %} ... {% endfor %}`
-- `{# comment #}`
-
 ### 最小コンパイル例（1コマンド）
 
 `example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
@@ -525,7 +498,7 @@ static_assert(map["ddd"] == 0);
 
 `frozen_map` は、実行時の検索速度を極限まで高めるために以下の最適化を自動的に適用します。
 
-- **ハードウェア加速ハッシュ (CRC32C)**: 
+- **ハードウェア加速ハッシュ (CRC32C)**:
   ルックアップ時のハッシュ計算に、CPUのハードウェア命令（x86のSSE4.2命令やARMのCRC32拡張）を使用します。これにより、従来の FNV-1a ハッシュに比べて数倍高速に動作します。
 - **128bit 整数比較最適化**:
   マップに登録された全てのキーが16バイト以下の場合、文字列比較を `std::string_view` の汎用的な比較から、レジスタ上の128bit整数比較へと自動的に切り替えます。これにより、キーの検証が1〜2命令で完了します。
@@ -755,6 +728,31 @@ static_assert(color_a.a == 0x99);
 static_assert(aggregate_bgr.b == 0xef);
 static_assert(color_abgr.a == 0x78);
 ```
+
+## inja風テンプレート（constexprパース + 実行時レンダリング）
+
+`FrozenString` をNTTPとして渡すと、テンプレート構造をコンパイル時に解析し、実行時に値を与えてレンダリングできます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars::inja;
+using namespace frozenchars::literals;
+
+auto constexpr src = "Hello {{ name }}{# comment #}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
+auto const ctx = make_object({
+  {"name", "A"},
+  {"items", make_array({1, 2})},
+});
+auto const out = render<src>(ctx); // "Hello A:12"
+```
+
+対応構文（コア）:
+
+- `{{ expr }}`
+- `{% if ... %} ... {% else %} ... {% endif %}`
+- `{% for item in items %} ... {% endfor %}`
+- `{% for key, value in object %} ... {% endfor %}`
+- `{# comment #}`
 
 ## `freeze` 対応型一覧
 
