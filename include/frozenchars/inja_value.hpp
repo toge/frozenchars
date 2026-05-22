@@ -25,7 +25,7 @@ namespace frozenchars {
 /**
  * @brief テンプレート値における null を表すタグ型。
  */
-struct template_null final {};
+struct inja_null final {};
 
 /**
  * @brief テンプレート評価時に使う動的値型。
@@ -35,7 +35,7 @@ struct inja_value;
 /**
  * @brief テンプレート配列値の実体型。
  */
-using template_array = std::vector<inja_value>;
+using inja_array = std::vector<inja_value>;
 
 /**
  * @brief テンプレートオブジェクト値の実体型。
@@ -56,7 +56,7 @@ struct inja_value {
   /**
    * @brief 内部ストレージ型。
    */
-  using storage_type = std::variant<template_null, bool, std::int64_t, double, std::string, template_array, inja_object>;
+  using storage_type = std::variant<inja_null, bool, std::int64_t, double, std::string, inja_array, inja_object>;
 
   /**
    * @brief 値の実体。
@@ -66,12 +66,12 @@ struct inja_value {
   /**
    * @brief null 値で初期化する。
    */
-  inja_value() : storage(template_null{}) {}
+  inja_value() : storage(inja_null{}) {}
 
   /**
    * @brief nullptr を null 値として受け取る。
    */
-  inja_value(std::nullptr_t) : storage(template_null{}) {}
+  inja_value(std::nullptr_t) : storage(inja_null{}) {}
 
   /**
    * @brief 真偽値で初期化する。
@@ -91,7 +91,7 @@ struct inja_value {
   /**
    * @brief 配列値で初期化する。
    */
-  inja_value(template_array v) : storage(std::move(v)) {}
+  inja_value(inja_array v) : storage(std::move(v)) {}
 
   /**
    * @brief オブジェクト値で初期化する。
@@ -120,7 +120,7 @@ struct inja_value {
 /**
  * @brief テンプレート評価時の実行時エラー。
  */
-class template_render_error : public std::runtime_error {
+class inja_render_error : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
 };
@@ -131,33 +131,33 @@ public:
  * @return null なら true
  */
 [[nodiscard]] inline auto is_null(inja_value const& v) -> bool {
-  return std::holds_alternative<template_null>(v.storage);
+  return std::holds_alternative<inja_null>(v.storage);
 }
 
 /**
  * @brief 値を bool として取り出す。
  * @param v 対象値
  * @return bool 値
- * @throws template_render_error 型が不一致の場合
+ * @throws inja_render_error 型が不一致の場合
  */
 [[nodiscard]] inline auto as_bool(inja_value const& v) -> bool {
   if (auto const* p = std::get_if<bool>(&v.storage)) {
     return *p;
   }
-  throw template_render_error{"value is not bool"};
+  throw inja_render_error{"value is not bool"};
 }
 
 /**
  * @brief 値を int64 として取り出す。
  * @param v 対象値
  * @return int64 値
- * @throws template_render_error 型が不一致の場合
+ * @throws inja_render_error 型が不一致の場合
  */
 [[nodiscard]] inline auto as_int(inja_value const& v) -> std::int64_t {
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     return *p;
   }
-  throw template_render_error{"value is not int"};
+  throw inja_render_error{"value is not int"};
 }
 
 /**
@@ -167,7 +167,7 @@ public:
  *
  * @param v 対象値
  * @return 数値
- * @throws template_render_error 数値型でない場合
+ * @throws inja_render_error 数値型でない場合
  */
 [[nodiscard]] inline auto as_double(inja_value const& v) -> double {
   if (auto const* p = std::get_if<double>(&v.storage)) {
@@ -176,46 +176,46 @@ public:
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     return static_cast<double>(*p);
   }
-  throw template_render_error{"value is not number"};
+  throw inja_render_error{"value is not number"};
 }
 
 /**
  * @brief 値を文字列参照として取り出す。
  * @param v 対象値
  * @return 文字列参照
- * @throws template_render_error 型が不一致の場合
+ * @throws inja_render_error 型が不一致の場合
  */
 [[nodiscard]] inline auto as_string(inja_value const& v) -> std::string const& {
   if (auto const* p = std::get_if<std::string>(&v.storage)) {
     return *p;
   }
-  throw template_render_error{"value is not string"};
+  throw inja_render_error{"value is not string"};
 }
 
 /**
  * @brief 値を配列参照として取り出す。
  * @param v 対象値
  * @return 配列参照
- * @throws template_render_error 型が不一致の場合
+ * @throws inja_render_error 型が不一致の場合
  */
-[[nodiscard]] inline auto as_array(inja_value const& v) -> template_array const& {
-  if (auto const* p = std::get_if<template_array>(&v.storage)) {
+[[nodiscard]] inline auto as_array(inja_value const& v) -> inja_array const& {
+  if (auto const* p = std::get_if<inja_array>(&v.storage)) {
     return *p;
   }
-  throw template_render_error{"value is not array"};
+  throw inja_render_error{"value is not array"};
 }
 
 /**
  * @brief 値をオブジェクト参照として取り出す。
  * @param v 対象値
  * @return オブジェクト参照
- * @throws template_render_error 型が不一致の場合
+ * @throws inja_render_error 型が不一致の場合
  */
 [[nodiscard]] inline auto as_object(inja_value const& v) -> inja_object const& {
   if (auto const* p = std::get_if<inja_object>(&v.storage)) {
     return *p;
   }
-  throw template_render_error{"value is not object"};
+  throw inja_render_error{"value is not object"};
 }
 
 /**
@@ -223,8 +223,8 @@ public:
  * @param items 要素列
  * @return inja_value(配列)
  */
-[[nodiscard]] inline auto make_template_array(std::initializer_list<inja_value> items) -> inja_value {
-  return inja_value{template_array{items}};
+[[nodiscard]] inline auto make_inja_array(std::initializer_list<inja_value> items) -> inja_value {
+  return inja_value{inja_array{items}};
 }
 
 /**
@@ -235,7 +235,7 @@ public:
  * @param items キー・値列
  * @return inja_value(オブジェクト)
  */
-[[nodiscard]] inline auto make_template_object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
+[[nodiscard]] inline auto make_inja_object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
   auto out = inja_object{};
   out.reserve(items.size());
   for (auto const& [k, v] : items) {
@@ -253,8 +253,8 @@ public:
 * @param v 対象値
 * @return 真偽値
  */
-[[nodiscard]] inline auto template_truthy(inja_value const& v) -> bool {
-  if (std::holds_alternative<template_null>(v.storage)) {
+[[nodiscard]] inline auto inja_truthy(inja_value const& v) -> bool {
+  if (std::holds_alternative<inja_null>(v.storage)) {
     return false;
   }
   if (auto const* p = std::get_if<bool>(&v.storage)) {
@@ -269,7 +269,7 @@ public:
   if (auto const* p = std::get_if<std::string>(&v.storage)) {
     return !p->empty();
   }
-  if (auto const* p = std::get_if<template_array>(&v.storage)) {
+  if (auto const* p = std::get_if<inja_array>(&v.storage)) {
     return !p->empty();
   }
   return !std::get<inja_object>(v.storage).empty();
@@ -285,7 +285,7 @@ namespace frozenchars::inja {
 * @return inja_value(配列)
 */
 [[nodiscard]] inline auto array(std::initializer_list<inja_value> items) -> inja_value {
-  return make_template_array(items);
+  return make_inja_array(items);
 }
 
 /**
@@ -297,7 +297,7 @@ namespace frozenchars::inja {
 * @return inja_value(オブジェクト)
 */
 [[nodiscard]] inline auto object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
-  return make_template_object(items);
+  return make_inja_object(items);
 }
 
 } // namespace frozenchars::inja
@@ -312,8 +312,8 @@ namespace frozenchars {
 * @param v 対象値
 * @return 出力文字列
 */
-[[nodiscard]] inline auto template_to_string(inja_value const& v) -> std::string {
-  if (std::holds_alternative<template_null>(v.storage)) {
+[[nodiscard]] inline auto inja_to_string(inja_value const& v) -> std::string {
+  if (std::holds_alternative<inja_null>(v.storage)) {
     return "null";
   }
   if (auto const* p = std::get_if<bool>(&v.storage)) {
@@ -335,7 +335,7 @@ namespace frozenchars {
   if (auto const* p = std::get_if<std::string>(&v.storage)) {
     return *p;
   }
-  if (std::holds_alternative<template_array>(v.storage)) {
+  if (std::holds_alternative<inja_array>(v.storage)) {
     return "[array]";
   }
   return "{object}";
@@ -393,16 +393,16 @@ namespace frozenchars {
 /// @brief Get length of array
 /// @param arr Input array
 /// @return Number of elements
-[[nodiscard]] inline auto fn_length(template_array const& arr) -> std::int64_t {
+[[nodiscard]] inline auto fn_length(inja_array const& arr) -> std::int64_t {
   return static_cast<std::int64_t>(arr.size());
 }
 
 /// @brief Get first element of array
 /// @param arr Input array
 /// @return First element (throws if empty)
-[[nodiscard]] inline auto fn_first(template_array const& arr) -> inja_value {
+[[nodiscard]] inline auto fn_first(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw template_render_error{"first() called on empty array"};
+    throw inja_render_error{"first() called on empty array"};
   }
   return arr[0];
 }
@@ -410,9 +410,9 @@ namespace frozenchars {
 /// @brief Get last element of array
 /// @param arr Input array
 /// @return Last element (throws if empty)
-[[nodiscard]] inline auto fn_last(template_array const& arr) -> inja_value {
+[[nodiscard]] inline auto fn_last(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw template_render_error{"last() called on empty array"};
+    throw inja_render_error{"last() called on empty array"};
   }
   return arr[arr.size() - 1];
 }
@@ -421,7 +421,7 @@ namespace frozenchars {
 /// @param arr Input array
 /// @param sep Separator string
 /// @return Joined string
-[[nodiscard]] inline auto fn_join(template_array const& arr, std::string_view sep) -> std::string {
+[[nodiscard]] inline auto fn_join(inja_array const& arr, std::string_view sep) -> std::string {
   if (arr.empty()) {
     return "";
   }
@@ -451,7 +451,7 @@ namespace frozenchars {
 /// @brief Sort array (creates new sorted copy)
 /// @param arr Input array
 /// @return New sorted array
-[[nodiscard]] inline auto fn_sort(template_array const& arr) -> template_array {
+[[nodiscard]] inline auto fn_sort(inja_array const& arr) -> inja_array {
   auto result = arr;
   std::sort(result.begin(), result.end(), [](inja_value const& a, inja_value const& b) {
     // Helper lambda to convert to double if possible
@@ -493,8 +493,8 @@ namespace frozenchars {
 /// @brief Generate range of integers
 /// @param end Upper bound (exclusive)
 /// @return Array [0, 1, 2, ..., end-1]
-[[nodiscard]] inline auto fn_range(std::int64_t end) -> template_array {
-  auto result = template_array{};
+[[nodiscard]] inline auto fn_range(std::int64_t end) -> inja_array {
+  auto result = inja_array{};
   for (auto i = std::int64_t{0}; i < end; ++i) {
     result.push_back(inja_value{i});
   }
@@ -505,8 +505,8 @@ namespace frozenchars {
 /// @param start Start value (inclusive)
 /// @param end End value (exclusive)
 /// @return Array [start, start+1, ..., end-1]
-[[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end) -> template_array {
-  auto result = template_array{};
+[[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end) -> inja_array {
+  auto result = inja_array{};
   for (auto i = start; i < end; ++i) {
     result.push_back(inja_value{i});
   }
@@ -518,8 +518,8 @@ namespace frozenchars {
 /// @param end End value (exclusive)
 /// @param step Step value
 /// @return Array with values spaced by step
-[[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end, std::int64_t step) -> template_array {
-  auto result = template_array{};
+[[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end, std::int64_t step) -> inja_array {
+  auto result = inja_array{};
   if (step > 0) {
     for (auto i = start; i < end; i += step) {
       result.push_back(inja_value{i});
@@ -544,7 +544,7 @@ namespace frozenchars {
     auto const val = std::get<double>(num.storage);
     return inja_value{std::abs(val)};
   }
-  throw template_render_error{"abs() expects numeric argument"};
+  throw inja_render_error{"abs() expects numeric argument"};
 }
 
 /// @brief Round a number to specified decimal places
@@ -558,11 +558,11 @@ namespace frozenchars {
   } else if (std::holds_alternative<double>(num.storage)) {
     val = std::get<double>(num.storage);
   } else {
-    throw template_render_error{"round() expects numeric first argument"};
+    throw inja_render_error{"round() expects numeric first argument"};
   }
 
   if (!std::holds_alternative<std::int64_t>(digits.storage)) {
-    throw template_render_error{"round() expects integer second argument"};
+    throw inja_render_error{"round() expects integer second argument"};
   }
 
   auto const places = std::get<std::int64_t>(digits.storage);
@@ -580,7 +580,7 @@ namespace frozenchars {
   } else if (std::holds_alternative<double>(num.storage)) {
     val = std::get<double>(num.storage);
   } else {
-    throw template_render_error{"round() expects numeric argument"};
+    throw inja_render_error{"round() expects numeric argument"};
   }
   return inja_value{std::round(val)};
 }
@@ -588,9 +588,9 @@ namespace frozenchars {
 /// @brief Get maximum value from array of numbers
 /// @param arr Input array
 /// @return Maximum value (int64_t if all integers, double otherwise)
-[[nodiscard]] inline auto fn_max(template_array const& arr) -> inja_value {
+[[nodiscard]] inline auto fn_max(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw template_render_error{"max() called on empty array"};
+    throw inja_render_error{"max() called on empty array"};
   }
 
   // First pass: determine if we have any doubles
@@ -610,7 +610,7 @@ namespace frozenchars {
       } else if (std::holds_alternative<double>(elem.storage)) {
         max_val = std::max(max_val, std::get<double>(elem.storage));
       } else {
-        throw template_render_error{"max() array contains non-numeric value"};
+        throw inja_render_error{"max() array contains non-numeric value"};
       }
     }
     return inja_value{max_val};
@@ -620,7 +620,7 @@ namespace frozenchars {
       if (std::holds_alternative<std::int64_t>(elem.storage)) {
         max_int = std::max(max_int, std::get<std::int64_t>(elem.storage));
       } else {
-        throw template_render_error{"max() array contains non-numeric value"};
+        throw inja_render_error{"max() array contains non-numeric value"};
       }
     }
     return inja_value{max_int};
@@ -630,9 +630,9 @@ namespace frozenchars {
 /// @brief Get minimum value from array of numbers
 /// @param arr Input array
 /// @return Minimum value (int64_t if all integers, double otherwise)
-[[nodiscard]] inline auto fn_min(template_array const& arr) -> inja_value {
+[[nodiscard]] inline auto fn_min(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw template_render_error{"min() called on empty array"};
+    throw inja_render_error{"min() called on empty array"};
   }
 
   // First pass: determine if we have any doubles
@@ -652,7 +652,7 @@ namespace frozenchars {
       } else if (std::holds_alternative<double>(elem.storage)) {
         min_val = std::min(min_val, std::get<double>(elem.storage));
       } else {
-        throw template_render_error{"min() array contains non-numeric value"};
+        throw inja_render_error{"min() array contains non-numeric value"};
       }
     }
     return inja_value{min_val};
@@ -662,7 +662,7 @@ namespace frozenchars {
       if (std::holds_alternative<std::int64_t>(elem.storage)) {
         min_int = std::min(min_int, std::get<std::int64_t>(elem.storage));
       } else {
-        throw template_render_error{"min() array contains non-numeric value"};
+        throw inja_render_error{"min() array contains non-numeric value"};
       }
     }
     return inja_value{min_int};
@@ -674,7 +674,7 @@ namespace frozenchars {
 /// @return true if even, false if odd
 [[nodiscard]] inline auto fn_even(inja_value const& num) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
-    throw template_render_error{"even() expects integer argument"};
+    throw inja_render_error{"even() expects integer argument"};
   }
   auto const val = std::get<std::int64_t>(num.storage);
   return inja_value{val % 2 == 0};
@@ -685,7 +685,7 @@ namespace frozenchars {
 /// @return true if odd, false if even
 [[nodiscard]] inline auto fn_odd(inja_value const& num) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
-    throw template_render_error{"odd() expects integer argument"};
+    throw inja_render_error{"odd() expects integer argument"};
   }
   auto const val = std::get<std::int64_t>(num.storage);
   return inja_value{val % 2 != 0};
@@ -697,17 +697,17 @@ namespace frozenchars {
 /// @return true if divisible, false otherwise
 [[nodiscard]] inline auto fn_divisibleBy(inja_value const& num, inja_value const& divisor) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
-    throw template_render_error{"divisibleBy() expects integer first argument"};
+    throw inja_render_error{"divisibleBy() expects integer first argument"};
   }
   if (!std::holds_alternative<std::int64_t>(divisor.storage)) {
-    throw template_render_error{"divisibleBy() expects integer second argument"};
+    throw inja_render_error{"divisibleBy() expects integer second argument"};
   }
 
   auto const val = std::get<std::int64_t>(num.storage);
   auto const div = std::get<std::int64_t>(divisor.storage);
 
   if (div == 0) {
-    throw template_render_error{"divisibleBy() divisor cannot be zero"};
+    throw inja_render_error{"divisibleBy() divisor cannot be zero"};
   }
 
   return inja_value{val % div == 0};
@@ -716,7 +716,7 @@ namespace frozenchars {
 /// @brief Convert value to integer
 /// @param val Input value (any type)
 /// @return Integer conversion
-/// @throws template_render_error if conversion is invalid (object type or non-convertible string)
+/// @throws inja_render_error if conversion is invalid (object type or non-convertible string)
 [[nodiscard]] inline auto fn_int(inja_value const& val) noexcept(false) -> inja_value {
   if (std::holds_alternative<std::int64_t>(val.storage)) {
     return val;
@@ -733,23 +733,23 @@ namespace frozenchars {
       auto const result = std::stoll(str, nullptr, 10);
       return inja_value{result};
     } catch (...) {
-      throw template_render_error{"int() cannot convert string to integer"};
+      throw inja_render_error{"int() cannot convert string to integer"};
     }
   }
-  if (std::holds_alternative<template_array>(val.storage)) {
-    auto const& arr = std::get<template_array>(val.storage);
+  if (std::holds_alternative<inja_array>(val.storage)) {
+    auto const& arr = std::get<inja_array>(val.storage);
     return inja_value{static_cast<std::int64_t>(arr.size())};
   }
-  if (std::holds_alternative<template_null>(val.storage)) {
+  if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{0};
   }
-  throw template_render_error{"int() cannot convert object type"};
+  throw inja_render_error{"int() cannot convert object type"};
 }
 
 /// @brief Convert value to float
 /// @param val Input value (any type)
 /// @return Float conversion
-/// @throws template_render_error if conversion is invalid (object type or non-convertible string)
+/// @throws inja_render_error if conversion is invalid (object type or non-convertible string)
 [[nodiscard]] inline auto fn_float(inja_value const& val) noexcept(false) -> inja_value {
   if (std::holds_alternative<double>(val.storage)) {
     return val;
@@ -766,17 +766,17 @@ namespace frozenchars {
       auto const result = std::stod(str);
       return inja_value{result};
     } catch (...) {
-      throw template_render_error{"float() cannot convert string to float"};
+      throw inja_render_error{"float() cannot convert string to float"};
     }
   }
-  if (std::holds_alternative<template_array>(val.storage)) {
-    auto const& arr = std::get<template_array>(val.storage);
+  if (std::holds_alternative<inja_array>(val.storage)) {
+    auto const& arr = std::get<inja_array>(val.storage);
     return inja_value{static_cast<double>(arr.size())};
   }
-  if (std::holds_alternative<template_null>(val.storage)) {
+  if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{0.0};
   }
-  throw template_render_error{"float() cannot convert object type"};
+  throw inja_render_error{"float() cannot convert object type"};
 }
 
 /// @brief Check if value is a string
@@ -790,7 +790,7 @@ namespace frozenchars {
 /// @param val Input value
 /// @return true if value is array type, false otherwise
 [[nodiscard]] inline auto fn_isArray(inja_value const& val) -> inja_value {
-  return inja_value{std::holds_alternative<template_array>(val.storage)};
+  return inja_value{std::holds_alternative<inja_array>(val.storage)};
 }
 
 /// @brief Check if value is numeric (int64_t or double)
@@ -798,7 +798,7 @@ namespace frozenchars {
 /// @return true if value is numeric type, false otherwise
 [[nodiscard]] inline auto fn_isNumber(inja_value const& val) -> inja_value {
   return inja_value{
-    std::holds_alternative<std::int64_t>(val.storage) || 
+    std::holds_alternative<std::int64_t>(val.storage) ||
     std::holds_alternative<double>(val.storage)
   };
 }
@@ -835,20 +835,20 @@ namespace frozenchars {
 /// @param val Input value
 /// @return true if value is null, false otherwise
 [[nodiscard]] inline auto fn_isNone(inja_value const& val) -> inja_value {
-  return inja_value{std::holds_alternative<template_null>(val.storage)};
+  return inja_value{std::holds_alternative<inja_null>(val.storage)};
 }
 
 /// @brief Check if value is empty
 /// @param val Input value
 /// @return true if value is empty (empty string, empty array, empty object, or null)
 [[nodiscard]] inline auto fn_isEmpty(inja_value const& val) -> inja_value {
-  if (std::holds_alternative<template_null>(val.storage)) {
+  if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{true};
   }
   if (auto const* p = std::get_if<std::string>(&val.storage)) {
     return inja_value{p->empty()};
   }
-  if (auto const* p = std::get_if<template_array>(&val.storage)) {
+  if (auto const* p = std::get_if<inja_array>(&val.storage)) {
     return inja_value{p->empty()};
   }
   if (auto const* p = std::get_if<inja_object>(&val.storage)) {
@@ -863,13 +863,13 @@ namespace frozenchars {
 /// @param val Input value
 /// @return true if value is null or empty container/string
 [[nodiscard]] inline auto is_empty_value(inja_value const& val) -> bool {
-  if (std::holds_alternative<template_null>(val.storage)) {
+  if (std::holds_alternative<inja_null>(val.storage)) {
     return true;
   }
   if (auto const* p = std::get_if<std::string>(&val.storage)) {
     return p->empty();
   }
-  if (auto const* p = std::get_if<template_array>(&val.storage)) {
+  if (auto const* p = std::get_if<inja_array>(&val.storage)) {
     return p->empty();
   }
   if (auto const* p = std::get_if<inja_object>(&val.storage)) {
@@ -878,12 +878,12 @@ namespace frozenchars {
   return false;
 }
 
-/// @brief Helper to check if two template_values are equal
+/// @brief Helper to check if two inja_values are equal
 /// @param lhs Left hand side value
 /// @param rhs Right hand side value
 /// @return true if values are equal
 [[nodiscard]] inline auto values_equal(inja_value const& lhs, inja_value const& rhs) -> bool {
-  if (std::holds_alternative<template_null>(lhs.storage) && std::holds_alternative<template_null>(rhs.storage)) {
+  if (std::holds_alternative<inja_null>(lhs.storage) && std::holds_alternative<inja_null>(rhs.storage)) {
     return true;
   }
   if (auto const* p = std::get_if<bool>(&lhs.storage)) {
@@ -927,28 +927,28 @@ namespace frozenchars {
 /// @param arr Array to access
 /// @param index Index to retrieve (supports negative indices from end)
 /// @return Element at index
-/// @throws template_render_error on invalid input or out of bounds
+/// @throws inja_render_error on invalid input or out of bounds
 [[nodiscard]] inline auto fn_at(inja_value const& arr, inja_value const& index) noexcept(false) -> inja_value {
-  if (!std::holds_alternative<template_array>(arr.storage)) {
-    throw template_render_error{"at() expects array as first argument"};
+  if (!std::holds_alternative<inja_array>(arr.storage)) {
+    throw inja_render_error{"at() expects array as first argument"};
   }
-  
+
   if (!std::holds_alternative<std::int64_t>(index.storage)) {
-    throw template_render_error{"at() expects integer as index"};
+    throw inja_render_error{"at() expects integer as index"};
   }
-  
-  auto const& array = std::get<template_array>(arr.storage);
+
+  auto const& array = std::get<inja_array>(arr.storage);
   auto idx = std::get<std::int64_t>(index.storage);
   auto const size = static_cast<std::int64_t>(array.size());
-  
+
   if (idx < 0) {
     idx = size + idx;
   }
-  
+
   if (idx < 0 || idx >= size) {
-    throw template_render_error{"at() index out of bounds"};
+    throw inja_render_error{"at() index out of bounds"};
   }
-  
+
   return array[static_cast<std::size_t>(idx)];
 }
 
@@ -956,7 +956,7 @@ namespace frozenchars {
 /// @param val Array or object to check
 /// @return true if val is non-empty array or object, false otherwise
 [[nodiscard]] inline auto fn_exists(inja_value const& val) noexcept(false) -> inja_value {
-  if (auto const* p = std::get_if<template_array>(&val.storage)) {
+  if (auto const* p = std::get_if<inja_array>(&val.storage)) {
     return inja_value{!p->empty()};
   }
   if (auto const* p = std::get_if<inja_object>(&val.storage)) {
@@ -969,9 +969,9 @@ namespace frozenchars {
 /// @param val Value to search for
 /// @param container Array or object to search in
 /// @return true if value found in array or matches any object value
-/// @throws template_render_error if container is not array/object
+/// @throws inja_render_error if container is not array/object
 [[nodiscard]] inline auto fn_existsIn(inja_value const& val, inja_value const& container) noexcept(false) -> inja_value {
-  if (auto const* p = std::get_if<template_array>(&container.storage)) {
+  if (auto const* p = std::get_if<inja_array>(&container.storage)) {
     for (auto const& elem : *p) {
       if (values_equal(val, elem)) {
         return inja_value{true};
@@ -979,7 +979,7 @@ namespace frozenchars {
     }
     return inja_value{false};
   }
-  
+
   if (auto const* p = std::get_if<inja_object>(&container.storage)) {
     for (auto const& [k, v] : *p) {
       if (values_equal(val, v)) {
@@ -988,8 +988,8 @@ namespace frozenchars {
     }
     return inja_value{false};
   }
-  
-  throw template_render_error{"existsIn() expects array or object as second argument"};
+
+  throw inja_render_error{"existsIn() expects array or object as second argument"};
 }
 
 } // namespace frozenchars

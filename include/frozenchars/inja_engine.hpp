@@ -35,7 +35,7 @@ template <
   auto CommentClose,  // コメント終了
   auto LineStmtPrefix // 行文プレフィックス
 >
-struct template_delimiters {
+struct inja_delimiters {
   static constexpr auto expression_open = ExprOpen;
   static constexpr auto expression_close = ExprClose;
   static constexpr auto statement_open = StmtOpen;
@@ -53,7 +53,7 @@ inline constexpr auto default_comment_open = FrozenString<3>{"{#"};
 inline constexpr auto default_comment_close = FrozenString<3>{"#}"};
 inline constexpr auto default_line_stmt_prefix = FrozenString<3>{"##"};
 
-using default_template_delimiters = template_delimiters<
+using default_inja_delimiters = inja_delimiters<
   default_expr_open,
   default_expr_close,
   default_stmt_open,
@@ -63,8 +63,8 @@ using default_template_delimiters = template_delimiters<
   default_line_stmt_prefix
 >;
 
-using template_function_callback = std::function<inja_value(std::vector<inja_value> const&)>;
-using template_include_callback = std::function<std::string(std::string_view, inja_object const&)>;
+using inja_function_callback = std::function<inja_value(std::vector<inja_value> const&)>;
+using inja_include_callback = std::function<std::string(std::string_view, inja_object const&)>;
 
 /**
  * @brief テンプレート実行時の拡張オプション。
@@ -73,12 +73,12 @@ using template_include_callback = std::function<std::string(std::string_view, in
  * - include_templates: `{% include %}` 用の名前付きテンプレート本体
  * - include_callback: include 解決時のフォールバック
  */
-struct template_runtime_options {
-  std::unordered_map<std::string, template_function_callback> function_callbacks{};
+struct inja_runtime_options {
+  std::unordered_map<std::string, inja_function_callback> function_callbacks{};
   std::unordered_map<std::string, std::string> include_templates{};
-  template_include_callback include_callback{};
+  inja_include_callback include_callback{};
 
-  auto add_function(std::string name, template_function_callback callback) -> void {
+  auto add_function(std::string name, inja_function_callback callback) -> void {
     function_callbacks.insert_or_assign(std::move(name), std::move(callback));
   }
 
@@ -94,19 +94,19 @@ namespace frozenchars::detail {
 /**
  * @brief テンプレートで保持する最大ノード数。
  */
-constexpr auto k_template_max_nodes = std::size_t{2048};
+constexpr auto k_inja_max_nodes = std::size_t{2048};
 
 /**
  * @brief テンプレート構文ノードの種類。
  */
-enum class template_node_kind : std::uint8_t { text, expr, if_stmt, else_stmt, endif_stmt, for_stmt, endfor_stmt, set_stmt, include_stmt };
+enum class inja_node_kind : std::uint8_t { text, expr, if_stmt, else_stmt, endif_stmt, for_stmt, endfor_stmt, set_stmt, include_stmt };
 
 /**
  * @brief パース済みテンプレートの単一ノード。
  */
-struct template_node {
+struct inja_node {
   /// ノード種別
-  template_node_kind kind{};
+  inja_node_kind kind{};
   /// 元テンプレート中の開始位置（半開区間）
   std::size_t begin{};
   /// 元テンプレート中の終了位置（半開区間）
@@ -122,9 +122,9 @@ struct template_node {
  *
  * 現状は命令配列ではなく、実行に必要なノード列を保持する。
  */
-struct template_bytecode {
+struct inja_bytecode {
   /// ノード列
-  std::array<template_node, k_template_max_nodes> nodes{};
+  std::array<inja_node, k_inja_max_nodes> nodes{};
   /// 使用ノード数
   std::size_t count{};
 };
@@ -155,7 +155,7 @@ struct template_bytecode {
   return s.substr(begin, end - begin);
 }
 
-enum class template_open_kind : std::uint8_t {
+enum class inja_open_kind : std::uint8_t {
   expression,      // 式
   statement,       // 文
   comment,         // コメント
@@ -163,9 +163,9 @@ enum class template_open_kind : std::uint8_t {
   none,            // 該当なし
 };
 
-struct template_open_match {
+struct inja_open_match {
   std::size_t pos{std::string_view::npos};
-  template_open_kind kind{template_open_kind::none};
+  inja_open_kind kind{inja_open_kind::none};
 };
 
 /**
@@ -201,10 +201,10 @@ template <typename Delims>
  * @return 見つかったタグオープン情報
  */
 template <typename Delims>
-[[nodiscard]] constexpr auto find_next_open(std::string_view src, std::size_t from) -> template_open_match {
-  auto best = template_open_match{};
+[[nodiscard]] constexpr auto find_next_open(std::string_view src, std::size_t from) -> inja_open_match {
+  auto best = inja_open_match{};
 
-  auto consider = [&](std::size_t pos, template_open_kind kind) constexpr {
+  auto consider = [&](std::size_t pos, inja_open_kind kind) constexpr {
     if (pos == std::string_view::npos) {
       return;
     }
@@ -213,17 +213,17 @@ template <typename Delims>
       return;
     }
     if (pos == best.pos) {
-      auto const priority = [&](template_open_kind k) constexpr -> int {
+      auto const priority = [&](inja_open_kind k) constexpr -> int {
         switch (k) {
-        case template_open_kind::expression:
+        case inja_open_kind::expression:
           return 0;
-        case template_open_kind::statement:
+        case inja_open_kind::statement:
           return 1;
-        case template_open_kind::comment:
+        case inja_open_kind::comment:
           return 2;
-        case template_open_kind::line_statement:
+        case inja_open_kind::line_statement:
           return 3;
-        case template_open_kind::none:
+        case inja_open_kind::none:
           return 4;
         }
         return 4;
@@ -234,10 +234,10 @@ template <typename Delims>
     }
   };
 
-  consider(src.find(Delims::expression_open.sv(), from), template_open_kind::expression);
-  consider(src.find(Delims::statement_open.sv(), from), template_open_kind::statement);
-  consider(src.find(Delims::comment_open.sv(), from), template_open_kind::comment);
-  consider(find_line_statement<Delims>(src, from), template_open_kind::line_statement);
+  consider(src.find(Delims::expression_open.sv(), from), inja_open_kind::expression);
+  consider(src.find(Delims::statement_open.sv(), from), inja_open_kind::statement);
+  consider(src.find(Delims::comment_open.sv(), from), inja_open_kind::comment);
+  consider(find_line_statement<Delims>(src, from), inja_open_kind::line_statement);
   return best;
 }
 
@@ -249,10 +249,10 @@ template <typename Delims>
  * @throw consteval 文脈で文字列リテラル例外を投げる。
  * 不正構文（未閉鎖タグ、ネスト不整合、未対応文）で失敗する。
  */
-template <auto Src, typename Delims = frozenchars::default_template_delimiters>
-consteval auto parse_program() -> template_bytecode {
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters>
+consteval auto parse_program() -> inja_bytecode {
   auto constexpr src = Src.sv();
-  auto program = template_bytecode{};
+  auto program = inja_bytecode{};
   auto constexpr expr_open = Delims::expression_open.sv();
   auto constexpr expr_close = Delims::expression_close.sv();
   auto constexpr stmt_open = Delims::statement_open.sv();
@@ -265,15 +265,15 @@ consteval auto parse_program() -> template_bytecode {
     throw "template parse error: delimiters must not be empty";
   }
 
-  auto stack = std::array<std::size_t, k_template_max_nodes>{};
+  auto stack = std::array<std::size_t, k_inja_max_nodes>{};
   auto stack_size = std::size_t{0};
 
-  auto push_node = [&](template_node_kind kind, std::size_t begin, std::size_t end) consteval -> std::size_t {
-    if (program.count >= k_template_max_nodes) {
+  auto push_node = [&](inja_node_kind kind, std::size_t begin, std::size_t end) consteval -> std::size_t {
+    if (program.count >= k_inja_max_nodes) {
       throw "template parse error: too many nodes";
     }
     auto const index = program.count++;
-    program.nodes[index] = template_node{kind, begin, end};
+    program.nodes[index] = inja_node{kind, begin, end};
     return index;
   };
 
@@ -282,18 +282,18 @@ consteval auto parse_program() -> template_bytecode {
   // 3. if/for の対応関係は stack で後方解決
   auto process_statement = [&](std::string_view stmt, std::size_t begin, std::size_t end) consteval {
     if (stmt.starts_with("if ")) {
-      auto const idx = push_node(template_node_kind::if_stmt, begin, end);
+      auto const idx = push_node(inja_node_kind::if_stmt, begin, end);
       stack[stack_size] = idx;
       ++stack_size;
       return;
     }
     // else / else if を同じノード種別で連結し、else_index で鎖状に接続する。
     if (stmt == "else" || stmt.starts_with("else if ")) {
-      if (stack_size == 0 || program.nodes[stack[stack_size - 1]].kind != template_node_kind::if_stmt) {
+      if (stack_size == 0 || program.nodes[stack[stack_size - 1]].kind != inja_node_kind::if_stmt) {
         throw "template parse error: unexpected else";
       }
       auto const if_idx = stack[stack_size - 1];
-      auto const else_idx = push_node(template_node_kind::else_stmt, begin, end);
+      auto const else_idx = push_node(inja_node_kind::else_stmt, begin, end);
 
       if (program.nodes[if_idx].else_index == std::numeric_limits<std::size_t>::max()) {
         program.nodes[if_idx].else_index = else_idx;
@@ -314,10 +314,10 @@ consteval auto parse_program() -> template_bytecode {
       return;
     }
     if (stmt == "endif") {
-      if (stack_size == 0 || program.nodes[stack[stack_size - 1]].kind != template_node_kind::if_stmt) {
+      if (stack_size == 0 || program.nodes[stack[stack_size - 1]].kind != inja_node_kind::if_stmt) {
         throw "template parse error: unexpected endif";
       }
-      auto const end_idx = push_node(template_node_kind::endif_stmt, begin, end);
+      auto const end_idx = push_node(inja_node_kind::endif_stmt, begin, end);
       auto const if_idx = stack[stack_size - 1];
       program.nodes[if_idx].end_index = end_idx;
       --stack_size;
@@ -327,28 +327,28 @@ consteval auto parse_program() -> template_bytecode {
       if (stmt.find(" in ") == std::string_view::npos) {
         throw "template parse error: invalid for statement";
       }
-      auto const idx = push_node(template_node_kind::for_stmt, begin, end);
+      auto const idx = push_node(inja_node_kind::for_stmt, begin, end);
       stack[stack_size] = idx;
       ++stack_size;
       return;
     }
     if (stmt == "endfor") {
-      if (stack_size == 0 || program.nodes[stack[stack_size - 1]].kind != template_node_kind::for_stmt) {
+      if (stack_size == 0 || program.nodes[stack[stack_size - 1]].kind != inja_node_kind::for_stmt) {
         throw "template parse error: unexpected endfor";
       }
       auto const for_idx = stack[stack_size - 1];
-      auto const end_idx = push_node(template_node_kind::endfor_stmt, begin, end);
+      auto const end_idx = push_node(inja_node_kind::endfor_stmt, begin, end);
       program.nodes[for_idx].end_index = end_idx;
       --stack_size;
       return;
     }
     // set/include は単独ステートメントノードとして保持し、実行時に評価する。
     if (stmt.starts_with("set ")) {
-      std::ignore = push_node(template_node_kind::set_stmt, begin, end);
+      std::ignore = push_node(inja_node_kind::set_stmt, begin, end);
       return;
     }
     if (stmt.starts_with("include ")) {
-      std::ignore = push_node(template_node_kind::include_stmt, begin, end);
+      std::ignore = push_node(inja_node_kind::include_stmt, begin, end);
       return;
     }
     throw "template parse error: unsupported statement";
@@ -360,27 +360,27 @@ consteval auto parse_program() -> template_bytecode {
     auto const tag = next.pos;
     if (tag == std::string_view::npos) {
       if (pos < src.size()) {
-        std::ignore = push_node(template_node_kind::text, pos, src.size());
+        std::ignore = push_node(inja_node_kind::text, pos, src.size());
       }
       break;
     }
     if (tag > pos) {
-      std::ignore = push_node(template_node_kind::text, pos, tag);
+      std::ignore = push_node(inja_node_kind::text, pos, tag);
     }
     switch (next.kind) {
     // 式
-    case template_open_kind::expression: {
+    case inja_open_kind::expression: {
       auto const content_begin = tag + expr_open.size();
       auto const close = src.find(expr_close, content_begin);
       if (close == std::string_view::npos) {
         throw "template parse error: unclosed expression tag";
       }
-      std::ignore = push_node(template_node_kind::expr, content_begin, close);
+      std::ignore = push_node(inja_node_kind::expr, content_begin, close);
       pos = close + expr_close.size();
       break;
     }
     // コメント
-    case template_open_kind::comment: {
+    case inja_open_kind::comment: {
       auto const content_begin = tag + comment_open.size();
       auto const close = src.find(comment_close, content_begin);
       if (close == std::string_view::npos) {
@@ -390,7 +390,7 @@ consteval auto parse_program() -> template_bytecode {
       break;
     }
     // 文
-    case template_open_kind::statement: {
+    case inja_open_kind::statement: {
       auto const content_begin = tag + stmt_open.size();
       auto const close = src.find(stmt_close, content_begin);
       if (close == std::string_view::npos) {
@@ -402,7 +402,7 @@ consteval auto parse_program() -> template_bytecode {
       break;
     }
     // 行文
-    case template_open_kind::line_statement: {
+    case inja_open_kind::line_statement: {
       auto const content_begin = tag + line_stmt_prefix.size();
       auto const line_end = src.find('\n', content_begin);
       auto const content_end = (line_end == std::string_view::npos) ? src.size() : line_end;
@@ -412,7 +412,7 @@ consteval auto parse_program() -> template_bytecode {
       break;
     }
     // 該当なし
-    case template_open_kind::none:
+    case inja_open_kind::none:
       throw "template parse error: internal opener resolution failure";
     }
   }
@@ -446,7 +446,7 @@ consteval auto parse_program() -> template_bytecode {
  */
 [[nodiscard]] inline auto equals_value(inja_value const& lhs, inja_value const& rhs) -> bool {
   if (lhs.storage.index() == rhs.storage.index()) {
-    if (std::holds_alternative<template_null>(lhs.storage)) {
+    if (std::holds_alternative<inja_null>(lhs.storage)) {
       return true;
     }
     if (auto const* p = std::get_if<bool>(&lhs.storage)) {
@@ -473,26 +473,26 @@ consteval auto parse_program() -> template_bytecode {
  * @param lhs 左辺
  * @param rhs 右辺
  * @return lhs < rhs の結果
- * @throws template_render_error 比較不能な型の組み合わせ
+ * @throws inja_render_error 比較不能な型の組み合わせ
  */
 [[nodiscard]] inline auto less_value(inja_value const& lhs, inja_value const& rhs) -> bool {
   if (auto const lnum = try_as_double(lhs); lnum.has_value()) {
     auto const rnum = try_as_double(rhs);
     if (!rnum.has_value()) {
-      throw template_render_error{"comparison requires same type"};
+      throw inja_render_error{"comparison requires same type"};
     }
     return *lnum < *rnum;
   }
   if (std::holds_alternative<std::string>(lhs.storage) && std::holds_alternative<std::string>(rhs.storage)) {
     return std::get<std::string>(lhs.storage) < std::get<std::string>(rhs.storage);
   }
-  throw template_render_error{"comparison requires same type"};
+  throw inja_render_error{"comparison requires same type"};
 }
 
 /// @brief Forward declaration of evaluate_function
 [[nodiscard]] inline auto evaluate_function(std::string_view func_name,
                                             std::vector<inja_value> const& args,
-                                            template_runtime_options const* runtime_options) -> inja_value;
+                                            inja_runtime_options const* runtime_options) -> inja_value;
 
 /**
  * @brief 実行時式評価器（簡易再帰下降パーサ）。
@@ -506,7 +506,7 @@ public:
    */
   expr_parser(std::string_view text,
               std::vector<inja_object> const& scopes,
-              template_runtime_options const* runtime_options = nullptr)
+              inja_runtime_options const* runtime_options = nullptr)
     : text_(text), scopes_(scopes), runtime_options_(runtime_options) {}
 
   /**
@@ -518,7 +518,7 @@ public:
     auto v = parse_or(evaluate);
     skip_space();
     if (pos_ != text_.size()) {
-      throw template_render_error{"unexpected token in expression"};
+      throw inja_render_error{"unexpected token in expression"};
     }
     return v;
   }
@@ -527,7 +527,7 @@ private:
   std::string_view text_;
   std::size_t pos_{};
   std::vector<inja_object> const& scopes_;
-  template_runtime_options const* runtime_options_{};
+  inja_runtime_options const* runtime_options_{};
 
   /**
    * @brief 現在位置から空白を読み飛ばす。
@@ -570,10 +570,10 @@ private:
   [[nodiscard]] auto parse_or(bool evaluate) -> inja_value {
     auto lhs = parse_and(evaluate);
     while (consume("or")) {
-      auto const lhs_truth = evaluate && frozenchars::template_truthy(lhs);
+      auto const lhs_truth = evaluate && frozenchars::inja_truthy(lhs);
       auto rhs = parse_and(evaluate && !lhs_truth);
       if (evaluate) {
-        lhs = inja_value{lhs_truth || template_truthy(rhs)};
+        lhs = inja_value{lhs_truth || inja_truthy(rhs)};
       }
     }
     return lhs;
@@ -585,10 +585,10 @@ private:
   [[nodiscard]] auto parse_and(bool evaluate) -> inja_value {
     auto lhs = parse_in(evaluate);
     while (consume("and")) {
-      auto const lhs_truth = evaluate && frozenchars::template_truthy(lhs);
+      auto const lhs_truth = evaluate && frozenchars::inja_truthy(lhs);
       auto rhs = parse_in(evaluate && lhs_truth);
       if (evaluate) {
-        lhs = inja_value{lhs_truth && frozenchars::template_truthy(rhs)};
+        lhs = inja_value{lhs_truth && frozenchars::inja_truthy(rhs)};
       }
     }
     return lhs;
@@ -607,9 +607,9 @@ private:
       }
       if (std::holds_alternative<std::string>(lhs.storage) && std::holds_alternative<std::string>(rhs.storage)) {
         lhs = inja_value{std::get<std::string>(rhs.storage).find(std::get<std::string>(lhs.storage)) != std::string::npos};
-      } else if (std::holds_alternative<template_array>(rhs.storage)) {
+      } else if (std::holds_alternative<inja_array>(rhs.storage)) {
         auto found = false;
-        for (auto const& v : std::get<template_array>(rhs.storage)) {
+        for (auto const& v : std::get<inja_array>(rhs.storage)) {
           if (equals_value(lhs, v)) {
             found = true;
             break;
@@ -620,7 +620,7 @@ private:
         auto const& obj = std::get<inja_object>(rhs.storage);
         lhs = inja_value{obj.contains(std::get<std::string>(lhs.storage))};
       } else {
-        throw template_render_error{"invalid operands for in"};
+        throw inja_render_error{"invalid operands for in"};
       }
     }
     return lhs;
@@ -700,7 +700,7 @@ private:
           auto const lnum = try_as_double(lhs);
           auto const rnum = try_as_double(rhs);
           if (!lnum.has_value() || !rnum.has_value()) {
-            throw template_render_error{"invalid operands for +"};
+            throw inja_render_error{"invalid operands for +"};
           }
           lhs = inja_value{*lnum + *rnum};
         }
@@ -710,7 +710,7 @@ private:
           auto const lnum = try_as_double(lhs);
           auto const rnum = try_as_double(rhs);
           if (!lnum.has_value() || !rnum.has_value()) {
-            throw template_render_error{"invalid operands for -"};
+            throw inja_render_error{"invalid operands for -"};
           }
           lhs = inja_value{*lnum - *rnum};
         }
@@ -733,7 +733,7 @@ private:
           auto const lnum = try_as_double(lhs);
           auto const rnum = try_as_double(rhs);
           if (!lnum.has_value() || !rnum.has_value()) {
-            throw template_render_error{"invalid operands for *"};
+            throw inja_render_error{"invalid operands for *"};
           }
           lhs = inja_value{*lnum * *rnum};
         }
@@ -743,7 +743,7 @@ private:
           auto const lnum = try_as_double(lhs);
           auto const rnum = try_as_double(rhs);
           if (!lnum.has_value() || !rnum.has_value()) {
-            throw template_render_error{"invalid operands for /"};
+            throw inja_render_error{"invalid operands for /"};
           }
           lhs = inja_value{*lnum / *rnum};
         }
@@ -751,7 +751,7 @@ private:
         auto rhs = parse_postfix(evaluate);
         if (evaluate) {
           if (!std::holds_alternative<std::int64_t>(lhs.storage) || !std::holds_alternative<std::int64_t>(rhs.storage)) {
-            throw template_render_error{"invalid operands for %"};
+            throw inja_render_error{"invalid operands for %"};
           }
           lhs = inja_value{std::get<std::int64_t>(lhs.storage) % std::get<std::int64_t>(rhs.storage)};
         }
@@ -765,7 +765,7 @@ private:
   [[nodiscard]] auto parse_unary(bool evaluate) -> inja_value {
     if (consume("not")) {
       auto v = parse_unary(evaluate);
-      return evaluate ? inja_value{!template_truthy(v)} : inja_value{};
+      return evaluate ? inja_value{!inja_truthy(v)} : inja_value{};
     }
     if (consume("-")) {
       auto v = parse_unary(evaluate);
@@ -777,7 +777,7 @@ private:
       }
       auto const num = try_as_double(v);
       if (!num.has_value()) {
-        throw template_render_error{"invalid operand for unary -"};
+        throw inja_render_error{"invalid operand for unary -"};
       }
       return inja_value{-*num};
     }
@@ -824,7 +824,7 @@ private:
         break;
       }
       if (start == pos_) {
-        throw template_render_error{"unexpected token after pipe operator"};
+        throw inja_render_error{"unexpected token after pipe operator"};
       }
       auto const func_name = text_.substr(start, pos_ - start);
 
@@ -839,13 +839,13 @@ private:
             args.push_back(parse_or(evaluate));
             skip_space();
             if (pos_ >= text_.size()) {
-              throw template_render_error{"unclosed pipe function call"};
+              throw inja_render_error{"unclosed pipe function call"};
             }
             if (text_[pos_] == ')') {
               break;
             }
             if (text_[pos_] != ',') {
-              throw template_render_error{"expected comma or closing parenthesis in pipe function call"};
+              throw inja_render_error{"expected comma or closing parenthesis in pipe function call"};
             }
             ++pos_;
             skip_space();
@@ -853,7 +853,7 @@ private:
         }
 
         if (!consume(")")) {
-          throw template_render_error{"missing closing parenthesis in pipe function call"};
+          throw inja_render_error{"missing closing parenthesis in pipe function call"};
         }
       }
 
@@ -883,7 +883,7 @@ private:
       }
     }
     if (path.empty()) {
-      throw template_render_error{"empty identifier"};
+      throw inja_render_error{"empty identifier"};
     }
     auto const* current = static_cast<inja_value const*>(nullptr);
     for (auto s = scopes_.rbegin(); s != scopes_.rend(); ++s) {
@@ -894,16 +894,16 @@ private:
       }
     }
     if (current == nullptr) {
-      throw template_render_error{"undefined variable: " + std::string{name}};
+      throw inja_render_error{"undefined variable: " + std::string{name}};
     }
     for (auto i = std::size_t{1}; i < path.size(); ++i) {
       if (!std::holds_alternative<inja_object>(current->storage)) {
-        throw template_render_error{"cannot resolve path: " + std::string{name}};
+        throw inja_render_error{"cannot resolve path: " + std::string{name}};
       }
       auto const& obj = std::get<inja_object>(current->storage);
       auto const it = obj.find(std::string{path[i]});
       if (it == obj.end()) {
-        throw template_render_error{"undefined variable: " + std::string{name}};
+        throw inja_render_error{"undefined variable: " + std::string{name}};
       }
       current = &it->second;
     }
@@ -918,7 +918,7 @@ private:
     if (consume("(")) {
       auto v = parse_or(evaluate);
       if (!consume(")")) {
-        throw template_render_error{"missing closing parenthesis"};
+        throw inja_render_error{"missing closing parenthesis"};
       }
       return v;
     }
@@ -939,7 +939,7 @@ private:
         ++pos_;
       }
       if (pos_ >= text_.size()) {
-        throw template_render_error{"unterminated string literal"};
+        throw inja_render_error{"unterminated string literal"};
       }
       auto out = std::string{text_.substr(start, pos_ - start)};
       ++pos_;
@@ -977,7 +977,7 @@ private:
       break;
     }
     if (start == pos_) {
-      throw template_render_error{"unexpected token in expression"};
+      throw inja_render_error{"unexpected token in expression"};
     }
     auto const name = text_.substr(start, pos_ - start);
 
@@ -1008,13 +1008,13 @@ private:
           args.push_back(parse_or(evaluate));
           skip_space();
           if (pos_ >= text_.size()) {
-            throw template_render_error{"unclosed function call"};
+            throw inja_render_error{"unclosed function call"};
           }
           if (text_[pos_] == ')') {
             break;
           }
           if (text_[pos_] != ',') {
-            throw template_render_error{"expected comma or closing parenthesis in function call"};
+            throw inja_render_error{"expected comma or closing parenthesis in function call"};
           }
           ++pos_;  // consume ','
           skip_space();
@@ -1022,7 +1022,7 @@ private:
       }
 
       if (!consume(")")) {
-        throw template_render_error{"missing closing parenthesis in function call"};
+        throw inja_render_error{"missing closing parenthesis in function call"};
       }
 
       return evaluate_function(name, args, runtime_options_);
@@ -1051,22 +1051,22 @@ struct for_header {
  * @brief `{% for ... in ... %}` 文ヘッダを解析する。
  * @param stmt ステートメント本体
  * @return 分解済みヘッダ
- * @throws template_render_error 構文が不正な場合
+ * @throws inja_render_error 構文が不正な場合
  */
 [[nodiscard]] inline auto parse_for_header(std::string_view stmt) -> for_header {
   auto body = trim_view(stmt);
   if (!body.starts_with("for ")) {
-    throw template_render_error{"invalid for statement"};
+    throw inja_render_error{"invalid for statement"};
   }
   body.remove_prefix(4);
   auto const in_pos = body.find(" in ");
   if (in_pos == std::string_view::npos) {
-    throw template_render_error{"invalid for statement"};
+    throw inja_render_error{"invalid for statement"};
   }
   auto lhs = trim_view(body.substr(0, in_pos));
   auto rhs = trim_view(body.substr(in_pos + 4));
   if (rhs.empty()) {
-    throw template_render_error{"invalid for statement"};
+    throw inja_render_error{"invalid for statement"};
   }
   auto header = for_header{};
   auto comma = lhs.find(',');
@@ -1079,7 +1079,7 @@ struct for_header {
     header.has_key = true;
   }
   if (header.value_name.empty() || (header.has_key && header.key_name.empty())) {
-    throw template_render_error{"invalid for statement"};
+    throw inja_render_error{"invalid for statement"};
   }
   header.expr = std::string{rhs};
   return header;
@@ -1096,17 +1096,17 @@ struct set_statement {
 [[nodiscard]] inline auto parse_set_statement(std::string_view stmt) -> set_statement {
   auto body = trim_view(stmt);
   if (!body.starts_with("set ")) {
-    throw template_render_error{"invalid set statement"};
+    throw inja_render_error{"invalid set statement"};
   }
   body.remove_prefix(4);
   auto const eq_pos = body.find('=');
   if (eq_pos == std::string_view::npos) {
-    throw template_render_error{"invalid set statement"};
+    throw inja_render_error{"invalid set statement"};
   }
   auto const target = trim_view(body.substr(0, eq_pos));
   auto const expr = trim_view(body.substr(eq_pos + 1));
   if (target.empty() || expr.empty()) {
-    throw template_render_error{"invalid set statement"};
+    throw inja_render_error{"invalid set statement"};
   }
   return set_statement{std::string{target}, std::string{expr}};
 }
@@ -1124,7 +1124,7 @@ inline auto assign_path(inja_object& scope, std::string_view path, inja_value va
     if (pos == std::string_view::npos) {
       auto const key = std::string{trim_view(path.substr(key_begin))};
       if (key.empty()) {
-        throw template_render_error{"invalid set target"};
+        throw inja_render_error{"invalid set target"};
       }
       current_scope->insert_or_assign(key, std::move(value));
       return;
@@ -1132,12 +1132,12 @@ inline auto assign_path(inja_object& scope, std::string_view path, inja_value va
 
     auto const key = std::string{trim_view(path.substr(key_begin, pos - key_begin))};
     if (key.empty()) {
-      throw template_render_error{"invalid set target"};
+      throw inja_render_error{"invalid set target"};
     }
 
     auto [it, inserted] = current_scope->insert_or_assign(key, inja_value{inja_object{}});
     if (!inserted && !std::holds_alternative<inja_object>(it->second.storage)) {
-      throw template_render_error{"set target path is not object"};
+      throw inja_render_error{"set target path is not object"};
     }
     current_scope = &std::get<inja_object>(it->second.storage);
     key_begin = pos + 1;
@@ -1153,7 +1153,7 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
     trim_view(dot_pos == std::string_view::npos ? path : path.substr(0, dot_pos))
   };
   if (root_name.empty()) {
-    throw template_render_error{"invalid set target"};
+    throw inja_render_error{"invalid set target"};
   }
 
   for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
@@ -1177,7 +1177,7 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
   if (body.starts_with("else if ")) {
     return trim_view(body.substr(7));
   }
-  throw template_render_error{"invalid if statement"};
+  throw inja_render_error{"invalid if statement"};
 }
 
 /// @brief Evaluate function call by name with arguments
@@ -1186,45 +1186,45 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
 /// @return Result of function call
 [[nodiscard]] inline auto evaluate_function(std::string_view func_name,
                                             std::vector<inja_value> const& args,
-                                            template_runtime_options const* runtime_options) -> inja_value {
+                                            inja_runtime_options const* runtime_options) -> inja_value {
   if (func_name == "upper") {
     if (args.size() != 1) {
-      throw template_render_error{"upper() expects 1 argument"};
+      throw inja_render_error{"upper() expects 1 argument"};
     }
     if (!std::holds_alternative<std::string>(args[0].storage)) {
-      throw template_render_error{"upper() expects string argument"};
+      throw inja_render_error{"upper() expects string argument"};
     }
     return inja_value{fn_upper(std::get<std::string>(args[0].storage))};
   }
 
   if (func_name == "lower") {
     if (args.size() != 1) {
-      throw template_render_error{"lower() expects 1 argument"};
+      throw inja_render_error{"lower() expects 1 argument"};
     }
     if (!std::holds_alternative<std::string>(args[0].storage)) {
-      throw template_render_error{"lower() expects string argument"};
+      throw inja_render_error{"lower() expects string argument"};
     }
     return inja_value{fn_lower(std::get<std::string>(args[0].storage))};
   }
 
   if (func_name == "capitalize") {
     if (args.size() != 1) {
-      throw template_render_error{"capitalize() expects 1 argument"};
+      throw inja_render_error{"capitalize() expects 1 argument"};
     }
     if (!std::holds_alternative<std::string>(args[0].storage)) {
-      throw template_render_error{"capitalize() expects string argument"};
+      throw inja_render_error{"capitalize() expects string argument"};
     }
     return inja_value{fn_capitalize(std::get<std::string>(args[0].storage))};
   }
 
   if (func_name == "replace") {
     if (args.size() != 3) {
-      throw template_render_error{"replace() expects 3 arguments"};
+      throw inja_render_error{"replace() expects 3 arguments"};
     }
     if (!std::holds_alternative<std::string>(args[0].storage) ||
         !std::holds_alternative<std::string>(args[1].storage) ||
         !std::holds_alternative<std::string>(args[2].storage)) {
-      throw template_render_error{"replace() expects 3 string arguments"};
+      throw inja_render_error{"replace() expects 3 string arguments"};
     }
     return inja_value{fn_replace(
       std::get<std::string>(args[0].storage),
@@ -1235,70 +1235,70 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
 
   if (func_name == "length") {
     if (args.size() != 1) {
-      throw template_render_error{"length() expects 1 argument"};
+      throw inja_render_error{"length() expects 1 argument"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"length() expects array argument"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"length() expects array argument"};
     }
-    return inja_value{fn_length(std::get<template_array>(args[0].storage))};
+    return inja_value{fn_length(std::get<inja_array>(args[0].storage))};
   }
 
   if (func_name == "first") {
     if (args.size() != 1) {
-      throw template_render_error{"first() expects 1 argument"};
+      throw inja_render_error{"first() expects 1 argument"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"first() expects array argument"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"first() expects array argument"};
     }
-    return fn_first(std::get<template_array>(args[0].storage));
+    return fn_first(std::get<inja_array>(args[0].storage));
   }
 
   if (func_name == "last") {
     if (args.size() != 1) {
-      throw template_render_error{"last() expects 1 argument"};
+      throw inja_render_error{"last() expects 1 argument"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"last() expects array argument"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"last() expects array argument"};
     }
-    return fn_last(std::get<template_array>(args[0].storage));
+    return fn_last(std::get<inja_array>(args[0].storage));
   }
 
   if (func_name == "join") {
     if (args.size() != 2) {
-      throw template_render_error{"join() expects 2 arguments"};
+      throw inja_render_error{"join() expects 2 arguments"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"join() expects first argument to be array"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"join() expects first argument to be array"};
     }
     if (!std::holds_alternative<std::string>(args[1].storage)) {
-      throw template_render_error{"join() expects second argument to be string"};
+      throw inja_render_error{"join() expects second argument to be string"};
     }
     return inja_value{fn_join(
-      std::get<template_array>(args[0].storage),
+      std::get<inja_array>(args[0].storage),
       std::get<std::string>(args[1].storage)
     )};
   }
 
   if (func_name == "sort") {
     if (args.size() != 1) {
-      throw template_render_error{"sort() expects 1 argument"};
+      throw inja_render_error{"sort() expects 1 argument"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"sort() expects array argument"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"sort() expects array argument"};
     }
-    return inja_value{fn_sort(std::get<template_array>(args[0].storage))};
+    return inja_value{fn_sort(std::get<inja_array>(args[0].storage))};
   }
 
   if (func_name == "range") {
     if (args.size() == 1) {
       if (!std::holds_alternative<std::int64_t>(args[0].storage)) {
-        throw template_render_error{"range() expects integer argument"};
+        throw inja_render_error{"range() expects integer argument"};
       }
       return inja_value{fn_range(std::get<std::int64_t>(args[0].storage))};
     } else if (args.size() == 2) {
       if (!std::holds_alternative<std::int64_t>(args[0].storage) ||
           !std::holds_alternative<std::int64_t>(args[1].storage)) {
-        throw template_render_error{"range() expects integer arguments"};
+        throw inja_render_error{"range() expects integer arguments"};
       }
       return inja_value{fn_range(
         std::get<std::int64_t>(args[0].storage),
@@ -1308,7 +1308,7 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
       if (!std::holds_alternative<std::int64_t>(args[0].storage) ||
           !std::holds_alternative<std::int64_t>(args[1].storage) ||
           !std::holds_alternative<std::int64_t>(args[2].storage)) {
-        throw template_render_error{"range() expects integer arguments"};
+        throw inja_render_error{"range() expects integer arguments"};
       }
       return inja_value{fn_range(
         std::get<std::int64_t>(args[0].storage),
@@ -1316,13 +1316,13 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
         std::get<std::int64_t>(args[2].storage)
       )};
     } else {
-      throw template_render_error{"range() expects 1, 2, or 3 arguments"};
+      throw inja_render_error{"range() expects 1, 2, or 3 arguments"};
     }
   }
 
   if (func_name == "abs") {
     if (args.size() != 1) {
-      throw template_render_error{"abs() expects 1 argument"};
+      throw inja_render_error{"abs() expects 1 argument"};
     }
     return fn_abs(args[0]);
   }
@@ -1333,152 +1333,152 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
     } else if (args.size() == 2) {
       return fn_round(args[0], args[1]);
     } else {
-      throw template_render_error{"round() expects 1 or 2 arguments"};
+      throw inja_render_error{"round() expects 1 or 2 arguments"};
     }
   }
 
   if (func_name == "max") {
     if (args.size() != 1) {
-      throw template_render_error{"max() expects 1 argument"};
+      throw inja_render_error{"max() expects 1 argument"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"max() expects array argument"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"max() expects array argument"};
     }
-    return fn_max(std::get<template_array>(args[0].storage));
+    return fn_max(std::get<inja_array>(args[0].storage));
   }
 
   if (func_name == "min") {
     if (args.size() != 1) {
-      throw template_render_error{"min() expects 1 argument"};
+      throw inja_render_error{"min() expects 1 argument"};
     }
-    if (!std::holds_alternative<template_array>(args[0].storage)) {
-      throw template_render_error{"min() expects array argument"};
+    if (!std::holds_alternative<inja_array>(args[0].storage)) {
+      throw inja_render_error{"min() expects array argument"};
     }
-    return fn_min(std::get<template_array>(args[0].storage));
+    return fn_min(std::get<inja_array>(args[0].storage));
   }
 
   if (func_name == "even") {
     if (args.size() != 1) {
-      throw template_render_error{"even() expects 1 argument"};
+      throw inja_render_error{"even() expects 1 argument"};
     }
     return fn_even(args[0]);
   }
 
   if (func_name == "odd") {
     if (args.size() != 1) {
-      throw template_render_error{"odd() expects 1 argument"};
+      throw inja_render_error{"odd() expects 1 argument"};
     }
     return fn_odd(args[0]);
   }
 
   if (func_name == "divisibleBy") {
     if (args.size() != 2) {
-      throw template_render_error{"divisibleBy() expects 2 arguments"};
+      throw inja_render_error{"divisibleBy() expects 2 arguments"};
     }
     return fn_divisibleBy(args[0], args[1]);
   }
 
   if (func_name == "int") {
     if (args.size() != 1) {
-      throw template_render_error{"int() expects 1 argument"};
+      throw inja_render_error{"int() expects 1 argument"};
     }
     return fn_int(args[0]);
   }
 
   if (func_name == "float") {
     if (args.size() != 1) {
-      throw template_render_error{"float() expects 1 argument"};
+      throw inja_render_error{"float() expects 1 argument"};
     }
     return fn_float(args[0]);
   }
 
   if (func_name == "isString") {
     if (args.size() != 1) {
-      throw template_render_error{"isString() expects 1 argument"};
+      throw inja_render_error{"isString() expects 1 argument"};
     }
     return fn_isString(args[0]);
   }
 
   if (func_name == "isArray") {
     if (args.size() != 1) {
-      throw template_render_error{"isArray() expects 1 argument"};
+      throw inja_render_error{"isArray() expects 1 argument"};
     }
     return fn_isArray(args[0]);
   }
 
   if (func_name == "isNumber") {
     if (args.size() != 1) {
-      throw template_render_error{"isNumber() expects 1 argument"};
+      throw inja_render_error{"isNumber() expects 1 argument"};
     }
     return fn_isNumber(args[0]);
   }
 
   if (func_name == "isObject") {
     if (args.size() != 1) {
-      throw template_render_error{"isObject() expects 1 argument"};
+      throw inja_render_error{"isObject() expects 1 argument"};
     }
     return fn_isObject(args[0]);
   }
 
   if (func_name == "isBoolean") {
     if (args.size() != 1) {
-      throw template_render_error{"isBoolean() expects 1 argument"};
+      throw inja_render_error{"isBoolean() expects 1 argument"};
     }
     return fn_isBoolean(args[0]);
   }
 
   if (func_name == "isFloat") {
     if (args.size() != 1) {
-      throw template_render_error{"isFloat() expects 1 argument"};
+      throw inja_render_error{"isFloat() expects 1 argument"};
     }
     return fn_isFloat(args[0]);
   }
 
   if (func_name == "isInteger") {
     if (args.size() != 1) {
-      throw template_render_error{"isInteger() expects 1 argument"};
+      throw inja_render_error{"isInteger() expects 1 argument"};
     }
     return fn_isInteger(args[0]);
   }
 
   if (func_name == "isNone") {
     if (args.size() != 1) {
-      throw template_render_error{"isNone() expects 1 argument"};
+      throw inja_render_error{"isNone() expects 1 argument"};
     }
     return fn_isNone(args[0]);
   }
 
   if (func_name == "isEmpty") {
     if (args.size() != 1) {
-      throw template_render_error{"isEmpty() expects 1 argument"};
+      throw inja_render_error{"isEmpty() expects 1 argument"};
     }
     return fn_isEmpty(args[0]);
   }
 
   if (func_name == "default") {
     if (args.size() != 2) {
-      throw template_render_error{"default() expects 2 arguments"};
+      throw inja_render_error{"default() expects 2 arguments"};
     }
     return fn_default(args[0], args[1]);
   }
 
   if (func_name == "at") {
     if (args.size() != 2) {
-      throw template_render_error{"at() expects 2 arguments"};
+      throw inja_render_error{"at() expects 2 arguments"};
     }
     return fn_at(args[0], args[1]);
   }
 
   if (func_name == "exists") {
     if (args.size() != 1) {
-      throw template_render_error{"exists() expects 1 argument"};
+      throw inja_render_error{"exists() expects 1 argument"};
     }
     return fn_exists(args[0]);
   }
 
   if (func_name == "existsIn") {
     if (args.size() != 2) {
-      throw template_render_error{"existsIn() expects 2 arguments"};
+      throw inja_render_error{"existsIn() expects 2 arguments"};
     }
     return fn_existsIn(args[0], args[1]);
   }
@@ -1491,7 +1491,7 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
     }
   }
 
-  throw template_render_error{"unknown function: " + std::string{func_name}};
+  throw inja_render_error{"unknown function: " + std::string{func_name}};
 }
 
 /**
@@ -1506,11 +1506,11 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
-template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_template_delimiters>
-auto render_program(template_bytecode const& program,
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_inja_delimiters>
+auto render_program(inja_bytecode const& program,
                     inja_object const& root,
                     OutputBuffer& out,
-                    template_runtime_options const* runtime_options = nullptr) -> void {
+                    inja_runtime_options const* runtime_options = nullptr) -> void {
   auto constexpr src = Src.sv();
   auto scopes = std::vector<inja_object>{root};
 
@@ -1522,29 +1522,29 @@ auto render_program(template_bytecode const& program,
       // ノード種別ごとに分岐し、必要に応じて i をジャンプ更新する
       switch (node.kind) {
       // text ノードはそのまま出力に追加する
-      case template_node_kind::text: {
+      case inja_node_kind::text: {
         out.append(src.substr(node.begin, node.end - node.begin));
         ++i;
         break;
       }
 
       // expr ノードは式を評価して出力に追加する
-      case template_node_kind::expr: {
+      case inja_node_kind::expr: {
         auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
         auto value = expr_parser{expr, scopes, runtime_options}.parse();
-        out.append(frozenchars::template_to_string(value));
+        out.append(frozenchars::inja_to_string(value));
         ++i;
         break;
       }
 
       // cond を評価し、then または else 節の範囲だけを再帰実行する
-      case template_node_kind::if_stmt: {
+      case inja_node_kind::if_stmt: {
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const cond = expr_parser{if_condition_expr(stmt), scopes, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
-        if (frozenchars::template_truthy(cond)) {
+        if (frozenchars::inja_truthy(cond)) {
           self(i + 1, then_end);
         } else {
           // else-if 連鎖を順に評価し、最初に真になった分岐だけを実行する。
@@ -1561,14 +1561,14 @@ auto render_program(template_bytecode const& program,
             }
             if (else_stmt.starts_with("else if ")) {
               auto const else_cond = expr_parser{if_condition_expr(else_stmt), scopes, runtime_options}.parse();
-              if (frozenchars::template_truthy(else_cond)) {
+              if (frozenchars::inja_truthy(else_cond)) {
                 self(else_idx + 1, branch_end);
                 break;
               }
               else_idx = else_node.else_index;
               continue;
             }
-            throw template_render_error{"invalid else statement"};
+            throw inja_render_error{"invalid else statement"};
           }
         }
         i = node.end_index + 1;
@@ -1576,14 +1576,14 @@ auto render_program(template_bytecode const& program,
       }
 
       // 配列反復とオブジェクト反復で束縛方法を切り替える
-      case template_node_kind::for_stmt: {
+      case inja_node_kind::for_stmt: {
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const header = parse_for_header(stmt);
         auto iterable = expr_parser{header.expr, scopes, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
-        if (std::holds_alternative<template_array>(iterable.storage)) {
-          auto const& arr = std::get<template_array>(iterable.storage);
+        if (std::holds_alternative<inja_array>(iterable.storage)) {
+          auto const& arr = std::get<inja_array>(iterable.storage);
           for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
             auto frame = inja_object{};
             frame.insert_or_assign(header.value_name, arr[idx]);
@@ -1618,13 +1618,13 @@ auto render_program(template_bytecode const& program,
             ++idx;
           }
         } else {
-          throw template_render_error{"for target must be array or object"};
+          throw inja_render_error{"for target must be array or object"};
         }
         i = node.end_index + 1;
         break;
       }
 
-      case template_node_kind::set_stmt: {
+      case inja_node_kind::set_stmt: {
         // set は式を評価して、現在のスコープ連鎖へ代入する。
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const assignment = parse_set_statement(stmt);
@@ -1634,13 +1634,13 @@ auto render_program(template_bytecode const& program,
         break;
       }
 
-      case template_node_kind::include_stmt: {
+      case inja_node_kind::include_stmt: {
         // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const include_expr = trim_view(stmt.substr(8));
         auto include_name = expr_parser{include_expr, scopes, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
-          throw template_render_error{"include target must evaluate to string"};
+          throw inja_render_error{"include target must evaluate to string"};
         }
         auto const& key = std::get<std::string>(include_name.storage);
         if (runtime_options != nullptr) {
@@ -1656,13 +1656,13 @@ auto render_program(template_bytecode const& program,
             break;
           }
         }
-        throw template_render_error{"unknown include: " + key};
+        throw inja_render_error{"unknown include: " + key};
       }
 
       // ブロックの終了は無視する
-      case template_node_kind::else_stmt:
-      case template_node_kind::endif_stmt:
-      case template_node_kind::endfor_stmt:
+      case inja_node_kind::else_stmt:
+      case inja_node_kind::endif_stmt:
+      case inja_node_kind::endfor_stmt:
         ++i;
         break;
       }
@@ -1672,10 +1672,10 @@ auto render_program(template_bytecode const& program,
   render_range(0, program.count);
 }
 
-template <auto Src, typename Delims = frozenchars::default_template_delimiters>
-auto render_program(template_bytecode const& program,
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters>
+auto render_program(inja_bytecode const& program,
                     inja_object const& root,
-                    template_runtime_options const* runtime_options = nullptr) -> std::string {
+                    inja_runtime_options const* runtime_options = nullptr) -> std::string {
   auto constexpr src = Src.sv();
   auto out = std::string{};
   auto scopes = std::vector<inja_object>{root};
@@ -1688,29 +1688,29 @@ auto render_program(template_bytecode const& program,
       // ノード種別ごとに分岐し、必要に応じて i をジャンプ更新する
       switch (node.kind) {
       // text ノードはそのまま出力に追加する
-      case template_node_kind::text: {
+      case inja_node_kind::text: {
         out.append(src.substr(node.begin, node.end - node.begin));
         ++i;
         break;
       }
 
       // expr ノードは式を評価して出力に追加する
-      case template_node_kind::expr: {
+      case inja_node_kind::expr: {
         auto const expr = trim_view(src.substr(node.begin, node.end - node.begin));
         auto value = expr_parser{expr, scopes, runtime_options}.parse();
-        out.append(frozenchars::template_to_string(value));
+        out.append(frozenchars::inja_to_string(value));
         ++i;
         break;
       }
 
       // cond を評価し、then または else 節の範囲だけを再帰実行する
-      case template_node_kind::if_stmt: {
+      case inja_node_kind::if_stmt: {
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const cond = expr_parser{if_condition_expr(stmt), scopes, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
-        if (frozenchars::template_truthy(cond)) {
+        if (frozenchars::inja_truthy(cond)) {
           self(i + 1, then_end);
         } else {
           // else-if 連鎖を順に評価し、最初に真になった分岐だけを実行する。
@@ -1727,14 +1727,14 @@ auto render_program(template_bytecode const& program,
             }
             if (else_stmt.starts_with("else if ")) {
               auto const else_cond = expr_parser{if_condition_expr(else_stmt), scopes, runtime_options}.parse();
-              if (frozenchars::template_truthy(else_cond)) {
+              if (frozenchars::inja_truthy(else_cond)) {
                 self(else_idx + 1, branch_end);
                 break;
               }
               else_idx = else_node.else_index;
               continue;
             }
-            throw template_render_error{"invalid else statement"};
+            throw inja_render_error{"invalid else statement"};
           }
         }
         i = node.end_index + 1;
@@ -1742,14 +1742,14 @@ auto render_program(template_bytecode const& program,
       }
 
       // 配列反復とオブジェクト反復で束縛方法を切り替える
-      case template_node_kind::for_stmt: {
+      case inja_node_kind::for_stmt: {
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const header = parse_for_header(stmt);
         auto iterable = expr_parser{header.expr, scopes, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
-        if (std::holds_alternative<template_array>(iterable.storage)) {
-          auto const& arr = std::get<template_array>(iterable.storage);
+        if (std::holds_alternative<inja_array>(iterable.storage)) {
+          auto const& arr = std::get<inja_array>(iterable.storage);
           for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
             auto frame = inja_object{};
             frame.insert_or_assign(header.value_name, arr[idx]);
@@ -1784,13 +1784,13 @@ auto render_program(template_bytecode const& program,
             ++idx;
           }
         } else {
-          throw template_render_error{"for target must be array or object"};
+          throw inja_render_error{"for target must be array or object"};
         }
         i = node.end_index + 1;
         break;
       }
 
-      case template_node_kind::set_stmt: {
+      case inja_node_kind::set_stmt: {
         // set は式を評価して、現在のスコープ連鎖へ代入する。
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const assignment = parse_set_statement(stmt);
@@ -1800,13 +1800,13 @@ auto render_program(template_bytecode const& program,
         break;
       }
 
-      case template_node_kind::include_stmt: {
+      case inja_node_kind::include_stmt: {
         // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
         auto const stmt = trim_view(src.substr(node.begin, node.end - node.begin));
         auto const include_expr = trim_view(stmt.substr(8));
         auto include_name = expr_parser{include_expr, scopes, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
-          throw template_render_error{"include target must evaluate to string"};
+          throw inja_render_error{"include target must evaluate to string"};
         }
         auto const& key = std::get<std::string>(include_name.storage);
         if (runtime_options != nullptr) {
@@ -1822,13 +1822,13 @@ auto render_program(template_bytecode const& program,
             break;
           }
         }
-        throw template_render_error{"unknown include: " + key};
+        throw inja_render_error{"unknown include: " + key};
       }
 
       // ブロックの終了は無視する
-      case template_node_kind::else_stmt:
-      case template_node_kind::endif_stmt:
-      case template_node_kind::endfor_stmt:
+      case inja_node_kind::else_stmt:
+      case inja_node_kind::endif_stmt:
+      case inja_node_kind::endfor_stmt:
         ++i;
         break;
       }
@@ -1849,19 +1849,19 @@ namespace frozenchars {
  * @param root ルートコンテキスト（frozen_map）
  * @return 出力文字列
  */
-template <auto Src, typename Delims = frozenchars::default_template_delimiters>
-auto render_template(inja_value const& root) -> std::string {
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters>
+auto render_inja(inja_value const& root) -> std::string {
   if (!std::holds_alternative<inja_object>(root.storage)) {
-    throw template_render_error{"root context must be object"};
+    throw inja_render_error{"root context must be object"};
   }
   auto constexpr program = detail::parse_program<Src, Delims>();
   return detail::render_program<Src, Delims>(program, std::get<inja_object>(root.storage));
 }
 
-template <auto Src, typename Delims = frozenchars::default_template_delimiters>
-auto render_template(inja_value const& root, template_runtime_options const& runtime_options) -> std::string {
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters>
+auto render_inja(inja_value const& root, inja_runtime_options const& runtime_options) -> std::string {
   if (!std::holds_alternative<inja_object>(root.storage)) {
-    throw template_render_error{"root context must be object"};
+    throw inja_render_error{"root context must be object"};
   }
   auto constexpr program = detail::parse_program<Src, Delims>();
   return detail::render_program<Src, Delims>(program, std::get<inja_object>(root.storage), &runtime_options);
@@ -1877,11 +1877,11 @@ auto render_template(inja_value const& root, template_runtime_options const& run
  * @param output 出力バッファ（append() メソッドを呼び出される）
  * @return 成功時は void、エラー時は std::string のエラーメッセージ
  */
-template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_template_delimiters>
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_inja_delimiters>
   requires requires(OutputBuffer& output, std::string_view chunk) {
     output.append(chunk);
   }
-auto render_template(inja_value const& root, OutputBuffer& output) -> std::expected<void, std::string> {
+auto render_inja(inja_value const& root, OutputBuffer& output) -> std::expected<void, std::string> {
   try {
     if (!std::holds_alternative<inja_object>(root.storage)) {
       return std::unexpected(std::string{"root context must be object"});
@@ -1896,13 +1896,13 @@ auto render_template(inja_value const& root, OutputBuffer& output) -> std::expec
   }
 }
 
-template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_template_delimiters>
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::default_inja_delimiters>
   requires requires(OutputBuffer& output, std::string_view chunk) {
     output.append(chunk);
   }
-auto render_template(inja_value const& root,
+auto render_inja(inja_value const& root,
                      OutputBuffer& output,
-                     template_runtime_options const& runtime_options) -> std::expected<void, std::string> {
+                     inja_runtime_options const& runtime_options) -> std::expected<void, std::string> {
   try {
     if (!std::holds_alternative<inja_object>(root.storage)) {
       return std::unexpected(std::string{"root context must be object"});
@@ -1926,15 +1926,15 @@ auto render_template(inja_value const& root,
  * @brief `Src` 固定のテンプレートVMラッパ。
  * @tparam Src テンプレート文字列
  */
-template <auto Src, typename Delims = frozenchars::default_template_delimiters>
-struct template_vm {
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters>
+struct inja_vm {
   /**
    * @brief レンダリングを実行する。
    * @param root ルートコンテキスト
    * @return 出力文字列
    */
   static auto render(inja_value const& root) -> std::string {
-    return render_template<Src, Delims>(root);
+    return render_inja<Src, Delims>(root);
   }
 };
 
@@ -1945,7 +1945,7 @@ namespace frozenchars::inja {
 namespace detail {
 
 template <typename T>
-[[nodiscard]] inline auto to_template_value(T const& v) -> inja_value {
+[[nodiscard]] inline auto to_inja_value(T const& v) -> inja_value {
   if constexpr (std::same_as<std::remove_cvref_t<T>, inja_value>) {
     return v;
   } else if constexpr (std::convertible_to<T, std::string_view>) {
@@ -1956,11 +1956,11 @@ template <typename T>
 }
 
 template <typename T, FrozenString... Keys>
-[[nodiscard]] inline auto make_template_root(frozen_map<T, Keys...> const& root) -> inja_value {
+[[nodiscard]] inline auto make_inja_root(frozen_map<T, Keys...> const& root) -> inja_value {
   auto obj = inja_object{};
   obj.reserve(root.size());
   for (auto const& [k, v] : root) {
-    obj.insert_or_assign(std::string{k}, to_template_value(v));
+    obj.insert_or_assign(std::string{k}, to_inja_value(v));
   }
   return inja_value{std::move(obj)};
 }
@@ -1973,14 +1973,14 @@ template <typename T, FrozenString... Keys>
  * @param root ルートコンテキスト（frozen_map）
  * @return 出力文字列
  */
-template <auto Src, typename Delims = frozenchars::default_template_delimiters, typename T, FrozenString... Keys>
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters, typename T, FrozenString... Keys>
 auto render(frozen_map<T, Keys...> const& root) -> std::string {
-  return frozenchars::render_template<Src, Delims>(detail::make_template_root(root));
+  return frozenchars::render_inja<Src, Delims>(detail::make_inja_root(root));
 }
 
-template <auto Src, typename Delims = frozenchars::default_template_delimiters, typename T, FrozenString... Keys>
-auto render(frozen_map<T, Keys...> const& root, template_runtime_options const& runtime_options) -> std::string {
-  return frozenchars::render_template<Src, Delims>(detail::make_template_root(root), runtime_options);
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters, typename T, FrozenString... Keys>
+auto render(frozen_map<T, Keys...> const& root, inja_runtime_options const& runtime_options) -> std::string {
+  return frozenchars::render_inja<Src, Delims>(detail::make_inja_root(root), runtime_options);
 }
 
 /**
@@ -1993,30 +1993,30 @@ auto render(frozen_map<T, Keys...> const& root, template_runtime_options const& 
  * @param output 出力バッファ（append() メソッドを呼び出される）
  * @return 成功時は void、エラー時は std::string のエラーメッセージ
  */
-template <auto Src, typename Delims = frozenchars::default_template_delimiters, typename T, FrozenString... Keys, typename OutputBuffer>
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters, typename T, FrozenString... Keys, typename OutputBuffer>
   requires requires(OutputBuffer& output, std::string_view chunk) {
     output.append(chunk);
   }
 auto render(frozen_map<T, Keys...> const& root, OutputBuffer& output) -> std::expected<void, std::string> {
-  return frozenchars::render_template<Src, OutputBuffer, Delims>(detail::make_template_root(root), output);
+  return frozenchars::render_inja<Src, OutputBuffer, Delims>(detail::make_inja_root(root), output);
 }
 
-template <auto Src, typename Delims = frozenchars::default_template_delimiters, typename T, FrozenString... Keys, typename OutputBuffer>
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters, typename T, FrozenString... Keys, typename OutputBuffer>
   requires requires(OutputBuffer& output, std::string_view chunk) {
     output.append(chunk);
   }
 auto render(frozen_map<T, Keys...> const& root,
             OutputBuffer& output,
-            template_runtime_options const& runtime_options) -> std::expected<void, std::string> {
-  return frozenchars::render_template<Src, OutputBuffer, Delims>(detail::make_template_root(root), output, runtime_options);
+            inja_runtime_options const& runtime_options) -> std::expected<void, std::string> {
+  return frozenchars::render_inja<Src, OutputBuffer, Delims>(detail::make_inja_root(root), output, runtime_options);
 }
 
 /**
  * @brief `Src` 固定のテンプレートVMラッパ。
  * @tparam Src テンプレート文字列
  */
-template <auto Src, typename Delims = frozenchars::default_template_delimiters>
-struct template_vm {
+template <auto Src, typename Delims = frozenchars::default_inja_delimiters>
+struct vm {
   /**
    * @brief レンダリングを実行する。
    * @param root ルートコンテキスト
