@@ -69,7 +69,7 @@ TEST_CASE("template_vm public API", "[template_vm][api]") {
   auto const root = make_frozen_map<inja_value, "x"_fs>(
     std::pair{"x", inja_value{9}}
   );
-  REQUIRE(vm<src>::render(make_object({{"x", 9}})) == "X=9");
+  REQUIRE(render<src>(make_object({{"x", 9}})) == "X=9");
 }
 
 TEST_CASE("inja::render accepts frozen_map root", "[template_vm][api]") {
@@ -149,9 +149,9 @@ TEST_CASE("template runtime supports include template registry", "[template_vm][
   auto const ctx = make_object({});
 
   auto options = runtime_options{};
-  options.add_include_template("part", "X");
+  options.add_include("part", "X");
 
-  REQUIRE(render<src>(ctx, options) == "AXB");
+  REQUIRE(render<src>(ctx, std::cref(options)) == "AXB");
 }
 
 TEST_CASE("template runtime supports include callback", "[template_vm][include]") {
@@ -163,7 +163,7 @@ TEST_CASE("template runtime supports include callback", "[template_vm][include]"
     return std::string{"<"} + std::string{include_name} + ">";
   };
 
-  REQUIRE(render<src>(ctx, options) == "<dynamic>");
+  REQUIRE(render<src>(ctx, std::cref(options)) == "<dynamic>");
 }
 
 TEST_CASE("template runtime supports custom function callbacks", "[template_vm][callback]") {
@@ -178,5 +178,5 @@ TEST_CASE("template runtime supports custom function callbacks", "[template_vm][
     return inja_value{as_int(args[0]) * 2};
   });
 
-  REQUIRE(render<src>(ctx, options) == "42");
+  REQUIRE(render<src>(ctx, std::cref(options)) == "42");
 }

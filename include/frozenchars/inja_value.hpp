@@ -16,8 +16,6 @@
 #include <unordered_map>
 #define FROZENCHARS_OBJECT_MAP_HEADER
 #define FROZENCHARS_OBJECT_MAP std::unordered_map
-#else
-#include <ankerl/unordered_dense.h>
 #endif
 
 namespace frozenchars::inja {
