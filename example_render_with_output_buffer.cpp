@@ -22,14 +22,14 @@ int main() {
   constexpr auto tmpl = frozenchars::FrozenString{"Hello {{ name }}! Count: {{ count }}"};
 
   // コンテキスト作成
-  auto context = frozenchars::make_inja_object({
-    {"name", frozenchars::inja_value{"World"}},
-    {"count", frozenchars::inja_value{42.0}},
+  auto context = frozenchars::inja::make_object({
+    {"name", frozenchars::inja::inja_value{"World"}},
+    {"count", frozenchars::inja::inja_value{42.0}},
   });
 
   // 方法1: 従来の render_template（std::string を返す）
   try {
-    auto result1 = frozenchars::render_inja<tmpl>(context);
+    auto result1 = frozenchars::inja::render<tmpl>(context);
     std::cout << "Method 1 (std::string): " << result1 << '\n';
   } catch (std::exception const& e) {
     std::cerr << "Error in method 1: " << e.what() << '\n';
@@ -37,7 +37,7 @@ int main() {
 
   // 方法2: カスタム出力バッファを使用（std::expected を返す）
   auto buffer = StringBuffer{};
-  auto result2 = frozenchars::render_inja<tmpl>(context, buffer);
+  auto result2 = frozenchars::inja::render<tmpl>(context, buffer);
 
   if (result2.has_value()) {
     std::cout << "Method 2 (OutputBuffer): " << buffer.result() << '\n';
@@ -46,9 +46,9 @@ int main() {
   }
 
   // エラーケースのテスト: root がオブジェクトでない場合
-  auto non_obj = frozenchars::inja_value{123.0};
+  auto non_obj = frozenchars::inja::inja_value{123.0};
   auto buffer_err = StringBuffer{};
-  auto result_err = frozenchars::render_inja<tmpl>(non_obj, buffer_err);
+  auto result_err = frozenchars::inja::render<tmpl>(non_obj, buffer_err);
 
   if (!result_err.has_value()) {
     std::cout << "Expected error: " << result_err.error() << '\n';

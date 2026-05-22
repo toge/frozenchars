@@ -20,25 +20,25 @@
 #include <ankerl/unordered_dense.h>
 #endif
 
-namespace frozenchars {
+namespace frozenchars::inja {
 
 /**
- * @brief テンプレート値における null を表すタグ型。
+ * @brief テンプレート値における null を表すタグ型
  */
 struct inja_null final {};
 
 /**
- * @brief テンプレート評価時に使う動的値型。
+ * @brief テンプレート評価時に使う動的値型
  */
 struct inja_value;
 
 /**
- * @brief テンプレート配列値の実体型。
+ * @brief テンプレート配列値の実体型
  */
 using inja_array = std::vector<inja_value>;
 
 /**
- * @brief テンプレートオブジェクト値の実体型。
+ * @brief テンプレートオブジェクト値の実体型
  *
  * FROZENCHARS_OBJECT_MAP マクロで選択可能（デフォルト: std::unordered_map）
  * コンパイル時に -DFROZENCHARS_OBJECT_MAP_HEADER や define で指定してカスタマイズ可能。
@@ -47,7 +47,7 @@ using inja_array = std::vector<inja_value>;
 using inja_object = FROZENCHARS_OBJECT_MAP<std::string, inja_value>;
 
 /**
- * @brief テンプレート言語で扱う値の共用体ラッパ。
+ * @brief テンプレート言語で扱う値の共用体ラッパ
  *
  * `null / bool / 整数 / 浮動小数 / 文字列 / 配列 / オブジェクト`
  * を単一の型で扱うためのコンテナ。
@@ -108,7 +108,7 @@ struct inja_value {
   inja_value(Int v) : storage(static_cast<std::int64_t>(v)) {}
 
   /**
-   * @brief 浮動小数型を double 値として保持する。
+   * @brief 浮動小数型を double 値として保持する
    * @tparam Float 浮動小数型
    * @param v 入力値
    */
@@ -120,7 +120,7 @@ struct inja_value {
 /**
  * @brief テンプレート評価時の実行時エラー。
  */
-class inja_render_error : public std::runtime_error {
+class render_error : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
 };
@@ -144,7 +144,7 @@ public:
   if (auto const* p = std::get_if<bool>(&v.storage)) {
     return *p;
   }
-  throw inja_render_error{"value is not bool"};
+  throw render_error{"value is not bool"};
 }
 
 /**
@@ -157,7 +157,7 @@ public:
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     return *p;
   }
-  throw inja_render_error{"value is not int"};
+  throw render_error{"value is not int"};
 }
 
 /**
@@ -176,7 +176,7 @@ public:
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     return static_cast<double>(*p);
   }
-  throw inja_render_error{"value is not number"};
+  throw render_error{"value is not number"};
 }
 
 /**
@@ -189,7 +189,7 @@ public:
   if (auto const* p = std::get_if<std::string>(&v.storage)) {
     return *p;
   }
-  throw inja_render_error{"value is not string"};
+  throw render_error{"value is not string"};
 }
 
 /**
@@ -202,7 +202,7 @@ public:
   if (auto const* p = std::get_if<inja_array>(&v.storage)) {
     return *p;
   }
-  throw inja_render_error{"value is not array"};
+  throw render_error{"value is not array"};
 }
 
 /**
@@ -215,7 +215,7 @@ public:
   if (auto const* p = std::get_if<inja_object>(&v.storage)) {
     return *p;
   }
-  throw inja_render_error{"value is not object"};
+  throw render_error{"value is not object"};
 }
 
 /**
@@ -223,19 +223,19 @@ public:
  * @param items 要素列
  * @return inja_value(配列)
  */
-[[nodiscard]] inline auto make_inja_array(std::initializer_list<inja_value> items) -> inja_value {
+[[nodiscard]] inline auto make_array(std::initializer_list<inja_value> items) -> inja_value {
   return inja_value{inja_array{items}};
 }
 
 /**
  * @brief 初期化リストからオブジェクト値を生成する。
  *
- * メモ: 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
+ * 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
  *
  * @param items キー・値列
  * @return inja_value(オブジェクト)
  */
-[[nodiscard]] inline auto make_inja_object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
+[[nodiscard]] inline auto make_object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
   auto out = inja_object{};
   out.reserve(items.size());
   for (auto const& [k, v] : items) {
@@ -245,15 +245,15 @@ public:
 }
 
 /**
-* @brief inja 互換寄りの真偽値変換を行う。
-*
-* false 扱い: null / false / 0 / 0.0 / 空文字 / 空配列 / 空オブジェクト
-* true 扱い: 上記以外
-*
-* @param v 対象値
-* @return 真偽値
+ * @brief inja 互換寄りの真偽値変換
+ *
+ * false 扱い: null / false / 0 / 0.0 / 空文字 / 空配列 / 空オブジェクト
+ * true 扱い: 上記以外
+ *
+ * @param v 対象値
+ * @return 真偽値
  */
-[[nodiscard]] inline auto inja_truthy(inja_value const& v) -> bool {
+[[nodiscard]] inline auto truthy(inja_value const& v) -> bool {
   if (std::holds_alternative<inja_null>(v.storage)) {
     return false;
   }
@@ -275,44 +275,36 @@ public:
   return !std::get<inja_object>(v.storage).empty();
 }
 
-} // namespace frozenchars
-
-namespace frozenchars::inja {
-
 /**
-* @brief 初期化リストから配列値を生成する。
-* @param items 要素列
-* @return inja_value(配列)
-*/
+ * @brief 初期化リストから配列値を生成する
+ * @param items 要素列
+ * @return inja_value(配列)
+ */
 [[nodiscard]] inline auto array(std::initializer_list<inja_value> items) -> inja_value {
-  return make_inja_array(items);
+  return make_array(items);
 }
 
 /**
-* @brief 初期化リストからオブジェクト値を生成する。
-*
-* メモ: 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
-*
-* @param items キー・値列
-* @return inja_value(オブジェクト)
-*/
+ * @brief 初期化リストからオブジェクト値を生成する
+ *
+ * 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
+ *
+ * @param items キー・値列
+ * @return inja_value(オブジェクト)
+ */
 [[nodiscard]] inline auto object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
-  return make_inja_object(items);
+  return make_object(items);
 }
 
-} // namespace frozenchars::inja
-
-namespace frozenchars {
-
 /**
-* @brief 値をテンプレート出力用文字列に変換する。
-*
-* 配列とオブジェクトは現状の簡易表現（`[array]`, `{object}`）を返す。
-*
-* @param v 対象値
-* @return 出力文字列
-*/
-[[nodiscard]] inline auto inja_to_string(inja_value const& v) -> std::string {
+ * @brief 値をテンプレート出力用文字列に変換する
+ *
+ * 配列とオブジェクトは現状の簡易表現（`[array]`, `{object}`）を返す。
+ *
+ * @param v 対象値
+ * @return 出力文字列
+ */
+[[nodiscard]] inline auto to_string(inja_value const& v) -> std::string {
   if (std::holds_alternative<inja_null>(v.storage)) {
     return "null";
   }
@@ -341,9 +333,12 @@ namespace frozenchars {
   return "{object}";
 }
 
-/// @brief Convert string to uppercase
-/// @param str Input string view
-/// @return Uppercase version of the string
+/**
+ * @brief 文字列を大文字に変換する。
+ *
+ * @param str 入力文字列ビュー
+ * @return 大文字化した文字列
+ */
 [[nodiscard]] inline auto fn_upper(std::string_view str) -> std::string {
   auto result = std::string{str};
   for (auto& c : result) {
@@ -352,9 +347,12 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Convert string to lowercase
-/// @param str Input string view
-/// @return Lowercase version of the string
+/**
+ * @brief 文字列を小文字に変換する。
+ *
+ * @param str 入力文字列ビュー
+ * @return 小文字化した文字列
+ */
 [[nodiscard]] inline auto fn_lower(std::string_view str) -> std::string {
   auto result = std::string{str};
   for (auto& c : result) {
@@ -363,9 +361,12 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Capitalize first character of string
-/// @param str Input string view
-/// @return String with first character capitalized
+/**
+ * @brief 文字列の先頭文字を大文字にする。
+ *
+ * @param str 入力文字列ビュー
+ * @return 先頭文字を大文字にした文字列
+ */
 [[nodiscard]] inline auto fn_capitalize(std::string_view str) -> std::string {
   if (str.empty()) {
     return std::string{str};
@@ -375,11 +376,14 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Replace first occurrence of substring
-/// @param str Input string view
-/// @param old_str Substring to find
-/// @param new_str Replacement substring
-/// @return String with first occurrence replaced
+/**
+ * @brief 文字列中のすべての一致部分を置換する。
+ *
+ * @param str 入力文字列ビュー
+ * @param old_str 検索する部分文字列
+ * @param new_str 置換後の部分文字列
+ * @return 一致をすべて置換した文字列
+ */
 [[nodiscard]] inline auto fn_replace(std::string_view str, std::string_view old_str, std::string_view new_str) -> std::string {
   auto result = std::string{str};
   auto pos = size_t{0};
@@ -390,37 +394,49 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Get length of array
-/// @param arr Input array
-/// @return Number of elements
+/**
+ * @brief 配列の要素数を返す
+ *
+ * @param arr 入力配列
+ * @return 要素数
+ */
 [[nodiscard]] inline auto fn_length(inja_array const& arr) -> std::int64_t {
   return static_cast<std::int64_t>(arr.size());
 }
 
-/// @brief Get first element of array
-/// @param arr Input array
-/// @return First element (throws if empty)
+/**
+ * @brief 配列の先頭要素を返す
+ *
+ * @param arr 入力配列
+ * @return 先頭要素（空なら例外を投げる）
+ */
 [[nodiscard]] inline auto fn_first(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw inja_render_error{"first() called on empty array"};
+    throw render_error{"first() called on empty array"};
   }
   return arr[0];
 }
 
-/// @brief Get last element of array
-/// @param arr Input array
-/// @return Last element (throws if empty)
+/**
+ * @brief 配列の末尾要素を返す
+ *
+ * @param arr 入力配列
+ * @return 末尾要素（空なら例外を投げる）
+ */
 [[nodiscard]] inline auto fn_last(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw inja_render_error{"last() called on empty array"};
+    throw render_error{"last() called on empty array"};
   }
   return arr[arr.size() - 1];
 }
 
-/// @brief Join array elements into string with separator
-/// @param arr Input array
-/// @param sep Separator string
-/// @return Joined string
+/**
+ * @brief 配列の要素を文字列化して、指定された区切り文字で連結する。
+ *
+ * @param arr 入力配列
+ * @param sep 区切り文字列
+ * @return 連結結果
+ */
 [[nodiscard]] inline auto fn_join(inja_array const& arr, std::string_view sep) -> std::string {
   if (arr.empty()) {
     return "";
@@ -448,13 +464,16 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Sort array (creates new sorted copy)
-/// @param arr Input array
-/// @return New sorted array
+/**
+ * @brief 配列をソートする（新しい並び順のコピーを返す）
+ *
+ * @param arr 入力配列
+ * @return ソート済みの新しい配列
+ */
 [[nodiscard]] inline auto fn_sort(inja_array const& arr) -> inja_array {
   auto result = arr;
   std::sort(result.begin(), result.end(), [](inja_value const& a, inja_value const& b) {
-    // Helper lambda to convert to double if possible
+    // 可能なら double に変換するヘルパーラムダ。
     auto to_double = [](inja_value const& v) -> std::optional<double> {
       if (std::holds_alternative<double>(v.storage)) {
         return std::get<double>(v.storage);
@@ -472,12 +491,12 @@ namespace frozenchars {
       return *a_num < *b_num;
     }
 
-    // String comparison
+    // 文字列同士の比較。
     if (std::holds_alternative<std::string>(a.storage) && std::holds_alternative<std::string>(b.storage)) {
       return std::get<std::string>(a.storage) < std::get<std::string>(b.storage);
     }
 
-    // If types differ, numbers come before strings
+    // 型が異なる場合は、数値を文字列より前に置く。
     if (a_num && std::holds_alternative<std::string>(b.storage)) {
       return true;
     }
@@ -490,9 +509,12 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Generate range of integers
-/// @param end Upper bound (exclusive)
-/// @return Array [0, 1, 2, ..., end-1]
+/**
+ * @brief 整数の範囲を生成する
+ *
+ * @param end 上限（含まない）
+ * @return 配列 [0, 1, 2, ..., end-1]
+ */
 [[nodiscard]] inline auto fn_range(std::int64_t end) -> inja_array {
   auto result = inja_array{};
   for (auto i = std::int64_t{0}; i < end; ++i) {
@@ -501,10 +523,13 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Generate range of integers with start and end
-/// @param start Start value (inclusive)
-/// @param end End value (exclusive)
-/// @return Array [start, start+1, ..., end-1]
+/**
+ * @brief 開始値と終了値から整数の範囲を生成する
+ *
+ * @param start 開始値（含む）
+ * @param end 終了値（含まない）
+ * @return 配列 [start, start+1, ..., end-1]
+ */
 [[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end) -> inja_array {
   auto result = inja_array{};
   for (auto i = start; i < end; ++i) {
@@ -513,11 +538,14 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Generate range of integers with start, end, and step
-/// @param start Start value (inclusive)
-/// @param end End value (exclusive)
-/// @param step Step value
-/// @return Array with values spaced by step
+/**
+ * @brief 開始値・終了値・ステップから整数の範囲を生成する
+ *
+ * @param start 開始値（含む）
+ * @param end 終了値（含まない）
+ * @param step ステップ値
+ * @return step 間隔の値を持つ配列
+ */
 [[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end, std::int64_t step) -> inja_array {
   auto result = inja_array{};
   if (step > 0) {
@@ -532,9 +560,12 @@ namespace frozenchars {
   return result;
 }
 
-/// @brief Get absolute value of a number
-/// @param num Input number (int64_t or double)
-/// @return Absolute value with same type as input
+/**
+ * @brief 数値の絶対値を返す
+ *
+ * @param num 入力数値（int64_t または double）
+ * @return 入力と同じ型の絶対値
+ */
 [[nodiscard]] inline auto fn_abs(inja_value const& num) -> inja_value {
   if (std::holds_alternative<std::int64_t>(num.storage)) {
     auto const val = std::get<std::int64_t>(num.storage);
@@ -544,13 +575,16 @@ namespace frozenchars {
     auto const val = std::get<double>(num.storage);
     return inja_value{std::abs(val)};
   }
-  throw inja_render_error{"abs() expects numeric argument"};
+  throw render_error{"abs() expects numeric argument"};
 }
 
-/// @brief Round a number to specified decimal places
-/// @param num Input number (int64_t or double)
-/// @param digits Number of decimal places (default 0)
-/// @return Rounded value as double
+/**
+ * @brief 数値を指定した小数桁で丸める
+ *
+ * @param num 入力数値（int64_t または double）
+ * @param digits 小数桁数
+ * @return 指定した小数桁で丸めた値
+ */
 [[nodiscard]] inline auto fn_round(inja_value const& num, inja_value const& digits) -> inja_value {
   double val = 0.0;
   if (std::holds_alternative<std::int64_t>(num.storage)) {
@@ -558,11 +592,11 @@ namespace frozenchars {
   } else if (std::holds_alternative<double>(num.storage)) {
     val = std::get<double>(num.storage);
   } else {
-    throw inja_render_error{"round() expects numeric first argument"};
+    throw render_error{"round() expects numeric first argument"};
   }
 
   if (!std::holds_alternative<std::int64_t>(digits.storage)) {
-    throw inja_render_error{"round() expects integer second argument"};
+    throw render_error{"round() expects integer second argument"};
   }
 
   auto const places = std::get<std::int64_t>(digits.storage);
@@ -570,9 +604,12 @@ namespace frozenchars {
   return inja_value{std::round(val * factor) / factor};
 }
 
-/// @brief Round a number to 0 decimal places (overload for single argument)
-/// @param num Input number (int64_t or double)
-/// @return Rounded value as double
+/**
+ * @brief 数値を小数 0 桁に丸める（単一引数版）
+ *
+ * @param num 入力数値（int64_t または double）
+ * @return double として丸めた値
+ */
 [[nodiscard]] inline auto fn_round(inja_value const& num) -> inja_value {
   double val = 0.0;
   if (std::holds_alternative<std::int64_t>(num.storage)) {
@@ -580,20 +617,23 @@ namespace frozenchars {
   } else if (std::holds_alternative<double>(num.storage)) {
     val = std::get<double>(num.storage);
   } else {
-    throw inja_render_error{"round() expects numeric argument"};
+    throw render_error{"round() expects numeric argument"};
   }
   return inja_value{std::round(val)};
 }
 
-/// @brief Get maximum value from array of numbers
-/// @param arr Input array
-/// @return Maximum value (int64_t if all integers, double otherwise)
+/**
+ * @brief 数値配列の最大値を返す
+ *
+ * @param arr 入力配列
+ * @return 最大値（すべて整数なら int64_t、それ以外は double）
+ */
 [[nodiscard]] inline auto fn_max(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw inja_render_error{"max() called on empty array"};
+    throw render_error{"max() called on empty array"};
   }
 
-  // First pass: determine if we have any doubles
+  // 先に double が含まれるかを判定する。
   auto has_double = false;
   for (auto const& elem : arr) {
     if (std::holds_alternative<double>(elem.storage)) {
@@ -610,7 +650,7 @@ namespace frozenchars {
       } else if (std::holds_alternative<double>(elem.storage)) {
         max_val = std::max(max_val, std::get<double>(elem.storage));
       } else {
-        throw inja_render_error{"max() array contains non-numeric value"};
+        throw render_error{"max() array contains non-numeric value"};
       }
     }
     return inja_value{max_val};
@@ -620,22 +660,25 @@ namespace frozenchars {
       if (std::holds_alternative<std::int64_t>(elem.storage)) {
         max_int = std::max(max_int, std::get<std::int64_t>(elem.storage));
       } else {
-        throw inja_render_error{"max() array contains non-numeric value"};
+        throw render_error{"max() array contains non-numeric value"};
       }
     }
     return inja_value{max_int};
   }
 }
 
-/// @brief Get minimum value from array of numbers
-/// @param arr Input array
-/// @return Minimum value (int64_t if all integers, double otherwise)
+/**
+ * @brief 数値配列の最小値を返す
+ *
+ * @param arr 入力配列
+ * @return 最小値（すべて整数なら int64_t、それ以外は double）
+ */
 [[nodiscard]] inline auto fn_min(inja_array const& arr) -> inja_value {
   if (arr.empty()) {
-    throw inja_render_error{"min() called on empty array"};
+    throw render_error{"min() called on empty array"};
   }
 
-  // First pass: determine if we have any doubles
+  // 先に double が含まれるかを判定する。
   auto has_double = false;
   for (auto const& elem : arr) {
     if (std::holds_alternative<double>(elem.storage)) {
@@ -652,7 +695,7 @@ namespace frozenchars {
       } else if (std::holds_alternative<double>(elem.storage)) {
         min_val = std::min(min_val, std::get<double>(elem.storage));
       } else {
-        throw inja_render_error{"min() array contains non-numeric value"};
+        throw render_error{"min() array contains non-numeric value"};
       }
     }
     return inja_value{min_val};
@@ -662,61 +705,73 @@ namespace frozenchars {
       if (std::holds_alternative<std::int64_t>(elem.storage)) {
         min_int = std::min(min_int, std::get<std::int64_t>(elem.storage));
       } else {
-        throw inja_render_error{"min() array contains non-numeric value"};
+        throw render_error{"min() array contains non-numeric value"};
       }
     }
     return inja_value{min_int};
   }
 }
 
-/// @brief Check if a number is even
-/// @param num Input integer
-/// @return true if even, false if odd
+/**
+ * @brief 数値が偶数か判定する。
+ *
+ * @param num 入力整数
+ * @return 偶数なら true、奇数なら false
+ */
 [[nodiscard]] inline auto fn_even(inja_value const& num) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
-    throw inja_render_error{"even() expects integer argument"};
+    throw render_error{"even() expects integer argument"};
   }
   auto const val = std::get<std::int64_t>(num.storage);
   return inja_value{val % 2 == 0};
 }
 
-/// @brief Check if a number is odd
-/// @param num Input integer
-/// @return true if odd, false if even
+/**
+ * @brief 数値が奇数か判定する。
+ *
+ * @param num 入力整数
+ * @return 奇数なら true、偶数なら false
+ */
 [[nodiscard]] inline auto fn_odd(inja_value const& num) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
-    throw inja_render_error{"odd() expects integer argument"};
+    throw render_error{"odd() expects integer argument"};
   }
   auto const val = std::get<std::int64_t>(num.storage);
   return inja_value{val % 2 != 0};
 }
 
-/// @brief Check if a number is divisible by another
-/// @param num Dividend (integer)
-/// @param divisor Divisor (integer, non-zero)
-/// @return true if divisible, false otherwise
+/**
+ * @brief ある数値が別の数値で割り切れるか判定する。
+ *
+ * @param num 被除数（整数）
+ * @param divisor 除数（0 以外の整数）
+ * @return 割り切れるなら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_divisibleBy(inja_value const& num, inja_value const& divisor) -> inja_value {
   if (!std::holds_alternative<std::int64_t>(num.storage)) {
-    throw inja_render_error{"divisibleBy() expects integer first argument"};
+    throw render_error{"divisibleBy() expects integer first argument"};
   }
   if (!std::holds_alternative<std::int64_t>(divisor.storage)) {
-    throw inja_render_error{"divisibleBy() expects integer second argument"};
+    throw render_error{"divisibleBy() expects integer second argument"};
   }
 
   auto const val = std::get<std::int64_t>(num.storage);
   auto const div = std::get<std::int64_t>(divisor.storage);
 
   if (div == 0) {
-    throw inja_render_error{"divisibleBy() divisor cannot be zero"};
+    throw render_error{"divisibleBy() divisor cannot be zero"};
   }
 
   return inja_value{val % div == 0};
 }
 
-/// @brief Convert value to integer
-/// @param val Input value (any type)
-/// @return Integer conversion
-/// @throws inja_render_error if conversion is invalid (object type or non-convertible string)
+/**
+ * @brief 値を整数に変換する
+ *
+ * @param val 入力値（任意の型）
+ * @return 整数変換結果
+ * @throws inja_render_error 変換できない場合（オブジェクト型や変換不能な文字列）
+ */
 [[nodiscard]] inline auto fn_int(inja_value const& val) noexcept(false) -> inja_value {
   if (std::holds_alternative<std::int64_t>(val.storage)) {
     return val;
@@ -733,7 +788,7 @@ namespace frozenchars {
       auto const result = std::stoll(str, nullptr, 10);
       return inja_value{result};
     } catch (...) {
-      throw inja_render_error{"int() cannot convert string to integer"};
+      throw render_error{"int() cannot convert string to integer"};
     }
   }
   if (std::holds_alternative<inja_array>(val.storage)) {
@@ -743,13 +798,16 @@ namespace frozenchars {
   if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{0};
   }
-  throw inja_render_error{"int() cannot convert object type"};
+  throw render_error{"int() cannot convert object type"};
 }
 
-/// @brief Convert value to float
-/// @param val Input value (any type)
-/// @return Float conversion
-/// @throws inja_render_error if conversion is invalid (object type or non-convertible string)
+/**
+ * @brief 値を浮動小数に変換する
+ *
+ * @param val 入力値（任意の型）
+ * @return 浮動小数変換結果
+ * @throws inja_render_error 変換できない場合（オブジェクト型や変換不能な文字列）
+ */
 [[nodiscard]] inline auto fn_float(inja_value const& val) noexcept(false) -> inja_value {
   if (std::holds_alternative<double>(val.storage)) {
     return val;
@@ -766,7 +824,7 @@ namespace frozenchars {
       auto const result = std::stod(str);
       return inja_value{result};
     } catch (...) {
-      throw inja_render_error{"float() cannot convert string to float"};
+      throw render_error{"float() cannot convert string to float"};
     }
   }
   if (std::holds_alternative<inja_array>(val.storage)) {
@@ -776,26 +834,35 @@ namespace frozenchars {
   if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{0.0};
   }
-  throw inja_render_error{"float() cannot convert object type"};
+  throw render_error{"float() cannot convert object type"};
 }
 
-/// @brief Check if value is a string
-/// @param val Input value
-/// @return true if value is string type, false otherwise
+/**
+ * @brief 値が文字列か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value 文字列型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isString(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<std::string>(val.storage)};
 }
 
-/// @brief Check if value is an array
-/// @param val Input value
-/// @return true if value is array type, false otherwise
+/**
+ * @brief 値が配列か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value 配列型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isArray(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<inja_array>(val.storage)};
 }
 
-/// @brief Check if value is numeric (int64_t or double)
-/// @param val Input value
-/// @return true if value is numeric type, false otherwise
+/**
+ * @brief 値が数値型か判定する（int64_t または double）。
+ *
+ * @param val 判定対象の値
+ * @return inja_value 数値型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isNumber(inja_value const& val) -> inja_value {
   return inja_value{
     std::holds_alternative<std::int64_t>(val.storage) ||
@@ -803,44 +870,62 @@ namespace frozenchars {
   };
 }
 
-/// @brief Check if value is an object
-/// @param val Input value
-/// @return true if value is object type, false otherwise
+/**
+ * @brief 値がオブジェクトか判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value オブジェクト型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isObject(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<inja_object>(val.storage)};
 }
 
-/// @brief Check if value is a boolean
-/// @param val Input value
-/// @return true if value is bool type, false otherwise
+/**
+ * @brief 値が真偽値か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value bool 型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isBoolean(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<bool>(val.storage)};
 }
 
-/// @brief Check if value is a float (double)
-/// @param val Input value
-/// @return true if value is double type, false otherwise
+/**
+ * @brief 値が浮動小数か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value double 型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isFloat(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<double>(val.storage)};
 }
 
-/// @brief Check if value is an integer (int64_t)
-/// @param val Input value
-/// @return true if value is int64_t type, false otherwise
+/**
+ * @brief 値が整数か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value int64_t 型なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isInteger(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<std::int64_t>(val.storage)};
 }
 
-/// @brief Check if value is null
-/// @param val Input value
-/// @return true if value is null, false otherwise
+/**
+ * @brief 値が null か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value null なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isNone(inja_value const& val) -> inja_value {
   return inja_value{std::holds_alternative<inja_null>(val.storage)};
 }
 
-/// @brief Check if value is empty
-/// @param val Input value
-/// @return true if value is empty (empty string, empty array, empty object, or null)
+/**
+ * @brief 値が空か判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value 空なら true、それ以外は false
+ */
 [[nodiscard]] inline auto fn_isEmpty(inja_value const& val) -> inja_value {
   if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{true};
@@ -857,11 +942,14 @@ namespace frozenchars {
   return inja_value{false};
 }
 
-// ============ Utility Functions ============
+// ============ ユーティリティ関数 ============
 
-/// @brief Helper to check if a value is considered "empty" for the default function
-/// @param val Input value
-/// @return true if value is null or empty container/string
+/**
+ * @brief default 関数で「空」とみなす値か判定する補助関数。
+ *
+ * @param val 入力値
+ * @return null または空のコンテナ/文字列なら true、それ以外は false
+ */
 [[nodiscard]] inline auto is_empty_value(inja_value const& val) -> bool {
   if (std::holds_alternative<inja_null>(val.storage)) {
     return true;
@@ -878,10 +966,14 @@ namespace frozenchars {
   return false;
 }
 
-/// @brief Helper to check if two inja_values are equal
-/// @param lhs Left hand side value
-/// @param rhs Right hand side value
-/// @return true if values are equal
+/**
+ * @brief 2つの inja_value が等しいか判定する
+ *
+ * @param lhs 左辺値
+ * @param rhs 右辺値
+ * @return true 等しければ true
+ * @return false 等しくなければ false
+ */
 [[nodiscard]] inline auto values_equal(inja_value const& lhs, inja_value const& rhs) -> bool {
   if (std::holds_alternative<inja_null>(lhs.storage) && std::holds_alternative<inja_null>(rhs.storage)) {
     return true;
@@ -915,26 +1007,32 @@ namespace frozenchars {
   return false;
 }
 
-/// @brief Returns value if not empty, otherwise returns fallback
-/// @param val Input value to test
-/// @param fallback Fallback value if val is empty
-/// @return val if non-empty, fallback otherwise
+/**
+ * @brief 空でなければ値を返し、空ならフォールバックを返す
+ *
+ * @param val 判定対象の値
+ * @param fallback val が空の場合に返す値
+ * @return inja_value 非空なら val、そうでなければ fallback
+ */
 [[nodiscard]] inline auto fn_default(inja_value const& val, inja_value const& fallback) noexcept(false) -> inja_value {
   return is_empty_value(val) ? fallback : val;
 }
 
-/// @brief Gets element from array at index (0-based)
-/// @param arr Array to access
-/// @param index Index to retrieve (supports negative indices from end)
-/// @return Element at index
-/// @throws inja_render_error on invalid input or out of bounds
+/**
+ * @brief 配列の指定インデックスの要素を取得する（0 始まり）
+ *
+ * @param arr 参照する配列
+ * @param index 取得インデックス（末尾からの負のインデックスにも対応）
+ * @return inja_value 指定位置の要素
+ * @throws inja_render_error 不正な入力または範囲外の場合
+ */
 [[nodiscard]] inline auto fn_at(inja_value const& arr, inja_value const& index) noexcept(false) -> inja_value {
   if (!std::holds_alternative<inja_array>(arr.storage)) {
-    throw inja_render_error{"at() expects array as first argument"};
+    throw render_error{"at() expects array as first argument"};
   }
 
   if (!std::holds_alternative<std::int64_t>(index.storage)) {
-    throw inja_render_error{"at() expects integer as index"};
+    throw render_error{"at() expects integer as index"};
   }
 
   auto const& array = std::get<inja_array>(arr.storage);
@@ -946,15 +1044,18 @@ namespace frozenchars {
   }
 
   if (idx < 0 || idx >= size) {
-    throw inja_render_error{"at() index out of bounds"};
+    throw render_error{"at() index out of bounds"};
   }
 
   return array[static_cast<std::size_t>(idx)];
 }
 
-/// @brief Checks if array or object is not empty
-/// @param val Array or object to check
-/// @return true if val is non-empty array or object, false otherwise
+/**
+ * @brief 配列またはオブジェクトが存在するか判定する
+ *
+ * @param val 判定対象の値
+ * @return inja_value 存在すれば true、存在しなければ false
+ */
 [[nodiscard]] inline auto fn_exists(inja_value const& val) noexcept(false) -> inja_value {
   if (auto const* p = std::get_if<inja_array>(&val.storage)) {
     return inja_value{!p->empty()};
@@ -965,11 +1066,14 @@ namespace frozenchars {
   return inja_value{false};
 }
 
-/// @brief Checks if value exists in array or matches value in object
-/// @param val Value to search for
-/// @param container Array or object to search in
-/// @return true if value found in array or matches any object value
-/// @throws inja_render_error if container is not array/object
+/**
+ * @brief 配列内に値が存在するか、またはオブジェクト値に一致するか判定する
+ *
+ * @param val 探す値
+ * @param container 探索対象の配列またはオブジェクト
+ * @return inja_value 配列で見つかるか、オブジェクトのいずれかの値に一致すれば true
+ * @throws inja_render_error container が配列/オブジェクトでない場合
+ */
 [[nodiscard]] inline auto fn_existsIn(inja_value const& val, inja_value const& container) noexcept(false) -> inja_value {
   if (auto const* p = std::get_if<inja_array>(&container.storage)) {
     for (auto const& elem : *p) {
@@ -989,11 +1093,7 @@ namespace frozenchars {
     return inja_value{false};
   }
 
-  throw inja_render_error{"existsIn() expects array or object as second argument"};
+  throw render_error{"existsIn() expects array or object as second argument"};
 }
-
-} // namespace frozenchars
-
-namespace frozenchars::inja {
 
 } // namespace frozenchars::inja
