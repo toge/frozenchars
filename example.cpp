@@ -4,7 +4,7 @@
 #endif
 
 #include "frozenchars.hpp"
-#include "frozenchars/frozen_map.hpp"
+#include "frozenchars/map.hpp"
 
 int main() {
   auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars::Hex(255));

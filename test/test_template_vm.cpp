@@ -45,6 +45,49 @@ TEST_CASE("template runtime supports for key, value", "[template_vm][runtime]") 
   REQUIRE(out.find("age=18;") != std::string::npos);
 }
 
+TEST_CASE("template runtime reuses array loop frame", "[template_vm][runtime]") {
+  constexpr auto src = "{% for x in items %}{{ loop.index }},{{ x }}|{% endfor %}"_fs;
+  auto const ctx = make_object({
+    {"items", make_array({1, 2, 3})},
+  });
+  REQUIRE(render<src>(ctx) == "0,1|1,2|2,3|");
+}
+
+TEST_CASE("template runtime sets loop flags", "[template_vm][runtime]") {
+  constexpr auto src = "{% for x in items %}{{ loop.is_first }},{{ loop.is_last }}|{% endfor %}"_fs;
+  auto const ctx = make_object({
+    {"items", make_array({1, 2, 3})},
+  });
+  REQUIRE(render<src>(ctx) == "true,false|false,false|false,true|");
+}
+
+TEST_CASE("template runtime reuses object loop frame", "[template_vm][runtime]") {
+  constexpr auto src = "{% for k, v in obj %}{{ k }}={{ v }};{% endfor %}"_fs;
+  auto const ctx = make_object({
+    {"obj", make_object({{"name", "tom"}, {"age", 18}})},
+  });
+  auto const out = render<src>(ctx);
+  REQUIRE(out.find("name=tom;") != std::string::npos);
+  REQUIRE(out.find("age=18;") != std::string::npos);
+}
+
+TEST_CASE("template runtime supports nested for loops", "[template_vm][runtime]") {
+  constexpr auto src = "{% for row in rows %}[{% for x in row %}{{ loop.index }}:{{ x }},{% endfor %}]{% endfor %}"_fs;
+  auto const ctx = make_object({
+    {"rows", make_array({make_array({10, 20}), make_array({30})})},
+  });
+  REQUIRE(render<src>(ctx) == "[0:10,1:20,][0:30,]");
+}
+
+TEST_CASE("template runtime handles empty for iterables", "[template_vm][runtime]") {
+  constexpr auto array_src = "A{% for x in items %}X{% endfor %}B"_fs;
+  constexpr auto object_src = "C{% for k, v in obj %}Y{% endfor %}D"_fs;
+  auto const array_ctx = make_object({{"items", make_array({})}});
+  auto const object_ctx = make_object({{"obj", make_object({})}});
+  REQUIRE(render<array_src>(array_ctx) == "AB");
+  REQUIRE(render<object_src>(object_ctx) == "CD");
+}
+
 TEST_CASE("template runtime short-circuit", "[template_vm][runtime]") {
   constexpr auto src = "{% if ok or missing.value %}yes{% else %}no{% endif %}"_fs;
   auto const ctx = make_object({{"ok", true}});

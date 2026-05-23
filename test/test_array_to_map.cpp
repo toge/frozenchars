@@ -1,5 +1,5 @@
 #include "catch2/catch_all.hpp"
-#include "frozenchars/frozen_map.hpp"
+#include "frozenchars/map.hpp"
 #include "frozenchars/split.hpp"
 #include "frozenchars/literals.hpp"
 

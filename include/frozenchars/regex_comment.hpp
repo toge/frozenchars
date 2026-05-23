@@ -1,6 +1,6 @@
 #pragma once
 
-#include "frozen_string.hpp"
+#include "string.hpp"
 #include "string_ops.hpp"
 
 namespace frozenchars {

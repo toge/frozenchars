@@ -1,11 +1,12 @@
 #pragma once
 
-#include "frozen_string.hpp"
-#include "detail/char_utils.hpp"
 #include <cstddef>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
+
+#include "string.hpp"
+#include "detail/char_utils.hpp"
 
 namespace frozenchars {
 

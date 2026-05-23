@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "frozen_string.hpp"
+#include "string.hpp"
 #include "inja_value.hpp"
 
 namespace frozenchars::inja {
@@ -131,6 +131,15 @@ struct node {
   std::size_t else_index{std::numeric_limits<std::size_t>::max()};
   /// if / for ノードに紐づく閉じノード位置
   std::size_t end_index{std::numeric_limits<std::size_t>::max()};
+
+  /// 解析済みオフセット（consteval 段階で確定）
+  std::size_t aux_begin{std::numeric_limits<std::size_t>::max()};
+  std::size_t aux_end{std::numeric_limits<std::size_t>::max()};
+  std::size_t aux2_begin{std::numeric_limits<std::size_t>::max()};
+  std::size_t aux2_end{std::numeric_limits<std::size_t>::max()};
+  std::size_t aux3_begin{std::numeric_limits<std::size_t>::max()};
+  std::size_t aux3_end{std::numeric_limits<std::size_t>::max()};
+  bool aux_flag{};
 };
 
 /**
@@ -143,6 +152,8 @@ struct bytecode {
   std::array<node, MAX_NODES> nodes{};
   /// 使用ノード数
   std::size_t count{};
+  /// for の最大ネスト深さ
+  std::size_t max_for_depth{};
 };
 
 /**
@@ -283,6 +294,8 @@ consteval auto parse_program() -> bytecode {
 
   auto stack = std::array<std::size_t, MAX_NODES>{};
   auto stack_size = std::size_t{0};
+  auto for_depth = std::size_t{0};
+  auto max_for_depth = std::size_t{0};
 
   auto push_node = [&](node_kind kind, std::size_t begin, std::size_t end) consteval -> std::size_t {
     if (program.count >= MAX_NODES) {
@@ -299,6 +312,14 @@ consteval auto parse_program() -> bytecode {
   auto process_statement = [&](std::string_view stmt, std::size_t begin, std::size_t end) consteval {
     if (stmt.starts_with("if ")) {
       auto const idx = push_node(node_kind::if_stmt, begin, end);
+      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
+      auto const cond_body = stmt.substr(3);
+      auto const cond_sv = trim_view(cond_body);
+      if (cond_sv.empty()) {
+        throw "template parse error: invalid if statement";
+      }
+      program.nodes[idx].aux_begin = stmt_offset + 3 + static_cast<std::size_t>(cond_sv.data() - cond_body.data());
+      program.nodes[idx].aux_end = program.nodes[idx].aux_begin + cond_sv.size();
       stack[stack_size] = idx;
       ++stack_size;
       return;
@@ -310,6 +331,7 @@ consteval auto parse_program() -> bytecode {
       }
       auto const if_idx = stack[stack_size - 1];
       auto const else_idx = push_node(node_kind::else_stmt, begin, end);
+      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
 
       if (program.nodes[if_idx].else_index == std::numeric_limits<std::size_t>::max()) {
         program.nodes[if_idx].else_index = else_idx;
@@ -326,6 +348,16 @@ consteval auto parse_program() -> bytecode {
           throw "template parse error: unexpected else";
         }
         program.nodes[tail_else].else_index = else_idx;
+      }
+
+      if (stmt.starts_with("else if ")) {
+        auto const cond_body = stmt.substr(7);
+        auto const cond_sv = trim_view(cond_body);
+        if (cond_sv.empty()) {
+          throw "template parse error: invalid if statement";
+        }
+        program.nodes[else_idx].aux_begin = stmt_offset + 7 + static_cast<std::size_t>(cond_sv.data() - cond_body.data());
+        program.nodes[else_idx].aux_end = program.nodes[else_idx].aux_begin + cond_sv.size();
       }
       return;
     }
@@ -344,8 +376,43 @@ consteval auto parse_program() -> bytecode {
         throw "template parse error: invalid for statement";
       }
       auto const idx = push_node(node_kind::for_stmt, begin, end);
+      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
+      auto body = stmt.substr(4);
+      auto const in_pos_local = body.find(" in ");
+      auto const lhs = trim_view(body.substr(0, in_pos_local));
+      auto const rhs = trim_view(body.substr(in_pos_local + 4));
+      if (rhs.empty()) {
+        throw "template parse error: invalid for statement";
+      }
+      auto const comma = lhs.find(',');
+      if (comma == std::string_view::npos) {
+        auto const val_sv = trim_view(lhs);
+        if (val_sv.empty()) {
+          throw "template parse error: invalid for statement";
+        }
+        program.nodes[idx].aux2_begin = stmt_offset + 4 + static_cast<std::size_t>(val_sv.data() - body.data());
+        program.nodes[idx].aux2_end = program.nodes[idx].aux2_begin + val_sv.size();
+        program.nodes[idx].aux_flag = false;
+      } else {
+        auto const key_sv = trim_view(lhs.substr(0, comma));
+        auto const val_sv = trim_view(lhs.substr(comma + 1));
+        if (key_sv.empty() || val_sv.empty()) {
+          throw "template parse error: invalid for statement";
+        }
+        program.nodes[idx].aux3_begin = stmt_offset + 4 + static_cast<std::size_t>(key_sv.data() - body.data());
+        program.nodes[idx].aux3_end = program.nodes[idx].aux3_begin + key_sv.size();
+        program.nodes[idx].aux2_begin = stmt_offset + 4 + static_cast<std::size_t>(val_sv.data() - body.data());
+        program.nodes[idx].aux2_end = program.nodes[idx].aux2_begin + val_sv.size();
+        program.nodes[idx].aux_flag = true;
+      }
+      program.nodes[idx].aux_begin = stmt_offset + 4 + static_cast<std::size_t>(rhs.data() - body.data());
+      program.nodes[idx].aux_end = program.nodes[idx].aux_begin + rhs.size();
       stack[stack_size] = idx;
       ++stack_size;
+      ++for_depth;
+      if (for_depth > max_for_depth) {
+        max_for_depth = for_depth;
+      }
       return;
     }
     if (stmt == "endfor") {
@@ -356,15 +423,39 @@ consteval auto parse_program() -> bytecode {
       auto const end_idx = push_node(node_kind::endfor_stmt, begin, end);
       program.nodes[for_idx].end_index = end_idx;
       --stack_size;
+      --for_depth;
       return;
     }
     // set/include は単独ステートメントノードとして保持し、実行時に評価する。
     if (stmt.starts_with("set ")) {
-      std::ignore = push_node(node_kind::set_stmt, begin, end);
+      auto const idx = push_node(node_kind::set_stmt, begin, end);
+      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
+      auto body = stmt.substr(4);
+      auto const eq_pos_local = body.find('=');
+      if (eq_pos_local == std::string_view::npos) {
+        throw "template parse error: invalid set statement";
+      }
+      auto const target_sv = trim_view(body.substr(0, eq_pos_local));
+      auto const expr_sv = trim_view(body.substr(eq_pos_local + 1));
+      if (target_sv.empty() || expr_sv.empty()) {
+        throw "template parse error: invalid set statement";
+      }
+      program.nodes[idx].aux2_begin = stmt_offset + 4 + static_cast<std::size_t>(target_sv.data() - body.data());
+      program.nodes[idx].aux2_end = program.nodes[idx].aux2_begin + target_sv.size();
+      program.nodes[idx].aux_begin = stmt_offset + 4 + static_cast<std::size_t>(expr_sv.data() - body.data());
+      program.nodes[idx].aux_end = program.nodes[idx].aux_begin + expr_sv.size();
       return;
     }
     if (stmt.starts_with("include ")) {
-      std::ignore = push_node(node_kind::include_stmt, begin, end);
+      auto const idx = push_node(node_kind::include_stmt, begin, end);
+      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
+      auto const name_body = stmt.substr(8);
+      auto const name_sv = trim_view(name_body);
+      if (name_sv.empty()) {
+        throw "template parse error: invalid include statement";
+      }
+      program.nodes[idx].aux_begin = stmt_offset + 8 + static_cast<std::size_t>(name_sv.data() - name_body.data());
+      program.nodes[idx].aux_end = program.nodes[idx].aux_begin + name_sv.size();
       return;
     }
     throw "template parse error: unsupported statement";
@@ -436,6 +527,7 @@ consteval auto parse_program() -> bytecode {
   if (stack_size != 0) {
     throw "template parse error: unclosed block";
   }
+  program.max_for_depth = max_for_depth;
   return program;
 }
 
@@ -503,6 +595,54 @@ consteval auto parse_program() -> bytecode {
     return std::get<std::string>(lhs.storage) < std::get<std::string>(rhs.storage);
   }
   throw render_error{"comparison requires same type"};
+}
+
+/**
+ * @brief inja_value の文字列表現を出力バッファへ直接書き込む。
+ *
+ * @param out 追記先バッファ（std::string または append(string_view) を持つ型）
+ * @param v 書き込む値
+ * @throws render_error 文字列化できない型（array / object）の場合
+ */
+template <typename OutputBuffer>
+inline auto append_value(OutputBuffer& out, inja_value const& v) -> void {
+  if (auto const* p = std::get_if<std::string>(&v.storage)) {
+    out.append(std::string_view{*p});
+    return;
+  }
+  if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
+    auto buf = std::array<char, 24>{};
+    auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), *p);
+    if (ec == std::errc{}) {
+      out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
+    }
+    return;
+  }
+  if (auto const* p = std::get_if<double>(&v.storage)) {
+    auto buf = std::array<char, 32>{};
+    auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), *p);
+    if (ec == std::errc{}) {
+      out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
+    }
+    return;
+  }
+  if (auto const* p = std::get_if<bool>(&v.storage)) {
+    out.append(*p ? std::string_view{"true"} : std::string_view{"false"});
+    return;
+  }
+  if (std::holds_alternative<inja_null>(v.storage)) {
+    out.append(std::string_view{"null"});
+    return;
+  }
+  if (std::holds_alternative<inja_array>(v.storage)) {
+    out.append(std::string_view{"[array]"});
+    return;
+  }
+  if (std::holds_alternative<inja_object>(v.storage)) {
+    out.append(std::string_view{"{object}"});
+    return;
+  }
+  throw render_error{"cannot convert value to string"};
 }
 
 /// @brief Forward declaration of evaluate_function
@@ -1079,84 +1219,6 @@ private:
 };
 
 /**
- * @brief for 文ヘッダを分解した結果。
- */
-struct for_header {
-  /// key 変数名（key,value 形式時のみ使用）
-  std::string key_name{};
-  /// value 変数名
-  std::string value_name{};
-  /// 反復対象式
-  std::string_view expr{};
-  /// key,value 形式かどうか
-  bool has_key{};
-};
-
-/**
- * @brief `{% for ... in ... %}` 文ヘッダを解析する。
- * @param stmt ステートメント本体
- * @return 分解済みヘッダ
- * @throws render_error 構文が不正な場合
- */
-[[nodiscard]] inline auto parse_for_header(std::string_view stmt) -> for_header {
-  auto body = trim_view(stmt);
-  if (!body.starts_with("for ")) {
-    throw render_error{"invalid for statement"};
-  }
-  body.remove_prefix(4);
-  auto const in_pos = body.find(" in ");
-  if (in_pos == std::string_view::npos) {
-    throw render_error{"invalid for statement"};
-  }
-  auto lhs = trim_view(body.substr(0, in_pos));
-  auto rhs = trim_view(body.substr(in_pos + 4));
-  if (rhs.empty()) {
-    throw render_error{"invalid for statement"};
-  }
-  auto header = for_header{};
-  auto comma = lhs.find(',');
-  if (comma == std::string_view::npos) {
-    header.value_name = std::string{trim_view(lhs)};
-    header.has_key = false;
-  } else {
-    header.key_name = std::string{trim_view(lhs.substr(0, comma))};
-    header.value_name = std::string{trim_view(lhs.substr(comma + 1))};
-    header.has_key = true;
-  }
-  if (header.value_name.empty() || (header.has_key && header.key_name.empty())) {
-    throw render_error{"invalid for statement"};
-  }
-  header.expr = rhs;
-  return header;
-}
-
-struct set_statement {
-  std::string_view target{};
-  std::string_view expr{};
-};
-
-/**
- * @brief `{% set a.b = expr %}` を `target` と `expr` に分解する。
- */
-[[nodiscard]] inline auto parse_set_statement(std::string_view stmt) -> set_statement {
-  auto body = trim_view(stmt);
-  if (!body.starts_with("set ")) {
-    throw render_error{"invalid set statement"};
-  }
-  body.remove_prefix(4);
-  auto const eq_pos = body.find('=');
-  if (eq_pos == std::string_view::npos) {
-    throw render_error{"invalid set statement"};
-  }
-  auto const target = trim_view(body.substr(0, eq_pos));
-  auto const expr = trim_view(body.substr(eq_pos + 1));
-  if (target.empty() || expr.empty()) {
-    throw render_error{"invalid set statement"};
-  }
-  return set_statement{target, expr};
-}
-
-/**
  * @brief ドット区切りパスへ値を代入する（必要なら中間 object を生成）。
  */
 inline auto assign_path(inja_object& scope, std::string_view path, inja_value value) -> void {
@@ -1213,19 +1275,7 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
   assign_path(scopes.back(), path, std::move(value));
 }
 
-/**
- * @brief if / else if 文から条件式部分のみを取り出す。
- */
-[[nodiscard]] inline auto if_condition_expr(std::string_view stmt) -> std::string_view {
-  auto body = trim_view(stmt);
-  if (body.starts_with("if ")) {
-    return trim_view(body.substr(2));
-  }
-  if (body.starts_with("else if ")) {
-    return trim_view(body.substr(7));
-  }
-  throw render_error{"invalid if statement"};
-}
+using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
 
 /**
  * @brief 関数名と引数から組み込み関数を評価する
@@ -1238,300 +1288,276 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
 [[nodiscard]] inline auto evaluate_function(std::string_view func_name,
                                             std::vector<inja_value> const& args,
                                             runtime_options_ref runtime_options) -> inja_value {
-  if (func_name == "upper") {
-    if (args.size() != 1) {
-      throw render_error{"upper() expects 1 argument"};
-    }
-    if (!std::holds_alternative<std::string>(args[0].storage)) {
-      throw render_error{"upper() expects string argument"};
-    }
-    return inja_value{fn_upper(std::get<std::string>(args[0].storage))};
-  }
+  static auto const builtin_dispatch = std::unordered_map<std::string_view, builtin_fn>{
+    {"upper", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"upper() expects 1 argument"};
+       }
+       if (!std::holds_alternative<std::string>(a[0].storage)) {
+         throw render_error{"upper() expects string argument"};
+       }
+       return inja_value{fn_upper(std::get<std::string>(a[0].storage))};
+     }},
+    {"lower", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"lower() expects 1 argument"};
+       }
+       if (!std::holds_alternative<std::string>(a[0].storage)) {
+         throw render_error{"lower() expects string argument"};
+       }
+       return inja_value{fn_lower(std::get<std::string>(a[0].storage))};
+     }},
+    {"capitalize", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"capitalize() expects 1 argument"};
+       }
+       if (!std::holds_alternative<std::string>(a[0].storage)) {
+         throw render_error{"capitalize() expects string argument"};
+       }
+       return inja_value{fn_capitalize(std::get<std::string>(a[0].storage))};
+     }},
+    {"replace", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 3) {
+         throw render_error{"replace() expects 3 arguments"};
+       }
+       if (!std::holds_alternative<std::string>(a[0].storage) ||
+           !std::holds_alternative<std::string>(a[1].storage) ||
+           !std::holds_alternative<std::string>(a[2].storage)) {
+         throw render_error{"replace() expects 3 string arguments"};
+       }
+       return inja_value{fn_replace(
+         std::get<std::string>(a[0].storage),
+         std::get<std::string>(a[1].storage),
+         std::get<std::string>(a[2].storage)
+       )};
+     }},
+    {"length", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"length() expects 1 argument"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"length() expects array argument"};
+       }
+       return inja_value{fn_length(std::get<inja_array>(a[0].storage))};
+     }},
+    {"first", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"first() expects 1 argument"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"first() expects array argument"};
+       }
+       return fn_first(std::get<inja_array>(a[0].storage));
+     }},
+    {"last", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"last() expects 1 argument"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"last() expects array argument"};
+       }
+       return fn_last(std::get<inja_array>(a[0].storage));
+     }},
+    {"join", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 2) {
+         throw render_error{"join() expects 2 arguments"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"join() expects first argument to be array"};
+       }
+       if (!std::holds_alternative<std::string>(a[1].storage)) {
+         throw render_error{"join() expects second argument to be string"};
+       }
+       return inja_value{fn_join(
+         std::get<inja_array>(a[0].storage),
+         std::get<std::string>(a[1].storage)
+       )};
+     }},
+    {"sort", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"sort() expects 1 argument"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"sort() expects array argument"};
+       }
+       return inja_value{fn_sort(std::get<inja_array>(a[0].storage))};
+     }},
+    {"range", [](std::vector<inja_value> const& a) -> inja_value {
+       switch (a.size()) {
+       case 1:
+         if (!std::holds_alternative<std::int64_t>(a[0].storage)) {
+           throw render_error{"range() expects integer argument"};
+         }
+         return inja_value{fn_range(std::get<std::int64_t>(a[0].storage))};
+       case 2:
+         if (!std::holds_alternative<std::int64_t>(a[0].storage) ||
+             !std::holds_alternative<std::int64_t>(a[1].storage)) {
+           throw render_error{"range() expects integer arguments"};
+         }
+         return inja_value{fn_range(
+           std::get<std::int64_t>(a[0].storage),
+           std::get<std::int64_t>(a[1].storage)
+         )};
+       case 3:
+         if (!std::holds_alternative<std::int64_t>(a[0].storage) ||
+             !std::holds_alternative<std::int64_t>(a[1].storage) ||
+             !std::holds_alternative<std::int64_t>(a[2].storage)) {
+           throw render_error{"range() expects integer arguments"};
+         }
+         return inja_value{fn_range(
+           std::get<std::int64_t>(a[0].storage),
+           std::get<std::int64_t>(a[1].storage),
+           std::get<std::int64_t>(a[2].storage)
+         )};
+       default:
+         throw render_error{"range() expects 1, 2, or 3 arguments"};
+       }
+     }},
+    {"abs", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"abs() expects 1 argument"};
+       }
+       return fn_abs(a[0]);
+     }},
+    {"round", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() == 1) {
+         return fn_round(a[0]);
+       }
+       if (a.size() == 2) {
+         return fn_round(a[0], a[1]);
+       }
+       throw render_error{"round() expects 1 or 2 arguments"};
+     }},
+    {"max", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"max() expects 1 argument"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"max() expects array argument"};
+       }
+       return fn_max(std::get<inja_array>(a[0].storage));
+     }},
+    {"min", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"min() expects 1 argument"};
+       }
+       if (!std::holds_alternative<inja_array>(a[0].storage)) {
+         throw render_error{"min() expects array argument"};
+       }
+       return fn_min(std::get<inja_array>(a[0].storage));
+     }},
+    {"even", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"even() expects 1 argument"};
+       }
+       return fn_even(a[0]);
+     }},
+    {"odd", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"odd() expects 1 argument"};
+       }
+       return fn_odd(a[0]);
+     }},
+    {"divisibleBy", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 2) {
+         throw render_error{"divisibleBy() expects 2 arguments"};
+       }
+       return fn_divisibleBy(a[0], a[1]);
+     }},
+    {"int", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"int() expects 1 argument"};
+       }
+       return fn_int(a[0]);
+     }},
+    {"float", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"float() expects 1 argument"};
+       }
+       return fn_float(a[0]);
+     }},
+    {"isString", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isString() expects 1 argument"};
+       }
+       return fn_isString(a[0]);
+     }},
+    {"isArray", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isArray() expects 1 argument"};
+       }
+       return fn_isArray(a[0]);
+     }},
+    {"isNumber", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isNumber() expects 1 argument"};
+       }
+       return fn_isNumber(a[0]);
+     }},
+    {"isObject", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isObject() expects 1 argument"};
+       }
+       return fn_isObject(a[0]);
+     }},
+    {"isBoolean", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isBoolean() expects 1 argument"};
+       }
+       return fn_isBoolean(a[0]);
+     }},
+    {"isFloat", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isFloat() expects 1 argument"};
+       }
+       return fn_isFloat(a[0]);
+     }},
+    {"isInteger", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isInteger() expects 1 argument"};
+       }
+       return fn_isInteger(a[0]);
+     }},
+    {"isNone", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isNone() expects 1 argument"};
+       }
+       return fn_isNone(a[0]);
+     }},
+    {"isEmpty", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"isEmpty() expects 1 argument"};
+       }
+       return fn_isEmpty(a[0]);
+     }},
+    {"default", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 2) {
+         throw render_error{"default() expects 2 arguments"};
+       }
+       return fn_default(a[0], a[1]);
+     }},
+    {"at", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 2) {
+         throw render_error{"at() expects 2 arguments"};
+       }
+       return fn_at(a[0], a[1]);
+     }},
+    {"exists", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"exists() expects 1 argument"};
+       }
+       return fn_exists(a[0]);
+     }},
+    {"existsIn", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 2) {
+         throw render_error{"existsIn() expects 2 arguments"};
+       }
+       return fn_existsIn(a[0], a[1]);
+     }},
+  };
 
-  if (func_name == "lower") {
-    if (args.size() != 1) {
-      throw render_error{"lower() expects 1 argument"};
-    }
-    if (!std::holds_alternative<std::string>(args[0].storage)) {
-      throw render_error{"lower() expects string argument"};
-    }
-    return inja_value{fn_lower(std::get<std::string>(args[0].storage))};
-  }
-
-  if (func_name == "capitalize") {
-    if (args.size() != 1) {
-      throw render_error{"capitalize() expects 1 argument"};
-    }
-    if (!std::holds_alternative<std::string>(args[0].storage)) {
-      throw render_error{"capitalize() expects string argument"};
-    }
-    return inja_value{fn_capitalize(std::get<std::string>(args[0].storage))};
-  }
-
-  if (func_name == "replace") {
-    if (args.size() != 3) {
-      throw render_error{"replace() expects 3 arguments"};
-    }
-    if (!std::holds_alternative<std::string>(args[0].storage) ||
-        !std::holds_alternative<std::string>(args[1].storage) ||
-        !std::holds_alternative<std::string>(args[2].storage)) {
-      throw render_error{"replace() expects 3 string arguments"};
-    }
-    return inja_value{fn_replace(
-      std::get<std::string>(args[0].storage),
-      std::get<std::string>(args[1].storage),
-      std::get<std::string>(args[2].storage)
-    )};
-  }
-
-  if (func_name == "length") {
-    if (args.size() != 1) {
-      throw render_error{"length() expects 1 argument"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"length() expects array argument"};
-    }
-    return inja_value{fn_length(std::get<inja_array>(args[0].storage))};
-  }
-
-  if (func_name == "first") {
-    if (args.size() != 1) {
-      throw render_error{"first() expects 1 argument"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"first() expects array argument"};
-    }
-    return fn_first(std::get<inja_array>(args[0].storage));
-  }
-
-  if (func_name == "last") {
-    if (args.size() != 1) {
-      throw render_error{"last() expects 1 argument"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"last() expects array argument"};
-    }
-    return fn_last(std::get<inja_array>(args[0].storage));
-  }
-
-  if (func_name == "join") {
-    if (args.size() != 2) {
-      throw render_error{"join() expects 2 arguments"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"join() expects first argument to be array"};
-    }
-    if (!std::holds_alternative<std::string>(args[1].storage)) {
-      throw render_error{"join() expects second argument to be string"};
-    }
-    return inja_value{fn_join(
-      std::get<inja_array>(args[0].storage),
-      std::get<std::string>(args[1].storage)
-    )};
-  }
-
-  if (func_name == "sort") {
-    if (args.size() != 1) {
-      throw render_error{"sort() expects 1 argument"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"sort() expects array argument"};
-    }
-    return inja_value{fn_sort(std::get<inja_array>(args[0].storage))};
-  }
-
-  if (func_name == "range") {
-    if (args.size() == 1) {
-      if (!std::holds_alternative<std::int64_t>(args[0].storage)) {
-        throw render_error{"range() expects integer argument"};
-      }
-      return inja_value{fn_range(std::get<std::int64_t>(args[0].storage))};
-    } else if (args.size() == 2) {
-      if (!std::holds_alternative<std::int64_t>(args[0].storage) ||
-          !std::holds_alternative<std::int64_t>(args[1].storage)) {
-        throw render_error{"range() expects integer arguments"};
-      }
-      return inja_value{fn_range(
-        std::get<std::int64_t>(args[0].storage),
-        std::get<std::int64_t>(args[1].storage)
-      )};
-    } else if (args.size() == 3) {
-      if (!std::holds_alternative<std::int64_t>(args[0].storage) ||
-          !std::holds_alternative<std::int64_t>(args[1].storage) ||
-          !std::holds_alternative<std::int64_t>(args[2].storage)) {
-        throw render_error{"range() expects integer arguments"};
-      }
-      return inja_value{fn_range(
-        std::get<std::int64_t>(args[0].storage),
-        std::get<std::int64_t>(args[1].storage),
-        std::get<std::int64_t>(args[2].storage)
-      )};
-    } else {
-      throw render_error{"range() expects 1, 2, or 3 arguments"};
-    }
-  }
-
-  if (func_name == "abs") {
-    if (args.size() != 1) {
-      throw render_error{"abs() expects 1 argument"};
-    }
-    return fn_abs(args[0]);
-  }
-
-  if (func_name == "round") {
-    if (args.size() == 1) {
-      return fn_round(args[0]);
-    } else if (args.size() == 2) {
-      return fn_round(args[0], args[1]);
-    } else {
-      throw render_error{"round() expects 1 or 2 arguments"};
-    }
-  }
-
-  if (func_name == "max") {
-    if (args.size() != 1) {
-      throw render_error{"max() expects 1 argument"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"max() expects array argument"};
-    }
-    return fn_max(std::get<inja_array>(args[0].storage));
-  }
-
-  if (func_name == "min") {
-    if (args.size() != 1) {
-      throw render_error{"min() expects 1 argument"};
-    }
-    if (!std::holds_alternative<inja_array>(args[0].storage)) {
-      throw render_error{"min() expects array argument"};
-    }
-    return fn_min(std::get<inja_array>(args[0].storage));
-  }
-
-  if (func_name == "even") {
-    if (args.size() != 1) {
-      throw render_error{"even() expects 1 argument"};
-    }
-    return fn_even(args[0]);
-  }
-
-  if (func_name == "odd") {
-    if (args.size() != 1) {
-      throw render_error{"odd() expects 1 argument"};
-    }
-    return fn_odd(args[0]);
-  }
-
-  if (func_name == "divisibleBy") {
-    if (args.size() != 2) {
-      throw render_error{"divisibleBy() expects 2 arguments"};
-    }
-    return fn_divisibleBy(args[0], args[1]);
-  }
-
-  if (func_name == "int") {
-    if (args.size() != 1) {
-      throw render_error{"int() expects 1 argument"};
-    }
-    return fn_int(args[0]);
-  }
-
-  if (func_name == "float") {
-    if (args.size() != 1) {
-      throw render_error{"float() expects 1 argument"};
-    }
-    return fn_float(args[0]);
-  }
-
-  if (func_name == "isString") {
-    if (args.size() != 1) {
-      throw render_error{"isString() expects 1 argument"};
-    }
-    return fn_isString(args[0]);
-  }
-
-  if (func_name == "isArray") {
-    if (args.size() != 1) {
-      throw render_error{"isArray() expects 1 argument"};
-    }
-    return fn_isArray(args[0]);
-  }
-
-  if (func_name == "isNumber") {
-    if (args.size() != 1) {
-      throw render_error{"isNumber() expects 1 argument"};
-    }
-    return fn_isNumber(args[0]);
-  }
-
-  if (func_name == "isObject") {
-    if (args.size() != 1) {
-      throw render_error{"isObject() expects 1 argument"};
-    }
-    return fn_isObject(args[0]);
-  }
-
-  if (func_name == "isBoolean") {
-    if (args.size() != 1) {
-      throw render_error{"isBoolean() expects 1 argument"};
-    }
-    return fn_isBoolean(args[0]);
-  }
-
-  if (func_name == "isFloat") {
-    if (args.size() != 1) {
-      throw render_error{"isFloat() expects 1 argument"};
-    }
-    return fn_isFloat(args[0]);
-  }
-
-  if (func_name == "isInteger") {
-    if (args.size() != 1) {
-      throw render_error{"isInteger() expects 1 argument"};
-    }
-    return fn_isInteger(args[0]);
-  }
-
-  if (func_name == "isNone") {
-    if (args.size() != 1) {
-      throw render_error{"isNone() expects 1 argument"};
-    }
-    return fn_isNone(args[0]);
-  }
-
-  if (func_name == "isEmpty") {
-    if (args.size() != 1) {
-      throw render_error{"isEmpty() expects 1 argument"};
-    }
-    return fn_isEmpty(args[0]);
-  }
-
-  if (func_name == "default") {
-    if (args.size() != 2) {
-      throw render_error{"default() expects 2 arguments"};
-    }
-    return fn_default(args[0], args[1]);
-  }
-
-  if (func_name == "at") {
-    if (args.size() != 2) {
-      throw render_error{"at() expects 2 arguments"};
-    }
-    return fn_at(args[0], args[1]);
-  }
-
-  if (func_name == "exists") {
-    if (args.size() != 1) {
-      throw render_error{"exists() expects 1 argument"};
-    }
-    return fn_exists(args[0]);
-  }
-
-  if (func_name == "existsIn") {
-    if (args.size() != 2) {
-      throw render_error{"existsIn() expects 2 arguments"};
-    }
-    return fn_existsIn(args[0], args[1]);
+  if (auto const it = builtin_dispatch.find(func_name); it != builtin_dispatch.end()) {
+    return it->second(args);
   }
 
   // 組み込み関数で見つからない場合のみ、実行時登録コールバックを参照する。
@@ -1563,49 +1589,9 @@ template <auto Src, typename OutputBuffer, typename Delims = frozenchars::inja::
 auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
   auto constexpr program = detail::parse_program<Src, Delims>();
   auto constexpr src = Src.sv();
-  auto scopes = std::vector<inja_object>{root};
-
-  // 各ノードの trim 済みステートメントを 1 回だけ作成し、レンダー中に再利用する。
-  auto const n = program.count;
-  auto stmt_views = std::vector<std::string_view>(n);
-  auto for_headers = std::vector<std::optional<for_header>>(n);
-  auto set_statements = std::vector<std::optional<set_statement>>(n);
-  auto if_conditions = std::vector<std::string_view>(n);
-  auto include_exprs = std::vector<std::string_view>(n);
-
-  for (auto n = std::size_t{0}; n < program.count; ++n) {
-    auto const& nd = program.nodes[n];
-    if (nd.kind == node_kind::text || nd.kind == node_kind::endif_stmt || nd.kind == node_kind::endfor_stmt) {
-      continue;
-    }
-
-    auto const stmt = trim_view(src.substr(nd.begin, nd.end - nd.begin));
-    stmt_views[n] = stmt;
-    switch (nd.kind) {
-    case node_kind::if_stmt:
-      if_conditions[n] = if_condition_expr(stmt);
-      break;
-    case node_kind::else_stmt:
-      if (stmt.starts_with("else if ")) {
-        if_conditions[n] = if_condition_expr(stmt);
-      }
-      break;
-    case node_kind::for_stmt:
-      for_headers[n] = parse_for_header(stmt);
-      break;
-    case node_kind::set_stmt:
-      set_statements[n] = parse_set_statement(stmt);
-      break;
-    case node_kind::include_stmt:
-      include_exprs[n] = trim_view(stmt.substr(8));
-      break;
-    case node_kind::expr:
-    case node_kind::text:
-    case node_kind::endif_stmt:
-    case node_kind::endfor_stmt:
-      break;
-    }
-  }
+  auto scopes = std::vector<inja_object>{};
+  scopes.reserve(1 + program.max_for_depth);
+  scopes.push_back(root);
 
   // begin/end は program.nodes の半開区間。
   auto const render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
@@ -1623,16 +1609,17 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       // expr ノードは式を評価して出力に追加する
       case node_kind::expr: {
-        auto const expr = stmt_views[i];
-        auto value = expr_parser{expr, scopes, runtime_options}.parse();
-        out.append(frozenchars::inja::to_string(value));
+        auto const expr = src.substr(node.begin, node.end - node.begin);
+        auto const value = expr_parser{trim_view(expr), scopes, runtime_options}.parse();
+        append_value(out, value);
         ++i;
         break;
       }
 
       // cond を評価し、then または else 節の範囲だけを再帰実行する
       case node_kind::if_stmt: {
-        auto const cond = expr_parser{if_conditions[i], scopes, runtime_options}.parse();
+        auto const cond_sv = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
+        auto const cond = expr_parser{cond_sv, scopes, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
@@ -1643,16 +1630,16 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
           auto else_idx = node.else_index;
           while (else_idx != std::numeric_limits<std::size_t>::max()) {
             auto const& else_node = program.nodes[else_idx];
-            auto const else_stmt = stmt_views[else_idx];
             auto const branch_end = else_node.else_index != std::numeric_limits<std::size_t>::max()
                                       ? else_node.else_index
                                       : node.end_index;
-            if (else_stmt == "else") {
+            if (else_node.aux_begin == std::numeric_limits<std::size_t>::max()) {
               self(else_idx + 1, branch_end);
               break;
             }
-            if (else_stmt.starts_with("else if ")) {
-              auto const else_cond = expr_parser{if_conditions[else_idx], scopes, runtime_options}.parse();
+            if (else_node.kind == node_kind::else_stmt) {
+              auto const else_cond_sv = src.substr(else_node.aux_begin, else_node.aux_end - else_node.aux_begin);
+              auto const else_cond = expr_parser{else_cond_sv, scopes, runtime_options}.parse();
               if (frozenchars::inja::truthy(else_cond)) {
                 self(else_idx + 1, branch_end);
                 break;
@@ -1669,41 +1656,76 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       // 配列反復とオブジェクト反復で束縛方法を切り替える
       case node_kind::for_stmt: {
-        auto const& header = *for_headers[i];
-        auto iterable = expr_parser{header.expr, scopes, runtime_options}.parse();
+        auto const iter_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
+        auto const value_name = src.substr(node.aux2_begin, node.aux2_end - node.aux2_begin);
+        auto const has_key = node.aux_flag;
+        auto const key_name = has_key
+                                ? src.substr(node.aux3_begin, node.aux3_end - node.aux3_begin)
+                                : std::string_view{};
+        auto iterable = expr_parser{iter_expr, scopes, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
         if (std::holds_alternative<inja_array>(iterable.storage)) {
           auto const& arr = std::get<inja_array>(iterable.storage);
+          auto const value_key = std::string{value_name};
+          auto const loop_key = std::string{"loop"};
+          auto const index_key = std::string{"index"};
+          auto const index1_key = std::string{"index1"};
+          auto const is_first_key = std::string{"is_first"};
+          auto const is_last_key = std::string{"is_last"};
+          auto frame = inja_object{};
+          frame.reserve(2);
+          frame.emplace(value_key, inja_value{});
+          frame.emplace(loop_key, inja_value{inja_object{}});
+          auto& loop_obj = std::get<inja_object>(frame.at(loop_key).storage);
+          loop_obj.reserve(4);
+          loop_obj.emplace(index_key, inja_value{std::int64_t{0}});
+          loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
+          loop_obj.emplace(is_first_key, inja_value{false});
+          loop_obj.emplace(is_last_key, inja_value{false});
           for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
-            auto frame = inja_object{};
-            frame.insert_or_assign(header.value_name, arr[idx]);
-            auto loop_obj = inja_object{};
-            loop_obj.insert_or_assign("index", inja_value{static_cast<std::int64_t>(idx)});
-            loop_obj.insert_or_assign("index1", inja_value{static_cast<std::int64_t>(idx + 1)});
-            loop_obj.insert_or_assign("is_first", inja_value{idx == 0});
-            loop_obj.insert_or_assign("is_last", inja_value{idx + 1 == arr.size()});
-            frame.insert_or_assign("loop", inja_value{std::move(loop_obj)});
-            scopes.push_back(std::move(frame));
+            frame.at(value_key) = arr[idx];
+            loop_obj.at(index_key) = inja_value{static_cast<std::int64_t>(idx)};
+            loop_obj.at(index1_key) = inja_value{static_cast<std::int64_t>(idx + 1)};
+            loop_obj.at(is_first_key) = inja_value{idx == 0};
+            loop_obj.at(is_last_key) = inja_value{idx + 1 == arr.size()};
+            scopes.push_back(frame);
             self(body_begin, body_end);
             scopes.pop_back();
           }
         } else if (std::holds_alternative<inja_object>(iterable.storage)) {
           auto const& obj = std::get<inja_object>(iterable.storage);
+          auto const has_key_key = has_key ? std::optional<std::string>{std::string{key_name}} : std::nullopt;
+          auto const value_key = std::string{value_name};
+          auto const loop_key = std::string{"loop"};
+          auto const index_key = std::string{"index"};
+          auto const index1_key = std::string{"index1"};
+          auto const is_first_key = std::string{"is_first"};
+          auto const is_last_key = std::string{"is_last"};
+          auto frame = inja_object{};
+          frame.reserve(has_key ? 3 : 2);
+          if (has_key_key.has_value()) {
+            frame.emplace(*has_key_key, inja_value{});
+          }
+          frame.emplace(value_key, inja_value{});
+          frame.emplace(loop_key, inja_value{inja_object{}});
+          auto& loop_obj = std::get<inja_object>(frame.at(loop_key).storage);
+          loop_obj.reserve(4);
+          loop_obj.emplace(index_key, inja_value{std::int64_t{0}});
+          loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
+          loop_obj.emplace(is_first_key, inja_value{false});
+          loop_obj.emplace(is_last_key, inja_value{false});
           auto idx = std::size_t{0};
           for (auto const& [k, v] : obj) {
-            auto frame = inja_object{};
-            if (header.has_key) {
-              frame.insert_or_assign(header.key_name, inja_value{k});
+            if (has_key_key.has_value()) {
+              frame.at(*has_key_key) = inja_value{k};
             }
-            frame.insert_or_assign(header.value_name, v);
-            auto loop_obj = inja_object{};
-            loop_obj.insert_or_assign("index", inja_value{static_cast<std::int64_t>(idx)});
-            loop_obj.insert_or_assign("index1", inja_value{static_cast<std::int64_t>(idx + 1)});
-            loop_obj.insert_or_assign("is_first", inja_value{idx == 0});
-            loop_obj.insert_or_assign("is_last", inja_value{idx + 1 == obj.size()});
-            frame.insert_or_assign("loop", inja_value{std::move(loop_obj)});
-            scopes.push_back(std::move(frame));
+            frame.at(value_key) = v;
+            loop_obj.at(index_key) = inja_value{static_cast<std::int64_t>(idx)};
+            loop_obj.at(index1_key) = inja_value{static_cast<std::int64_t>(idx + 1)};
+            loop_obj.at(is_first_key) = inja_value{idx == 0};
+            loop_obj.at(is_last_key) = inja_value{idx + 1 == obj.size()};
+            scopes.push_back(frame);
             self(body_begin, body_end);
             scopes.pop_back();
             ++idx;
@@ -1717,16 +1739,18 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 
       case node_kind::set_stmt: {
         // set は式を評価して、現在のスコープ連鎖へ代入する。
-        auto const& assignment = *set_statements[i];
-        auto value = expr_parser{assignment.expr, scopes, runtime_options}.parse();
-        assign_to_scopes(scopes, assignment.target, std::move(value));
+        auto const set_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
+        auto const set_target = src.substr(node.aux2_begin, node.aux2_end - node.aux2_begin);
+        auto value = expr_parser{set_expr, scopes, runtime_options}.parse();
+        assign_to_scopes(scopes, set_target, std::move(value));
         ++i;
         break;
       }
 
       case node_kind::include_stmt: {
         // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
-        auto include_name = expr_parser{include_exprs[i], scopes, runtime_options}.parse();
+        auto const include_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
+        auto include_name = expr_parser{include_expr, scopes, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
           throw render_error{"include target must evaluate to string"};
         }

@@ -1,15 +1,16 @@
 #pragma once
 
-#include "frozen_string.hpp"
+#include <array>
+#include <cstddef>
+#include <string_view>
+
+#include "string.hpp"
 #include "string_ops.hpp"
 #include "case_conv.hpp"
 #include "multiline.hpp"
 #include "encoding.hpp"
 #include "regex_comment.hpp"
 #include "split.hpp"
-#include <array>
-#include <cstddef>
-#include <string_view>
 
 namespace frozenchars::ops {
 

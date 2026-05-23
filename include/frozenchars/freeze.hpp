@@ -1,6 +1,6 @@
 #pragma once
 
-#include "frozen_string.hpp"
+#include "string.hpp"
 #include "detail/number_conv.hpp"
 #include "detail/freeze_impl.hpp"
 #include <array>

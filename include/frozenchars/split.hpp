@@ -1,15 +1,16 @@
 #pragma once
 
-#include "frozen_string.hpp"
-#include "number_conv.hpp"
-#include "detail/split_impl.hpp"
-#include "detail/char_utils.hpp"
-#include "concepts.hpp"
 #include <array>
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
 #include <algorithm>
+
+#include "string.hpp"
+#include "number_conv.hpp"
+#include "detail/split_impl.hpp"
+#include "detail/char_utils.hpp"
+#include "concepts.hpp"
 
 namespace frozenchars {
 

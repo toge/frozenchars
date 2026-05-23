@@ -1,5 +1,5 @@
 #include "frozenchars/literals.hpp"
-#include "frozenchars/frozen_map.hpp"
+#include "frozenchars/map.hpp"
 
 using namespace frozenchars::literals;
 

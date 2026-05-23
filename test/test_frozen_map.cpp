@@ -12,7 +12,7 @@
 #include <utility>
 
 #include "frozenchars/literals.hpp"
-#include "frozenchars/frozen_map.hpp"
+#include "frozenchars/map.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
 
 using namespace frozenchars;

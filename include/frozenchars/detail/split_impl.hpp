@@ -1,9 +1,10 @@
 #pragma once
 
-#include "../frozen_string.hpp"
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
+
+#include "../string.hpp"
 
 namespace frozenchars::detail {
 

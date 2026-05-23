@@ -1,7 +1,7 @@
 #pragma once
 
 #include "frozenchars/concepts.hpp"
-#include "frozenchars/frozen_string.hpp"
+#include "frozenchars/string.hpp"
 #include "frozenchars/freeze.hpp"
 #include "frozenchars/string_ops.hpp"
 #include "frozenchars/case_conv.hpp"
@@ -17,7 +17,7 @@
 #include "frozenchars/number_conv.hpp"
 #include "frozenchars/ctre.hpp"
 #include "frozenchars/regex_comment.hpp"
-#include "frozenchars/frozen_map.hpp"
+#include "frozenchars/map.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
 #include "frozenchars/inja_value.hpp"
 #include "frozenchars/inja_engine.hpp"

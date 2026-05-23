@@ -1,6 +1,6 @@
 #pragma once
 
-#include "frozen_map.hpp"
+#include "map.hpp"
 
 #if defined(__has_include) && __has_include(<glaze/json.hpp>)
 #include <glaze/json.hpp>

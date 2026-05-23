@@ -1,7 +1,8 @@
 #pragma once
 
-#include "frozen_string.hpp"
 #include <cstddef>
+
+#include "string.hpp"
 
 namespace frozenchars::literals {
 

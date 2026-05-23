@@ -1,12 +1,13 @@
 #pragma once
 
-#include "frozen_string.hpp"
-#include "string_ops.hpp"
-#include "detail/type_mapping.hpp"
 #include <cstddef>
 #include <optional>
 #include <tuple>
 #include <utility>
+
+#include "string.hpp"
+#include "string_ops.hpp"
+#include "detail/type_mapping.hpp"
 
 namespace frozenchars {
 

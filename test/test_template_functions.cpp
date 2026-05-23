@@ -1,10 +1,16 @@
 #include "catch2/catch_all.hpp"
 
+#include <type_traits>
+
 #include "frozenchars.hpp"
+
+using builtin_fn = frozenchars::inja::detail::builtin_fn;
 
 using namespace frozenchars;
 using namespace frozenchars::inja;
 using namespace frozenchars::literals;
+
+static_assert(std::is_same_v<builtin_fn, inja_value (*)(std::vector<inja_value> const&)>);
 
 TEST_CASE("template functions - upper", "[template_functions][upper]") {
   constexpr auto src = "{{ upper(name) }}"_fs;
@@ -322,6 +328,15 @@ TEST_CASE("template functions - sort preserves original", "[template_functions][
   });
   auto const out = render<src>(ctx);
   REQUIRE(out == "3-1");
+}
+
+TEST_CASE("template functions - render object", "[template_functions]") {
+  constexpr auto src = "{{ items }}"_fs;
+  auto const ctx = make_object({
+    {"items", make_object({{"a", 1}})},
+  });
+  auto const out = render<src>(ctx);
+  REQUIRE(out.find("{object}") != std::string::npos);
 }
 
 // range() tests

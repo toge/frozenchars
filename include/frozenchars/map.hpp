@@ -21,7 +21,7 @@
 #include <ranges>
 #include <span>
 
-#include "frozen_string.hpp"
+#include "string.hpp"
 
 #if defined(__SSE4_2__)
 #include <nmmintrin.h>

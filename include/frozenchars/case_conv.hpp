@@ -1,6 +1,6 @@
 #pragma once
 
-#include "frozen_string.hpp"
+#include "string.hpp"
 #include "detail/string_utils.hpp"
 #include <cstddef>
 

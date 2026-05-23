@@ -1,11 +1,12 @@
 #pragma once
 
-#include "frozen_string.hpp"
 #include <cstddef>
 #if defined(__has_include) && __has_include(<format>)
 #  include <format>
 #endif
 #include <string_view>
+
+#include "string.hpp"
 
 #ifdef __cpp_lib_format
 namespace std {

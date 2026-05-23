@@ -1,6 +1,5 @@
 #pragma once
 
-#include "frozen_string.hpp"
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
@@ -8,6 +7,8 @@
 #include <charconv>
 #include <system_error>
 #include <limits>
+
+#include "string.hpp"
 
 namespace frozenchars {
 
