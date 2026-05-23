@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <charconv>
@@ -761,6 +762,9 @@ private:
           if (!lnum.has_value() || !rnum.has_value()) {
             throw render_error{"invalid operands for /"};
           }
+          if (*rnum == 0.0) {
+            throw render_error{"division by zero"};
+          }
           lhs = inja_value{*lnum / *rnum};
         }
       } else if (consume("%")) {
@@ -769,7 +773,11 @@ private:
           if (!std::holds_alternative<std::int64_t>(lhs.storage) || !std::holds_alternative<std::int64_t>(rhs.storage)) {
             throw render_error{"invalid operands for %"};
           }
-          lhs = inja_value{std::get<std::int64_t>(lhs.storage) % std::get<std::int64_t>(rhs.storage)};
+          auto const rval = std::get<std::int64_t>(rhs.storage);
+          if (rval == 0) {
+            throw render_error{"modulo by zero"};
+          }
+          lhs = inja_value{std::get<std::int64_t>(lhs.storage) % rval};
         }
       } else {
         break;
@@ -873,7 +881,8 @@ private:
         }
       }
 
-      args.insert(args.begin(), v);
+      args.push_back(std::move(v));
+      std::rotate(args.begin(), args.end() - 1, args.end());
       v = evaluate_function(func_name, args, runtime_options_);
       skip_space();
     }
@@ -950,14 +959,27 @@ private:
     skip_space();
     if (pos_ < text_.size() && (text_[pos_] == '"' || text_[pos_] == '\'')) {
       auto const q = text_[pos_++];
-      auto start = pos_;
+      auto out = std::string{};
       while (pos_ < text_.size() && text_[pos_] != q) {
+        if (text_[pos_] == '\\' && pos_ + 1 < text_.size()) {
+          ++pos_;
+          switch (text_[pos_]) {
+            case 'n':  out += '\n'; break;
+            case 't':  out += '\t'; break;
+            case 'r':  out += '\r'; break;
+            case '\\': out += '\\'; break;
+            case '"':  out += '"';  break;
+            case '\'': out += '\''; break;
+            default:   out += '\\'; out += text_[pos_]; break;
+          }
+        } else {
+          out += text_[pos_];
+        }
         ++pos_;
       }
       if (pos_ >= text_.size()) {
         throw render_error{"unterminated string literal"};
       }
-      auto out = std::string{text_.substr(start, pos_ - start)};
       ++pos_;
       return inja_value{std::move(out)};
     }
@@ -1158,8 +1180,10 @@ inline auto assign_path(inja_object& scope, std::string_view path, inja_value va
       throw render_error{"invalid set target"};
     }
 
-    auto [it, inserted] = current_scope->insert_or_assign(key, inja_value{inja_object{}});
-    if (!inserted && !std::holds_alternative<inja_object>(it->second.storage)) {
+    auto it = current_scope->find(key);
+    if (it == current_scope->end()) {
+      it = current_scope->emplace(key, inja_value{inja_object{}}).first;
+    } else if (!std::holds_alternative<inja_object>(it->second.storage)) {
       throw render_error{"set target path is not object"};
     }
     current_scope = &std::get<inja_object>(it->second.storage);
@@ -1542,11 +1566,12 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
   auto scopes = std::vector<inja_object>{root};
 
   // 各ノードの trim 済みステートメントを 1 回だけ作成し、レンダー中に再利用する。
-  auto stmt_views = std::array<std::string_view, MAX_NODES>{};
-  auto for_headers = std::array<std::optional<for_header>, MAX_NODES>{};
-  auto set_statements = std::array<std::optional<set_statement>, MAX_NODES>{};
-  auto if_conditions = std::array<std::string_view, MAX_NODES>{};
-  auto include_exprs = std::array<std::string_view, MAX_NODES>{};
+  auto const n = program.count;
+  auto stmt_views = std::vector<std::string_view>(n);
+  auto for_headers = std::vector<std::optional<for_header>>(n);
+  auto set_statements = std::vector<std::optional<set_statement>>(n);
+  auto if_conditions = std::vector<std::string_view>(n);
+  auto include_exprs = std::vector<std::string_view>(n);
 
   for (auto n = std::size_t{0}; n < program.count; ++n) {
     auto const& nd = program.nodes[n];

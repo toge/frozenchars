@@ -62,6 +62,18 @@ TEST_CASE("template runtime errors", "[template_vm][runtime_error]") {
   constexpr auto bad_for = "{% for x in x %}{{ x }}{% endfor %}"_fs;
   auto const ctx = make_object({{"x", 1}});
   REQUIRE_THROWS_AS(render<bad_for>(ctx), render_error);
+
+  constexpr auto mod_zero = "{{ 10 % 0 }}"_fs;
+  REQUIRE_THROWS_WITH(render<mod_zero>(empty), "modulo by zero");
+
+  constexpr auto div_zero = "{{ 1.0 / 0.0 }}"_fs;
+  REQUIRE_THROWS_WITH(render<div_zero>(empty), "division by zero");
+
+  constexpr auto mod_ok = "{{ 10 % 3 }}"_fs;
+  REQUIRE(render<mod_ok>(empty) == "1");
+
+  constexpr auto div_ok = "{{ 9.0 / 4.0 }}"_fs;
+  REQUIRE(render<div_ok>(empty) == "2.25");
 }
 
 TEST_CASE("template_vm public API", "[template_vm][api]") {
