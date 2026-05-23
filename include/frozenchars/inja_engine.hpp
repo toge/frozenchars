@@ -569,6 +569,12 @@ consteval auto parse_program() -> bytecode {
     if (auto const* p = std::get_if<std::string>(&lhs.storage)) {
       return *p == std::get<std::string>(rhs.storage);
     }
+    if (auto const* p = std::get_if<inja_array>(&lhs.storage)) {
+      return *p == std::get<inja_array>(rhs.storage);
+    }
+    if (auto const* p = std::get_if<inja_object>(&lhs.storage)) {
+      return *p == std::get<inja_object>(rhs.storage);
+    }
     return false;
   }
   auto const lnum = try_as_double(lhs);
@@ -764,14 +770,18 @@ private:
       if (std::holds_alternative<std::string>(lhs.storage) && std::holds_alternative<std::string>(rhs.storage)) {
         lhs = inja_value{std::get<std::string>(rhs.storage).find(std::get<std::string>(lhs.storage)) != std::string::npos};
       } else if (std::holds_alternative<inja_array>(rhs.storage)) {
-        auto found = false;
-        for (auto const& v : std::get<inja_array>(rhs.storage)) {
-          if (equals_value(lhs, v)) {
-            found = true;
-            break;
+        auto const& arr_variant = std::get<inja_array>(rhs.storage);
+        auto const& search_val = lhs;
+        lhs = inja_value{std::visit([&](auto const& vec) {
+          for (auto const& v : vec) {
+            if constexpr (std::is_same_v<std::decay_t<decltype(v)>, inja_value>) {
+              if (equals_value(search_val, v)) return true;
+            } else {
+              if (equals_value(search_val, inja_value{v})) return true;
+            }
           }
-        }
-        lhs = inja_value{found};
+          return false;
+        }, arr_variant)};
       } else if (std::holds_alternative<inja_object>(rhs.storage) && std::holds_alternative<std::string>(lhs.storage)) {
         auto const& obj = std::get<inja_object>(rhs.storage);
         auto const key = std::string_view{std::get<std::string>(lhs.storage)};
@@ -1554,6 +1564,24 @@ using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
        }
        return fn_existsIn(a[0], a[1]);
      }},
+    {"as_int_array", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"as_int_array() expects 1 argument"};
+       }
+       return fn_as_int_array(a[0]);
+     }},
+    {"as_double_array", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"as_double_array() expects 1 argument"};
+       }
+       return fn_as_double_array(a[0]);
+     }},
+    {"as_string_array", [](std::vector<inja_value> const& a) -> inja_value {
+       if (a.size() != 1) {
+         throw render_error{"as_string_array() expects 1 argument"};
+       }
+       return fn_as_string_array(a[0]);
+     }},
   };
 
   if (auto const it = builtin_dispatch.find(func_name); it != builtin_dispatch.end()) {
@@ -1666,7 +1694,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
         if (std::holds_alternative<inja_array>(iterable.storage)) {
-          auto const& arr = std::get<inja_array>(iterable.storage);
+          auto const& arr_variant = std::get<inja_array>(iterable.storage);
           auto const value_key = std::string{value_name};
           auto const loop_key = std::string{"loop"};
           auto const index_key = std::string{"index"};
@@ -1683,16 +1711,19 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
           loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
           loop_obj.emplace(is_first_key, inja_value{false});
           loop_obj.emplace(is_last_key, inja_value{false});
-          for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
-            frame.at(value_key) = arr[idx];
-            loop_obj.at(index_key) = inja_value{static_cast<std::int64_t>(idx)};
-            loop_obj.at(index1_key) = inja_value{static_cast<std::int64_t>(idx + 1)};
-            loop_obj.at(is_first_key) = inja_value{idx == 0};
-            loop_obj.at(is_last_key) = inja_value{idx + 1 == arr.size()};
-            scopes.push_back(frame);
-            self(body_begin, body_end);
-            scopes.pop_back();
-          }
+
+          std::visit([&](auto const& arr) {
+            for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
+              frame.at(value_key) = inja_value{arr[idx]};
+              loop_obj.at(index_key) = inja_value{static_cast<std::int64_t>(idx)};
+              loop_obj.at(index1_key) = inja_value{static_cast<std::int64_t>(idx + 1)};
+              loop_obj.at(is_first_key) = inja_value{idx == 0};
+              loop_obj.at(is_last_key) = inja_value{idx + 1 == arr.size()};
+              scopes.push_back(frame);
+              self(body_begin, body_end);
+              scopes.pop_back();
+            }
+          }, arr_variant);
         } else if (std::holds_alternative<inja_object>(iterable.storage)) {
           auto const& obj = std::get<inja_object>(iterable.storage);
           auto const has_key_key = has_key ? std::optional<std::string>{std::string{key_name}} : std::nullopt;

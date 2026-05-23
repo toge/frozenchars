@@ -23,7 +23,11 @@ namespace frozenchars::inja {
 /**
  * @brief テンプレート値における null を表すタグ型
  */
-struct inja_null final {};
+struct inja_null final {
+  bool operator==(inja_null const&) const noexcept {
+    return true;
+  }
+};
 
 /**
  * @brief テンプレート評価時に使う動的値型
@@ -33,7 +37,12 @@ struct inja_value;
 /**
  * @brief テンプレート配列値の実体型
  */
-using inja_array = std::vector<inja_value>;
+using inja_array = std::variant<
+  std::vector<inja_value>,   // 混合型（従来どおり）
+  std::vector<std::int64_t>, // 整数特化
+  std::vector<double>,       // 浮動小数特化
+  std::vector<std::string>   // 文字列特化
+>;
 
 /**
  * @brief テンプレートオブジェクト値の実体型
@@ -134,6 +143,16 @@ struct inja_value {
   template <typename Float>
   requires(std::is_floating_point_v<std::remove_cvref_t<Float>>)
   inja_value(Float v) : storage(static_cast<double>(v)) {}
+
+  /**
+   * @brief 値の等価性を判定する。
+   *
+   * variant の各型が等しいかどうかを判定する。
+   * 数値型の型を跨いだ比較（int vs double）は equals_value を使用すること。
+   */
+  bool operator==(inja_value const& rhs) const {
+    return storage == rhs.storage;
+  }
 };
 
 /**
@@ -243,7 +262,34 @@ public:
  * @return inja_value(配列)
  */
 [[nodiscard]] inline auto make_array(std::initializer_list<inja_value> items) -> inja_value {
-  return inja_value{inja_array{items}};
+  return inja_value{inja_array{std::vector<inja_value>{items}}};
+}
+
+/**
+ * @brief 整数配列を生成する。
+ * @param v 整数ベクタ
+ * @return inja_value(配列)
+ */
+[[nodiscard]] inline auto make_array(std::vector<std::int64_t> v) -> inja_value {
+  return inja_value{inja_array{std::move(v)}};
+}
+
+/**
+ * @brief 浮動小数配列を生成する。
+ * @param v 浮動小数ベクタ
+ * @return inja_value(配列)
+ */
+[[nodiscard]] inline auto make_array(std::vector<double> v) -> inja_value {
+  return inja_value{inja_array{std::move(v)}};
+}
+
+/**
+ * @brief 文字列配列を生成する。
+ * @param v 文字列ベクタ
+ * @return inja_value(配列)
+ */
+[[nodiscard]] inline auto make_array(std::vector<std::string> v) -> inja_value {
+  return inja_value{inja_array{std::move(v)}};
 }
 
 /**
@@ -289,7 +335,7 @@ public:
     return !p->empty();
   }
   if (auto const* p = std::get_if<inja_array>(&v.storage)) {
-    return !p->empty();
+    return std::visit([](auto const& vec) { return !vec.empty(); }, *p);
   }
   return !std::get<inja_object>(v.storage).empty();
 }
@@ -420,7 +466,7 @@ public:
  * @return 要素数
  */
 [[nodiscard]] inline auto fn_length(inja_array const& arr) -> std::int64_t {
-  return static_cast<std::int64_t>(arr.size());
+  return std::visit([](auto const& vec) { return static_cast<std::int64_t>(vec.size()); }, arr);
 }
 
 /**
@@ -430,10 +476,12 @@ public:
  * @return 先頭要素（空なら例外を投げる）
  */
 [[nodiscard]] inline auto fn_first(inja_array const& arr) -> inja_value {
-  if (arr.empty()) {
-    throw render_error{"first() called on empty array"};
-  }
-  return arr[0];
+  return std::visit([](auto const& vec) -> inja_value {
+    if (vec.empty()) {
+      throw render_error{"first() called on empty array"};
+    }
+    return inja_value{vec[0]};
+  }, arr);
 }
 
 /**
@@ -443,10 +491,12 @@ public:
  * @return 末尾要素（空なら例外を投げる）
  */
 [[nodiscard]] inline auto fn_last(inja_array const& arr) -> inja_value {
-  if (arr.empty()) {
-    throw render_error{"last() called on empty array"};
-  }
-  return arr[arr.size() - 1];
+  return std::visit([](auto const& vec) -> inja_value {
+    if (vec.empty()) {
+      throw render_error{"last() called on empty array"};
+    }
+    return inja_value{vec[vec.size() - 1]};
+  }, arr);
 }
 
 /**
@@ -457,30 +507,40 @@ public:
  * @return 連結結果
  */
 [[nodiscard]] inline auto fn_join(inja_array const& arr, std::string_view sep) -> std::string {
-  if (arr.empty()) {
-    return "";
-  }
-
-  auto result = std::string{};
-  for (auto i = std::size_t{0}; i < arr.size(); ++i) {
-    if (i > 0) {
-      result += sep;
+  return std::visit([&](auto const& vec) -> std::string {
+    if (vec.empty()) {
+      return "";
     }
 
-    auto const& elem = arr[i];
-    if (std::holds_alternative<std::string>(elem.storage)) {
-      result += std::get<std::string>(elem.storage);
-    } else if (std::holds_alternative<std::int64_t>(elem.storage)) {
-      result += std::to_string(std::get<std::int64_t>(elem.storage));
-    } else if (std::holds_alternative<double>(elem.storage)) {
-      result += std::to_string(std::get<double>(elem.storage));
-    } else if (std::holds_alternative<bool>(elem.storage)) {
-      result += std::get<bool>(elem.storage) ? "true" : "false";
-    } else {
-      result += "null";
+    auto result = std::string{};
+    for (auto i = std::size_t{0}; i < vec.size(); ++i) {
+      if (i > 0) {
+        result += sep;
+      }
+
+      auto const& elem = vec[i];
+      if constexpr (std::is_same_v<std::decay_t<decltype(elem)>, inja_value>) {
+        if (std::holds_alternative<std::string>(elem.storage)) {
+          result += std::get<std::string>(elem.storage);
+        } else if (std::holds_alternative<std::int64_t>(elem.storage)) {
+          result += std::to_string(std::get<std::int64_t>(elem.storage));
+        } else if (std::holds_alternative<double>(elem.storage)) {
+          result += std::to_string(std::get<double>(elem.storage));
+        } else if (std::holds_alternative<bool>(elem.storage)) {
+          result += std::get<bool>(elem.storage) ? "true" : "false";
+        } else {
+          result += "null";
+        }
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(elem)>, std::string>) {
+        result += elem;
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(elem)>, bool>) {
+        result += elem ? "true" : "false";
+      } else {
+        result += std::to_string(elem);
+      }
     }
-  }
-  return result;
+    return result;
+  }, arr);
 }
 
 /**
@@ -490,42 +550,49 @@ public:
  * @return ソート済みの新しい配列
  */
 [[nodiscard]] inline auto fn_sort(inja_array const& arr) -> inja_array {
-  auto result = arr;
-  std::sort(result.begin(), result.end(), [](inja_value const& a, inja_value const& b) {
-    // 可能なら double に変換するヘルパーラムダ。
-    auto to_double = [](inja_value const& v) -> std::optional<double> {
-      if (std::holds_alternative<double>(v.storage)) {
-        return std::get<double>(v.storage);
-      }
-      if (std::holds_alternative<std::int64_t>(v.storage)) {
-        return static_cast<double>(std::get<std::int64_t>(v.storage));
-      }
-      return std::nullopt;
-    };
+  return std::visit([](auto const& vec) -> inja_array {
+    auto result = vec;
+    using T = typename std::decay_t<decltype(vec)>::value_type;
+    if constexpr (std::is_same_v<T, inja_value>) {
+      std::sort(result.begin(), result.end(), [](inja_value const& a, inja_value const& b) {
+        // 可能なら double に変換するヘルパーラムダ。
+        auto to_double = [](inja_value const& v) -> std::optional<double> {
+          if (std::holds_alternative<double>(v.storage)) {
+            return std::get<double>(v.storage);
+          }
+          if (std::holds_alternative<std::int64_t>(v.storage)) {
+            return static_cast<double>(std::get<std::int64_t>(v.storage));
+          }
+          return std::nullopt;
+        };
 
-    auto a_num = to_double(a);
-    auto b_num = to_double(b);
+        auto a_num = to_double(a);
+        auto b_num = to_double(b);
 
-    if (a_num && b_num) {
-      return *a_num < *b_num;
+        if (a_num && b_num) {
+          return *a_num < *b_num;
+        }
+
+        // 文字列同士の比較。
+        if (std::holds_alternative<std::string>(a.storage) && std::holds_alternative<std::string>(b.storage)) {
+          return std::get<std::string>(a.storage) < std::get<std::string>(b.storage);
+        }
+
+        // 型が異なる場合は、数値を文字列より前に置く。
+        if (a_num && std::holds_alternative<std::string>(b.storage)) {
+          return true;
+        }
+        if (std::holds_alternative<std::string>(a.storage) && b_num) {
+          return false;
+        }
+
+        return false;
+      });
+    } else {
+      std::sort(result.begin(), result.end());
     }
-
-    // 文字列同士の比較。
-    if (std::holds_alternative<std::string>(a.storage) && std::holds_alternative<std::string>(b.storage)) {
-      return std::get<std::string>(a.storage) < std::get<std::string>(b.storage);
-    }
-
-    // 型が異なる場合は、数値を文字列より前に置く。
-    if (a_num && std::holds_alternative<std::string>(b.storage)) {
-      return true;
-    }
-    if (std::holds_alternative<std::string>(a.storage) && b_num) {
-      return false;
-    }
-
-    return false;
-  });
-  return result;
+    return inja_array{std::move(result)};
+  }, arr);
 }
 
 /**
@@ -535,11 +602,14 @@ public:
  * @return 配列 [0, 1, 2, ..., end-1]
  */
 [[nodiscard]] inline auto fn_range(std::int64_t end) -> inja_array {
-  auto result = inja_array{};
-  for (auto i = std::int64_t{0}; i < end; ++i) {
-    result.push_back(inja_value{i});
+  auto result = std::vector<std::int64_t>{};
+  if (end > 0) {
+    result.reserve(static_cast<std::size_t>(end));
+    for (auto i = std::int64_t{0}; i < end; ++i) {
+      result.push_back(i);
+    }
   }
-  return result;
+  return inja_array{std::move(result)};
 }
 
 /**
@@ -550,11 +620,14 @@ public:
  * @return 配列 [start, start+1, ..., end-1]
  */
 [[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end) -> inja_array {
-  auto result = inja_array{};
-  for (auto i = start; i < end; ++i) {
-    result.push_back(inja_value{i});
+  auto result = std::vector<std::int64_t>{};
+  if (end > start) {
+    result.reserve(static_cast<std::size_t>(end - start));
+    for (auto i = start; i < end; ++i) {
+      result.push_back(i);
+    }
   }
-  return result;
+  return inja_array{std::move(result)};
 }
 
 /**
@@ -566,17 +639,23 @@ public:
  * @return step 間隔の値を持つ配列
  */
 [[nodiscard]] inline auto fn_range(std::int64_t start, std::int64_t end, std::int64_t step) -> inja_array {
-  auto result = inja_array{};
+  auto result = std::vector<std::int64_t>{};
   if (step > 0) {
-    for (auto i = start; i < end; i += step) {
-      result.push_back(inja_value{i});
+    if (end > start) {
+      result.reserve(static_cast<std::size_t>((end - start + step - 1) / step));
+      for (auto i = start; i < end; i += step) {
+        result.push_back(i);
+      }
     }
   } else if (step < 0) {
-    for (auto i = start; i > end; i += step) {
-      result.push_back(inja_value{i});
+    if (start > end) {
+      result.reserve(static_cast<std::size_t>((start - end + (-step) - 1) / (-step)));
+      for (auto i = start; i > end; i += step) {
+        result.push_back(i);
+      }
     }
   }
-  return result;
+  return inja_array{std::move(result)};
 }
 
 /**
@@ -648,42 +727,51 @@ public:
  * @return 最大値（すべて整数なら int64_t、それ以外は double）
  */
 [[nodiscard]] inline auto fn_max(inja_array const& arr) -> inja_value {
-  if (arr.empty()) {
-    throw render_error{"max() called on empty array"};
-  }
+  return std::visit([](auto const& vec) -> inja_value {
+    if (vec.empty()) {
+      throw render_error{"max() called on empty array"};
+    }
 
-  // 先に double が含まれるかを判定する。
-  auto has_double = false;
-  for (auto const& elem : arr) {
-    if (std::holds_alternative<double>(elem.storage)) {
-      has_double = true;
-      break;
-    }
-  }
+    using T = typename std::decay_t<decltype(vec)>::value_type;
+    if constexpr (std::is_same_v<T, inja_value>) {
+      // 先に double が含まれるかを判定する。
+      auto has_double = false;
+      for (auto const& elem : vec) {
+        if (std::holds_alternative<double>(elem.storage)) {
+          has_double = true;
+          break;
+        }
+      }
 
-  if (has_double) {
-    auto max_val = -std::numeric_limits<double>::infinity();
-    for (auto const& elem : arr) {
-      if (std::holds_alternative<std::int64_t>(elem.storage)) {
-        max_val = std::max(max_val, static_cast<double>(std::get<std::int64_t>(elem.storage)));
-      } else if (std::holds_alternative<double>(elem.storage)) {
-        max_val = std::max(max_val, std::get<double>(elem.storage));
+      if (has_double) {
+        auto max_val = -std::numeric_limits<double>::infinity();
+        for (auto const& elem : vec) {
+          if (std::holds_alternative<std::int64_t>(elem.storage)) {
+            max_val = std::max(max_val, static_cast<double>(std::get<std::int64_t>(elem.storage)));
+          } else if (std::holds_alternative<double>(elem.storage)) {
+            max_val = std::max(max_val, std::get<double>(elem.storage));
+          } else {
+            throw render_error{"max() array contains non-numeric value"};
+          }
+        }
+        return inja_value{max_val};
       } else {
-        throw render_error{"max() array contains non-numeric value"};
+        auto max_int = std::numeric_limits<std::int64_t>::min();
+        for (auto const& elem : vec) {
+          if (std::holds_alternative<std::int64_t>(elem.storage)) {
+            max_int = std::max(max_int, std::get<std::int64_t>(elem.storage));
+          } else {
+            throw render_error{"max() array contains non-numeric value"};
+          }
+        }
+        return inja_value{max_int};
       }
+    } else if constexpr (std::is_arithmetic_v<T>) {
+      return inja_value{*std::max_element(vec.begin(), vec.end())};
+    } else {
+      throw render_error{"max() array contains non-numeric value"};
     }
-    return inja_value{max_val};
-  } else {
-    auto max_int = std::numeric_limits<std::int64_t>::min();
-    for (auto const& elem : arr) {
-      if (std::holds_alternative<std::int64_t>(elem.storage)) {
-        max_int = std::max(max_int, std::get<std::int64_t>(elem.storage));
-      } else {
-        throw render_error{"max() array contains non-numeric value"};
-      }
-    }
-    return inja_value{max_int};
-  }
+  }, arr);
 }
 
 /**
@@ -693,42 +781,51 @@ public:
  * @return 最小値（すべて整数なら int64_t、それ以外は double）
  */
 [[nodiscard]] inline auto fn_min(inja_array const& arr) -> inja_value {
-  if (arr.empty()) {
-    throw render_error{"min() called on empty array"};
-  }
+  return std::visit([](auto const& vec) -> inja_value {
+    if (vec.empty()) {
+      throw render_error{"min() called on empty array"};
+    }
 
-  // 先に double が含まれるかを判定する。
-  auto has_double = false;
-  for (auto const& elem : arr) {
-    if (std::holds_alternative<double>(elem.storage)) {
-      has_double = true;
-      break;
-    }
-  }
+    using T = typename std::decay_t<decltype(vec)>::value_type;
+    if constexpr (std::is_same_v<T, inja_value>) {
+      // 先に double が含まれるかを判定する。
+      auto has_double = false;
+      for (auto const& elem : vec) {
+        if (std::holds_alternative<double>(elem.storage)) {
+          has_double = true;
+          break;
+        }
+      }
 
-  if (has_double) {
-    auto min_val = std::numeric_limits<double>::infinity();
-    for (auto const& elem : arr) {
-      if (std::holds_alternative<std::int64_t>(elem.storage)) {
-        min_val = std::min(min_val, static_cast<double>(std::get<std::int64_t>(elem.storage)));
-      } else if (std::holds_alternative<double>(elem.storage)) {
-        min_val = std::min(min_val, std::get<double>(elem.storage));
+      if (has_double) {
+        auto min_val = std::numeric_limits<double>::infinity();
+        for (auto const& elem : vec) {
+          if (std::holds_alternative<std::int64_t>(elem.storage)) {
+            min_val = std::min(min_val, static_cast<double>(std::get<std::int64_t>(elem.storage)));
+          } else if (std::holds_alternative<double>(elem.storage)) {
+            min_val = std::min(min_val, std::get<double>(elem.storage));
+          } else {
+            throw render_error{"min() array contains non-numeric value"};
+          }
+        }
+        return inja_value{min_val};
       } else {
-        throw render_error{"min() array contains non-numeric value"};
+        auto min_int = std::numeric_limits<std::int64_t>::max();
+        for (auto const& elem : vec) {
+          if (std::holds_alternative<std::int64_t>(elem.storage)) {
+            min_int = std::min(min_int, std::get<std::int64_t>(elem.storage));
+          } else {
+            throw render_error{"min() array contains non-numeric value"};
+          }
+        }
+        return inja_value{min_int};
       }
+    } else if constexpr (std::is_arithmetic_v<T>) {
+      return inja_value{*std::min_element(vec.begin(), vec.end())};
+    } else {
+      throw render_error{"min() array contains non-numeric value"};
     }
-    return inja_value{min_val};
-  } else {
-    auto min_int = std::numeric_limits<std::int64_t>::max();
-    for (auto const& elem : arr) {
-      if (std::holds_alternative<std::int64_t>(elem.storage)) {
-        min_int = std::min(min_int, std::get<std::int64_t>(elem.storage));
-      } else {
-        throw render_error{"min() array contains non-numeric value"};
-      }
-    }
-    return inja_value{min_int};
-  }
+  }, arr);
 }
 
 /**
@@ -812,7 +909,7 @@ public:
   }
   if (std::holds_alternative<inja_array>(val.storage)) {
     auto const& arr = std::get<inja_array>(val.storage);
-    return inja_value{static_cast<std::int64_t>(arr.size())};
+    return inja_value{std::visit([](auto const& vec) { return static_cast<std::int64_t>(vec.size()); }, arr)};
   }
   if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{0};
@@ -848,7 +945,7 @@ public:
   }
   if (std::holds_alternative<inja_array>(val.storage)) {
     auto const& arr = std::get<inja_array>(val.storage);
-    return inja_value{static_cast<double>(arr.size())};
+    return inja_value{std::visit([](auto const& vec) { return static_cast<double>(vec.size()); }, arr)};
   }
   if (std::holds_alternative<inja_null>(val.storage)) {
     return inja_value{0.0};
@@ -953,12 +1050,119 @@ public:
     return inja_value{p->empty()};
   }
   if (auto const* p = std::get_if<inja_array>(&val.storage)) {
-    return inja_value{p->empty()};
+    return inja_value{std::visit([](auto const& vec) { return vec.empty(); }, *p)};
   }
   if (auto const* p = std::get_if<inja_object>(&val.storage)) {
     return inja_value{p->empty()};
   }
   return inja_value{false};
+}
+
+/**
+ * @brief 配列を整数特化配列へ変換する。
+ * @param v 変換対象の配列を持つ値
+ * @return 整数特化配列を持つ inja_value
+ * @throws render_error 変換できない要素が含まれる場合
+ */
+[[nodiscard]] inline auto fn_as_int_array(inja_value const& v) -> inja_value {
+  if (!std::holds_alternative<inja_array>(v.storage)) {
+    throw render_error{"as_int_array() expects array argument"};
+  }
+  auto const& arr = std::get<inja_array>(v.storage);
+  return std::visit([](auto const& vec) -> inja_value {
+    using T = typename std::decay_t<decltype(vec)>::value_type;
+    if constexpr (std::is_same_v<T, std::int64_t>) {
+      return inja_value{inja_array{vec}};
+    } else {
+      auto result = std::vector<std::int64_t>{};
+      result.reserve(vec.size());
+      for (auto const& elem : vec) {
+        if constexpr (std::is_same_v<T, inja_value>) {
+          if (auto const* p = std::get_if<std::int64_t>(&elem.storage)) {
+            result.push_back(*p);
+          } else {
+            throw render_error{"as_int_array() element is not integer"};
+          }
+        } else {
+          // double or string
+          throw render_error{"as_int_array() element is not integer"};
+        }
+      }
+      return inja_value{inja_array{std::move(result)}};
+    }
+  }, arr);
+}
+
+/**
+ * @brief 配列を浮動小数特化配列へ変換する。
+ * @param v 変換対象の配列を持つ値
+ * @return 浮動小数特化配列を持つ inja_value
+ * @throws render_error 変換できない要素が含まれる場合
+ */
+[[nodiscard]] inline auto fn_as_double_array(inja_value const& v) -> inja_value {
+  if (!std::holds_alternative<inja_array>(v.storage)) {
+    throw render_error{"as_double_array() expects array argument"};
+  }
+  auto const& arr = std::get<inja_array>(v.storage);
+  return std::visit([](auto const& vec) -> inja_value {
+    using T = typename std::decay_t<decltype(vec)>::value_type;
+    if constexpr (std::is_same_v<T, double>) {
+      return inja_value{inja_array{vec}};
+    } else {
+      auto result = std::vector<double>{};
+      result.reserve(vec.size());
+      for (auto const& elem : vec) {
+        if constexpr (std::is_same_v<T, inja_value>) {
+          if (auto const* p = std::get_if<double>(&elem.storage)) {
+            result.push_back(*p);
+          } else if (auto const* p = std::get_if<std::int64_t>(&elem.storage)) {
+            result.push_back(static_cast<double>(*p));
+          } else {
+            throw render_error{"as_double_array() element is not number"};
+          }
+        } else if constexpr (std::is_same_v<T, std::int64_t>) {
+          result.push_back(static_cast<double>(elem));
+        } else {
+          throw render_error{"as_double_array() element is not number"};
+        }
+      }
+      return inja_value{inja_array{std::move(result)}};
+    }
+  }, arr);
+}
+
+/**
+ * @brief 配列を文字列特化配列へ変換する。
+ * @param v 変換対象の配列を持つ値
+ * @return 文字列特化配列を持つ inja_value
+ * @throws render_error 変換できない要素が含まれる場合
+ */
+[[nodiscard]] inline auto fn_as_string_array(inja_value const& v) -> inja_value {
+  if (!std::holds_alternative<inja_array>(v.storage)) {
+    throw render_error{"as_string_array() expects array argument"};
+  }
+  auto const& arr = std::get<inja_array>(v.storage);
+  return std::visit([](auto const& vec) -> inja_value {
+    using T = typename std::decay_t<decltype(vec)>::value_type;
+    if constexpr (std::is_same_v<T, std::string>) {
+      return inja_value{inja_array{vec}};
+    } else {
+      auto result = std::vector<std::string>{};
+      result.reserve(vec.size());
+      for (auto const& elem : vec) {
+        if constexpr (std::is_same_v<T, inja_value>) {
+          if (auto const* p = std::get_if<std::string>(&elem.storage)) {
+            result.push_back(*p);
+          } else {
+            throw render_error{"as_string_array() element is not string"};
+          }
+        } else {
+          throw render_error{"as_string_array() element is not string"};
+        }
+      }
+      return inja_value{inja_array{std::move(result)}};
+    }
+  }, arr);
 }
 
 // ============ ユーティリティ関数 ============
@@ -977,7 +1181,7 @@ public:
     return p->empty();
   }
   if (auto const* p = std::get_if<inja_array>(&val.storage)) {
-    return p->empty();
+    return std::visit([](auto const& vec) { return vec.empty(); }, *p);
   }
   if (auto const* p = std::get_if<inja_object>(&val.storage)) {
     return p->empty();
@@ -1054,30 +1258,32 @@ public:
     throw render_error{"at() expects integer as index"};
   }
 
-  auto const& array = std::get<inja_array>(arr.storage);
+  auto const& array_variant = std::get<inja_array>(arr.storage);
   auto idx = std::get<std::int64_t>(index.storage);
-  auto const size = static_cast<std::int64_t>(array.size());
 
-  if (idx < 0) {
-    idx = size + idx;
-  }
+  return std::visit([&](auto const& vec) -> inja_value {
+    auto const size = static_cast<std::int64_t>(vec.size());
+    if (idx < 0) {
+      idx = size + idx;
+    }
 
-  if (idx < 0 || idx >= size) {
-    throw render_error{"at() index out of bounds"};
-  }
+    if (idx < 0 || idx >= size) {
+      throw render_error{"at() index out of bounds"};
+    }
 
-  return array[static_cast<std::size_t>(idx)];
+    return inja_value{vec[static_cast<std::size_t>(idx)]};
+  }, array_variant);
 }
 
 /**
  * @brief 配列またはオブジェクトが存在するか判定する
  *
  * @param val 判定対象の値
- * @return inja_value 存在すれば true、存在しなければ false
+ * @return inja_value 存在すれば true、存在すれば false
  */
 [[nodiscard]] inline auto fn_exists(inja_value const& val) noexcept(false) -> inja_value {
   if (auto const* p = std::get_if<inja_array>(&val.storage)) {
-    return inja_value{!p->empty()};
+    return inja_value{std::visit([](auto const& vec) { return !vec.empty(); }, *p)};
   }
   if (auto const* p = std::get_if<inja_object>(&val.storage)) {
     return inja_value{!p->empty()};
@@ -1095,12 +1301,20 @@ public:
  */
 [[nodiscard]] inline auto fn_existsIn(inja_value const& val, inja_value const& container) noexcept(false) -> inja_value {
   if (auto const* p = std::get_if<inja_array>(&container.storage)) {
-    for (auto const& elem : *p) {
-      if (values_equal(val, elem)) {
-        return inja_value{true};
+    return std::visit([&](auto const& vec) -> inja_value {
+      for (auto const& elem : vec) {
+        if constexpr (std::is_same_v<std::decay_t<decltype(elem)>, inja_value>) {
+          if (values_equal(val, elem)) {
+            return inja_value{true};
+          }
+        } else {
+          if (values_equal(val, inja_value{elem})) {
+            return inja_value{true};
+          }
+        }
       }
-    }
-    return inja_value{false};
+      return inja_value{false};
+    }, *p);
   }
 
   if (auto const* p = std::get_if<inja_object>(&container.storage)) {
