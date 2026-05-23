@@ -20,4 +20,5 @@
 #include "frozenchars/map.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
 #include "frozenchars/inja_value.hpp"
+#include "frozenchars/inja_function.hpp"
 #include "frozenchars/inja_engine.hpp"

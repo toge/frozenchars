@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "string.hpp"
+#include "inja_function.hpp"
 #include "inja_value.hpp"
 
 namespace frozenchars::inja {
@@ -651,14 +652,406 @@ inline auto append_value(OutputBuffer& out, inja_value const& v) -> void {
   throw render_error{"cannot convert value to string"};
 }
 
-/// @brief Forward declaration of evaluate_function
+/// @brief Forward declaration は不要（builtin_function_list + evaluate_function<FunctionList> が担う）
+
+/**
+ * @brief builtin 関数ラッパー群。
+ *
+ * static unordered_map + std::function による runtime dispatch を排除し、
+ * 各関数を独立した named function として定義する。
+ * これにより function_list<fn<"upper", bfn_upper>, ...> を用いた
+ * compile-time fold expression dispatch が可能になる。
+ */
+
+inline auto bfn_upper(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"upper() expects 1 argument"};
+  }
+  if (!std::holds_alternative<std::string>(a[0].storage)) {
+    throw render_error{"upper() expects string argument"};
+  }
+  return inja_value{fn_upper(std::get<std::string>(a[0].storage))};
+}
+
+inline auto bfn_lower(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"lower() expects 1 argument"};
+  }
+  if (!std::holds_alternative<std::string>(a[0].storage)) {
+    throw render_error{"lower() expects string argument"};
+  }
+  return inja_value{fn_lower(std::get<std::string>(a[0].storage))};
+}
+
+inline auto bfn_capitalize(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"capitalize() expects 1 argument"};
+  }
+  if (!std::holds_alternative<std::string>(a[0].storage)) {
+    throw render_error{"capitalize() expects string argument"};
+  }
+  return inja_value{fn_capitalize(std::get<std::string>(a[0].storage))};
+}
+
+inline auto bfn_replace(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 3) {
+    throw render_error{"replace() expects 3 arguments"};
+  }
+  if (!std::holds_alternative<std::string>(a[0].storage) ||
+      !std::holds_alternative<std::string>(a[1].storage) ||
+      !std::holds_alternative<std::string>(a[2].storage)) {
+    throw render_error{"replace() expects 3 string arguments"};
+  }
+  return inja_value{fn_replace(
+    std::get<std::string>(a[0].storage),
+    std::get<std::string>(a[1].storage),
+    std::get<std::string>(a[2].storage)
+  )};
+}
+
+inline auto bfn_length(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"length() expects 1 argument"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"length() expects array argument"};
+  }
+  return inja_value{fn_length(std::get<inja_array>(a[0].storage))};
+}
+
+inline auto bfn_first(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"first() expects 1 argument"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"first() expects array argument"};
+  }
+  return fn_first(std::get<inja_array>(a[0].storage));
+}
+
+inline auto bfn_last(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"last() expects 1 argument"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"last() expects array argument"};
+  }
+  return fn_last(std::get<inja_array>(a[0].storage));
+}
+
+inline auto bfn_join(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 2) {
+    throw render_error{"join() expects 2 arguments"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"join() expects first argument to be array"};
+  }
+  if (!std::holds_alternative<std::string>(a[1].storage)) {
+    throw render_error{"join() expects second argument to be string"};
+  }
+  return inja_value{fn_join(
+    std::get<inja_array>(a[0].storage),
+    std::get<std::string>(a[1].storage)
+  )};
+}
+
+inline auto bfn_sort(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"sort() expects 1 argument"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"sort() expects array argument"};
+  }
+  return inja_value{fn_sort(std::get<inja_array>(a[0].storage))};
+}
+
+inline auto bfn_range(std::vector<inja_value> const& a) -> inja_value {
+  switch (a.size()) {
+  case 1:
+    if (!std::holds_alternative<std::int64_t>(a[0].storage)) {
+      throw render_error{"range() expects integer argument"};
+    }
+    return inja_value{fn_range(std::get<std::int64_t>(a[0].storage))};
+  case 2:
+    if (!std::holds_alternative<std::int64_t>(a[0].storage) ||
+        !std::holds_alternative<std::int64_t>(a[1].storage)) {
+      throw render_error{"range() expects integer arguments"};
+    }
+    return inja_value{fn_range(
+      std::get<std::int64_t>(a[0].storage),
+      std::get<std::int64_t>(a[1].storage)
+    )};
+  case 3:
+    if (!std::holds_alternative<std::int64_t>(a[0].storage) ||
+        !std::holds_alternative<std::int64_t>(a[1].storage) ||
+        !std::holds_alternative<std::int64_t>(a[2].storage)) {
+      throw render_error{"range() expects integer arguments"};
+    }
+    return inja_value{fn_range(
+      std::get<std::int64_t>(a[0].storage),
+      std::get<std::int64_t>(a[1].storage),
+      std::get<std::int64_t>(a[2].storage)
+    )};
+  default:
+    throw render_error{"range() expects 1, 2, or 3 arguments"};
+  }
+}
+
+inline auto bfn_abs(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"abs() expects 1 argument"};
+  }
+  return fn_abs(a[0]);
+}
+
+inline auto bfn_round(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() == 1) {
+    return fn_round(a[0]);
+  }
+  if (a.size() == 2) {
+    return fn_round(a[0], a[1]);
+  }
+  throw render_error{"round() expects 1 or 2 arguments"};
+}
+
+inline auto bfn_max(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"max() expects 1 argument"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"max() expects array argument"};
+  }
+  return fn_max(std::get<inja_array>(a[0].storage));
+}
+
+inline auto bfn_min(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"min() expects 1 argument"};
+  }
+  if (!std::holds_alternative<inja_array>(a[0].storage)) {
+    throw render_error{"min() expects array argument"};
+  }
+  return fn_min(std::get<inja_array>(a[0].storage));
+}
+
+inline auto bfn_even(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"even() expects 1 argument"};
+  }
+  return fn_even(a[0]);
+}
+
+inline auto bfn_odd(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"odd() expects 1 argument"};
+  }
+  return fn_odd(a[0]);
+}
+
+inline auto bfn_divisibleBy(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 2) {
+    throw render_error{"divisibleBy() expects 2 arguments"};
+  }
+  return fn_divisibleBy(a[0], a[1]);
+}
+
+inline auto bfn_int(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"int() expects 1 argument"};
+  }
+  return fn_int(a[0]);
+}
+
+inline auto bfn_float(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"float() expects 1 argument"};
+  }
+  return fn_float(a[0]);
+}
+
+inline auto bfn_isString(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isString() expects 1 argument"};
+  }
+  return fn_isString(a[0]);
+}
+
+inline auto bfn_isArray(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isArray() expects 1 argument"};
+  }
+  return fn_isArray(a[0]);
+}
+
+inline auto bfn_isNumber(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isNumber() expects 1 argument"};
+  }
+  return fn_isNumber(a[0]);
+}
+
+inline auto bfn_isObject(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isObject() expects 1 argument"};
+  }
+  return fn_isObject(a[0]);
+}
+
+inline auto bfn_isBoolean(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isBoolean() expects 1 argument"};
+  }
+  return fn_isBoolean(a[0]);
+}
+
+inline auto bfn_isFloat(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isFloat() expects 1 argument"};
+  }
+  return fn_isFloat(a[0]);
+}
+
+inline auto bfn_isInteger(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isInteger() expects 1 argument"};
+  }
+  return fn_isInteger(a[0]);
+}
+
+inline auto bfn_isNone(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isNone() expects 1 argument"};
+  }
+  return fn_isNone(a[0]);
+}
+
+inline auto bfn_isEmpty(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"isEmpty() expects 1 argument"};
+  }
+  return fn_isEmpty(a[0]);
+}
+
+inline auto bfn_default(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 2) {
+    throw render_error{"default() expects 2 arguments"};
+  }
+  return fn_default(a[0], a[1]);
+}
+
+inline auto bfn_at(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 2) {
+    throw render_error{"at() expects 2 arguments"};
+  }
+  return fn_at(a[0], a[1]);
+}
+
+inline auto bfn_exists(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"exists() expects 1 argument"};
+  }
+  return fn_exists(a[0]);
+}
+
+inline auto bfn_existsIn(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 2) {
+    throw render_error{"existsIn() expects 2 arguments"};
+  }
+  return fn_existsIn(a[0], a[1]);
+}
+
+inline auto bfn_as_int_array(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"as_int_array() expects 1 argument"};
+  }
+  return fn_as_int_array(a[0]);
+}
+
+inline auto bfn_as_double_array(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"as_double_array() expects 1 argument"};
+  }
+  return fn_as_double_array(a[0]);
+}
+
+inline auto bfn_as_string_array(std::vector<inja_value> const& a) -> inja_value {
+  if (a.size() != 1) {
+    throw render_error{"as_string_array() expects 1 argument"};
+  }
+  return fn_as_string_array(a[0]);
+}
+
+/// 全 builtin 関数を含む compile-time 関数登録テーブル。
+/// `evaluate_function<default_function_list>` によりデフォルト dispatch に使用する。
+using default_function_list = frozenchars::inja::function_list<
+  frozenchars::inja::fn<"upper",          bfn_upper>,
+  frozenchars::inja::fn<"lower",          bfn_lower>,
+  frozenchars::inja::fn<"capitalize",     bfn_capitalize>,
+  frozenchars::inja::fn<"replace",        bfn_replace>,
+  frozenchars::inja::fn<"length",         bfn_length>,
+  frozenchars::inja::fn<"first",          bfn_first>,
+  frozenchars::inja::fn<"last",           bfn_last>,
+  frozenchars::inja::fn<"join",           bfn_join>,
+  frozenchars::inja::fn<"sort",           bfn_sort>,
+  frozenchars::inja::fn<"range",          bfn_range>,
+  frozenchars::inja::fn<"abs",            bfn_abs>,
+  frozenchars::inja::fn<"round",          bfn_round>,
+  frozenchars::inja::fn<"max",            bfn_max>,
+  frozenchars::inja::fn<"min",            bfn_min>,
+  frozenchars::inja::fn<"even",           bfn_even>,
+  frozenchars::inja::fn<"odd",            bfn_odd>,
+  frozenchars::inja::fn<"divisibleBy",    bfn_divisibleBy>,
+  frozenchars::inja::fn<"int",            bfn_int>,
+  frozenchars::inja::fn<"float",          bfn_float>,
+  frozenchars::inja::fn<"isString",       bfn_isString>,
+  frozenchars::inja::fn<"isArray",        bfn_isArray>,
+  frozenchars::inja::fn<"isNumber",       bfn_isNumber>,
+  frozenchars::inja::fn<"isObject",       bfn_isObject>,
+  frozenchars::inja::fn<"isBoolean",      bfn_isBoolean>,
+  frozenchars::inja::fn<"isFloat",        bfn_isFloat>,
+  frozenchars::inja::fn<"isInteger",      bfn_isInteger>,
+  frozenchars::inja::fn<"isNone",         bfn_isNone>,
+  frozenchars::inja::fn<"isEmpty",        bfn_isEmpty>,
+  frozenchars::inja::fn<"default",        bfn_default>,
+  frozenchars::inja::fn<"at",             bfn_at>,
+  frozenchars::inja::fn<"exists",         bfn_exists>,
+  frozenchars::inja::fn<"existsIn",       bfn_existsIn>,
+  frozenchars::inja::fn<"as_int_array",   bfn_as_int_array>,
+  frozenchars::inja::fn<"as_double_array", bfn_as_double_array>,
+  frozenchars::inja::fn<"as_string_array", bfn_as_string_array>
+>;
+
+/**
+ * @brief 関数名と引数から関数を評価する。
+ *
+ * FunctionList の fold expression dispatch を試みた後、
+ * runtime_options のユーザー定義関数にフォールバックする。
+ * static unordered_map を使用しないため optimizer がインライン展開可能。
+ *
+ * @tparam FunctionList  compile-time 関数登録テーブル
+ */
+template <frozenchars::inja::is_function_list FunctionList = default_function_list>
 [[nodiscard]] inline auto evaluate_function(std::string_view func_name,
                                             std::vector<inja_value> const& args,
-                                            runtime_options_ref runtime_options) -> inja_value;
+                                            runtime_options_ref runtime_options) -> inja_value {
+  if (auto result = FunctionList::dispatch(func_name, args)) {
+    return std::move(*result);
+  }
+  if (runtime_options.has_value()) {
+    auto const& options = runtime_options->get();
+    auto const it = options.function_call.find(func_name);
+    if (it != options.function_call.end()) {
+      return it->second(args);
+    }
+  }
+  throw render_error{"unknown function: " + std::string{func_name}};
+}
 
 /**
  * @brief 実行時式評価器（簡易再帰下降パーサ）。
+ * @tparam FunctionList  compile-time 関数登録テーブル
  */
+template <frozenchars::inja::is_function_list FunctionList = default_function_list>
 class expr_parser {
 public:
   /**
@@ -1033,7 +1426,7 @@ private:
 
       args.push_back(std::move(v));
       std::rotate(args.begin(), args.end() - 1, args.end());
-      v = evaluate_function(func_name, args, runtime_options_);
+      v = evaluate_function<FunctionList>(func_name, args, runtime_options_);
       skip_space();
     }
     return v;
@@ -1222,7 +1615,7 @@ private:
       if (!consume(")")) {
         throw render_error{"missing closing parenthesis in function call"};
       }
-      return evaluate_function(name, args, runtime_options_);
+      return evaluate_function<FunctionList>(name, args, runtime_options_);
     }
     return resolve_name(name, evaluate);
   }
@@ -1288,319 +1681,6 @@ inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view 
 using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
 
 /**
- * @brief 関数名と引数から組み込み関数を評価する
- *
- * @param func_name 関数名
- * @param args 引数
- * @param runtime_options ランタイムオプション（必要な関数で使用）
- * @return inja_value 戻り値
- */
-[[nodiscard]] inline auto evaluate_function(std::string_view func_name,
-                                            std::vector<inja_value> const& args,
-                                            runtime_options_ref runtime_options) -> inja_value {
-  static auto const builtin_dispatch = std::unordered_map<std::string_view, builtin_fn>{
-    {"upper", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"upper() expects 1 argument"};
-       }
-       if (!std::holds_alternative<std::string>(a[0].storage)) {
-         throw render_error{"upper() expects string argument"};
-       }
-       return inja_value{fn_upper(std::get<std::string>(a[0].storage))};
-     }},
-    {"lower", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"lower() expects 1 argument"};
-       }
-       if (!std::holds_alternative<std::string>(a[0].storage)) {
-         throw render_error{"lower() expects string argument"};
-       }
-       return inja_value{fn_lower(std::get<std::string>(a[0].storage))};
-     }},
-    {"capitalize", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"capitalize() expects 1 argument"};
-       }
-       if (!std::holds_alternative<std::string>(a[0].storage)) {
-         throw render_error{"capitalize() expects string argument"};
-       }
-       return inja_value{fn_capitalize(std::get<std::string>(a[0].storage))};
-     }},
-    {"replace", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 3) {
-         throw render_error{"replace() expects 3 arguments"};
-       }
-       if (!std::holds_alternative<std::string>(a[0].storage) ||
-           !std::holds_alternative<std::string>(a[1].storage) ||
-           !std::holds_alternative<std::string>(a[2].storage)) {
-         throw render_error{"replace() expects 3 string arguments"};
-       }
-       return inja_value{fn_replace(
-         std::get<std::string>(a[0].storage),
-         std::get<std::string>(a[1].storage),
-         std::get<std::string>(a[2].storage)
-       )};
-     }},
-    {"length", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"length() expects 1 argument"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"length() expects array argument"};
-       }
-       return inja_value{fn_length(std::get<inja_array>(a[0].storage))};
-     }},
-    {"first", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"first() expects 1 argument"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"first() expects array argument"};
-       }
-       return fn_first(std::get<inja_array>(a[0].storage));
-     }},
-    {"last", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"last() expects 1 argument"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"last() expects array argument"};
-       }
-       return fn_last(std::get<inja_array>(a[0].storage));
-     }},
-    {"join", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 2) {
-         throw render_error{"join() expects 2 arguments"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"join() expects first argument to be array"};
-       }
-       if (!std::holds_alternative<std::string>(a[1].storage)) {
-         throw render_error{"join() expects second argument to be string"};
-       }
-       return inja_value{fn_join(
-         std::get<inja_array>(a[0].storage),
-         std::get<std::string>(a[1].storage)
-       )};
-     }},
-    {"sort", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"sort() expects 1 argument"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"sort() expects array argument"};
-       }
-       return inja_value{fn_sort(std::get<inja_array>(a[0].storage))};
-     }},
-    {"range", [](std::vector<inja_value> const& a) -> inja_value {
-       switch (a.size()) {
-       case 1:
-         if (!std::holds_alternative<std::int64_t>(a[0].storage)) {
-           throw render_error{"range() expects integer argument"};
-         }
-         return inja_value{fn_range(std::get<std::int64_t>(a[0].storage))};
-       case 2:
-         if (!std::holds_alternative<std::int64_t>(a[0].storage) ||
-             !std::holds_alternative<std::int64_t>(a[1].storage)) {
-           throw render_error{"range() expects integer arguments"};
-         }
-         return inja_value{fn_range(
-           std::get<std::int64_t>(a[0].storage),
-           std::get<std::int64_t>(a[1].storage)
-         )};
-       case 3:
-         if (!std::holds_alternative<std::int64_t>(a[0].storage) ||
-             !std::holds_alternative<std::int64_t>(a[1].storage) ||
-             !std::holds_alternative<std::int64_t>(a[2].storage)) {
-           throw render_error{"range() expects integer arguments"};
-         }
-         return inja_value{fn_range(
-           std::get<std::int64_t>(a[0].storage),
-           std::get<std::int64_t>(a[1].storage),
-           std::get<std::int64_t>(a[2].storage)
-         )};
-       default:
-         throw render_error{"range() expects 1, 2, or 3 arguments"};
-       }
-     }},
-    {"abs", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"abs() expects 1 argument"};
-       }
-       return fn_abs(a[0]);
-     }},
-    {"round", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() == 1) {
-         return fn_round(a[0]);
-       }
-       if (a.size() == 2) {
-         return fn_round(a[0], a[1]);
-       }
-       throw render_error{"round() expects 1 or 2 arguments"};
-     }},
-    {"max", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"max() expects 1 argument"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"max() expects array argument"};
-       }
-       return fn_max(std::get<inja_array>(a[0].storage));
-     }},
-    {"min", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"min() expects 1 argument"};
-       }
-       if (!std::holds_alternative<inja_array>(a[0].storage)) {
-         throw render_error{"min() expects array argument"};
-       }
-       return fn_min(std::get<inja_array>(a[0].storage));
-     }},
-    {"even", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"even() expects 1 argument"};
-       }
-       return fn_even(a[0]);
-     }},
-    {"odd", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"odd() expects 1 argument"};
-       }
-       return fn_odd(a[0]);
-     }},
-    {"divisibleBy", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 2) {
-         throw render_error{"divisibleBy() expects 2 arguments"};
-       }
-       return fn_divisibleBy(a[0], a[1]);
-     }},
-    {"int", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"int() expects 1 argument"};
-       }
-       return fn_int(a[0]);
-     }},
-    {"float", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"float() expects 1 argument"};
-       }
-       return fn_float(a[0]);
-     }},
-    {"isString", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isString() expects 1 argument"};
-       }
-       return fn_isString(a[0]);
-     }},
-    {"isArray", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isArray() expects 1 argument"};
-       }
-       return fn_isArray(a[0]);
-     }},
-    {"isNumber", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isNumber() expects 1 argument"};
-       }
-       return fn_isNumber(a[0]);
-     }},
-    {"isObject", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isObject() expects 1 argument"};
-       }
-       return fn_isObject(a[0]);
-     }},
-    {"isBoolean", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isBoolean() expects 1 argument"};
-       }
-       return fn_isBoolean(a[0]);
-     }},
-    {"isFloat", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isFloat() expects 1 argument"};
-       }
-       return fn_isFloat(a[0]);
-     }},
-    {"isInteger", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isInteger() expects 1 argument"};
-       }
-       return fn_isInteger(a[0]);
-     }},
-    {"isNone", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isNone() expects 1 argument"};
-       }
-       return fn_isNone(a[0]);
-     }},
-    {"isEmpty", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"isEmpty() expects 1 argument"};
-       }
-       return fn_isEmpty(a[0]);
-     }},
-    {"default", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 2) {
-         throw render_error{"default() expects 2 arguments"};
-       }
-       return fn_default(a[0], a[1]);
-     }},
-    {"at", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 2) {
-         throw render_error{"at() expects 2 arguments"};
-       }
-       return fn_at(a[0], a[1]);
-     }},
-    {"exists", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"exists() expects 1 argument"};
-       }
-       return fn_exists(a[0]);
-     }},
-    {"existsIn", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 2) {
-         throw render_error{"existsIn() expects 2 arguments"};
-       }
-       return fn_existsIn(a[0], a[1]);
-     }},
-    {"as_int_array", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"as_int_array() expects 1 argument"};
-       }
-       return fn_as_int_array(a[0]);
-     }},
-    {"as_double_array", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"as_double_array() expects 1 argument"};
-       }
-       return fn_as_double_array(a[0]);
-     }},
-    {"as_string_array", [](std::vector<inja_value> const& a) -> inja_value {
-       if (a.size() != 1) {
-         throw render_error{"as_string_array() expects 1 argument"};
-       }
-       return fn_as_string_array(a[0]);
-     }},
-  };
-
-  if (auto const it = builtin_dispatch.find(func_name); it != builtin_dispatch.end()) {
-    return it->second(args);
-  }
-
-  // 組み込み関数で見つからない場合のみ、実行時登録コールバックを参照する。
-  if (runtime_options.has_value()) {
-    auto const& options = runtime_options->get();
-    auto const it = options.function_call.find(func_name);
-    if (it != options.function_call.end()) {
-      return it->second(args);
-    }
-  }
-
-  throw render_error{"unknown function: " + std::string{func_name}};
-}
-
-/**
  * @brief パース済みバイトコードを実行して文字列を生成する。
  * @tparam Src 元テンプレート文字列
  * @param root ルートスコープ
@@ -1613,7 +1693,7 @@ using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
-template <auto Src, typename OutputBuffer, typename Delims = frozenchars::inja::default_delimiters>
+template <auto Src, typename OutputBuffer, frozenchars::inja::is_function_list FunctionList = default_function_list, typename Delims = frozenchars::inja::default_delimiters>
 auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
   auto constexpr program = detail::parse_program<Src, Delims>();
   auto constexpr src = Src.sv();
@@ -1638,7 +1718,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
       // expr ノードは式を評価して出力に追加する
       case node_kind::expr: {
         auto const expr = src.substr(node.begin, node.end - node.begin);
-        auto const value = expr_parser{trim_view(expr), scopes, runtime_options}.parse();
+        auto const value = expr_parser<FunctionList>{trim_view(expr), scopes, runtime_options}.parse();
         append_value(out, value);
         ++i;
         break;
@@ -1647,7 +1727,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
       // cond を評価し、then または else 節の範囲だけを再帰実行する
       case node_kind::if_stmt: {
         auto const cond_sv = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto const cond = expr_parser{cond_sv, scopes, runtime_options}.parse();
+        auto const cond = expr_parser<FunctionList>{cond_sv, scopes, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
@@ -1667,7 +1747,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
             }
             if (else_node.kind == node_kind::else_stmt) {
               auto const else_cond_sv = src.substr(else_node.aux_begin, else_node.aux_end - else_node.aux_begin);
-              auto const else_cond = expr_parser{else_cond_sv, scopes, runtime_options}.parse();
+              auto const else_cond = expr_parser<FunctionList>{else_cond_sv, scopes, runtime_options}.parse();
               if (frozenchars::inja::truthy(else_cond)) {
                 self(else_idx + 1, branch_end);
                 break;
@@ -1690,7 +1770,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         auto const key_name = has_key
                                 ? src.substr(node.aux3_begin, node.aux3_end - node.aux3_begin)
                                 : std::string_view{};
-        auto iterable = expr_parser{iter_expr, scopes, runtime_options}.parse();
+        auto iterable = expr_parser<FunctionList>{iter_expr, scopes, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
         if (std::holds_alternative<inja_array>(iterable.storage)) {
@@ -1772,7 +1852,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         // set は式を評価して、現在のスコープ連鎖へ代入する。
         auto const set_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
         auto const set_target = src.substr(node.aux2_begin, node.aux2_end - node.aux2_begin);
-        auto value = expr_parser{set_expr, scopes, runtime_options}.parse();
+        auto value = expr_parser<FunctionList>{set_expr, scopes, runtime_options}.parse();
         assign_to_scopes(scopes, set_target, std::move(value));
         ++i;
         break;
@@ -1781,7 +1861,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
       case node_kind::include_stmt: {
         // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
         auto const include_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto include_name = expr_parser{include_expr, scopes, runtime_options}.parse();
+        auto include_name = expr_parser<FunctionList>{include_expr, scopes, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
           throw render_error{"include target must evaluate to string"};
         }
@@ -1828,14 +1908,83 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
-template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
+template <auto Src, frozenchars::inja::is_function_list FunctionList = default_function_list, typename Delims = frozenchars::inja::default_delimiters>
 auto render_program(inja_object const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
   auto out = std::string{};
-  render_program<Src, std::string, Delims>(root, out, runtime_options);
+  render_program<Src, std::string, FunctionList, Delims>(root, out, runtime_options);
   return out;
 }
 
 } // namespace detail
+
+/// default_function_list を frozenchars::inja 名前空間に公開する
+using default_function_list = detail::default_function_list;
+
+/**
+ * @brief Collect all function call names from a template at compile time.
+ *
+ * Used for static_assert validation of unregistered functions.
+ * Scans expression blocks, statement blocks, and line statements.
+ */
+template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
+[[nodiscard]] consteval auto extract_template_function_calls()
+  -> frozenchars::inja::function_call_set<256> {
+  auto constexpr src_sv = Src.sv();
+  auto constexpr expr_open = Delims::expression_open.sv();
+  auto constexpr expr_close = Delims::expression_close.sv();
+  auto constexpr stmt_open = Delims::statement_open.sv();
+  auto constexpr stmt_close = Delims::statement_close.sv();
+  auto constexpr line_prefix = Delims::line_statement_prefix.sv();
+
+  auto result = frozenchars::inja::function_call_set<256>{};
+  auto pos = std::size_t{0};
+
+  while (pos < src_sv.size()) {
+    // 行文プレフィックスを先頭で確認（行頭のみ）
+    auto const at_line_start = (pos == 0) || (src_sv[pos - 1] == '\n');
+    if (at_line_start && src_sv.substr(pos, line_prefix.size()) == line_prefix) {
+      auto const content_begin = pos + line_prefix.size();
+      auto const newline = src_sv.find('\n', content_begin);
+      auto const content_end = (newline != std::string_view::npos) ? newline : src_sv.size();
+      frozenchars::inja::detail::extract_calls_from_expr(
+        src_sv.substr(content_begin, content_end - content_begin), result);
+      pos = content_end;
+      continue;
+    }
+
+    auto const expr_pos = src_sv.find(expr_open, pos);
+    auto const stmt_pos = src_sv.find(stmt_open, pos);
+    auto const next = std::min(
+      expr_pos != std::string_view::npos ? expr_pos : std::string_view::npos,
+      stmt_pos != std::string_view::npos ? stmt_pos : std::string_view::npos
+    );
+    if (next == std::string_view::npos) {
+      break;
+    }
+
+    if (next == expr_pos && (stmt_pos == std::string_view::npos || expr_pos < stmt_pos)) {
+      auto const content_begin = expr_pos + expr_open.size();
+      auto const close = src_sv.find(expr_close, content_begin);
+      if (close == std::string_view::npos) {
+        break;
+      }
+      frozenchars::inja::detail::extract_calls_from_expr(
+        src_sv.substr(content_begin, close - content_begin), result);
+      pos = close + expr_close.size();
+    } else {
+      auto const content_begin = stmt_pos + stmt_open.size();
+      auto const close = src_sv.find(stmt_close, content_begin);
+      if (close == std::string_view::npos) {
+        break;
+      }
+      frozenchars::inja::detail::extract_calls_from_expr(
+        src_sv.substr(content_begin, close - content_begin), result);
+      pos = close + stmt_close.size();
+    }
+  }
+
+  return result;
+}
 
 /**
  * @brief テンプレートをレンダリングする高水準API。
@@ -1844,11 +1993,48 @@ auto render_program(inja_object const& root, runtime_options_ref runtime_options
  * @return 出力文字列
  */
 template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
+  requires (!is_function_list<Delims>)
 auto render(inja_value const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
   if (!std::holds_alternative<inja_object>(root.storage)) {
     throw render_error{"root context must be object"};
   }
-  return detail::render_program<Src, Delims>(std::get<inja_object>(root.storage), runtime_options);
+  return detail::render_program<Src, default_function_list, Delims>(std::get<inja_object>(root.storage), runtime_options);
+}
+
+/**
+ * @brief テンプレートをレンダリングする高水準API（compile-time FunctionList 指定版）。
+ *
+ * 指定した FunctionList に含まれない関数名がテンプレート内に存在する場合、
+ * static_assert により compile-time エラーになる。
+ *
+ * @tparam Src          テンプレート文字列
+ * @tparam FunctionList compile-time 関数登録テーブル（is_function_list を満たす型）
+ * @tparam Delims       テンプレート区切り文字
+ *
+ * 使用例:
+ * @code
+ * using my_fns = function_list<fn<"upper", my_upper>, fn<"lower", my_lower>>;
+ * constexpr auto src = "{{ upper(name) }}"_fs;
+ * auto result = render<src, my_fns>(ctx);
+ * @endcode
+ */
+template <auto Src, is_function_list FunctionList, typename Delims = frozenchars::inja::default_delimiters>
+auto render(inja_value const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
+  static_assert([]() constexpr -> bool {
+    auto constexpr calls = extract_template_function_calls<Src, Delims>();
+    for (auto i = 0uz; i < calls.count; ++i) {
+      if (!FunctionList::contains(calls.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }(),
+  "Template calls function(s) not registered in the FunctionList. "
+  "Add the missing function(s) to your function_list<...>.");
+  if (!std::holds_alternative<inja_object>(root.storage)) {
+    throw render_error{"root context must be object"};
+  }
+  return detail::render_program<Src, FunctionList, Delims>(std::get<inja_object>(root.storage), runtime_options);
 }
 
 /**
@@ -1870,7 +2056,44 @@ auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref ru
     if (!std::holds_alternative<inja_object>(root.storage)) {
       return std::unexpected(std::string{"root context must be object"});
     }
-    detail::render_program<Src, OutputBuffer, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
+    detail::render_program<Src, OutputBuffer, default_function_list, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
+    return {};
+  } catch (std::exception const& e) {
+    return std::unexpected(std::string{e.what()});
+  } catch (...) {
+    return std::unexpected(std::string{"unknown error during template rendering"});
+  }
+}
+
+/**
+ * @brief テンプレートをレンダリングし、カスタム出力バッファへ結果を追加する（compile-time FunctionList 指定版）。
+ *
+ * @tparam Src          テンプレート文字列
+ * @tparam FunctionList compile-time 関数登録テーブル
+ * @tparam OutputBuffer append() メソッドを持つクラス
+ * @tparam Delims       テンプレート区切り文字
+ */
+template <auto Src, is_function_list FunctionList, typename OutputBuffer, typename Delims = frozenchars::inja::default_delimiters>
+  requires requires(OutputBuffer& output, std::string_view chunk) {
+    output.append(chunk);
+  }
+auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref runtime_options = std::nullopt) -> std::expected<void, std::string> {
+  static_assert([]() constexpr -> bool {
+    auto constexpr calls = extract_template_function_calls<Src, Delims>();
+    for (auto i = 0uz; i < calls.count; ++i) {
+      if (!FunctionList::contains(calls.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }(),
+  "Template calls function(s) not registered in the FunctionList. "
+  "Add the missing function(s) to your function_list<...>.");
+  try {
+    if (!std::holds_alternative<inja_object>(root.storage)) {
+      return std::unexpected(std::string{"root context must be object"});
+    }
+    detail::render_program<Src, OutputBuffer, FunctionList, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});
