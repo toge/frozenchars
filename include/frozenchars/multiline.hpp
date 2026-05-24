@@ -563,25 +563,13 @@ auto consteval remove_trailing_empty_lines(FrozenString<N> const& str, size_t n 
   auto removed = 0uz;
 
   while (cut > 0) {
-    auto line_end = cut;
-    if (str.buffer[line_end - 1] != '\n') {
-      break;
-    }
-    --line_end;
-
-    auto line_start = line_end;
-    while (line_start > 0 && str.buffer[line_start - 1] != '\n') {
-      --line_start;
-    }
-
-    auto const is_empty_line = line_start == line_end;
     auto const can_remove = n == 0 || removed < n;
-    if (!is_empty_line || !can_remove) {
+    if (str.buffer[cut - 1] != '\n' || !can_remove) {
       break;
     }
 
     ++removed;
-    cut = line_start;
+    --cut;
   }
 
   auto res = FrozenString<N>{};
