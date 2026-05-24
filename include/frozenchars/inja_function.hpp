@@ -1,9 +1,12 @@
 #pragma once
 
 #include <array>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "inja_value.hpp"
@@ -140,6 +143,135 @@ using empty_function_list = function_list<>;
  */
 template <typename T>
 concept is_function_list = requires { typename T::function_list_tag; };
+
+// ============================================================
+// constant / constant_list - compile-time 定数登録テーブル
+// ============================================================
+
+namespace detail {
+
+template <typename Provider>
+concept is_constant_provider = requires {
+  { Provider::value() } -> std::convertible_to<inja_value>;
+};
+
+} // namespace detail
+
+/**
+ * @brief compile-time 定数エントリ。
+ *
+ * @tparam Name  定数名
+ * @tparam Value 定数値（string / integer / floating-point / bool）
+ */
+struct constant_value {
+  enum class kind_type : std::uint8_t { string, integer, floating, boolean };
+
+  static constexpr auto max_string_size = std::size_t{128};
+
+  kind_type kind{kind_type::string};
+  std::array<char, max_string_size> string_value{};
+  std::size_t string_size{};
+  std::int64_t integer_value{};
+  double floating_value{};
+  bool bool_value{};
+
+  template <std::size_t N>
+  constexpr constant_value(char const (&s)[N]) : kind(kind_type::string), string_size(N - 1) {
+    static_assert(N > 0, "constant string must not be empty literal type");
+    static_assert(N - 1 <= max_string_size, "constant string literal too long");
+    for (auto i = 0uz; i < N - 1; ++i) {
+      string_value[i] = s[i];
+    }
+  }
+
+  template <typename Int>
+    requires(std::integral<std::remove_cvref_t<Int>> && !std::same_as<std::remove_cvref_t<Int>, bool>)
+  constexpr constant_value(Int v)
+    : kind(kind_type::integer), integer_value(static_cast<std::int64_t>(v)) {}
+
+  template <typename Float>
+    requires std::floating_point<std::remove_cvref_t<Float>>
+  constexpr constant_value(Float v)
+    : kind(kind_type::floating), floating_value(static_cast<double>(v)) {}
+
+  constexpr constant_value(bool v)
+    : kind(kind_type::boolean), bool_value(v) {}
+};
+
+template <fixed_string Name, constant_value Value>
+struct constant {
+  static constexpr auto name = Name;
+  static constexpr auto value = Value;
+
+  [[nodiscard]] static auto get() -> inja_value {
+    switch (value.kind) {
+      case constant_value::kind_type::string:
+        return inja_value{std::string{value.string_value.data(), value.string_size}};
+      case constant_value::kind_type::integer:
+        return inja_value{value.integer_value};
+      case constant_value::kind_type::floating:
+        return inja_value{value.floating_value};
+      case constant_value::kind_type::boolean:
+        return inja_value{value.bool_value};
+    }
+    return inja_value{};
+  }
+};
+
+/**
+ * @brief Provider 型で値を供給する拡張用エントリ。
+ *
+ * Provider は `static auto value() -> inja_value` を提供する。
+ */
+template <fixed_string Name, typename Provider>
+  requires detail::is_constant_provider<Provider>
+struct constant_provider {
+  static constexpr auto name = Name;
+
+  [[nodiscard]] static auto get() -> inja_value {
+    return Provider::value();
+  }
+};
+
+/**
+ * @brief compile-time 定数登録リスト。
+ */
+template <typename... Entries>
+struct constant_list {
+  struct constant_list_tag {};
+
+  [[nodiscard]] static constexpr auto contains(std::string_view name) noexcept -> bool {
+    return (... || (Entries::name == name));
+  }
+
+  [[nodiscard]] static auto lookup(std::string_view name) -> std::optional<inja_value> {
+    auto result = std::optional<inja_value>{};
+    std::ignore = (false || ... || (Entries::name == name
+      ? (result.emplace(Entries::get()), true)
+      : false));
+    return result;
+  }
+
+  static constexpr auto size = sizeof...(Entries);
+};
+
+using empty_constant_list = constant_list<>;
+
+template <typename T>
+concept is_constant_list = requires { typename T::constant_list_tag; };
+
+/**
+ * @brief compile-time function / constant を束ねる環境型。
+ */
+template <is_function_list FunctionList = empty_function_list, is_constant_list ConstantList = empty_constant_list>
+struct environment {
+  struct environment_tag {};
+  using function_list_type = FunctionList;
+  using constant_list_type = ConstantList;
+};
+
+template <typename T>
+concept is_environment = requires { typename T::environment_tag; };
 
 // ============================================================
 // function_call_set - consteval 用関数名収集コンテナ

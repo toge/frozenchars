@@ -108,6 +108,24 @@ using runtime_options_ref = std::optional<std::reference_wrapper<runtime_options
 
 namespace detail {
 
+template <typename T>
+concept is_environment_binding = frozenchars::inja::is_function_list<T> || frozenchars::inja::is_environment<T>;
+
+template <typename T>
+struct environment_traits;
+
+template <frozenchars::inja::is_function_list FunctionList>
+struct environment_traits<FunctionList> {
+  using function_list_type = FunctionList;
+  using constant_list_type = frozenchars::inja::empty_constant_list;
+};
+
+template <frozenchars::inja::is_environment Environment>
+struct environment_traits<Environment> {
+  using function_list_type = typename Environment::function_list_type;
+  using constant_list_type = typename Environment::constant_list_type;
+};
+
 /**
  * @brief テンプレートで保持する最大ノード数。
  */
@@ -1021,6 +1039,9 @@ using default_function_list = frozenchars::inja::function_list<
   frozenchars::inja::fn<"as_string_array", bfn_as_string_array>
 >;
 
+using default_environment =
+  frozenchars::inja::environment<default_function_list, frozenchars::inja::empty_constant_list>;
+
 /**
  * @brief 関数名と引数から関数を評価する。
  *
@@ -1030,11 +1051,12 @@ using default_function_list = frozenchars::inja::function_list<
  *
  * @tparam FunctionList  compile-time 関数登録テーブル
  */
-template <frozenchars::inja::is_function_list FunctionList = default_function_list>
+template <is_environment_binding EnvironmentBinding = default_environment>
 [[nodiscard]] inline auto evaluate_function(std::string_view func_name,
                                             std::vector<inja_value> const& args,
                                             runtime_options_ref runtime_options) -> inja_value {
-  if (auto result = FunctionList::dispatch(func_name, args)) {
+  using function_list_t = typename environment_traits<EnvironmentBinding>::function_list_type;
+  if (auto result = function_list_t::dispatch(func_name, args)) {
     return std::move(*result);
   }
   if (runtime_options.has_value()) {
@@ -1051,7 +1073,7 @@ template <frozenchars::inja::is_function_list FunctionList = default_function_li
  * @brief 実行時式評価器（簡易再帰下降パーサ）。
  * @tparam FunctionList  compile-time 関数登録テーブル
  */
-template <frozenchars::inja::is_function_list FunctionList = default_function_list>
+template <is_environment_binding EnvironmentBinding = default_environment>
 class expr_parser {
 public:
   /**
@@ -1426,7 +1448,7 @@ private:
 
       args.push_back(std::move(v));
       std::rotate(args.begin(), args.end() - 1, args.end());
-      v = evaluate_function<FunctionList>(func_name, args, runtime_options_);
+      v = evaluate_function<EnvironmentBinding>(func_name, args, runtime_options_);
       skip_space();
     }
     return v;
@@ -1438,7 +1460,7 @@ private:
    * @param evaluate 評価フラグ
    * @return 解決した値
    */
-  [[nodiscard]] auto resolve_name(std::string_view name, bool evaluate) -> inja_value {
+  [[nodiscard]] auto resolve_variable(std::string_view name, bool evaluate) -> inja_value {
     if (!evaluate) {
       return inja_value{};
     }
@@ -1462,6 +1484,12 @@ private:
       }
     }
     if (current == nullptr) {
+      if (path.size() == 1) {
+        using constant_list_t = typename environment_traits<EnvironmentBinding>::constant_list_type;
+        if (auto constant_value = constant_list_t::lookup(path[0]); constant_value.has_value()) {
+          return std::move(*constant_value);
+        }
+      }
       throw render_error{"undefined variable: " + std::string{name}};
     }
     for (auto i = std::size_t{1}; i < path.size(); ++i) {
@@ -1615,9 +1643,9 @@ private:
       if (!consume(")")) {
         throw render_error{"missing closing parenthesis in function call"};
       }
-      return evaluate_function<FunctionList>(name, args, runtime_options_);
+      return evaluate_function<EnvironmentBinding>(name, args, runtime_options_);
     }
-    return resolve_name(name, evaluate);
+    return resolve_variable(name, evaluate);
   }
 };
 
@@ -1693,7 +1721,7 @@ using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
-template <auto Src, typename OutputBuffer, frozenchars::inja::is_function_list FunctionList = default_function_list, typename Delims = frozenchars::inja::default_delimiters>
+template <auto Src, typename OutputBuffer, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
 auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
   auto constexpr program = detail::parse_program<Src, Delims>();
   auto constexpr src = Src.sv();
@@ -1718,7 +1746,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
       // expr ノードは式を評価して出力に追加する
       case node_kind::expr: {
         auto const expr = src.substr(node.begin, node.end - node.begin);
-        auto const value = expr_parser<FunctionList>{trim_view(expr), scopes, runtime_options}.parse();
+        auto const value = expr_parser<EnvironmentBinding>{trim_view(expr), scopes, runtime_options}.parse();
         append_value(out, value);
         ++i;
         break;
@@ -1727,7 +1755,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
       // cond を評価し、then または else 節の範囲だけを再帰実行する
       case node_kind::if_stmt: {
         auto const cond_sv = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto const cond = expr_parser<FunctionList>{cond_sv, scopes, runtime_options}.parse();
+        auto const cond = expr_parser<EnvironmentBinding>{cond_sv, scopes, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
@@ -1747,7 +1775,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
             }
             if (else_node.kind == node_kind::else_stmt) {
               auto const else_cond_sv = src.substr(else_node.aux_begin, else_node.aux_end - else_node.aux_begin);
-              auto const else_cond = expr_parser<FunctionList>{else_cond_sv, scopes, runtime_options}.parse();
+              auto const else_cond = expr_parser<EnvironmentBinding>{else_cond_sv, scopes, runtime_options}.parse();
               if (frozenchars::inja::truthy(else_cond)) {
                 self(else_idx + 1, branch_end);
                 break;
@@ -1770,7 +1798,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         auto const key_name = has_key
                                 ? src.substr(node.aux3_begin, node.aux3_end - node.aux3_begin)
                                 : std::string_view{};
-        auto iterable = expr_parser<FunctionList>{iter_expr, scopes, runtime_options}.parse();
+        auto iterable = expr_parser<EnvironmentBinding>{iter_expr, scopes, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
         if (std::holds_alternative<inja_array>(iterable.storage)) {
@@ -1852,7 +1880,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         // set は式を評価して、現在のスコープ連鎖へ代入する。
         auto const set_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
         auto const set_target = src.substr(node.aux2_begin, node.aux2_end - node.aux2_begin);
-        auto value = expr_parser<FunctionList>{set_expr, scopes, runtime_options}.parse();
+        auto value = expr_parser<EnvironmentBinding>{set_expr, scopes, runtime_options}.parse();
         assign_to_scopes(scopes, set_target, std::move(value));
         ++i;
         break;
@@ -1861,7 +1889,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
       case node_kind::include_stmt: {
         // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
         auto const include_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto include_name = expr_parser<FunctionList>{include_expr, scopes, runtime_options}.parse();
+        auto include_name = expr_parser<EnvironmentBinding>{include_expr, scopes, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
           throw render_error{"include target must evaluate to string"};
         }
@@ -1908,10 +1936,10 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
  * - ノード種別ごとの評価
  * - if/for 制御の分岐・反復
  */
-template <auto Src, frozenchars::inja::is_function_list FunctionList = default_function_list, typename Delims = frozenchars::inja::default_delimiters>
+template <auto Src, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
 auto render_program(inja_object const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
   auto out = std::string{};
-  render_program<Src, std::string, FunctionList, Delims>(root, out, runtime_options);
+  render_program<Src, std::string, EnvironmentBinding, Delims>(root, out, runtime_options);
   return out;
 }
 
@@ -1919,6 +1947,7 @@ auto render_program(inja_object const& root, runtime_options_ref runtime_options
 
 /// default_function_list を frozenchars::inja 名前空間に公開する
 using default_function_list = detail::default_function_list;
+using default_environment = detail::default_environment;
 
 /**
  * @brief Collect all function call names from a template at compile time.
@@ -1987,18 +2016,37 @@ template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
 }
 
 /**
+ * @brief テンプレートを compile-time で解析し、バイトコードを返す。
+ *
+ * EnvironmentBinding が function_list の場合は既存互換で扱い、
+ * environment の場合はその function_list を取り出して static_assert 検証を行う。
+ */
+template <auto Src, detail::is_environment_binding EnvironmentBinding = detail::default_environment,
+          typename Delims = frozenchars::inja::default_delimiters>
+[[nodiscard]] consteval auto compile_template() -> detail::bytecode {
+  using function_list_t = typename detail::environment_traits<EnvironmentBinding>::function_list_type;
+  auto constexpr calls = extract_template_function_calls<Src, Delims>();
+  for (auto i = 0uz; i < calls.count; ++i) {
+    if (!function_list_t::contains(calls.get(i))) {
+      throw "Template calls function(s) not registered in the FunctionList.";
+    }
+  }
+  return detail::parse_program<Src, Delims>();
+}
+
+/**
  * @brief テンプレートをレンダリングする高水準API。
  * @tparam Src テンプレート文字列
  * @param root ルートコンテキスト（frozen_map）
  * @return 出力文字列
  */
 template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
-  requires (!is_function_list<Delims>)
+  requires (!detail::is_environment_binding<Delims>)
 auto render(inja_value const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
   if (!std::holds_alternative<inja_object>(root.storage)) {
     throw render_error{"root context must be object"};
   }
-  return detail::render_program<Src, default_function_list, Delims>(std::get<inja_object>(root.storage), runtime_options);
+  return detail::render_program<Src, detail::default_environment, Delims>(std::get<inja_object>(root.storage), runtime_options);
 }
 
 /**
@@ -2018,12 +2066,13 @@ auto render(inja_value const& root, runtime_options_ref runtime_options = std::n
  * auto result = render<src, my_fns>(ctx);
  * @endcode
  */
-template <auto Src, is_function_list FunctionList, typename Delims = frozenchars::inja::default_delimiters>
+template <auto Src, detail::is_environment_binding EnvironmentBinding, typename Delims = frozenchars::inja::default_delimiters>
 auto render(inja_value const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
+  using function_list_t = typename detail::environment_traits<EnvironmentBinding>::function_list_type;
   static_assert([]() constexpr -> bool {
     auto constexpr calls = extract_template_function_calls<Src, Delims>();
     for (auto i = 0uz; i < calls.count; ++i) {
-      if (!FunctionList::contains(calls.get(i))) {
+      if (!function_list_t::contains(calls.get(i))) {
         return false;
       }
     }
@@ -2034,7 +2083,7 @@ auto render(inja_value const& root, runtime_options_ref runtime_options = std::n
   if (!std::holds_alternative<inja_object>(root.storage)) {
     throw render_error{"root context must be object"};
   }
-  return detail::render_program<Src, FunctionList, Delims>(std::get<inja_object>(root.storage), runtime_options);
+  return detail::render_program<Src, EnvironmentBinding, Delims>(std::get<inja_object>(root.storage), runtime_options);
 }
 
 /**
@@ -2056,7 +2105,7 @@ auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref ru
     if (!std::holds_alternative<inja_object>(root.storage)) {
       return std::unexpected(std::string{"root context must be object"});
     }
-    detail::render_program<Src, OutputBuffer, default_function_list, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
+    detail::render_program<Src, OutputBuffer, detail::default_environment, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});
@@ -2073,15 +2122,16 @@ auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref ru
  * @tparam OutputBuffer append() メソッドを持つクラス
  * @tparam Delims       テンプレート区切り文字
  */
-template <auto Src, is_function_list FunctionList, typename OutputBuffer, typename Delims = frozenchars::inja::default_delimiters>
+template <auto Src, detail::is_environment_binding EnvironmentBinding, typename OutputBuffer, typename Delims = frozenchars::inja::default_delimiters>
   requires requires(OutputBuffer& output, std::string_view chunk) {
     output.append(chunk);
   }
 auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref runtime_options = std::nullopt) -> std::expected<void, std::string> {
+  using function_list_t = typename detail::environment_traits<EnvironmentBinding>::function_list_type;
   static_assert([]() constexpr -> bool {
     auto constexpr calls = extract_template_function_calls<Src, Delims>();
     for (auto i = 0uz; i < calls.count; ++i) {
-      if (!FunctionList::contains(calls.get(i))) {
+      if (!function_list_t::contains(calls.get(i))) {
         return false;
       }
     }
@@ -2093,7 +2143,7 @@ auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref ru
     if (!std::holds_alternative<inja_object>(root.storage)) {
       return std::unexpected(std::string{"root context must be object"});
     }
-    detail::render_program<Src, OutputBuffer, FunctionList, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
+    detail::render_program<Src, OutputBuffer, EnvironmentBinding, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});
