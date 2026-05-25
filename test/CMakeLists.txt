@@ -74,6 +74,18 @@ assert_frozen_map_compile_fail(
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
 )
 
+assert_frozen_map_compile_fail(
+  NAME frozen_format_missing_arg
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_missing_arg.cpp
+  EXPECTED_TEXT "format"
+)
+
+assert_frozen_map_compile_fail(
+  NAME to_format_string_type_mismatch
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/to_format_string_type_mismatch.cpp
+  EXPECTED_TEXT "format"
+)
+
 # example_split executable
 add_executable(example_split ../example_split.cpp)
 target_compile_features(example_split PRIVATE ${STD_CPP})

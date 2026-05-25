@@ -10,6 +10,65 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 // msg.sv() == "answer=42, hex=0xff"
 ```
 
+## `frozen_format` / `to_format_string`（`std::format` 連携）
+
+`<format>` が利用可能な環境では、`FrozenString` を NTTP として使い、
+`std::format` のコンパイル時チェックを活かしたフォーマットができます。
+
+- `to_format_string<Str, Args...>()`
+  - `consteval` で `std::format_string<Args...>` を生成します
+  - フォーマット文字列と引数型の不一致はコンパイル時エラーになります
+- `frozen_format<Str>(args...)`
+  - 実引数から型を推論して内部で `to_format_string` を呼び出すヘルパーです
+
+```cpp
+#include "frozenchars.hpp"
+#include <string>
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto s = frozen_format<"id={} name={}"_fs>(42, std::string{"alice"});
+// s == "id=42 name=alice"
+```
+
+> メモ: `std::format_string` はコンパイル時定数として解釈可能な文字列を要求します。
+> `to_format_string` はこの要件を満たす形で `FrozenString` から安全に橋渡しするためのヘルパーです。
+
+
+`frozen_format`のようなwrapperを用意することで、フォーマット文字列を直接テンプレート引数に書くことができ、`std::format` のコンパイル時チェックを活かせます。
+
+```cpp
+  {
+    constexpr auto fmt = "Hello, {}!"_fs;
+    constexpr auto fmt_str = make_format_string<fmt, int>();
+    std::string result = std::format(fmt_str, 42);
+    std::cout << result << '\n'; // 出力: Hello, 42!
+  }
+
+  {
+    constexpr auto fmt = "Hello, {}!"_fs;
+    constexpr auto fmt_str = make_format_string<fmt, std::string_view>();
+    std::string result = std::format(fmt_str, std::string_view{"World"});
+    std::cout << result << '\n'; // 出力: Hello, World!
+  }
+
+  {
+    constexpr auto fmt = "Hello, {}!"_fs;
+    constexpr auto fmt_str = make_format_string<fmt, char const*>();
+    std::string result = std::format(fmt_str, static_cast<char const*>("World"));
+    std::cout << result << '\n'; // 出力: Hello, World!
+  }
+
+  {
+    // 例: NTTPを使用して安全なformat_stringを生成
+    constexpr auto fmt = "Hello, {}!"_fs;
+    constexpr auto fmt_str = make_format_string<fmt, char const*>();
+    std::string result = std::format(fmt_str, std::string{"World"}.c_str());
+    std::cout << result << '\n'; // 出力: Hello, World!
+  }
+```
+
 ### 最小コンパイル例（1コマンド）
 
 `example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
