@@ -568,6 +568,11 @@ auto consteval remove_trailing_empty_lines(FrozenString<N> const& str, size_t n 
       break;
     }
 
+    // 1つ前も改行であるか、または文字列の先頭であれば、この改行は空行を形成している
+    if (cut > 1 && str.buffer[cut - 2] != '\n') {
+      break;
+    }
+
     ++removed;
     --cut;
   }
