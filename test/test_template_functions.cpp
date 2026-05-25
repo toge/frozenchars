@@ -1878,3 +1878,69 @@ TEST_CASE("pipe on left side of addition", "[pipe][operator_precedence]") {
   auto const ctx = make_object({});
   REQUIRE(render<src>(ctx) == "8");
 }
+
+TEST_CASE("make_object variadic syntax", "[inja][make_object]") {
+  SECTION("single pair") {
+    auto obj = make_object("a", 1);
+    REQUIRE(std::holds_alternative<inja_object>(obj.storage));
+    auto const& map = std::get<inja_object>(obj.storage);
+    REQUIRE(map.size() == 1);
+    REQUIRE(as_int(map.at("a")) == 1);
+  }
+
+  SECTION("multiple pairs") {
+    auto obj = make_object("a", 1, "b", "hello");
+    auto const& map = std::get<inja_object>(obj.storage);
+    REQUIRE(map.size() == 2);
+    REQUIRE(as_int(map.at("a")) == 1);
+    REQUIRE(as_string(map.at("b")) == "hello");
+  }
+
+  SECTION("nested objects") {
+    auto obj = make_object("aaa", make_object("bbb", "ccc"));
+    auto const& map = std::get<inja_object>(obj.storage);
+    auto const& inner = as_object(map.at("aaa"));
+    REQUIRE(as_string(inner.at("bbb")) == "ccc");
+  }
+
+  SECTION("object() helper variadic") {
+    auto obj = object("key", "value");
+    REQUIRE(as_string(as_object(obj).at("key")) == "value");
+  }
+}
+
+TEST_CASE("make_array variadic syntax", "[inja][make_array]") {
+  SECTION("single element") {
+    auto arr = make_array(1);
+    REQUIRE(std::holds_alternative<inja_array>(arr.storage));
+    auto const& vec = std::get<std::vector<inja_value>>(std::get<inja_array>(arr.storage));
+    REQUIRE(vec.size() == 1);
+    REQUIRE(as_int(vec[0]) == 1);
+  }
+
+  SECTION("multiple elements") {
+    auto arr = make_array(1, "hello", true);
+    auto const& vec = std::get<std::vector<inja_value>>(std::get<inja_array>(arr.storage));
+    REQUIRE(vec.size() == 3);
+    REQUIRE(as_int(vec[0]) == 1);
+    REQUIRE(as_string(vec[1]) == "hello");
+    REQUIRE(as_bool(vec[2]) == true);
+  }
+
+  SECTION("nested arrays") {
+    auto arr = make_array(make_array(1, 2), 3);
+    auto const& vec = std::get<std::vector<inja_value>>(std::get<inja_array>(arr.storage));
+    REQUIRE(vec.size() == 2);
+    auto const& inner = std::get<std::vector<inja_value>>(as_array(vec[0]));
+    REQUIRE(inner.size() == 2);
+    REQUIRE(as_int(inner[0]) == 1);
+    REQUIRE(as_int(inner[1]) == 2);
+    REQUIRE(as_int(vec[1]) == 3);
+  }
+
+  SECTION("array() helper variadic") {
+    auto arr = array(1, 2, 3);
+    auto const& vec = std::get<std::vector<inja_value>>(std::get<inja_array>(arr.storage));
+    REQUIRE(vec.size() == 3);
+  }
+}

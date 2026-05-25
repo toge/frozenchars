@@ -266,6 +266,18 @@ public:
 }
 
 /**
+ * @brief 任意の個数の引数から配列値を生成する。
+ * @tparam Args 引数型
+ * @param args 要素の並び
+ * @return inja_value(配列)
+ */
+template <typename... Args>
+requires(sizeof...(Args) != 1 || !requires { inja_array{std::declval<Args>()...}; })
+[[nodiscard]] inline auto make_array(Args&&... args) -> inja_value {
+  return inja_value{inja_array{std::vector<inja_value>{inja_value{std::forward<Args>(args)}...}}};
+}
+
+/**
  * @brief 整数配列を生成する。
  * @param v 整数ベクタ
  * @return inja_value(配列)
@@ -305,6 +317,31 @@ public:
   out.reserve(items.size());
   for (auto const& [k, v] : items) {
     out.insert({k, v});
+  }
+  return inja_value{std::move(out)};
+}
+
+/**
+ * @brief 任意の個数の引数からオブジェクト値を生成する。
+ *
+ * キーと値を交互に指定する。
+ *
+ * @tparam Args 引数型
+ * @param args キーと値の並び
+ * @return inja_value(オブジェクト)
+ */
+template <typename... Args>
+requires(sizeof...(Args) % 2 == 0)
+[[nodiscard]] inline auto make_object(Args&&... args) -> inja_value {
+  auto out = inja_object{};
+  if constexpr (sizeof...(Args) > 0) {
+    out.reserve(sizeof...(Args) / 2);
+    [&out](this auto self, auto&& k, auto&& v, auto&&... rest) {
+      out.emplace(std::forward<decltype(k)>(k), std::forward<decltype(v)>(v));
+      if constexpr (sizeof...(rest) > 0) {
+        self(std::forward<decltype(rest)>(rest)...);
+      }
+    }(std::forward<Args>(args)...);
   }
   return inja_value{std::move(out)};
 }
@@ -350,6 +387,17 @@ public:
 }
 
 /**
+ * @brief 任意の個数の引数から配列値を生成する
+ * @tparam Args 引数型
+ * @param args 要素の並び
+ * @return inja_value(配列)
+ */
+template <typename... Args>
+[[nodiscard]] inline auto array(Args&&... args) -> inja_value {
+  return make_array(std::forward<Args>(args)...);
+}
+
+/**
  * @brief 初期化リストからオブジェクト値を生成する
  *
  * 事前に容量確保し、ハッシュテーブル再配置を最小化して高速化。
@@ -359,6 +407,21 @@ public:
  */
 [[nodiscard]] inline auto object(std::initializer_list<std::pair<std::string, inja_value>> items) -> inja_value {
   return make_object(items);
+}
+
+/**
+ * @brief 任意の個数の引数からオブジェクト値を生成する
+ *
+ * キーと値を交互に指定する。
+ *
+ * @tparam Args 引数型
+ * @param args キーと値の並び
+ * @return inja_value(オブジェクト)
+ */
+template <typename... Args>
+requires(sizeof...(Args) % 2 == 0)
+[[nodiscard]] inline auto object(Args&&... args) -> inja_value {
+  return make_object(std::forward<Args>(args)...);
 }
 
 /**
