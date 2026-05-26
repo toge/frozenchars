@@ -34,18 +34,82 @@ struct from<JSON, frozenchars::frozen_map<T, Keys...>> {
                  is_context auto&& ctx,
                  auto&& it,
                  auto end) -> void {
-    auto decoded = std::unordered_map<std::string, T>{};
-    parse<JSON>::op<Opts>(decoded, ctx, it, end);
-    if (ctx.error != error_code::none) {
+    if (skip_ws<Opts>(ctx, it, end)) {
+      return;
+    }
+    if (it == end) {
+      ctx.error = error_code::unexpected_end;
+      return;
+    }
+    if (*it != '{') {
+      ctx.error = error_code::syntax_error;
+      return;
+    }
+    ++it;
+    if (skip_ws<Opts>(ctx, it, end)) {
+      return;
+    }
+    if (it == end) {
+      ctx.error = error_code::unexpected_end;
+      return;
+    }
+    if (*it == '}') {
+      ++it;
       return;
     }
 
-    for (auto& [key, mapped] : decoded) {
+    while (true) {
+      if (*it != '"') {
+        ctx.error = error_code::syntax_error;
+        return;
+      }
+      ++it;
+      auto const key_begin = it;
+      skip_string_view(ctx, it, end);
+      if (ctx.error != error_code::none) {
+        return;
+      }
+      auto const key = std::string_view{key_begin, static_cast<std::size_t>(it - key_begin)};
+      ++it;
+      if (skip_ws<Opts>(ctx, it, end)) {
+        return;
+      }
+      if (parse_ws_colon<Opts>(ctx, it, end)) {
+        return;
+      }
       if (auto const slot = value.get(key); slot) {
-        slot->get() = std::move(mapped);
+        parse<JSON>::op<Opts>(slot->get(), ctx, it, end);
+      } else {
+        skip_value<JSON>::op<Opts>(ctx, it, end);
+      }
+      if (ctx.error != error_code::none) {
+        return;
+      }
+      if (skip_ws<Opts>(ctx, it, end)) {
+        return;
+      }
+      if (it == end) {
+        ctx.error = error_code::unexpected_end;
+        return;
+      }
+      if (*it == '}') {
+        ++it;
+        return;
+      }
+      if (*it != ',') {
+        ctx.error = error_code::syntax_error;
+        return;
+      }
+      ++it;
+      if (skip_ws<Opts>(ctx, it, end)) {
+        return;
+      }
+      if (it == end) {
+        ctx.error = error_code::unexpected_end;
+        return;
       }
     }
-  }
+  };
 };
 
 /**
