@@ -12,6 +12,8 @@
 #include <array>
 #include <cstdio>
 #include <iomanip>
+#include <iterator>
+#include <locale>
 #include <sstream>
 #include <string_view>
 
@@ -27,6 +29,34 @@ TEST_CASE("FrozenString works with std::format", "[format]") {
   auto const formatted = std::format("[{}] started", prefix);
   REQUIRE(formatted == "[MyApp] started");
   REQUIRE(std::format("{:>12}", prefix) == "       MyApp");
+}
+
+TEST_CASE("FrozenString format wrappers cover std format family", "[format]") {
+  auto formatted = std::string{"prefix:"};
+  std::ignore = frozenchars::format_to<"{} {}"_fs>(std::back_inserter(formatted), "hello", 42);
+  REQUIRE(formatted == "prefix:hello 42");
+
+  auto buffer = std::array<char, 5>{};
+  auto const truncated = frozenchars::format_to_n<"{}"_fs>(buffer.begin(), 5, "abcdef");
+  REQUIRE(truncated.size == 6);
+  REQUIRE(std::string_view{buffer.data(), buffer.size()} == "abcde");
+
+  REQUIRE(frozenchars::formatted_size<"{}-{}"_fs>("ab", 12) == 5);
+
+  auto const classic = std::locale::classic();
+  REQUIRE(frozenchars::format_with_locale<"{} {}"_fs>(classic, "a", 1) == "a 1");
+
+  auto localized = std::string{};
+  std::ignore =
+      frozenchars::format_to_with_locale<"{}"_fs>(std::back_inserter(localized), classic, 1234);
+  REQUIRE(localized == "1234");
+
+  auto locale_buffer = std::array<char, 3>{};
+  auto const locale_truncated =
+      frozenchars::format_to_n_with_locale<"{}"_fs>(locale_buffer.begin(), 3, classic, "xyz123");
+  REQUIRE(locale_truncated.size == 6);
+  REQUIRE(std::string_view{locale_buffer.data(), locale_buffer.size()} == "xyz");
+  REQUIRE(frozenchars::formatted_size_with_locale<"{}"_fs>(classic, "xyz123") == 6);
 }
 #endif
 

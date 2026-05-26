@@ -4,6 +4,8 @@
 #if defined(__has_include) && __has_include(<format>)
 #  include <format>
 #endif
+#include <iterator>
+#include <locale>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -57,16 +59,81 @@ constexpr auto normalize_format_arg(T&& value) noexcept -> std::decay_t<T> {
   return static_cast<std::decay_t<T>>(std::forward<T>(value));
 }
 
-}
+} // namespace detail
 
 /**
  * @brief 型リストを明示せずに FrozenString から安全な format を行うヘルパー
  * @details 呼び出し時の実引数から型を自動推論し、内部で format_string を生成する。
  */
 template <frozenchars::FrozenString Str, typename... Args>
-auto frozen_format(Args&&... args) {
+auto format(Args&&... args) {
   constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
   return std::format(fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief locale 指定で FrozenString から安全な format を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename... Args>
+auto format_with_locale(std::locale const& loc, Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::format(loc, fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief 型リストを明示せずに FrozenString から安全な format_to を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename Out, typename... Args>
+auto format_to(Out out, Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::format_to(std::move(out), fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief locale 指定で FrozenString から安全な format_to を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename Out, typename... Args>
+auto format_to_with_locale(Out out, std::locale const& loc, Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::format_to(std::move(out), loc, fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief 型リストを明示せずに FrozenString から安全な format_to_n を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename Out, typename... Args>
+auto format_to_n(Out out, std::iter_difference_t<Out> n, Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::format_to_n(
+      std::move(out), n, fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief locale 指定で FrozenString から安全な format_to_n を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename Out, typename... Args>
+auto format_to_n_with_locale(Out out, std::iter_difference_t<Out> n, std::locale const& loc, Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::format_to_n(
+      std::move(out), n, loc, fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief 型リストを明示せずに FrozenString から安全な formatted_size を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename... Args>
+auto formatted_size(Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::formatted_size(fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
+}
+
+/**
+ * @brief locale 指定で FrozenString から安全な formatted_size を行うヘルパー
+ */
+template <frozenchars::FrozenString Str, typename... Args>
+auto formatted_size_with_locale(std::locale const& loc, Args&&... args) {
+  constexpr auto fmt = to_format_string<Str, std::decay_t<Args>...>();
+  return std::formatted_size(loc, fmt, detail::normalize_format_arg(std::forward<Args>(args))...);
 }
 
 } // namespace frozenchars
