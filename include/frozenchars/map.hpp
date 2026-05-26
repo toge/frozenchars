@@ -526,15 +526,39 @@ private:
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   static constexpr auto reorder_entries(std::array<frozen_map_entry<T>, size()> entries) -> std::array<T, size()> {
-    auto const get_value = [&](size_type index) -> T&& {
-      for (auto& entry : entries) if (entry.key == key_views_[index]) return std::move(entry.value);
-      throw std::invalid_argument("missing key");
-    };
-    return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ get_value(I)... }; }(std::make_index_sequence<size()>{});
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto const index = find_index_raw(entry.key);
+      if (index == size()) {
+        continue;
+      }
+      if (values[index].has_value()) {
+        continue;
+      }
+      values[index].emplace(std::move(entry.value));
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        throw std::invalid_argument("missing key");
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return std::array<T, size()>{ std::move(*values[I])... };
+    }(std::make_index_sequence<size()>{});
   }
   template <typename Self> static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) { return std::forward_like<Self>(self.values_[index]); }
   template <typename Result, typename Self, std::size_t... Index> static constexpr auto to_array_result(Self&& self, std::index_sequence<Index...>) -> Result { return Result{ typename Result::value_type{ key_views_[Index], forward_mapped<Self>(std::forward<Self>(self), Index) }... }; }
-  template <typename Result, typename Self> static constexpr auto to_associative_result(Self&& self) -> Result { Result result{}; for (auto index = 0uz; index < size(); ++index) result.emplace(typename Result::key_type{key_views_[index]}, typename Result::mapped_type{forward_mapped<Self>(std::forward<Self>(self), index)}); return result; }
+  template <typename Result, typename Self> static constexpr auto to_associative_result(Self&& self) -> Result {
+    Result result{};
+    if constexpr (requires(Result& r) { r.reserve(size()); }) {
+      result.reserve(size());
+    }
+    for (auto index = 0uz; index < size(); ++index) {
+      result.emplace(typename Result::key_type{key_views_[index]},
+                     typename Result::mapped_type{forward_mapped<Self>(std::forward<Self>(self), index)});
+    }
+    return result;
+  }
   template <typename Result, typename Self> static constexpr auto to_result(Self&& self) -> Result {
     using value_arg = detail::forward_like_t<Self, mapped_type>;
     if constexpr (detail::frozen_map_array_result<Result, size(), value_arg>) return to_array_result<Result>(std::forward<Self>(self), std::make_index_sequence<size()>{});
