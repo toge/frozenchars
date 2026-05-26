@@ -1419,6 +1419,7 @@ private:
 
       skip_space();
       auto args = std::vector<inja_value>{};
+      args.reserve(4);
       if (pos_ < text_.size() && text_[pos_] == '(') {
         ++pos_;
         skip_space();
@@ -1446,8 +1447,7 @@ private:
         }
       }
 
-      args.push_back(std::move(v));
-      std::rotate(args.begin(), args.end() - 1, args.end());
+      args.emplace(args.begin(), std::move(v));
       v = evaluate_function<EnvironmentBinding>(func_name, args, runtime_options_);
       skip_space();
     }
@@ -1464,44 +1464,51 @@ private:
     if (!evaluate) {
       return inja_value{};
     }
-    auto path = std::vector<std::string_view>{};
-    auto b = std::size_t{0};
-    for (auto i = std::size_t{0}; i <= name.size(); ++i) {
-      if (i == name.size() || name[i] == '.') {
-        path.push_back(name.substr(b, i - b));
-        b = i + 1;
-      }
-    }
-    if (path.empty()) {
+    auto const root_end = name.find('.');
+    auto const root = name.substr(0, root_end);
+    if (root.empty()) {
       throw render_error{"empty identifier"};
     }
     auto const* current = static_cast<inja_value const*>(nullptr);
     for (auto s = scopes_.rbegin(); s != scopes_.rend(); ++s) {
-      auto const it = s->find(path[0]);
+      auto const it = s->find(root);
       if (it != s->end()) {
         current = &it->second;
         break;
       }
     }
     if (current == nullptr) {
-      if (path.size() == 1) {
+      if (root_end == std::string_view::npos) {
         using constant_list_t = typename environment_traits<EnvironmentBinding>::constant_list_type;
-        if (auto constant_value = constant_list_t::lookup(path[0]); constant_value.has_value()) {
+        if (auto constant_value = constant_list_t::lookup(root); constant_value.has_value()) {
           return std::move(*constant_value);
         }
       }
       throw render_error{"undefined variable: " + std::string{name}};
     }
-    for (auto i = std::size_t{1}; i < path.size(); ++i) {
+    if (root_end == std::string_view::npos) {
+      return *current;
+    }
+    auto segment_begin = root_end + 1;
+    while (segment_begin < name.size()) {
+      auto const segment_end = name.find('.', segment_begin);
+      auto const segment = name.substr(segment_begin, segment_end - segment_begin);
+      if (segment.empty()) {
+        throw render_error{"undefined variable: " + std::string{name}};
+      }
       if (!std::holds_alternative<inja_object>(current->storage)) {
         throw render_error{"cannot resolve path: " + std::string{name}};
       }
       auto const& obj = std::get<inja_object>(current->storage);
-      auto const it = obj.find(path[i]);
+      auto const it = obj.find(segment);
       if (it == obj.end()) {
         throw render_error{"undefined variable: " + std::string{name}};
       }
       current = &it->second;
+      if (segment_end == std::string_view::npos) {
+        break;
+      }
+      segment_begin = segment_end + 1;
     }
     return *current;
   }
@@ -1619,6 +1626,7 @@ private:
 
       // 関数引数を解析する
       auto args = std::vector<inja_value>{};
+      args.reserve(4);
       skip_space();
 
       // 空の引数リストをチェックする
@@ -1819,14 +1827,19 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
           loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
           loop_obj.emplace(is_first_key, inja_value{false});
           loop_obj.emplace(is_last_key, inja_value{false});
+          auto& value_ref = frame.at(value_key);
+          auto& index_ref = loop_obj.at(index_key);
+          auto& index1_ref = loop_obj.at(index1_key);
+          auto& is_first_ref = loop_obj.at(is_first_key);
+          auto& is_last_ref = loop_obj.at(is_last_key);
 
           std::visit([&](auto const& arr) {
             for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
-              frame.at(value_key) = inja_value{arr[idx]};
-              loop_obj.at(index_key) = inja_value{static_cast<std::int64_t>(idx)};
-              loop_obj.at(index1_key) = inja_value{static_cast<std::int64_t>(idx + 1)};
-              loop_obj.at(is_first_key) = inja_value{idx == 0};
-              loop_obj.at(is_last_key) = inja_value{idx + 1 == arr.size()};
+              value_ref = inja_value{arr[idx]};
+              index_ref = inja_value{static_cast<std::int64_t>(idx)};
+              index1_ref = inja_value{static_cast<std::int64_t>(idx + 1)};
+              is_first_ref = inja_value{idx == 0};
+              is_last_ref = inja_value{idx + 1 == arr.size()};
               scopes.push_back(frame);
               self(body_begin, body_end);
               scopes.pop_back();
@@ -1854,16 +1867,22 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
           loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
           loop_obj.emplace(is_first_key, inja_value{false});
           loop_obj.emplace(is_last_key, inja_value{false});
+          auto& value_ref = frame.at(value_key);
+          auto* key_ref = has_key_key.has_value() ? &frame.at(*has_key_key) : nullptr;
+          auto& index_ref = loop_obj.at(index_key);
+          auto& index1_ref = loop_obj.at(index1_key);
+          auto& is_first_ref = loop_obj.at(is_first_key);
+          auto& is_last_ref = loop_obj.at(is_last_key);
           auto idx = std::size_t{0};
           for (auto const& [k, v] : obj) {
-            if (has_key_key.has_value()) {
-              frame.at(*has_key_key) = inja_value{k};
+            if (key_ref != nullptr) {
+              *key_ref = inja_value{k};
             }
-            frame.at(value_key) = v;
-            loop_obj.at(index_key) = inja_value{static_cast<std::int64_t>(idx)};
-            loop_obj.at(index1_key) = inja_value{static_cast<std::int64_t>(idx + 1)};
-            loop_obj.at(is_first_key) = inja_value{idx == 0};
-            loop_obj.at(is_last_key) = inja_value{idx + 1 == obj.size()};
+            value_ref = v;
+            index_ref = inja_value{static_cast<std::int64_t>(idx)};
+            index1_ref = inja_value{static_cast<std::int64_t>(idx + 1)};
+            is_first_ref = inja_value{idx == 0};
+            is_last_ref = inja_value{idx + 1 == obj.size()};
             scopes.push_back(frame);
             self(body_begin, body_end);
             scopes.pop_back();
