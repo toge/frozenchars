@@ -351,6 +351,36 @@ struct bytecode {
   return s.substr(begin, end - begin);
 }
 
+[[nodiscard]] constexpr auto is_ident_start_char(char c) -> bool {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+[[nodiscard]] constexpr auto is_ident_continue_char(char c) -> bool {
+  return is_ident_start_char(c) || (c >= '0' && c <= '9');
+}
+
+[[nodiscard]] constexpr auto is_simple_path_expression(std::string_view expr) -> bool {
+  if (expr.empty() || !is_ident_start_char(expr.front())) {
+    return false;
+  }
+  auto prev_dot = false;
+  for (auto i = std::size_t{0}; i < expr.size(); ++i) {
+    auto const c = expr[i];
+    if (c == '.') {
+      if (prev_dot || i == expr.size() - 1) {
+        return false;
+      }
+      prev_dot = true;
+      continue;
+    }
+    if (!is_ident_continue_char(c)) {
+      return false;
+    }
+    prev_dot = false;
+  }
+  return true;
+}
+
 enum class open_kind : std::uint8_t {
   expression,      // 式
   statement,       // 文
@@ -651,7 +681,12 @@ consteval auto parse_program() -> bytecode {
       if (close == std::string_view::npos) {
         throw "template parse error: unclosed expression tag";
       }
-      std::ignore = push_node(node_kind::expr, content_begin, close);
+      auto const expr_idx = push_node(node_kind::expr, content_begin, close);
+      auto const expr_body = src.substr(content_begin, close - content_begin);
+      auto const expr_sv = trim_view(expr_body);
+      program.nodes[expr_idx].aux_begin = content_begin + static_cast<std::size_t>(expr_sv.data() - expr_body.data());
+      program.nodes[expr_idx].aux_end = program.nodes[expr_idx].aux_begin + expr_sv.size();
+      program.nodes[expr_idx].aux_flag = is_simple_path_expression(expr_sv);
       pos = close + expr_close.size();
       break;
     }
@@ -1238,7 +1273,13 @@ struct local_frame {
   loop_state loop{};
 };
 
-using variable_lookup = std::function<std::optional<inja_value>(std::string_view)>;
+enum class lookup_status : std::uint8_t {
+  not_found,
+  not_convertible,
+};
+
+using lookup_result = std::expected<inja_value, lookup_status>;
+using variable_lookup = std::function<lookup_result(std::string_view)>;
 
 [[nodiscard]] inline auto split_variable_path(std::string_view name) -> std::vector<std::string_view> {
   auto segments = std::vector<std::string_view>{};
@@ -1260,7 +1301,7 @@ using variable_lookup = std::function<std::optional<inja_value>(std::string_view
 
 [[nodiscard]] inline auto lookup_in_inja_value(inja_value const& value,
                                                 std::span<std::string_view const> segments,
-                                                std::size_t index = 0) -> std::optional<inja_value> {
+                                                std::size_t index = 0) -> lookup_result {
   if (index >= segments.size()) {
     return value;
   }
@@ -1272,18 +1313,18 @@ using variable_lookup = std::function<std::optional<inja_value>(std::string_view
     auto const& obj = std::get<inja_object>(current->storage);
     auto const it = obj.find(segments[i]);
     if (it == obj.end()) {
-      return std::nullopt;
+      return std::unexpected(lookup_status::not_found);
     }
     current = &it->second;
   }
   return *current;
 }
 
-[[nodiscard]] inline auto lookup_in_object_root(inja_object const& root, std::string_view name) -> std::optional<inja_value> {
+[[nodiscard]] inline auto lookup_in_object_root(inja_object const& root, std::string_view name) -> lookup_result {
   auto const segments = split_variable_path(name);
   auto const it = root.find(segments.front());
   if (it == root.end()) {
-    return std::nullopt;
+    return std::unexpected(lookup_status::not_found);
   }
   return lookup_in_inja_value(it->second, segments, 1);
 }
@@ -1292,18 +1333,18 @@ using variable_lookup = std::function<std::optional<inja_value>(std::string_view
 template <typename T>
 [[nodiscard]] inline auto lookup_in_typed_value(T const& value,
                                                  std::span<std::string_view const> segments,
-                                                 std::size_t index = 0) -> std::optional<inja_value>;
+                                                 std::size_t index = 0) -> lookup_result;
 
 template <typename T>
 [[nodiscard]] inline auto lookup_in_reflectable(T const& value,
                                                  std::span<std::string_view const> segments,
-                                                 std::size_t index) -> std::optional<inja_value> {
+                                                 std::size_t index) -> lookup_result {
   using U = remove_cvref_t<T>;
   constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
   auto tied = glz::to_tie(const_cast<U&>(value));
   auto const segment = segments[index];
   auto found = false;
-  auto result = std::optional<inja_value>{};
+  auto result = lookup_result{std::unexpected(lookup_status::not_found)};
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (
       [&] {
@@ -1320,7 +1361,7 @@ template <typename T>
     );
   }(std::make_index_sequence<count>{});
   if (!found) {
-    return std::nullopt;
+    return std::unexpected(lookup_status::not_found);
   }
   return result;
 }
@@ -1328,28 +1369,32 @@ template <typename T>
 template <typename T>
 [[nodiscard]] inline auto lookup_in_typed_value(T const& value,
                                                  std::span<std::string_view const> segments,
-                                                 std::size_t index) -> std::optional<inja_value> {
+                                                 std::size_t index) -> lookup_result {
   using U = remove_cvref_t<T>;
   if (index >= segments.size()) {
-    return try_to_inja_value(value);
+    auto converted = try_to_inja_value(value);
+    if (converted.has_value()) {
+      return std::move(*converted);
+    }
+    return std::unexpected(lookup_status::not_convertible);
   }
   if constexpr (std::same_as<U, inja_value>) {
     return lookup_in_inja_value(value, segments, index);
   } else if constexpr (map_like<U>) {
     auto const it = value.find(typename U::key_type{segments[index]});
     if (it == value.end()) {
-      return std::nullopt;
+      return std::unexpected(lookup_status::not_found);
     }
     return lookup_in_typed_value(it->second, segments, index + 1);
   } else if constexpr (glaze_reflectable<U>) {
     return lookup_in_reflectable(value, segments, index);
   } else {
-    return std::nullopt;
+    throw render_error{"cannot resolve path"};
   }
 }
 
 template <typename Context>
-[[nodiscard]] inline auto lookup_in_typed_root(Context const& root, std::string_view name) -> std::optional<inja_value> {
+[[nodiscard]] inline auto lookup_in_typed_root(Context const& root, std::string_view name) -> lookup_result {
   auto const segments = split_variable_path(name);
   return lookup_in_typed_value(root, segments, 0);
 }
@@ -1363,7 +1408,11 @@ template <typename Context>
   if (segments.size() == 1) {
     return binding.value;
   }
-  return lookup_in_inja_value(binding.value, segments, 1);
+  auto resolved = lookup_in_inja_value(binding.value, segments, 1);
+  if (!resolved.has_value()) {
+    return std::nullopt;
+  }
+  return std::move(*resolved);
 }
 
 [[nodiscard]] inline auto resolve_loop_property(local_frame const& frame,
@@ -1841,8 +1890,12 @@ private:
     if (!lookup_) {
       throw render_error{"variable lookup callback is not set"};
     }
-    if (auto resolved = lookup_(name); resolved.has_value()) {
+    auto resolved = lookup_(name);
+    if (resolved.has_value()) {
       return std::move(*resolved);
+    }
+    if (resolved.error() == lookup_status::not_convertible) {
+      throw render_error{"value cannot be converted to inja_value"};
     }
     if (name.find('.') == std::string_view::npos) {
       using constant_list_t = typename environment_traits<EnvironmentBinding>::constant_list_type;
@@ -2011,9 +2064,9 @@ auto render_program_with_lookup(RootLookup root_lookup,
   frames.reserve(1 + program.max_for_depth);
   frames.push_back(local_frame{});
 
-  auto lookup = [&](std::string_view name) -> std::optional<inja_value> {
+  auto lookup = [&](std::string_view name) -> lookup_result {
     if (auto local = resolve_local(frames, name); local.has_value()) {
-      return local;
+      return *local;
     }
     return root_lookup(name);
   };
@@ -2029,8 +2082,21 @@ auto render_program_with_lookup(RootLookup root_lookup,
         break;
       }
       case node_kind::expr: {
-        auto const expr = src.substr(node.begin, node.end - node.begin);
-        auto const value = expr_parser<EnvironmentBinding>{trim_view(expr), lookup, runtime_options}.parse();
+        auto const expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
+        auto value = inja_value{};
+        if (node.aux_flag) {
+          auto const looked = lookup(expr);
+          if (looked.has_value()) {
+            value = std::move(*looked);
+          } else if (looked.error() == lookup_status::not_convertible) {
+            throw render_error{"value cannot be converted to inja_value"};
+          } else {
+            // compile-time constantsなど、単純 lookup 以外の解決パスは既存の式評価へフォールバックする
+            value = expr_parser<EnvironmentBinding>{expr, lookup, runtime_options}.parse();
+          }
+        } else {
+          value = expr_parser<EnvironmentBinding>{expr, lookup, runtime_options}.parse();
+        }
         append_value(out, value);
         ++i;
         break;
@@ -2175,7 +2241,7 @@ auto render_program_with_lookup(RootLookup root_lookup,
 
 template <auto Src, typename OutputBuffer, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
 auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
-  auto lookup = [&](std::string_view name) -> std::optional<inja_value> {
+  auto lookup = [&](std::string_view name) -> lookup_result {
     return lookup_in_object_root(root, name);
   };
   render_program_with_lookup<Src, OutputBuffer, decltype(lookup), EnvironmentBinding, Delims>(lookup, out, runtime_options);
@@ -2185,7 +2251,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
 template <auto Src, typename OutputBuffer, typename Context, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
   requires glaze_reflectable<Context>
 auto render_program(Context const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
-  auto lookup = [&](std::string_view name) -> std::optional<inja_value> {
+  auto lookup = [&](std::string_view name) -> lookup_result {
     return lookup_in_typed_root(root, name);
   };
   render_program_with_lookup<Src, OutputBuffer, decltype(lookup), EnvironmentBinding, Delims>(lookup, out, runtime_options);

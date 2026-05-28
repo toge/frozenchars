@@ -74,6 +74,11 @@ TEST_CASE("template parser runs at constexpr", "[template_vm][parser]") {
   }();
   static_assert(count > 0);
   REQUIRE(count > 0);
+
+  static_assert(frozenchars::inja::detail::is_simple_path_expression("user.profile.city"));
+  static_assert(!frozenchars::inja::detail::is_simple_path_expression("upper(name)"));
+  REQUIRE(frozenchars::inja::detail::is_simple_path_expression("name"));
+  REQUIRE(!frozenchars::inja::detail::is_simple_path_expression("name..x"));
 }
 
 TEST_CASE("template runtime renders core syntax", "[template_vm][runtime]") {
@@ -285,4 +290,13 @@ TEST_CASE("typed root lookup does not require whole-tree conversion", "[template
     .opaque = opaque_payload{.handle = nullptr},
   };
   REQUIRE(render<src>(ctx) == "Hello Tom");
+}
+
+TEST_CASE("typed root reports conversion failure distinctly from undefined variable", "[template_vm][typed_root]") {
+  constexpr auto src = "{{ opaque }}"_fs;
+  auto const ctx = partial_context{
+    .name = "Tom",
+    .opaque = opaque_payload{.handle = nullptr},
+  };
+  REQUIRE_THROWS_WITH(render<src>(ctx), "value cannot be converted to inja_value");
 }
