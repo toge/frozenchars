@@ -46,6 +46,15 @@ struct value_context {
   std::int64_t value;
 };
 
+struct opaque_payload {
+  void* handle{};
+};
+
+struct partial_context {
+  std::string name;
+  opaque_payload opaque;
+};
+
 } // namespace
 
 TEST_CASE("inja_value basic types", "[template_vm][value]") {
@@ -267,4 +276,13 @@ TEST_CASE("template runtime supports custom function callbacks", "[template_vm][
   });
 
   REQUIRE(render<src>(ctx, std::cref(options)) == "42");
+}
+
+TEST_CASE("typed root lookup does not require whole-tree conversion", "[template_vm][typed_root]") {
+  constexpr auto src = "Hello {{ name }}"_fs;
+  auto const ctx = partial_context{
+    .name = "Tom",
+    .opaque = opaque_payload{.handle = nullptr},
+  };
+  REQUIRE(render<src>(ctx) == "Hello Tom");
 }

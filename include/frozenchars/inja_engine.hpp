@@ -11,6 +11,7 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -147,6 +148,10 @@ concept glaze_reflectable = requires {
   { glz::reflect<remove_cvref_t<T>>::size } -> std::convertible_to<std::size_t>;
   glz::reflect<remove_cvref_t<T>>::keys;
 };
+#else
+template <typename T>
+concept glaze_reflectable = false;
+#endif
 
 template <typename T>
 concept map_like = requires(remove_cvref_t<T> const& v) {
@@ -164,29 +169,74 @@ concept range_like =
   (!map_like<T>);
 
 template <typename T>
-[[nodiscard]] inline auto to_inja_value(T const& value) -> inja_value;
+[[nodiscard]] inline auto try_to_inja_value(T const& value) -> std::optional<inja_value>;
 
 template <typename T>
-[[nodiscard]] inline auto to_inja_object_value(T const& value) -> inja_value {
+[[nodiscard]] inline auto convert_map_like(T const& value) -> std::optional<inja_value> {
+  auto out = inja_object{};
+  if constexpr (requires { value.size(); }) {
+    out.reserve(static_cast<std::size_t>(value.size()));
+  }
+  for (auto const& [k, v] : value) {
+    auto converted = try_to_inja_value(v);
+    if (!converted.has_value()) {
+      return std::nullopt;
+    }
+    out.emplace(std::string{std::string_view{k}}, std::move(*converted));
+  }
+  return inja_value{std::move(out)};
+}
+
+template <typename T>
+[[nodiscard]] inline auto convert_range_like(T const& value) -> std::optional<inja_value> {
+  auto out = std::vector<inja_value>{};
+  if constexpr (requires { value.size(); }) {
+    out.reserve(static_cast<std::size_t>(value.size()));
+  }
+  for (auto const& element : value) {
+    auto converted = try_to_inja_value(element);
+    if (!converted.has_value()) {
+      return std::nullopt;
+    }
+    out.push_back(std::move(*converted));
+  }
+  return inja_value{inja_array{std::move(out)}};
+}
+
+#if FROZENCHARS_HAS_GLAZE
+template <typename T>
+[[nodiscard]] inline auto convert_reflectable(T const& value) -> std::optional<inja_value> {
   using U = remove_cvref_t<T>;
   auto out = inja_object{};
   constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
   out.reserve(count);
   auto tied = glz::to_tie(const_cast<U&>(value));
+  auto ok = true;
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (
-      out.emplace(
-        std::string{std::string_view{glz::reflect<U>::keys[Is]}},
-        to_inja_value(glz::get<Is>(tied))
-      ),
+      [&] {
+        if (!ok) {
+          return;
+        }
+        auto converted = try_to_inja_value(glz::get<Is>(tied));
+        if (!converted.has_value()) {
+          ok = false;
+          return;
+        }
+        out.emplace(std::string{std::string_view{glz::reflect<U>::keys[Is]}}, std::move(*converted));
+      }(),
       ...
     );
   }(std::make_index_sequence<count>{});
+  if (!ok) {
+    return std::nullopt;
+  }
   return inja_value{std::move(out)};
 }
+#endif
 
 template <typename T>
-[[nodiscard]] inline auto to_inja_value(T const& value) -> inja_value {
+[[nodiscard]] inline auto try_to_inja_value(T const& value) -> std::optional<inja_value> {
   using U = remove_cvref_t<T>;
   if constexpr (std::same_as<U, inja_value>) {
     return value;
@@ -205,39 +255,26 @@ template <typename T>
   } else if constexpr (std::is_convertible_v<U, std::string_view>) {
     return inja_value{std::string{std::string_view{value}}};
   } else if constexpr (map_like<U>) {
-    auto out = inja_object{};
-    if constexpr (requires { value.size(); }) {
-      out.reserve(static_cast<std::size_t>(value.size()));
-    }
-    for (auto const& [k, v] : value) {
-      out.emplace(std::string{std::string_view{k}}, to_inja_value(v));
-    }
-    return inja_value{std::move(out)};
+    return convert_map_like(value);
   } else if constexpr (range_like<U>) {
-    auto out = std::vector<inja_value>{};
-    if constexpr (requires { value.size(); }) {
-      out.reserve(static_cast<std::size_t>(value.size()));
-    }
-    for (auto const& element : value) {
-      out.push_back(to_inja_value(element));
-    }
-    return inja_value{inja_array{std::move(out)}};
+    return convert_range_like(value);
+#if FROZENCHARS_HAS_GLAZE
   } else if constexpr (glaze_reflectable<U>) {
-    return to_inja_object_value(value);
+    return convert_reflectable(value);
+#endif
   } else {
-    static_assert(always_false_v<U>, "type cannot be converted to inja_value");
+    return std::nullopt;
   }
 }
-#else
-template <typename T>
-concept glaze_reflectable = false;
 
 template <typename T>
-[[nodiscard]] inline auto to_inja_value(T const&) -> inja_value {
-  static_assert(always_false_v<T>, "typed context rendering requires glaze");
-  return inja_value{};
+[[nodiscard]] inline auto to_inja_value_or_throw(T const& value) -> inja_value {
+  auto converted = try_to_inja_value(value);
+  if (!converted.has_value()) {
+    throw render_error{"value cannot be converted to inja_value"};
+  }
+  return std::move(*converted);
 }
-#endif
 
 /**
  * @brief テンプレートで保持する最大ノード数。
@@ -1182,6 +1219,227 @@ template <is_environment_binding EnvironmentBinding = default_environment>
   throw render_error{"unknown function: " + std::string{func_name}};
 }
 
+struct loop_state {
+  std::int64_t index{};
+  std::int64_t index1{};
+  bool is_first{};
+  bool is_last{};
+};
+
+struct local_binding {
+  std::string name;
+  inja_value value;
+};
+
+struct local_frame {
+  std::optional<local_binding> key{};
+  std::optional<local_binding> value{};
+  std::vector<local_binding> assigned{};
+  loop_state loop{};
+};
+
+using variable_lookup = std::function<std::optional<inja_value>(std::string_view)>;
+
+[[nodiscard]] inline auto split_variable_path(std::string_view name) -> std::vector<std::string_view> {
+  auto segments = std::vector<std::string_view>{};
+  auto begin = std::size_t{0};
+  while (begin <= name.size()) {
+    auto const end = name.find('.', begin);
+    auto const segment = name.substr(begin, end - begin);
+    if (segment.empty()) {
+      throw render_error{"empty identifier"};
+    }
+    segments.push_back(segment);
+    if (end == std::string_view::npos) {
+      break;
+    }
+    begin = end + 1;
+  }
+  return segments;
+}
+
+[[nodiscard]] inline auto lookup_in_inja_value(inja_value const& value,
+                                                std::span<std::string_view const> segments,
+                                                std::size_t index = 0) -> std::optional<inja_value> {
+  if (index >= segments.size()) {
+    return value;
+  }
+  auto const* current = &value;
+  for (auto i = index; i < segments.size(); ++i) {
+    if (!std::holds_alternative<inja_object>(current->storage)) {
+      throw render_error{"cannot resolve path"};
+    }
+    auto const& obj = std::get<inja_object>(current->storage);
+    auto const it = obj.find(segments[i]);
+    if (it == obj.end()) {
+      return std::nullopt;
+    }
+    current = &it->second;
+  }
+  return *current;
+}
+
+[[nodiscard]] inline auto lookup_in_object_root(inja_object const& root, std::string_view name) -> std::optional<inja_value> {
+  auto const segments = split_variable_path(name);
+  auto const it = root.find(segments.front());
+  if (it == root.end()) {
+    return std::nullopt;
+  }
+  return lookup_in_inja_value(it->second, segments, 1);
+}
+
+#if FROZENCHARS_HAS_GLAZE
+template <typename T>
+[[nodiscard]] inline auto lookup_in_typed_value(T const& value,
+                                                 std::span<std::string_view const> segments,
+                                                 std::size_t index = 0) -> std::optional<inja_value>;
+
+template <typename T>
+[[nodiscard]] inline auto lookup_in_reflectable(T const& value,
+                                                 std::span<std::string_view const> segments,
+                                                 std::size_t index) -> std::optional<inja_value> {
+  using U = remove_cvref_t<T>;
+  constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
+  auto tied = glz::to_tie(const_cast<U&>(value));
+  auto const segment = segments[index];
+  auto found = false;
+  auto result = std::optional<inja_value>{};
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (
+      [&] {
+        if (found) {
+          return;
+        }
+        if (segment != std::string_view{glz::reflect<U>::keys[Is]}) {
+          return;
+        }
+        found = true;
+        result = lookup_in_typed_value(glz::get<Is>(tied), segments, index + 1);
+      }(),
+      ...
+    );
+  }(std::make_index_sequence<count>{});
+  if (!found) {
+    return std::nullopt;
+  }
+  return result;
+}
+
+template <typename T>
+[[nodiscard]] inline auto lookup_in_typed_value(T const& value,
+                                                 std::span<std::string_view const> segments,
+                                                 std::size_t index) -> std::optional<inja_value> {
+  using U = remove_cvref_t<T>;
+  if (index >= segments.size()) {
+    return try_to_inja_value(value);
+  }
+  if constexpr (std::same_as<U, inja_value>) {
+    return lookup_in_inja_value(value, segments, index);
+  } else if constexpr (map_like<U>) {
+    auto const it = value.find(typename U::key_type{segments[index]});
+    if (it == value.end()) {
+      return std::nullopt;
+    }
+    return lookup_in_typed_value(it->second, segments, index + 1);
+  } else if constexpr (glaze_reflectable<U>) {
+    return lookup_in_reflectable(value, segments, index);
+  } else {
+    return std::nullopt;
+  }
+}
+
+template <typename Context>
+[[nodiscard]] inline auto lookup_in_typed_root(Context const& root, std::string_view name) -> std::optional<inja_value> {
+  auto const segments = split_variable_path(name);
+  return lookup_in_typed_value(root, segments, 0);
+}
+#endif
+
+[[nodiscard]] inline auto resolve_local_binding(local_binding const& binding,
+                                                std::span<std::string_view const> segments) -> std::optional<inja_value> {
+  if (segments.front() != binding.name) {
+    return std::nullopt;
+  }
+  if (segments.size() == 1) {
+    return binding.value;
+  }
+  return lookup_in_inja_value(binding.value, segments, 1);
+}
+
+[[nodiscard]] inline auto resolve_loop_property(local_frame const& frame,
+                                                std::span<std::string_view const> segments) -> std::optional<inja_value> {
+  if (segments.size() != 2 || segments.front() != "loop") {
+    return std::nullopt;
+  }
+  auto const key = segments[1];
+  if (key == "index") {
+    return inja_value{frame.loop.index};
+  }
+  if (key == "index1") {
+    return inja_value{frame.loop.index1};
+  }
+  if (key == "is_first") {
+    return inja_value{frame.loop.is_first};
+  }
+  if (key == "is_last") {
+    return inja_value{frame.loop.is_last};
+  }
+  return std::nullopt;
+}
+
+[[nodiscard]] inline auto resolve_local(std::vector<local_frame> const& frames, std::string_view name) -> std::optional<inja_value> {
+  auto const segments = split_variable_path(name);
+  for (auto it = frames.rbegin(); it != frames.rend(); ++it) {
+    if (auto value = resolve_loop_property(*it, segments); value.has_value()) {
+      return value;
+    }
+    if (it->key.has_value()) {
+      if (auto value = resolve_local_binding(*it->key, segments); value.has_value()) {
+        return value;
+      }
+    }
+    if (it->value.has_value()) {
+      if (auto value = resolve_local_binding(*it->value, segments); value.has_value()) {
+        return value;
+      }
+    }
+    for (auto assigned_it = it->assigned.rbegin(); assigned_it != it->assigned.rend(); ++assigned_it) {
+      if (auto value = resolve_local_binding(*assigned_it, segments); value.has_value()) {
+        return value;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+inline auto assign_to_local(std::vector<local_frame>& frames, std::string_view name, inja_value value) -> void {
+  if (name.find('.') != std::string_view::npos) {
+    throw render_error{"set target must be local identifier"};
+  }
+  auto const target = std::string{trim_view(name)};
+  if (target.empty()) {
+    throw render_error{"invalid set target"};
+  }
+  auto& frame = frames.back();
+  if (frame.key.has_value() && frame.key->name == target) {
+    frame.key->value = std::move(value);
+    return;
+  }
+  if (frame.value.has_value() && frame.value->name == target) {
+    frame.value->value = std::move(value);
+    return;
+  }
+  for (auto it = frame.assigned.rbegin(); it != frame.assigned.rend(); ++it) {
+    if (it->name == target) {
+      it->value = std::move(value);
+      return;
+    }
+  }
+  frame.assigned.push_back(local_binding{.name = target, .value = std::move(value)});
+}
+
+using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
+
 /**
  * @brief 実行時式評価器（簡易再帰下降パーサ）。
  * @tparam FunctionList  compile-time 関数登録テーブル
@@ -1192,12 +1450,12 @@ public:
   /**
    * @brief 評価器を初期化する。
    * @param text 式文字列
-   * @param scopes 変数探索スコープ（内側 -> 外側）
+   * @param lookup 変数解決コールバック
    */
   expr_parser(std::string_view text,
-              std::vector<inja_object> const& scopes,
+              variable_lookup lookup,
               runtime_options_ref runtime_options = std::nullopt)
-    : text_(text), scopes_(scopes), runtime_options_(runtime_options) {}
+    : text_(text), lookup_(std::move(lookup)), runtime_options_(runtime_options) {}
 
   /**
    * @brief 式を評価する。
@@ -1216,7 +1474,7 @@ public:
 private:
   std::string_view text_;
   std::size_t pos_{};
-  std::vector<inja_object> const& scopes_;
+  variable_lookup lookup_;
   runtime_options_ref runtime_options_{};
 
   /**
@@ -1577,53 +1835,22 @@ private:
     if (!evaluate) {
       return inja_value{};
     }
-    auto const root_end = name.find('.');
-    auto const root = name.substr(0, root_end);
-    if (root.empty()) {
+    if (name.empty()) {
       throw render_error{"empty identifier"};
     }
-    auto const* current = static_cast<inja_value const*>(nullptr);
-    for (auto s = scopes_.rbegin(); s != scopes_.rend(); ++s) {
-      auto const it = s->find(root);
-      if (it != s->end()) {
-        current = &it->second;
-        break;
+    if (!lookup_) {
+      throw render_error{"variable lookup callback is not set"};
+    }
+    if (auto resolved = lookup_(name); resolved.has_value()) {
+      return std::move(*resolved);
+    }
+    if (name.find('.') == std::string_view::npos) {
+      using constant_list_t = typename environment_traits<EnvironmentBinding>::constant_list_type;
+      if (auto constant_value = constant_list_t::lookup(name); constant_value.has_value()) {
+        return std::move(*constant_value);
       }
     }
-    if (current == nullptr) {
-      if (root_end == std::string_view::npos) {
-        using constant_list_t = typename environment_traits<EnvironmentBinding>::constant_list_type;
-        if (auto constant_value = constant_list_t::lookup(root); constant_value.has_value()) {
-          return std::move(*constant_value);
-        }
-      }
-      throw render_error{"undefined variable: " + std::string{name}};
-    }
-    if (root_end == std::string_view::npos) {
-      return *current;
-    }
-    auto segment_begin = root_end + 1;
-    while (segment_begin < name.size()) {
-      auto const segment_end = name.find('.', segment_begin);
-      auto const segment = name.substr(segment_begin, segment_end - segment_begin);
-      if (segment.empty()) {
-        throw render_error{"undefined variable: " + std::string{name}};
-      }
-      if (!std::holds_alternative<inja_object>(current->storage)) {
-        throw render_error{"cannot resolve path: " + std::string{name}};
-      }
-      auto const& obj = std::get<inja_object>(current->storage);
-      auto const it = obj.find(segment);
-      if (it == obj.end()) {
-        throw render_error{"undefined variable: " + std::string{name}};
-      }
-      current = &it->second;
-      if (segment_end == std::string_view::npos) {
-        break;
-      }
-      segment_begin = segment_end + 1;
-    }
-    return *current;
+    throw render_error{"undefined variable: " + std::string{name}};
   }
 
   /**
@@ -1770,112 +1997,53 @@ private:
   }
 };
 
-/**
- * @brief ドット区切りパスへ値を代入する（必要なら中間 object を生成）。
- */
-inline auto assign_path(inja_object& scope, std::string_view path, inja_value value) -> void {
-  auto pos = 0uz;
-  auto key_begin = 0uz;
-  auto* current_scope = &scope;
-
-  while (true) {
-    pos = path.find('.', key_begin);
-    if (pos == std::string_view::npos) {
-      auto const key = std::string{trim_view(path.substr(key_begin))};
-      if (key.empty()) {
-        throw render_error{"invalid set target"};
-      }
-      current_scope->insert_or_assign(key, std::move(value));
-      return;
-    }
-
-    auto const key = std::string{trim_view(path.substr(key_begin, pos - key_begin))};
-    if (key.empty()) {
-      throw render_error{"invalid set target"};
-    }
-
-    auto it = current_scope->find(key);
-    if (it == current_scope->end()) {
-      it = current_scope->emplace(key, inja_value{inja_object{}}).first;
-    } else if (!std::holds_alternative<inja_object>(it->second.storage)) {
-      throw render_error{"set target path is not object"};
-    }
-    current_scope = &std::get<inja_object>(it->second.storage);
-    key_begin = pos + 1;
-  }
-}
-
-/**
- * @brief スコープ連鎖（内側→外側）から代入先を決定して set を適用する。
- */
-inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view path, inja_value value) -> void {
-  if (path.find('.') != std::string_view::npos) {
-    throw render_error{"set target must be local identifier"};
-  }
-  auto const target = std::string{trim_view(path)};
-  if (target.empty()) {
-    throw render_error{"invalid set target"};
-  }
-  scopes.back().insert_or_assign(target, std::move(value));
-}
-
-using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
-
-/**
- * @brief パース済みバイトコードを実行して文字列を生成する。
- * @tparam Src 元テンプレート文字列
- * @param root ルートスコープ
- * @param out 出力バッファ
- * @param runtime_options ランタイムオプション（組み込み関数以外の関数呼び出しで使用）
- * @return レンダリング結果
- *
- * @note 長いメソッドのため、以下の3フェーズに分けて読めるようにしている。
- * - ノード走査
- * - ノード種別ごとの評価
- * - if/for 制御の分岐・反復
- */
-template <auto Src, typename OutputBuffer, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
-auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
+template <auto Src,
+          typename OutputBuffer,
+          typename RootLookup,
+          is_environment_binding EnvironmentBinding = default_environment,
+          typename Delims = frozenchars::inja::default_delimiters>
+auto render_program_with_lookup(RootLookup root_lookup,
+                                OutputBuffer& out,
+                                runtime_options_ref runtime_options = std::nullopt) -> void {
   auto constexpr program = detail::parse_program<Src, Delims>();
   auto constexpr src = Src.sv();
-  auto scopes = std::vector<inja_object>{};
-  scopes.reserve(1 + program.max_for_depth);
-  scopes.push_back(root);
+  auto frames = std::vector<local_frame>{};
+  frames.reserve(1 + program.max_for_depth);
+  frames.push_back(local_frame{});
 
-  // begin/end は program.nodes の半開区間。
+  auto lookup = [&](std::string_view name) -> std::optional<inja_value> {
+    if (auto local = resolve_local(frames, name); local.has_value()) {
+      return local;
+    }
+    return root_lookup(name);
+  };
+
   auto const render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
     auto i = begin;
     while (i < end) {
       auto const& node = program.nodes[i];
-      // ノード種別ごとに分岐し、必要に応じて i をジャンプ更新する
       switch (node.kind) {
-      // text ノードはそのまま出力に追加する
       case node_kind::text: {
         out.append(src.substr(node.begin, node.end - node.begin));
         ++i;
         break;
       }
-
-      // expr ノードは式を評価して出力に追加する
       case node_kind::expr: {
         auto const expr = src.substr(node.begin, node.end - node.begin);
-        auto const value = expr_parser<EnvironmentBinding>{trim_view(expr), scopes, runtime_options}.parse();
+        auto const value = expr_parser<EnvironmentBinding>{trim_view(expr), lookup, runtime_options}.parse();
         append_value(out, value);
         ++i;
         break;
       }
-
-      // cond を評価し、then または else 節の範囲だけを再帰実行する
       case node_kind::if_stmt: {
         auto const cond_sv = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto const cond = expr_parser<EnvironmentBinding>{cond_sv, scopes, runtime_options}.parse();
+        auto const cond = expr_parser<EnvironmentBinding>{cond_sv, lookup, runtime_options}.parse();
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
-        if (frozenchars::inja::truthy(cond)) {
+        if (truthy(cond)) {
           self(i + 1, then_end);
         } else {
-          // else-if 連鎖を順に評価し、最初に真になった分岐だけを実行する。
           auto else_idx = node.else_index;
           while (else_idx != std::numeric_limits<std::size_t>::max()) {
             auto const& else_node = program.nodes[else_idx];
@@ -1886,24 +2054,18 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
               self(else_idx + 1, branch_end);
               break;
             }
-            if (else_node.kind == node_kind::else_stmt) {
-              auto const else_cond_sv = src.substr(else_node.aux_begin, else_node.aux_end - else_node.aux_begin);
-              auto const else_cond = expr_parser<EnvironmentBinding>{else_cond_sv, scopes, runtime_options}.parse();
-              if (frozenchars::inja::truthy(else_cond)) {
-                self(else_idx + 1, branch_end);
-                break;
-              }
-              else_idx = else_node.else_index;
-              continue;
+            auto const else_cond_sv = src.substr(else_node.aux_begin, else_node.aux_end - else_node.aux_begin);
+            auto const else_cond = expr_parser<EnvironmentBinding>{else_cond_sv, lookup, runtime_options}.parse();
+            if (truthy(else_cond)) {
+              self(else_idx + 1, branch_end);
+              break;
             }
-            throw render_error{"invalid else statement"};
+            else_idx = else_node.else_index;
           }
         }
         i = node.end_index + 1;
         break;
       }
-
-      // 配列反復とオブジェクト反復で束縛方法を切り替える
       case node_kind::for_stmt: {
         auto const iter_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
         auto const value_name = src.substr(node.aux2_begin, node.aux2_end - node.aux2_begin);
@@ -1911,86 +2073,56 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         auto const key_name = has_key
                                 ? src.substr(node.aux3_begin, node.aux3_end - node.aux3_begin)
                                 : std::string_view{};
-        auto iterable = expr_parser<EnvironmentBinding>{iter_expr, scopes, runtime_options}.parse();
+        auto const iterable = expr_parser<EnvironmentBinding>{iter_expr, lookup, runtime_options}.parse();
         auto const body_begin = i + 1;
         auto const body_end = node.end_index;
+
         if (std::holds_alternative<inja_array>(iterable.storage)) {
           auto const& arr_variant = std::get<inja_array>(iterable.storage);
-          auto const value_key = std::string{value_name};
-          auto const loop_key = std::string{"loop"};
-          auto const index_key = std::string{"index"};
-          auto const index1_key = std::string{"index1"};
-          auto const is_first_key = std::string{"is_first"};
-          auto const is_last_key = std::string{"is_last"};
-          auto frame = inja_object{};
-          frame.reserve(2);
-          frame.emplace(value_key, inja_value{});
-          frame.emplace(loop_key, inja_value{inja_object{}});
-          auto& loop_obj = std::get<inja_object>(frame.at(loop_key).storage);
-          loop_obj.reserve(4);
-          loop_obj.emplace(index_key, inja_value{std::int64_t{0}});
-          loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
-          loop_obj.emplace(is_first_key, inja_value{false});
-          loop_obj.emplace(is_last_key, inja_value{false});
-          auto& value_ref = frame.at(value_key);
-          auto& index_ref = loop_obj.at(index_key);
-          auto& index1_ref = loop_obj.at(index1_key);
-          auto& is_first_ref = loop_obj.at(is_first_key);
-          auto& is_last_ref = loop_obj.at(is_last_key);
-
           std::visit([&](auto const& arr) {
             for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
-              value_ref = inja_value{arr[idx]};
-              index_ref = inja_value{static_cast<std::int64_t>(idx)};
-              index1_ref = inja_value{static_cast<std::int64_t>(idx + 1)};
-              is_first_ref = inja_value{idx == 0};
-              is_last_ref = inja_value{idx + 1 == arr.size()};
-              scopes.push_back(frame);
+              auto frame = local_frame{};
+              frame.loop.index = static_cast<std::int64_t>(idx);
+              frame.loop.index1 = static_cast<std::int64_t>(idx + 1);
+              frame.loop.is_first = idx == 0;
+              frame.loop.is_last = idx + 1 == arr.size();
+              frame.value = local_binding{
+                .name = std::string{value_name},
+                .value = to_inja_value_or_throw(arr[idx]),
+              };
+              if (has_key) {
+                frame.key = local_binding{
+                  .name = std::string{key_name},
+                  .value = inja_value{static_cast<std::int64_t>(idx)},
+                };
+              }
+              frames.push_back(std::move(frame));
               self(body_begin, body_end);
-              scopes.pop_back();
+              frames.pop_back();
             }
           }, arr_variant);
         } else if (std::holds_alternative<inja_object>(iterable.storage)) {
           auto const& obj = std::get<inja_object>(iterable.storage);
-          auto const has_key_key = has_key ? std::optional<std::string>{std::string{key_name}} : std::nullopt;
-          auto const value_key = std::string{value_name};
-          auto const loop_key = std::string{"loop"};
-          auto const index_key = std::string{"index"};
-          auto const index1_key = std::string{"index1"};
-          auto const is_first_key = std::string{"is_first"};
-          auto const is_last_key = std::string{"is_last"};
-          auto frame = inja_object{};
-          frame.reserve(has_key ? 3 : 2);
-          if (has_key_key.has_value()) {
-            frame.emplace(*has_key_key, inja_value{});
-          }
-          frame.emplace(value_key, inja_value{});
-          frame.emplace(loop_key, inja_value{inja_object{}});
-          auto& loop_obj = std::get<inja_object>(frame.at(loop_key).storage);
-          loop_obj.reserve(4);
-          loop_obj.emplace(index_key, inja_value{std::int64_t{0}});
-          loop_obj.emplace(index1_key, inja_value{std::int64_t{0}});
-          loop_obj.emplace(is_first_key, inja_value{false});
-          loop_obj.emplace(is_last_key, inja_value{false});
-          auto& value_ref = frame.at(value_key);
-          auto* key_ref = has_key_key.has_value() ? &frame.at(*has_key_key) : nullptr;
-          auto& index_ref = loop_obj.at(index_key);
-          auto& index1_ref = loop_obj.at(index1_key);
-          auto& is_first_ref = loop_obj.at(is_first_key);
-          auto& is_last_ref = loop_obj.at(is_last_key);
           auto idx = std::size_t{0};
           for (auto const& [k, v] : obj) {
-            if (key_ref != nullptr) {
-              *key_ref = inja_value{k};
+            auto frame = local_frame{};
+            frame.loop.index = static_cast<std::int64_t>(idx);
+            frame.loop.index1 = static_cast<std::int64_t>(idx + 1);
+            frame.loop.is_first = idx == 0;
+            frame.loop.is_last = idx + 1 == obj.size();
+            frame.value = local_binding{
+              .name = std::string{value_name},
+              .value = v,
+            };
+            if (has_key) {
+              frame.key = local_binding{
+                .name = std::string{key_name},
+                .value = inja_value{k},
+              };
             }
-            value_ref = v;
-            index_ref = inja_value{static_cast<std::int64_t>(idx)};
-            index1_ref = inja_value{static_cast<std::int64_t>(idx + 1)};
-            is_first_ref = inja_value{idx == 0};
-            is_last_ref = inja_value{idx + 1 == obj.size()};
-            scopes.push_back(frame);
+            frames.push_back(std::move(frame));
             self(body_begin, body_end);
-            scopes.pop_back();
+            frames.pop_back();
             ++idx;
           }
         } else {
@@ -1999,29 +2131,24 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         i = node.end_index + 1;
         break;
       }
-
       case node_kind::set_stmt: {
-        // set は式を評価して、現在のスコープ連鎖へ代入する。
         auto const set_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
         auto const set_target = src.substr(node.aux2_begin, node.aux2_end - node.aux2_begin);
-        auto value = expr_parser<EnvironmentBinding>{set_expr, scopes, runtime_options}.parse();
-        assign_to_scopes(scopes, set_target, std::move(value));
+        auto value = expr_parser<EnvironmentBinding>{set_expr, lookup, runtime_options}.parse();
+        assign_to_local(frames, set_target, std::move(value));
         ++i;
         break;
       }
-
       case node_kind::include_stmt: {
-        // include は登録テンプレート優先、未登録時は callback をフォールバックに使う。
         auto const include_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto include_name = expr_parser<EnvironmentBinding>{include_expr, scopes, runtime_options}.parse();
+        auto include_name = expr_parser<EnvironmentBinding>{include_expr, lookup, runtime_options}.parse();
         if (!std::holds_alternative<std::string>(include_name.storage)) {
           throw render_error{"include target must evaluate to string"};
         }
         auto const& key = std::get<std::string>(include_name.storage);
         if (runtime_options.has_value()) {
           auto const& options = runtime_options->get();
-          if (auto const it = options.include_templates.find(key);
-              it != options.include_templates.end()) {
+          if (auto const it = options.include_templates.find(key); it != options.include_templates.end()) {
             out.append(it->second);
             ++i;
             break;
@@ -2034,8 +2161,6 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
         }
         throw render_error{"unknown include: " + key};
       }
-
-      // ブロックの終了は無視する
       case node_kind::else_stmt:
       case node_kind::endif_stmt:
       case node_kind::endfor_stmt:
@@ -2048,24 +2173,41 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
   render_range(0, program.count);
 }
 
-/**
- * @brief パース済みバイトコードを実行して文字列を生成する。
- * @tparam Src 元テンプレート文字列
- * @param root ルートスコープ
- * @param runtime_options ランタイムオプション（組み込み関数以外の関数呼び出しで使用）
- * @return レンダリング結果
- *
- * @note 長いメソッドのため、以下の3フェーズに分けて読めるようにしている。
- * - ノード走査
- * - ノード種別ごとの評価
- * - if/for 制御の分岐・反復
- */
+template <auto Src, typename OutputBuffer, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
+auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
+  auto lookup = [&](std::string_view name) -> std::optional<inja_value> {
+    return lookup_in_object_root(root, name);
+  };
+  render_program_with_lookup<Src, OutputBuffer, decltype(lookup), EnvironmentBinding, Delims>(lookup, out, runtime_options);
+}
+
+#if FROZENCHARS_HAS_GLAZE
+template <auto Src, typename OutputBuffer, typename Context, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
+  requires glaze_reflectable<Context>
+auto render_program(Context const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
+  auto lookup = [&](std::string_view name) -> std::optional<inja_value> {
+    return lookup_in_typed_root(root, name);
+  };
+  render_program_with_lookup<Src, OutputBuffer, decltype(lookup), EnvironmentBinding, Delims>(lookup, out, runtime_options);
+}
+#endif
+
 template <auto Src, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
 auto render_program(inja_object const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
   auto out = std::string{};
   render_program<Src, std::string, EnvironmentBinding, Delims>(root, out, runtime_options);
   return out;
 }
+
+#if FROZENCHARS_HAS_GLAZE
+template <auto Src, typename Context, is_environment_binding EnvironmentBinding = default_environment, typename Delims = frozenchars::inja::default_delimiters>
+  requires glaze_reflectable<Context>
+auto render_program(Context const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
+  auto out = std::string{};
+  render_program<Src, std::string, Context, EnvironmentBinding, Delims>(root, out, runtime_options);
+  return out;
+}
+#endif
 
 } // namespace detail
 
@@ -2176,11 +2318,7 @@ auto render(inja_value const& root, runtime_options_ref runtime_options = std::n
 template <auto Src, typename Delims = frozenchars::inja::default_delimiters, typename Context>
   requires (!detail::is_environment_binding<Delims>) && detail::glaze_reflectable<Context>
 auto render(Context const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
-  auto const converted_root = detail::to_inja_value(root);
-  if (!std::holds_alternative<inja_object>(converted_root.storage)) {
-    throw render_error{"root context must be object"};
-  }
-  return detail::render_program<Src, detail::default_environment, Delims>(std::get<inja_object>(converted_root.storage), runtime_options);
+  return detail::render_program<Src, Context, detail::default_environment, Delims>(root, runtime_options);
 }
 
 /**
@@ -2235,11 +2373,7 @@ auto render(Context const& root, runtime_options_ref runtime_options = std::null
   }(),
   "Template calls function(s) not registered in the FunctionList. "
   "Add the missing function(s) to your function_list<...>.");
-  auto const converted_root = detail::to_inja_value(root);
-  if (!std::holds_alternative<inja_object>(converted_root.storage)) {
-    throw render_error{"root context must be object"};
-  }
-  return detail::render_program<Src, EnvironmentBinding, Delims>(std::get<inja_object>(converted_root.storage), runtime_options);
+  return detail::render_program<Src, Context, EnvironmentBinding, Delims>(root, runtime_options);
 }
 
 /**
@@ -2276,11 +2410,7 @@ template <auto Src, typename OutputBuffer, typename Delims = frozenchars::inja::
   } && detail::glaze_reflectable<Context>
 auto render(Context const& root, OutputBuffer& output, runtime_options_ref runtime_options = std::nullopt) -> std::expected<void, std::string> {
   try {
-    auto const converted_root = detail::to_inja_value(root);
-    if (!std::holds_alternative<inja_object>(converted_root.storage)) {
-      return std::unexpected(std::string{"root context must be object"});
-    }
-    detail::render_program<Src, OutputBuffer, detail::default_environment, Delims>(std::get<inja_object>(converted_root.storage), output, runtime_options);
+    detail::render_program<Src, OutputBuffer, Context, detail::default_environment, Delims>(root, output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});
@@ -2345,11 +2475,7 @@ auto render(Context const& root, OutputBuffer& output, runtime_options_ref runti
   "Template calls function(s) not registered in the FunctionList. "
   "Add the missing function(s) to your function_list<...>.");
   try {
-    auto const converted_root = detail::to_inja_value(root);
-    if (!std::holds_alternative<inja_object>(converted_root.storage)) {
-      return std::unexpected(std::string{"root context must be object"});
-    }
-    detail::render_program<Src, OutputBuffer, EnvironmentBinding, Delims>(std::get<inja_object>(converted_root.storage), output, runtime_options);
+    detail::render_program<Src, OutputBuffer, Context, EnvironmentBinding, Delims>(root, output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});
