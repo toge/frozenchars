@@ -10,11 +10,20 @@
 #include <functional>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
+
+#if defined(__has_include) && __has_include(<glaze/glaze.hpp>)
+#include <glaze/glaze.hpp>
+#define FROZENCHARS_HAS_GLAZE 1
+#else
+#define FROZENCHARS_HAS_GLAZE 0
+#endif
 
 #include "string.hpp"
 #include "inja_function.hpp"
@@ -66,7 +75,7 @@ using default_delimiters = delimiters<
 >;
 
 using function_callback = std::function<inja_value(std::vector<inja_value> const&)>;
-using include_callback = std::function<std::string(std::string_view, inja_object const&)>;
+using include_callback = std::function<std::string(std::string_view)>;
 
 /**
  * @brief テンプレート実行時の拡張オプション。
@@ -125,6 +134,110 @@ struct environment_traits<Environment> {
   using function_list_type = typename Environment::function_list_type;
   using constant_list_type = typename Environment::constant_list_type;
 };
+
+template <typename T>
+using remove_cvref_t = std::remove_cvref_t<T>;
+
+template <typename>
+inline constexpr auto always_false_v = false;
+
+#if FROZENCHARS_HAS_GLAZE
+template <typename T>
+concept glaze_reflectable = requires {
+  { glz::reflect<remove_cvref_t<T>>::size } -> std::convertible_to<std::size_t>;
+  glz::reflect<remove_cvref_t<T>>::keys;
+};
+
+template <typename T>
+concept map_like = requires(remove_cvref_t<T> const& v) {
+  typename remove_cvref_t<T>::key_type;
+  typename remove_cvref_t<T>::mapped_type;
+  { v.begin() };
+  { v.end() };
+} && std::convertible_to<typename remove_cvref_t<T>::key_type, std::string_view>;
+
+template <typename T>
+concept range_like =
+  std::ranges::input_range<remove_cvref_t<T>> &&
+  (!std::same_as<remove_cvref_t<T>, std::string>) &&
+  (!std::same_as<remove_cvref_t<T>, std::string_view>) &&
+  (!map_like<T>);
+
+template <typename T>
+[[nodiscard]] inline auto to_inja_value(T const& value) -> inja_value;
+
+template <typename T>
+[[nodiscard]] inline auto to_inja_object_value(T const& value) -> inja_value {
+  using U = remove_cvref_t<T>;
+  auto out = inja_object{};
+  constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
+  out.reserve(count);
+  auto tied = glz::to_tie(const_cast<U&>(value));
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (
+      out.emplace(
+        std::string{std::string_view{glz::reflect<U>::keys[Is]}},
+        to_inja_value(glz::get<Is>(tied))
+      ),
+      ...
+    );
+  }(std::make_index_sequence<count>{});
+  return inja_value{std::move(out)};
+}
+
+template <typename T>
+[[nodiscard]] inline auto to_inja_value(T const& value) -> inja_value {
+  using U = remove_cvref_t<T>;
+  if constexpr (std::same_as<U, inja_value>) {
+    return value;
+  } else if constexpr (std::same_as<U, std::nullptr_t>) {
+    return inja_value{};
+  } else if constexpr (std::same_as<U, bool>) {
+    return inja_value{value};
+  } else if constexpr (std::integral<U> && !std::same_as<U, bool>) {
+    return inja_value{static_cast<std::int64_t>(value)};
+  } else if constexpr (std::floating_point<U>) {
+    return inja_value{static_cast<double>(value)};
+  } else if constexpr (std::same_as<U, std::string>) {
+    return inja_value{value};
+  } else if constexpr (std::same_as<U, std::string_view>) {
+    return inja_value{std::string{value}};
+  } else if constexpr (std::is_convertible_v<U, std::string_view>) {
+    return inja_value{std::string{std::string_view{value}}};
+  } else if constexpr (map_like<U>) {
+    auto out = inja_object{};
+    if constexpr (requires { value.size(); }) {
+      out.reserve(static_cast<std::size_t>(value.size()));
+    }
+    for (auto const& [k, v] : value) {
+      out.emplace(std::string{std::string_view{k}}, to_inja_value(v));
+    }
+    return inja_value{std::move(out)};
+  } else if constexpr (range_like<U>) {
+    auto out = std::vector<inja_value>{};
+    if constexpr (requires { value.size(); }) {
+      out.reserve(static_cast<std::size_t>(value.size()));
+    }
+    for (auto const& element : value) {
+      out.push_back(to_inja_value(element));
+    }
+    return inja_value{inja_array{std::move(out)}};
+  } else if constexpr (glaze_reflectable<U>) {
+    return to_inja_object_value(value);
+  } else {
+    static_assert(always_false_v<U>, "type cannot be converted to inja_value");
+  }
+}
+#else
+template <typename T>
+concept glaze_reflectable = false;
+
+template <typename T>
+[[nodiscard]] inline auto to_inja_value(T const&) -> inja_value {
+  static_assert(always_false_v<T>, "typed context rendering requires glaze");
+  return inja_value{};
+}
+#endif
 
 /**
  * @brief テンプレートで保持する最大ノード数。
@@ -1696,22 +1809,14 @@ inline auto assign_path(inja_object& scope, std::string_view path, inja_value va
  * @brief スコープ連鎖（内側→外側）から代入先を決定して set を適用する。
  */
 inline auto assign_to_scopes(std::vector<inja_object>& scopes, std::string_view path, inja_value value) -> void {
-  auto const dot_pos = path.find('.');
-  auto const root_name = std::string{
-    trim_view(dot_pos == std::string_view::npos ? path : path.substr(0, dot_pos))
-  };
-  if (root_name.empty()) {
+  if (path.find('.') != std::string_view::npos) {
+    throw render_error{"set target must be local identifier"};
+  }
+  auto const target = std::string{trim_view(path)};
+  if (target.empty()) {
     throw render_error{"invalid set target"};
   }
-
-  for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
-    if (it->contains(root_name)) {
-      assign_path(*it, path, std::move(value));
-      return;
-    }
-  }
-
-  assign_path(scopes.back(), path, std::move(value));
+  scopes.back().insert_or_assign(target, std::move(value));
 }
 
 using builtin_fn = inja_value (*)(std::vector<inja_value> const&);
@@ -1922,7 +2027,7 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
             break;
           }
           if (options.include_call) {
-            out.append(options.include_call(key, scopes.back()));
+            out.append(options.include_call(key));
             ++i;
             break;
           }
@@ -2068,6 +2173,16 @@ auto render(inja_value const& root, runtime_options_ref runtime_options = std::n
   return detail::render_program<Src, detail::default_environment, Delims>(std::get<inja_object>(root.storage), runtime_options);
 }
 
+template <auto Src, typename Delims = frozenchars::inja::default_delimiters, typename Context>
+  requires (!detail::is_environment_binding<Delims>) && detail::glaze_reflectable<Context>
+auto render(Context const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
+  auto const converted_root = detail::to_inja_value(root);
+  if (!std::holds_alternative<inja_object>(converted_root.storage)) {
+    throw render_error{"root context must be object"};
+  }
+  return detail::render_program<Src, detail::default_environment, Delims>(std::get<inja_object>(converted_root.storage), runtime_options);
+}
+
 /**
  * @brief テンプレートをレンダリングする高水準API（compile-time FunctionList 指定版）。
  *
@@ -2105,6 +2220,28 @@ auto render(inja_value const& root, runtime_options_ref runtime_options = std::n
   return detail::render_program<Src, EnvironmentBinding, Delims>(std::get<inja_object>(root.storage), runtime_options);
 }
 
+template <auto Src, detail::is_environment_binding EnvironmentBinding, typename Delims = frozenchars::inja::default_delimiters, typename Context>
+  requires detail::glaze_reflectable<Context>
+auto render(Context const& root, runtime_options_ref runtime_options = std::nullopt) -> std::string {
+  using function_list_t = typename detail::environment_traits<EnvironmentBinding>::function_list_type;
+  static_assert([]() constexpr -> bool {
+    auto constexpr calls = extract_template_function_calls<Src, Delims>();
+    for (auto i = 0uz; i < calls.count; ++i) {
+      if (!function_list_t::contains(calls.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }(),
+  "Template calls function(s) not registered in the FunctionList. "
+  "Add the missing function(s) to your function_list<...>.");
+  auto const converted_root = detail::to_inja_value(root);
+  if (!std::holds_alternative<inja_object>(converted_root.storage)) {
+    throw render_error{"root context must be object"};
+  }
+  return detail::render_program<Src, EnvironmentBinding, Delims>(std::get<inja_object>(converted_root.storage), runtime_options);
+}
+
 /**
  * @brief テンプレートをレンダリングし、カスタム出力バッファへ結果を追加する
  *
@@ -2125,6 +2262,25 @@ auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref ru
       return std::unexpected(std::string{"root context must be object"});
     }
     detail::render_program<Src, OutputBuffer, detail::default_environment, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
+    return {};
+  } catch (std::exception const& e) {
+    return std::unexpected(std::string{e.what()});
+  } catch (...) {
+    return std::unexpected(std::string{"unknown error during template rendering"});
+  }
+}
+
+template <auto Src, typename OutputBuffer, typename Delims = frozenchars::inja::default_delimiters, typename Context>
+  requires requires(OutputBuffer& output, std::string_view chunk) {
+    output.append(chunk);
+  } && detail::glaze_reflectable<Context>
+auto render(Context const& root, OutputBuffer& output, runtime_options_ref runtime_options = std::nullopt) -> std::expected<void, std::string> {
+  try {
+    auto const converted_root = detail::to_inja_value(root);
+    if (!std::holds_alternative<inja_object>(converted_root.storage)) {
+      return std::unexpected(std::string{"root context must be object"});
+    }
+    detail::render_program<Src, OutputBuffer, detail::default_environment, Delims>(std::get<inja_object>(converted_root.storage), output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});
@@ -2163,6 +2319,37 @@ auto render(inja_value const& root, OutputBuffer& output, runtime_options_ref ru
       return std::unexpected(std::string{"root context must be object"});
     }
     detail::render_program<Src, OutputBuffer, EnvironmentBinding, Delims>(std::get<inja_object>(root.storage), output, runtime_options);
+    return {};
+  } catch (std::exception const& e) {
+    return std::unexpected(std::string{e.what()});
+  } catch (...) {
+    return std::unexpected(std::string{"unknown error during template rendering"});
+  }
+}
+
+template <auto Src, detail::is_environment_binding EnvironmentBinding, typename OutputBuffer, typename Delims = frozenchars::inja::default_delimiters, typename Context>
+  requires requires(OutputBuffer& output, std::string_view chunk) {
+    output.append(chunk);
+  } && detail::glaze_reflectable<Context>
+auto render(Context const& root, OutputBuffer& output, runtime_options_ref runtime_options = std::nullopt) -> std::expected<void, std::string> {
+  using function_list_t = typename detail::environment_traits<EnvironmentBinding>::function_list_type;
+  static_assert([]() constexpr -> bool {
+    auto constexpr calls = extract_template_function_calls<Src, Delims>();
+    for (auto i = 0uz; i < calls.count; ++i) {
+      if (!function_list_t::contains(calls.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }(),
+  "Template calls function(s) not registered in the FunctionList. "
+  "Add the missing function(s) to your function_list<...>.");
+  try {
+    auto const converted_root = detail::to_inja_value(root);
+    if (!std::holds_alternative<inja_object>(converted_root.storage)) {
+      return std::unexpected(std::string{"root context must be object"});
+    }
+    detail::render_program<Src, OutputBuffer, EnvironmentBinding, Delims>(std::get<inja_object>(converted_root.storage), output, runtime_options);
     return {};
   } catch (std::exception const& e) {
     return std::unexpected(std::string{e.what()});

@@ -1,5 +1,6 @@
 #include "frozenchars.hpp"
 
+#include <glaze/glaze.hpp>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -44,7 +45,7 @@ volatile std::size_t g_sink = 0;
  */
 template <auto Src>
 auto run_case(std::string_view name,
-              inja_value const& root,
+              auto const& root,
               runtime_options const* options,
               std::uint64_t iterations) -> bench_result {
   // ウォームアップ（初回割り当てや命令キャッシュの偏りを緩和）。
@@ -114,6 +115,35 @@ auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[sink] " << g_sink << '\n';
 }
 
+struct item_context {
+  std::string name;
+  std::int64_t value;
+};
+
+struct profile_context {
+  std::string city;
+};
+
+struct user_context {
+  profile_context profile;
+};
+
+struct lookup_context {
+  user_context user;
+  std::int64_t constv;
+  std::vector<item_context> items;
+};
+
+struct numeric_context {
+  double scale;
+  std::vector<std::int64_t> nums;
+};
+
+struct control_context {
+  bool show;
+  std::vector<item_context> items;
+};
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -125,29 +155,29 @@ int main(int argc, char** argv) {
     }
   }
 
-  auto const common_items = make_array({
-    make_object({{"name", "alpha"}, {"value", 11}}),
-    make_object({{"name", "beta"}, {"value", 22}}),
-    make_object({{"name", "gamma"}, {"value", 33}}),
-    make_object({{"name", "delta"}, {"value", 44}}),
-    make_object({{"name", "epsilon"}, {"value", 55}}),
-  });
+  auto const common_items = std::vector<item_context>{
+    item_context{.name = "alpha", .value = 11},
+    item_context{.name = "beta", .value = 22},
+    item_context{.name = "gamma", .value = 33},
+    item_context{.name = "delta", .value = 44},
+    item_context{.name = "epsilon", .value = 55},
+  };
 
-  auto const root_lookup = make_object({
-    {"user", make_object({{"profile", make_object({{"city", "Tokyo"}})}})},
-    {"constv", 777},
-    {"items", common_items},
-  });
+  auto const root_lookup = lookup_context{
+    .user = user_context{.profile = profile_context{.city = "Tokyo"}},
+    .constv = 777,
+    .items = common_items,
+  };
 
-  auto const root_numeric = make_object({
-    {"scale", 1.125},
-    {"nums", make_array({1, 2, 3, 4, 5, 6, 7, 8})},
-  });
+  auto const root_numeric = numeric_context{
+    .scale = 1.125,
+    .nums = {1, 2, 3, 4, 5, 6, 7, 8},
+  };
 
-  auto const root_control = make_object({
-    {"show", true},
-    {"items", common_items},
-  });
+  auto const root_control = control_context{
+    .show = true,
+    .items = common_items,
+  };
 
   auto options = runtime_options{};
   options.reserve_functions(8);

@@ -1,72 +1,21 @@
 # frozenchars
 
-文字列連結・繰り返し・数値フォーマットをなるべくコンパイル時に行う、ヘッダオンリーの小さな C++ ライブラリです。
+文字列連結・繰り返し・数値フォーマットをなるべくコンパイル時に行うための型とヘルパー関数を提供する、ヘッダオンリーの C++ ライブラリです。
+
+## 特徴
+
+- 内部ではstd::arrayで固定長バッファを持つ `FrozenString` クラスを定義し、文字列リテラルや数値などからコンパイル時に文字列を生成できます。
+- 操作関数のほとんどをconstevalで定義しており、コンパイル時に評価されます。
+- 文字列操作をチェーンできるパイプ演算子も提供しています。
+- コンパイル時の文字列処理を前提にした応用機能もいくつか用意しています。
 
 ## クイックスタート
 
 ```cpp
 #include "frozenchars.hpp"
+
 auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars::Hex(255));
 // msg.sv() == "answer=42, hex=0xff"
-```
-
-## `frozen_format` / `to_format_string`（`std::format` 連携）
-
-`<format>` が利用可能な環境では、`FrozenString` を NTTP として使い、
-`std::format` のコンパイル時チェックを活かしたフォーマットができます。
-
-- `to_format_string<Str, Args...>()`
-  - `consteval` で `std::format_string<Args...>` を生成します
-  - フォーマット文字列と引数型の不一致はコンパイル時エラーになります
-- `frozen_format<Str>(args...)`
-  - 実引数から型を推論して内部で `to_format_string` を呼び出すヘルパーです
-
-```cpp
-#include "frozenchars.hpp"
-#include <string>
-
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-auto s = frozen_format<"id={} name={}"_fs>(42, std::string{"alice"});
-// s == "id=42 name=alice"
-```
-
-> メモ: `std::format_string` はコンパイル時定数として解釈可能な文字列を要求します。
-> `to_format_string` はこの要件を満たす形で `FrozenString` から安全に橋渡しするためのヘルパーです。
-
-
-`frozen_format`のようなwrapperを用意することで、フォーマット文字列を直接テンプレート引数に書くことができ、`std::format` のコンパイル時チェックを活かせます。
-
-```cpp
-  {
-    constexpr auto fmt = "Hello, {}!"_fs;
-    constexpr auto fmt_str = make_format_string<fmt, int>();
-    std::string result = std::format(fmt_str, 42);
-    std::cout << result << '\n'; // 出力: Hello, 42!
-  }
-
-  {
-    constexpr auto fmt = "Hello, {}!"_fs;
-    constexpr auto fmt_str = make_format_string<fmt, std::string_view>();
-    std::string result = std::format(fmt_str, std::string_view{"World"});
-    std::cout << result << '\n'; // 出力: Hello, World!
-  }
-
-  {
-    constexpr auto fmt = "Hello, {}!"_fs;
-    constexpr auto fmt_str = make_format_string<fmt, char const*>();
-    std::string result = std::format(fmt_str, static_cast<char const*>("World"));
-    std::cout << result << '\n'; // 出力: Hello, World!
-  }
-
-  {
-    // 例: NTTPを使用して安全なformat_stringを生成
-    constexpr auto fmt = "Hello, {}!"_fs;
-    constexpr auto fmt_str = make_format_string<fmt, char const*>();
-    std::string result = std::format(fmt_str, std::string{"World"}.c_str());
-    std::cout << result << '\n'; // 出力: Hello, World!
-  }
 ```
 
 ### 最小コンパイル例（1コマンド）
@@ -85,6 +34,7 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
 #include "frozenchars.hpp"
 using namespace frozenchars;
 using namespace frozenchars::literals;
+
 auto constexpr r1 = repeat<3>("abc"_fs);  // "abcabcabc"
 auto constexpr r2 = repeat<2>("xyz");     // "xyzxyz"
 ```
@@ -276,48 +226,6 @@ static_assert(dvalues[1] == -25.0);
 static_assert(dvalues[2] == 3.125);
 ```
 
-## `parse_to_tuple`（型列文字列 → `std::tuple<...>`）
-
-`parse_to_tuple<Str>()` は、固定文字列で書いた型リストをパースし、
-対応する `std::tuple<...>` 型を保持する `type_identity` を返します。
-実際の型は `typename decltype(parse_to_tuple<...>())::type` で取り出します。
-
-- `,` で型を区切ります
-- `?` を末尾に付けると `std::optional<T>` になります
-- `[ ... ]` でネストした `std::tuple<...>` を書けます
-- `[ ... ]?` は `std::optional<std::tuple<...>>` になります
-- 空要素（例: `"int,,string"`）は `void` として扱われます
-- `"void"` と明示的に書いた場合も `void` になります
-- 空白は無視されます
-- `void?` は `std::optional<void>` になるため非対応です
-
-対応している主な型名:
-
-- `bool`, `char`, `int`, `uint` / `unsigned`, `long`, `ulong`, `float`, `double`
-- `string` / `str`, `string_view` / `sv`, `void`, `size_t` / `sz`
-- `int8_t` / `int8`, `int16_t` / `int16`, `int32_t` / `int32`, `int64_t` / `int64`
-- `uint8_t` / `uint8`, `uint16_t` / `uint16`, `uint32_t` / `uint32`, `uint64_t` / `uint64`
-
-```cpp
-#include "frozenchars.hpp"
-#include <type_traits>
-
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-using T1 = typename decltype(parse_to_tuple<"int, string?, bool"_fs>())::type;
-static_assert(std::is_same_v<T1, std::tuple<int, std::optional<std::string>, bool>>);
-
-using T2 = typename decltype(parse_to_tuple<"[int, bool?], void, sv"_fs>())::type;
-static_assert(std::is_same_v<T2, std::tuple<std::tuple<int, std::optional<bool>>, void, std::string_view>>);
-
-using T3 = typename decltype(parse_to_tuple<"int,,[char, double]?"_fs>())::type;
-static_assert(std::is_same_v<T3, std::tuple<int, void, std::optional<std::tuple<char, double>>>>);
-```
-
-`parse_to_tuple` 自体は型計算用のヘルパーなので、実行時に `std::tuple` オブジェクトを返す関数ではありません。
-未知の型名や不正な構文は、ランタイムではなくコンパイル時エラーになります。
-
 ## `capitalize`（先頭大文字化）
 
 先頭の文字を大文字、残りを小文字に変換します。`FrozenString` と文字列リテラルの両方を受け取ります。
@@ -457,115 +365,6 @@ static_assert(q.sv() == "?name=Alice%20%26%20Bob");
 auto constexpr q2 = make_querystring(std::tuple{"name", "Alice & Bob"});
 static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
 ```
-
-## `frozen_map`（固定キーの軽量マップ）
-
-`frozen_map` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
-
-- 宣言順の値をそのまま書きたい場合は `frozen_map{...}`
-- キー集合を明示したい場合は `make_frozen_map(...)`
-- キーと値の両方をコンパイル時に書き切りたい場合は `make_frozen_map_kv(...)`
-- 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
-
-### 宣言順の値を braced-init-list で書く
-
-```cpp
-#include "frozenchars/frozen_map.hpp"
-
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
-  "30", "5", "2"
-};
-
-assert(map["timeout"] == "30");
-assert(map["retry"] == "5");
-assert(map["backoff"] == "2");
-
-frozen_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
-  "30", "5", "2"
-};
-
-assert(view_map["timeout"] == "30");
-```
-
-要素数がキー数と一致しない場合は、実行時に `std::invalid_argument` を送出します。
-
-`std::string_view` は non-owning なので、保持先の寿命には注意してください。Context7 で確認した `cppreference` の通り、
-文字列リテラルを渡すのは安全ですが、一時 `std::string` をそのまま渡すとダングリング参照になります。
-
-### pair-like エントリから作る基本形
-
-```cpp
-#include "frozenchars/frozen_map.hpp"
-
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
-  std::pair{"retry", 5},
-  std::pair{"timeout", 30}
-);
-
-static_assert(decltype(map)::size() == 2);
-```
-
-### `to<Result>()` で STL コンテナへ変換する
-
-```cpp
-auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>(
-  std::pair{"retry", 5},
-  std::pair{"timeout", 30},
-  std::pair{"backoff", 2}
-);
-
-auto ordered = map.to<std::map<std::string, int>>();
-auto hashed = map.to<std::unordered_map<std::string_view, int>>();
-auto slots = map.to<std::array<std::pair<std::string_view, int>, 3>>();
-
-auto moved = std::move(map).to<std::unordered_map<std::string, int>>();
-```
-
-`to<Result>()` は `std::map` / `std::unordered_map` / `std::array<std::pair<...>, N>` を受け付けます。
-`const&` からは値をコピーし、`&&` からは値をムーブします。
-`std::array` の並び順は宣言順ではなく、`begin()` / `end()` と同じハッシュスロット順です。
-
-### コンパイル時のキー/値列から作る短縮形
-
-```cpp
-#include "frozenchars.hpp"
-
-using namespace frozenchars;
-
-auto map = make_frozen_map_kv<int,
-  kv{"aaa", 5},
-  kv{"bbb", 3},
-  kv{"ccc", 1},
-  kv{"ddd", 0},
-  kv{"eee", 3}
->();
-
-static_assert(map["aaa"] == 5);
-static_assert(map["ddd"] == 0);
-```
-
-`{"aaa", 5}` のような裸の初期化子リストをテンプレート実引数にそのまま置くのは難しいため、
-コンパイル時APIでは `kv{"aaa", 5}` 形式を使います。
-
-### パフォーマンスと最適化
-
-`frozen_map` は、実行時の検索速度を極限まで高めるために以下の最適化を自動的に適用します。
-
-- **ハードウェア加速ハッシュ (CRC32C)**:
-  ルックアップ時のハッシュ計算に、CPUのハードウェア命令（x86のSSE4.2命令やARMのCRC32拡張）を使用します。これにより、従来の FNV-1a ハッシュに比べて数倍高速に動作します。
-- **128bit 整数比較最適化**:
-  マップに登録された全てのキーが16バイト以下の場合、文字列比較を `std::string_view` の汎用的な比較から、レジスタ上の128bit整数比較へと自動的に切り替えます。これにより、キーの検証が1〜2命令で完了します。
-- **データローカリティと宣言順反復**:
-  実データはメモリ上に連続した配列として保持されます。イテレータによる走査や `to<std::array>()` による変換は、ハッシュ順ではなく**キーの宣言順**に行われるため、キャッシュ効率が高く、予測可能な動作を提供します。
-
-> **依存関係について**:
-> 高速なSIMD/ハードウェア命令を利用するため、内部でネイティブのイントリンシック命令（または SIMDe）を使用しています。非x86/ARM環境や古いCPUでは、自動的に `constexpr` 対応のソフトウェア実装にフォールバックされます。
 
 ## マルチライン文字列の処理
 
@@ -788,59 +587,6 @@ static_assert(aggregate_bgr.b == 0xef);
 static_assert(color_abgr.a == 0x78);
 ```
 
-## inja風テンプレート（constexprパース + 実行時レンダリング）
-
-`FrozenString` をNTTPとして渡すと、テンプレート構造をコンパイル時に解析し、実行時に値を与えてレンダリングできます。
-
-```cpp
-#include "frozenchars.hpp"
-using namespace frozenchars::inja;
-using namespace frozenchars::literals;
-
-auto constexpr src = "Hello {{ name }}{# comment #}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
-auto const ctx = make_object({
-  {"name", "A"},
-  {"items", make_array({1, 2})},
-});
-auto const out = render<src>(ctx); // "Hello A:12"
-```
-
-対応構文（コア）:
-
-- `{{ expr }}`
-- `{% if ... %} ... {% else %} ... {% endif %}`
-- `{% for item in items %} ... {% endfor %}`
-- `{% for key, value in object %} ... {% endfor %}`
-- `{# comment #}`
-
-### 動的な値の扱い (`inja_value.hpp`)
-
-テンプレートに渡すデータは `inja_value` 型で管理されます。これは `std::variant` をベースにした動的型で、以下の型を保持できます。
-
-- `null` / `bool` / `int64_t` / `double` / `std::string`
-- `inja_array` (配列)
-- `inja_object` (オブジェクト/マップ)
-
-### 特化型配列による最適化
-
-`inja_array` は、すべての要素が同じ型である場合にメモリ効率と実行速度を向上させるための**特化型配列**をサポートしています。
-
-- `std::vector<int64_t>` (整数特化)
-- `std::vector<double>` (浮動小数特化)
-- `std::vector<std::string>` (文字列特化)
-
-特化型配列を使用すると、要素ごとの型チェックが省略され、連続したメモリ配置によるキャッシュ効率の向上が期待できます。特に `range()` 関数は最初から整数特化配列を生成します。
-
-明示的に特化型へ変換するための組み込み関数も提供されています：
-- `as_int_array(arr)`
-- `as_double_array(arr)`
-- `as_string_array(arr)`
-
-### パフォーマンス
-
-テンプレートはコンパイル時にバイトコード相当の構造へパースされます。
-実行時はこの構造を高速に走査するため、文字列ベースの逐次パースを行うエンジンに比べて高速なレンダリングを目標としていますが、まだ最適化の途中です。
-
 ## `freeze` 対応型一覧
 
 `freeze` はオーバーロードで入力型ごとに処理されます。主な対応は以下です。
@@ -916,6 +662,286 @@ auto const out = render<src>(ctx); // "Hello A:12"
 
 - `std::string` のような `std::string_view` 変換可能型は汎用オーバーロードで処理されますが、
   より専用のオーバーロード（例: 文字列リテラル、ポインタ系）がある場合はそちらが優先されます。
+
+## FrozenStringの応用例
+
+FrozenString を活用して「できるだけconstexprで処理させる」を目指した機能をいくつか用意しています。
+
+- std::formatのフォーマット文字列にFrozenStringを使うためのヘルパー
+- 「keyはコンパイル時に決定し、valueは実行時に更新する」マップ
+- 「固定文字列で型リストを書いて、対応するstd::tupleを得る」パーサー
+- テンプレート文字列をコンパイル時にパースして、実行時に展開するテンプレートエンジン
+
+### `format` / `to_format_string`（`std::format` 連携）
+
+`<format>` が利用可能な環境では、`FrozenString` を NTTP として使い、
+`std::format` のコンパイル時チェックを活かしたフォーマットができます。
+
+- `to_format_string<Str, Args...>()`
+  - `consteval` で `std::format_string<Args...>` を生成します
+  - フォーマット文字列と引数型の不一致はコンパイル時エラーになります
+- `frozen_format<Str>(args...)`
+  - 実引数から型を推論して内部で `to_format_string` を呼び出すヘルパーです
+
+```cpp
+#include "frozenchars.hpp"
+#include <string>
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto s = frozen_format<"id={} name={}"_fs>(42, std::string{"alice"});
+// s == "id=42 name=alice"
+```
+
+> メモ: `std::format_string` はコンパイル時定数として解釈可能な文字列を要求します。
+> `to_format_string` はこの要件を満たす形で `FrozenString` から安全に橋渡しするためのヘルパーです。
+
+
+`frozen_format`のようなwrapperを用意することで、フォーマット文字列を直接テンプレート引数に書くことができ、`std::format` のコンパイル時チェックを活かせます。
+
+```cpp
+{
+  constexpr auto fmt = "Hello, {}!"_fs;
+  constexpr auto fmt_str = make_format_string<fmt, int>();
+  std::string result = std::format(fmt_str, 42);
+  std::cout << result << '\n'; // 出力: Hello, 42!
+}
+
+{
+  constexpr auto fmt = "Hello, {}!"_fs;
+  constexpr auto fmt_str = make_format_string<fmt, std::string_view>();
+  std::string result = std::format(fmt_str, std::string_view{"World"});
+  std::cout << result << '\n'; // 出力: Hello, World!
+}
+```
+
+### `frozen_map`（固定キーの軽量マップ）
+
+`frozen_map` は、キー集合をコンパイル時に固定しつつ、値を軽量に保持する小さなマップです。
+
+- 宣言順の値をそのまま書きたい場合は `frozen_map{...}`
+- キー集合を明示したい場合は `make_frozen_map(...)`
+- キーと値の両方をコンパイル時に書き切りたい場合は `make_frozen_map_kv(...)`
+- 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
+
+#### 宣言順の値を braced-init-list で書く
+
+```cpp
+#include "frozenchars/frozen_map.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+  "30", "5", "2"
+};
+
+assert(map["timeout"] == "30");
+assert(map["retry"] == "5");
+assert(map["backoff"] == "2");
+
+frozen_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
+  "30", "5", "2"
+};
+
+assert(view_map["timeout"] == "30");
+```
+
+要素数がキー数と一致しない場合は、実行時に `std::invalid_argument` を送出します。
+
+`std::string_view` は non-owning なので、保持先の寿命には注意してください。Context7 で確認した `cppreference` の通り、
+文字列リテラルを渡すのは安全ですが、一時 `std::string` をそのまま渡すとダングリング参照になります。
+
+#### pair-like エントリから作る基本形
+
+```cpp
+#include "frozenchars/frozen_map.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+  std::pair{"retry", 5},
+  std::pair{"timeout", 30}
+);
+
+static_assert(decltype(map)::size() == 2);
+```
+
+#### `to<Result>()` で STL コンテナへ変換する
+
+```cpp
+auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>(
+  std::pair{"retry", 5},
+  std::pair{"timeout", 30},
+  std::pair{"backoff", 2}
+);
+
+auto ordered = map.to<std::map<std::string, int>>();
+auto hashed = map.to<std::unordered_map<std::string_view, int>>();
+auto slots = map.to<std::array<std::pair<std::string_view, int>, 3>>();
+
+auto moved = std::move(map).to<std::unordered_map<std::string, int>>();
+```
+
+`to<Result>()` は `std::map` / `std::unordered_map` / `std::array<std::pair<...>, N>` を受け付けます。
+`const&` からは値をコピーし、`&&` からは値をムーブします。
+`std::array` の並び順は宣言順ではなく、`begin()` / `end()` と同じハッシュスロット順です。
+
+#### コンパイル時のキー/値列から作る短縮形
+
+```cpp
+#include "frozenchars.hpp"
+
+using namespace frozenchars;
+
+auto map = make_frozen_map_kv<int,
+  kv{"aaa", 5},
+  kv{"bbb", 3},
+  kv{"ccc", 1},
+  kv{"ddd", 0},
+  kv{"eee", 3}
+>();
+
+static_assert(map["aaa"] == 5);
+static_assert(map["ddd"] == 0);
+```
+
+`{"aaa", 5}` のような裸の初期化子リストをテンプレート実引数にそのまま置くのは難しいため、
+コンパイル時APIでは `kv{"aaa", 5}` 形式を使います。
+
+#### パフォーマンスと最適化
+
+`frozen_map` は、実行時の検索速度を極限まで高めるために以下の最適化を自動的に適用します。
+
+- **ハードウェア加速ハッシュ (CRC32C)**:
+  ルックアップ時のハッシュ計算に、CPUのハードウェア命令（x86のSSE4.2命令やARMのCRC32拡張）を使用します。これにより、従来の FNV-1a ハッシュに比べて数倍高速に動作します。
+- **128bit 整数比較最適化**:
+  マップに登録された全てのキーが16バイト以下の場合、文字列比較を `std::string_view` の汎用的な比較から、レジスタ上の128bit整数比較へと自動的に切り替えます。これにより、キーの検証が1〜2命令で完了します。
+- **データローカリティと宣言順反復**:
+  実データはメモリ上に連続した配列として保持されます。イテレータによる走査や `to<std::array>()` による変換は、ハッシュ順ではなく**キーの宣言順**に行われるため、キャッシュ効率が高く、予測可能な動作を提供します。
+
+> **依存関係について**:
+> 高速なSIMD/ハードウェア命令を利用するため、内部でネイティブのイントリンシック命令（または SIMDe）を使用しています。非x86/ARM環境や古いCPUでは、自動的に `constexpr` 対応のソフトウェア実装にフォールバックされます。
+
+### `parse_to_tuple`（型列文字列 → `std::tuple<...>`）
+
+`parse_to_tuple<Str>()` は、固定文字列で書いた型リストをパースし、
+対応する `std::tuple<...>` 型を保持する `type_identity` を返します。
+実際の型は `typename decltype(parse_to_tuple<...>())::type` で取り出します。
+
+- `,` で型を区切ります
+- `?` を末尾に付けると `std::optional<T>` になります
+- `[ ... ]` でネストした `std::tuple<...>` を書けます
+- `[ ... ]?` は `std::optional<std::tuple<...>>` になります
+- 空要素（例: `"int,,string"`）は `void` として扱われます
+- `"void"` と明示的に書いた場合も `void` になります
+- 空白は無視されます
+- `void?` は `std::optional<void>` になるため非対応です
+
+対応している主な型名:
+
+- `bool`, `char`, `int`, `uint` / `unsigned`, `long`, `ulong`, `float`, `double`
+- `string` / `str`, `string_view` / `sv`, `void`, `size_t` / `sz`
+- `int8_t` / `int8`, `int16_t` / `int16`, `int32_t` / `int32`, `int64_t` / `int64`
+- `uint8_t` / `uint8`, `uint16_t` / `uint16`, `uint32_t` / `uint32`, `uint64_t` / `uint64`
+
+```cpp
+#include "frozenchars.hpp"
+#include <type_traits>
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+using T1 = typename decltype(parse_to_tuple<"int, string?, bool"_fs>())::type;
+static_assert(std::is_same_v<T1, std::tuple<int, std::optional<std::string>, bool>>);
+
+using T2 = typename decltype(parse_to_tuple<"[int, bool?], void, sv"_fs>())::type;
+static_assert(std::is_same_v<T2, std::tuple<std::tuple<int, std::optional<bool>>, void, std::string_view>>);
+
+using T3 = typename decltype(parse_to_tuple<"int,,[char, double]?"_fs>())::type;
+static_assert(std::is_same_v<T3, std::tuple<int, void, std::optional<std::tuple<char, double>>>>);
+```
+
+`parse_to_tuple` 自体は型計算用のヘルパーなので、実行時に `std::tuple` オブジェクトを返す関数ではありません。
+未知の型名や不正な構文は、ランタイムではなくコンパイル時エラーになります。
+
+
+### inja風テンプレート（constexprパース + 実行時レンダリング）
+
+`FrozenString` をNTTPとして渡すと、テンプレート構造をコンパイル時に解析し、実行時に値を与えてレンダリングできます。
+ルートコンテキストは `glz::meta<T>` または Glaze reflection で参照可能な型を渡します。
+
+```cpp
+#include "frozenchars.hpp"
+#include <glaze/glaze.hpp>
+using namespace frozenchars::inja;
+using namespace frozenchars::literals;
+
+struct profile {
+  std::string city;
+};
+
+struct user {
+  std::string name;
+  int age;
+  profile profile;
+};
+
+struct root_context {
+  user user;
+  std::vector<int> items;
+  bool ok;
+};
+
+auto constexpr src = "Hello {{ user.name }} from {{ user.profile.city }}{% if ok %}:{% for x in items %}{{ loop.index }}={{ x }};{% endfor %}{% endif %}"_fs;
+auto const ctx = root_context{
+  .user = user{.name = "Tom", .age = 18, .profile = profile{.city = "Tokyo"}},
+  .items = {1, 2, 3},
+  .ok = true,
+};
+auto const out = render<src>(ctx); // "Hello Tom from Tokyo:0=1;1=2;2=3;"
+```
+
+対応構文（コア）:
+
+- `{{ expr }}`
+- `{% if ... %} ... {% else %} ... {% endif %}`
+- `{% for item in items %} ... {% endfor %}`
+- `{% for key, value in object %} ... {% endfor %}`
+- `{# comment #}`
+
+#### 動的な値の扱い (`inja_value.hpp`)
+
+`inja_value` は式評価中の中間値・組み込み/カスタム関数引数・`set` のローカル変数に使われます。
+ルートコンテキストの入力は typed context（Glaze reflection 対応型）です。
+
+- `null` / `bool` / `int64_t` / `double` / `std::string`
+- `inja_array` (配列)
+- `inja_object` (オブジェクト/マップ)
+
+#### 特化型配列による最適化
+
+`inja_array` は、すべての要素が同じ型である場合にメモリ効率と実行速度を向上させるための**特化型配列**をサポートしています。
+
+- `std::vector<int64_t>` (整数特化)
+- `std::vector<double>` (浮動小数特化)
+- `std::vector<std::string>` (文字列特化)
+
+特化型配列を使用すると、要素ごとの型チェックが省略され、連続したメモリ配置によるキャッシュ効率の向上が期待できます。特に `range()` 関数は最初から整数特化配列を生成します。
+
+明示的に特化型へ変換するための組み込み関数も提供されています：
+- `as_int_array(arr)`
+- `as_double_array(arr)`
+- `as_string_array(arr)`
+
+#### パフォーマンス
+
+テンプレートはコンパイル時にバイトコード相当の構造へパースされます。
+実行時はこの構造を高速に走査するため、文字列ベースの逐次パースを行うエンジンに比べて高速なレンダリングを目標としていますが、まだ最適化の途中です。
+
+`set` 文はローカル識別子への代入のみ対応しています（`{% set user.name = ... %}` はエラー）。
 
 ## テスト
 

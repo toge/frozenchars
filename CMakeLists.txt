@@ -49,11 +49,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+find_package(glaze CONFIG REQUIRED)
 
 add_library(frozenchars INTERFACE)
 add_library(frozenchars::frozenchars ALIAS frozenchars)
 
 target_compile_features(frozenchars INTERFACE ${STD_CPP})
+target_link_libraries(frozenchars INTERFACE glaze::glaze)
 target_include_directories(frozenchars
     INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

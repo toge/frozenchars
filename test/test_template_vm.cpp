@@ -2,9 +2,51 @@
 
 #include "frozenchars.hpp"
 
+#include <glaze/glaze.hpp>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 using namespace frozenchars;
 using namespace frozenchars::inja;
 using namespace frozenchars::literals;
+
+namespace {
+
+struct profile_context {
+  std::string city;
+};
+
+struct user_context {
+  std::string name;
+  std::int64_t age;
+  profile_context profile;
+};
+
+struct root_context {
+  std::string name;
+  std::vector<std::int64_t> items;
+  bool ok{};
+  user_context user;
+  std::unordered_map<std::string, std::int64_t> obj;
+  std::vector<std::vector<std::int64_t>> rows;
+  std::string include_name{"dynamic"};
+  std::int64_t n{};
+};
+
+struct empty_context {
+};
+
+struct x_context {
+  std::int64_t x;
+};
+
+struct value_context {
+  std::int64_t value;
+};
+
+} // namespace
 
 TEST_CASE("inja_value basic types", "[template_vm][value]") {
   auto const v_null = inja_value{};
@@ -27,19 +69,19 @@ TEST_CASE("template parser runs at constexpr", "[template_vm][parser]") {
 
 TEST_CASE("template runtime renders core syntax", "[template_vm][runtime]") {
   constexpr auto src = "Hello {{ name }}{# comment #}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
-  auto const ctx = make_object({
-    {"name", "A"},
-    {"items", make_array({1, 2})},
-  });
+  auto const ctx = root_context{
+    .name = "A",
+    .items = {1, 2},
+  };
   auto const out = render<src>(ctx);
   REQUIRE(out == "Hello A:12");
 }
 
 TEST_CASE("template runtime supports for key, value", "[template_vm][runtime]") {
   constexpr auto src = "{% for k, v in user %}{{ k }}={{ v }};{% endfor %}"_fs;
-  auto const ctx = make_object({
-    {"user", make_object({{"name", "tom"}, {"age", 18}})},
-  });
+  auto const ctx = root_context{
+    .user = user_context{.name = "tom", .age = 18, .profile = profile_context{.city = "Tokyo"}},
+  };
   auto const out = render<src>(ctx);
   REQUIRE(out.find("name=tom;") != std::string::npos);
   REQUIRE(out.find("age=18;") != std::string::npos);
@@ -47,63 +89,55 @@ TEST_CASE("template runtime supports for key, value", "[template_vm][runtime]") 
 
 TEST_CASE("template runtime reuses array loop frame", "[template_vm][runtime]") {
   constexpr auto src = "{% for x in items %}{{ loop.index }},{{ x }}|{% endfor %}"_fs;
-  auto const ctx = make_object({
-    {"items", make_array({1, 2, 3})},
-  });
+  auto const ctx = root_context{
+    .items = {1, 2, 3},
+  };
   REQUIRE(render<src>(ctx) == "0,1|1,2|2,3|");
 }
 
 TEST_CASE("template runtime sets loop flags", "[template_vm][runtime]") {
   constexpr auto src = "{% for x in items %}{{ loop.is_first }},{{ loop.is_last }}|{% endfor %}"_fs;
-  auto const ctx = make_object({
-    {"items", make_array({1, 2, 3})},
-  });
+  auto const ctx = root_context{
+    .items = {1, 2, 3},
+  };
   REQUIRE(render<src>(ctx) == "true,false|false,false|false,true|");
-}
-
-TEST_CASE("template runtime reuses object loop frame", "[template_vm][runtime]") {
-  constexpr auto src = "{% for k, v in obj %}{{ k }}={{ v }};{% endfor %}"_fs;
-  auto const ctx = make_object({
-    {"obj", make_object({{"name", "tom"}, {"age", 18}})},
-  });
-  auto const out = render<src>(ctx);
-  REQUIRE(out.find("name=tom;") != std::string::npos);
-  REQUIRE(out.find("age=18;") != std::string::npos);
 }
 
 TEST_CASE("template runtime supports nested for loops", "[template_vm][runtime]") {
   constexpr auto src = "{% for row in rows %}[{% for x in row %}{{ loop.index }}:{{ x }},{% endfor %}]{% endfor %}"_fs;
-  auto const ctx = make_object({
-    {"rows", make_array({make_array({10, 20}), make_array({30})})},
-  });
+  auto const ctx = root_context{
+    .rows = {{10, 20}, {30}},
+  };
   REQUIRE(render<src>(ctx) == "[0:10,1:20,][0:30,]");
 }
 
 TEST_CASE("template runtime handles empty for iterables", "[template_vm][runtime]") {
   constexpr auto array_src = "A{% for x in items %}X{% endfor %}B"_fs;
   constexpr auto object_src = "C{% for k, v in obj %}Y{% endfor %}D"_fs;
-  auto const array_ctx = make_object({{"items", make_array({})}});
-  auto const object_ctx = make_object({{"obj", make_object({})}});
+  auto const array_ctx = root_context{};
+  auto const object_ctx = root_context{};
   REQUIRE(render<array_src>(array_ctx) == "AB");
   REQUIRE(render<object_src>(object_ctx) == "CD");
 }
 
 TEST_CASE("template runtime short-circuit", "[template_vm][runtime]") {
   constexpr auto src = "{% if ok or missing.value %}yes{% else %}no{% endif %}"_fs;
-  auto const ctx = make_object({{"ok", true}});
+  auto const ctx = root_context{
+    .ok = true,
+  };
   REQUIRE(render<src>(ctx) == "yes");
 }
 
 TEST_CASE("template runtime errors", "[template_vm][runtime_error]") {
   constexpr auto miss_var = "{{ missing }}"_fs;
-  auto const empty = make_object({});
+  auto const empty = empty_context{};
   REQUIRE_THROWS_AS(render<miss_var>(empty), render_error);
 
   constexpr auto bad_mod = "{{ 1.5 % 2 }}"_fs;
   REQUIRE_THROWS_AS(render<bad_mod>(empty), render_error);
 
   constexpr auto bad_for = "{% for x in x %}{{ x }}{% endfor %}"_fs;
-  auto const ctx = make_object({{"x", 1}});
+  auto const ctx = root_context{};
   REQUIRE_THROWS_AS(render<bad_for>(ctx), render_error);
 
   constexpr auto mod_zero = "{{ 10 % 0 }}"_fs;
@@ -121,28 +155,23 @@ TEST_CASE("template runtime errors", "[template_vm][runtime_error]") {
 
 TEST_CASE("template_vm public API", "[template_vm][api]") {
   constexpr auto src = "X={{ x }}"_fs;
-  auto const root = make_frozen_map<inja_value, "x"_fs>(
-    std::pair{"x", inja_value{9}}
-  );
-  REQUIRE(render<src>(make_object({{"x", 9}})) == "X=9");
+  auto const root = x_context{.x = 9};
+  REQUIRE(render<src>(root) == "X=9");
 }
 
-TEST_CASE("inja::render accepts frozen_map root", "[template_vm][api]") {
-  constexpr auto src = "X={{ x }}"_fs;
-  REQUIRE(render<src>(make_object({{"x", 9}})) == "X=9");
-}
-
-TEST_CASE("template runtime options callback uses inja_object", "[template_vm][api]") {
+TEST_CASE("template runtime options callback uses include name only", "[template_vm][api]") {
   auto options = runtime_options{};
-  options.include_call = [](std::string_view include_name, inja_object const&) -> std::string {
+  options.include_call = [](std::string_view include_name) -> std::string {
     return std::string{"<"} + std::string{include_name} + ">";
   };
-  REQUIRE(options.include_call("name", inja_object{}).find("name") != std::string::npos);
+  REQUIRE(options.include_call("name").find("name") != std::string::npos);
 }
 
 TEST_CASE("template runtime supports line statements", "[template_vm][line_statement]") {
   constexpr auto src = "## if ok\nYES\n## else\nNO\n## endif\n"_fs;
-  auto const ctx = make_object({{"ok", true}});
+  auto const ctx = root_context{
+    .ok = true,
+  };
   auto const out = render<src>(ctx);
   REQUIRE(out.find("YES") != std::string::npos);
   REQUIRE(out.find("NO") == std::string::npos);
@@ -167,10 +196,10 @@ TEST_CASE("template runtime supports custom delimiters", "[template_vm][delimite
     line_stmt_prefix>;
 
   constexpr auto src = "Hello [[ name ]]\n%% if ok\nOK\n%% endif\n(# hidden #)\n"_fs;
-  auto const ctx = make_object({
-    {"name", "Tom"},
-    {"ok", true},
-  });
+  auto const ctx = root_context{
+    .name = "Tom",
+    .ok = true,
+  };
   auto const out = render<src, custom_delims>(ctx);
   REQUIRE(out.find("Hello Tom") != std::string::npos);
   REQUIRE(out.find("OK") != std::string::npos);
@@ -180,28 +209,30 @@ TEST_CASE("template runtime supports custom delimiters", "[template_vm][delimite
 TEST_CASE("template runtime supports else if chains", "[template_vm][else_if]") {
   constexpr auto src = "{% if n > 10 %}large{% else if n > 5 %}mid{% else %}small{% endif %}"_fs;
 
-  auto const ctx_mid = make_object({{"n", 7}});
+  auto const ctx_mid = root_context{.n = 7};
   REQUIRE(render<src>(ctx_mid) == "mid");
 
-  auto const ctx_small = make_object({{"n", 3}});
+  auto const ctx_small = root_context{.n = 3};
   REQUIRE(render<src>(ctx_small) == "small");
 }
 
 TEST_CASE("template runtime supports set assignment", "[template_vm][set]") {
   constexpr auto src = "{% set title = upper(name) %}{{ title }}"_fs;
-  auto const ctx = make_object({{"name", "alice"}});
+  auto const ctx = root_context{
+    .name = "alice",
+  };
   REQUIRE(render<src>(ctx) == "ALICE");
 }
 
-TEST_CASE("template runtime supports set nested assignment", "[template_vm][set]") {
+TEST_CASE("template runtime rejects set nested assignment", "[template_vm][set]") {
   constexpr auto src = "{% set user.name = \"Tom\" %}{{ user.name }}"_fs;
-  auto const ctx = make_object({{"user", make_object({})}});
-  REQUIRE(render<src>(ctx) == "Tom");
+  auto const ctx = root_context{};
+  REQUIRE_THROWS_WITH(render<src>(ctx), "set target must be local identifier");
 }
 
 TEST_CASE("template runtime supports include template registry", "[template_vm][include]") {
   constexpr auto src = "A{% include \"part\" %}B"_fs;
-  auto const ctx = make_object({});
+  auto const ctx = root_context{};
 
   auto options = runtime_options{};
   options.add_include("part", "X");
@@ -211,10 +242,12 @@ TEST_CASE("template runtime supports include template registry", "[template_vm][
 
 TEST_CASE("template runtime supports include callback", "[template_vm][include]") {
   constexpr auto src = "{% include include_name %}"_fs;
-  auto const ctx = make_object({{"include_name", "dynamic"}});
+  auto const ctx = root_context{
+    .include_name = "dynamic",
+  };
 
   auto options = runtime_options{};
-  options.include_call = [](std::string_view include_name, inja_object const&) -> std::string {
+  options.include_call = [](std::string_view include_name) -> std::string {
     return std::string{"<"} + std::string{include_name} + ">";
   };
 
@@ -223,7 +256,7 @@ TEST_CASE("template runtime supports include callback", "[template_vm][include]"
 
 TEST_CASE("template runtime supports custom function callbacks", "[template_vm][callback]") {
   constexpr auto src = "{{ twice(value) }}"_fs;
-  auto const ctx = make_object({{"value", 21}});
+  auto const ctx = value_context{.value = 21};
 
   auto options = runtime_options{};
   options.add_function("twice", [](std::vector<inja_value> const& args) -> inja_value {
