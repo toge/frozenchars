@@ -101,6 +101,14 @@ TEST_CASE("template runtime supports for key, value", "[template_vm][runtime]") 
   REQUIRE(out.find("age=18;") != std::string::npos);
 }
 
+TEST_CASE("template runtime supports for key, value on typed nested reflectable path", "[template_vm][runtime]") {
+  constexpr auto src = "{% for k, v in user.profile %}{{ k }}={{ v }};{% endfor %}"_fs;
+  auto const ctx = root_context{
+    .user = user_context{.name = "tom", .age = 18, .profile = profile_context{.city = "Tokyo"}},
+  };
+  REQUIRE(render<src>(ctx) == "city=Tokyo;");
+}
+
 TEST_CASE("template runtime reuses array loop frame", "[template_vm][runtime]") {
   constexpr auto src = "{% for x in items %}{{ loop.index }},{{ x }}|{% endfor %}"_fs;
   auto const ctx = root_context{
@@ -165,6 +173,10 @@ TEST_CASE("template runtime errors", "[template_vm][runtime_error]") {
 
   constexpr auto div_ok = "{{ 9.0 / 4.0 }}"_fs;
   REQUIRE(render<div_ok>(empty) == "2.25");
+
+  constexpr auto bad_path = "{{ name.first }}"_fs;
+  auto const bad_path_ctx = root_context{.name = "Tom"};
+  REQUIRE_THROWS_WITH(render<bad_path>(bad_path_ctx), "cannot resolve path: name.first");
 }
 
 TEST_CASE("template_vm public API", "[template_vm][api]") {
