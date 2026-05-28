@@ -205,14 +205,14 @@ struct constant {
 
   [[nodiscard]] static auto get() -> inja_value {
     switch (value.kind) {
-      case constant_value::kind_type::string:
-        return inja_value{std::string{value.string_value.data(), value.string_size}};
-      case constant_value::kind_type::integer:
-        return inja_value{value.integer_value};
-      case constant_value::kind_type::floating:
-        return inja_value{value.floating_value};
-      case constant_value::kind_type::boolean:
-        return inja_value{value.bool_value};
+    case constant_value::kind_type::string:
+      return inja_value{std::string{value.string_value.data(), value.string_size}};
+    case constant_value::kind_type::integer:
+      return inja_value{value.integer_value};
+    case constant_value::kind_type::floating:
+      return inja_value{value.floating_value};
+    case constant_value::kind_type::boolean:
+      return inja_value{value.bool_value};
     }
     return inja_value{};
   }

@@ -2071,13 +2071,13 @@ private:
         if (text_[pos_] == '\\' && pos_ + 1 < text_.size()) {
           ++pos_;
           switch (text_[pos_]) {
-            case 'n':  out += '\n'; break;
-            case 't':  out += '\t'; break;
-            case 'r':  out += '\r'; break;
-            case '\\': out += '\\'; break;
-            case '"':  out += '"';  break;
-            case '\'': out += '\''; break;
-            default:   out += '\\'; out += text_[pos_]; break;
+          case 'n':  out += '\n'; break;
+          case 't':  out += '\t'; break;
+          case 'r':  out += '\r'; break;
+          case '\\': out += '\\'; break;
+          case '"':  out += '"';  break;
+          case '\'': out += '\''; break;
+          default:   out += '\\'; out += text_[pos_]; break;
           }
         } else {
           out += text_[pos_];
