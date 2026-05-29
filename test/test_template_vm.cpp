@@ -81,6 +81,29 @@ TEST_CASE("template parser runs at constexpr", "[template_vm][parser]") {
   REQUIRE(!frozenchars::inja::detail::is_simple_path_expression("name..x"));
 }
 
+TEST_CASE("template parser marks simple-path metadata for if/for/include", "[template_vm][parser]") {
+  constexpr auto src = "{% if user.profile.city %}X{% endif %}{% for v in user.profile %}{{ v }}{% endfor %}{% include include_name %}"_fs;
+  constexpr auto program = frozenchars::inja::detail::parse_program<src>();
+
+  auto has_if_simple = false;
+  auto has_for_simple = false;
+  auto has_include_simple = false;
+  for (auto i = std::size_t{0}; i < program.count; ++i) {
+    auto const& n = program.nodes[i];
+    if (n.kind == frozenchars::inja::detail::node_kind::if_stmt) {
+      has_if_simple = n.if_cond_is_simple_path;
+    } else if (n.kind == frozenchars::inja::detail::node_kind::for_stmt) {
+      has_for_simple = n.for_iter_is_simple_path;
+    } else if (n.kind == frozenchars::inja::detail::node_kind::include_stmt) {
+      has_include_simple = n.include_expr_is_simple_path;
+    }
+  }
+
+  REQUIRE(has_if_simple);
+  REQUIRE(has_for_simple);
+  REQUIRE(has_include_simple);
+}
+
 TEST_CASE("template runtime renders core syntax", "[template_vm][runtime]") {
   constexpr auto src = "Hello {{ name }}{# comment #}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
   auto const ctx = root_context{

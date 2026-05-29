@@ -309,8 +309,10 @@ struct node {
   std::size_t aux3_begin{std::numeric_limits<std::size_t>::max()};
   std::size_t aux3_end{std::numeric_limits<std::size_t>::max()};
   bool expr_is_simple_path{};
+  bool if_cond_is_simple_path{};
   bool for_has_key{};
   bool for_iter_is_simple_path{};
+  bool include_expr_is_simple_path{};
 };
 
 /**
@@ -521,6 +523,7 @@ consteval auto parse_program() -> bytecode {
       }
       program.nodes[idx].aux_begin = stmt_offset + 3 + static_cast<std::size_t>(cond_sv.data() - cond_body.data());
       program.nodes[idx].aux_end = program.nodes[idx].aux_begin + cond_sv.size();
+      program.nodes[idx].if_cond_is_simple_path = is_simple_path_expression(cond_sv);
       stack[stack_size] = idx;
       ++stack_size;
       return;
@@ -559,6 +562,7 @@ consteval auto parse_program() -> bytecode {
         }
         program.nodes[else_idx].aux_begin = stmt_offset + 7 + static_cast<std::size_t>(cond_sv.data() - cond_body.data());
         program.nodes[else_idx].aux_end = program.nodes[else_idx].aux_begin + cond_sv.size();
+        program.nodes[else_idx].if_cond_is_simple_path = is_simple_path_expression(cond_sv);
       }
       return;
     }
@@ -658,6 +662,7 @@ consteval auto parse_program() -> bytecode {
       }
       program.nodes[idx].aux_begin = stmt_offset + 8 + static_cast<std::size_t>(name_sv.data() - name_body.data());
       program.nodes[idx].aux_end = program.nodes[idx].aux_begin + name_sv.size();
+      program.nodes[idx].include_expr_is_simple_path = is_simple_path_expression(name_sv);
       return;
     }
     throw "template parse error: unsupported statement";
@@ -2210,6 +2215,20 @@ auto render_program_with_lookup(RootLookup root_lookup,
   };
 
   auto const render_range = [&](this auto&& self, std::size_t begin, std::size_t end) -> void {
+    auto const eval_expr_with_simple_path = [&](std::string_view expr, bool is_simple_path) -> inja_value {
+      if (!is_simple_path) {
+        return expr_parser<decltype(lookup), EnvironmentBinding>{expr, lookup, runtime_options}.parse();
+      }
+      auto const looked = lookup(expr);
+      if (looked.has_value()) {
+        return std::move(*looked);
+      }
+      if (looked.error() == lookup_status::not_convertible) {
+        throw render_error{"value cannot be converted to inja_value"};
+      }
+      return expr_parser<decltype(lookup), EnvironmentBinding>{expr, lookup, runtime_options}.parse();
+    };
+
     auto i = begin;
     while (i < end) {
       auto const& node = program.nodes[i];
@@ -2221,27 +2240,14 @@ auto render_program_with_lookup(RootLookup root_lookup,
       }
       case node_kind::expr: {
         auto const expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto value = inja_value{};
-        if (node.expr_is_simple_path) {
-          auto const looked = lookup(expr);
-          if (looked.has_value()) {
-            value = std::move(*looked);
-          } else if (looked.error() == lookup_status::not_convertible) {
-            throw render_error{"value cannot be converted to inja_value"};
-          } else {
-            // compile-time constantsなど、単純 lookup 以外の解決パスは既存の式評価へフォールバックする
-            value = expr_parser<decltype(lookup), EnvironmentBinding>{expr, lookup, runtime_options}.parse();
-          }
-        } else {
-          value = expr_parser<decltype(lookup), EnvironmentBinding>{expr, lookup, runtime_options}.parse();
-        }
+        auto const value = eval_expr_with_simple_path(expr, node.expr_is_simple_path);
         append_value(out, value);
         ++i;
         break;
       }
       case node_kind::if_stmt: {
         auto const cond_sv = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto const cond = expr_parser<decltype(lookup), EnvironmentBinding>{cond_sv, lookup, runtime_options}.parse();
+        auto const cond = eval_expr_with_simple_path(cond_sv, node.if_cond_is_simple_path);
         auto const then_end = node.else_index != std::numeric_limits<std::size_t>::max()
                                 ? node.else_index
                                 : node.end_index;
@@ -2259,7 +2265,7 @@ auto render_program_with_lookup(RootLookup root_lookup,
               break;
             }
             auto const else_cond_sv = src.substr(else_node.aux_begin, else_node.aux_end - else_node.aux_begin);
-            auto const else_cond = expr_parser<decltype(lookup), EnvironmentBinding>{else_cond_sv, lookup, runtime_options}.parse();
+            auto const else_cond = eval_expr_with_simple_path(else_cond_sv, else_node.if_cond_is_simple_path);
             if (truthy(else_cond)) {
               self(else_idx + 1, branch_end);
               break;
@@ -2282,31 +2288,20 @@ auto render_program_with_lookup(RootLookup root_lookup,
         auto native_typed_object = std::optional<typed_object_view>{};
  #endif
         if (node.for_iter_is_simple_path) {
-          if (auto local = resolve_local(frames, iter_expr); local.has_value()) {
-            iterable = std::move(*local);
-          } else {
-#if FROZENCHARS_HAS_GLAZE
+          auto const looked = lookup(iter_expr);
+          if (looked.has_value()) {
+            iterable = std::move(*looked);
+          } else if (looked.error() == lookup_status::not_convertible) {
+ #if FROZENCHARS_HAS_GLAZE
             native_typed_object = root_object_lookup(iter_expr);
             if (!native_typed_object.has_value()) {
-              auto const looked = root_lookup(iter_expr);
-              if (looked.has_value()) {
-                iterable = std::move(*looked);
-              } else if (looked.error() == lookup_status::not_convertible) {
-                throw render_error{"value cannot be converted to inja_value"};
-              } else {
-                iterable = expr_parser<decltype(lookup), EnvironmentBinding>{iter_expr, lookup, runtime_options}.parse();
-              }
-            }
-#else
-            auto const looked = root_lookup(iter_expr);
-            if (looked.has_value()) {
-              iterable = std::move(*looked);
-            } else if (looked.error() == lookup_status::not_convertible) {
               throw render_error{"value cannot be converted to inja_value"};
-            } else {
-              iterable = expr_parser<decltype(lookup), EnvironmentBinding>{iter_expr, lookup, runtime_options}.parse();
             }
-#endif
+ #else
+            throw render_error{"value cannot be converted to inja_value"};
+ #endif
+          } else {
+            iterable = expr_parser<decltype(lookup), EnvironmentBinding>{iter_expr, lookup, runtime_options}.parse();
           }
         } else {
           iterable = expr_parser<decltype(lookup), EnvironmentBinding>{iter_expr, lookup, runtime_options}.parse();
@@ -2405,7 +2400,7 @@ auto render_program_with_lookup(RootLookup root_lookup,
       }
       case node_kind::include_stmt: {
         auto const include_expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
-        auto include_name = expr_parser<decltype(lookup), EnvironmentBinding>{include_expr, lookup, runtime_options}.parse();
+        auto include_name = eval_expr_with_simple_path(include_expr, node.include_expr_is_simple_path);
         if (!std::holds_alternative<std::string>(include_name.storage)) {
           throw render_error{"include target must evaluate to string"};
         }
