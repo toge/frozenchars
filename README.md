@@ -936,15 +936,60 @@ auto const out = render<src>(ctx); // "Hello Tom from Tokyo:0=1;1=2;2=3;"
 - `as_double_array(arr)`
 - `as_string_array(arr)`
 
-#### パフォーマンス
+#### パフォーマンス / 実行モデル
 
-テンプレートはコンパイル時にバイトコード相当の構造へパースされます。
-実行時はこの構造を高速に走査するため、文字列ベースの逐次パースを行うエンジンに比べて高速なレンダリングを目標としていますが、まだ最適化の途中です。
+この実装は **constexpr でテンプレート構造を解析**し、ノード列（バイトコード相当）として保持します。  
+一方で、**レンダリング自体は実行時**にコンテキストを使って評価されます。  
+つまり「毎回テンプレート文字列を再パースしない」ことが主な利点であり、式評価や分岐・反復の判定は実行時に行われます。
 
-- `name` / `user.profile.city` のような単純な識別子・ドットパスは、まず軽量な直接 lookup を試行します（見つからない場合は通常の式パーサへフォールバックします）。
-- より複雑な式は従来どおり実行時の式パーサで評価されます。
-- `{% for k, v in user.profile %}` のような typed reflectable object ループは、反復対象が単純パスの場合に typed member を直接走査できます。
-- `set` 文は引き続きローカル識別子への代入のみ対応しています（`{% set user.name = ... %}` はエラー）。
+#### どのケースが軽量 lookup を使うか
+
+`name` や `user.profile.city` のような単純な識別子/ドットパスは simple-path として扱われ、まず軽量な直接 lookup を試します。  
+この経路は `{{ expr }}` だけでなく、simple-path の場合に以下でも使われます。
+
+- `{% if ... %}` の条件式
+- `{% for ... in ... %}` の反復対象
+- `{% include ... %}` のターゲット式
+
+```jinja
+{{ user.profile.city }}             {# simple path: 直接 lookup を先に試す #}
+{{ user.age + 1 }}                  {# 複合式: runtime 式パーサで評価 #}
+{% if user.active %}...{% endif %} {# simple path 条件なら lookup 優先 #}
+```
+
+#### どのケースが runtime 式パーサへフォールバックするか
+
+simple-path でない式は、従来どおり runtime の式パーサで評価されます。  
+また simple-path でも、直接 lookup が `not_found` の場合は既存挙動を保つため式パーサへフォールバックします（定数や他の式解決経路を維持するため）。
+
+代表例:
+
+- 四則演算
+- 論理演算（`and` / `or` / `not`）
+- 比較演算
+- 関数呼び出し
+- パイプ式
+- リテラル
+- その他の非 simple-path 式
+
+#### typed context と `inja_value` の役割分担
+
+ルート入力は Glaze reflection（`glz::meta<T>` / reflectable）を前提とした typed context です。  
+レンダリング前に typed root 全体を動的 `inja_object` に変換する設計ではなく、メンバー lookup は typed データを直接たどります。  
+一方で、式評価の中間値・ローカル変数・関数引数などには `inja_value` が使われます。
+
+#### ループ実行モデル
+
+配列/配列相当の反復は lightweight な local frame を使って実行され、`loop.index` / `loop.index1` / `loop.is_first` / `loop.is_last` はこのループ状態から供給されます（毎回の動的オブジェクトマップ生成ではありません）。  
+`{% for k, v in user.profile %}` のような typed reflectable object ループは、反復対象が simple-path のとき typed member を直接反復できます。  
+従来どおり `inja_object` の動的オブジェクト反復もサポートされます。
+
+#### 現在の制約
+
+- 複雑な式は runtime 式パーサに依存します。
+- 中間値の一部は `inja_value` 表現を使います。
+- フォールバック/中間処理の一部ではオブジェクト相当データを動的に実体化する場合があります。
+- `set` 文はローカル識別子への代入のみ対応です（`{% set user.name = ... %}` は未対応）。
 
 ## テスト
 
