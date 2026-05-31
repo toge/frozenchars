@@ -2,9 +2,9 @@
 
 **Goal:** `include/frozenchars/inja_engine.hpp` の既存公開 API を維持したまま、`else` チェーン判定、値文字列化の失敗処理、glaze 連携、関数抽出、変数パス分割、ホットパス最適化、ドキュメント補強を一括で整理し、貼り付けられた修正仕様を単一実装単位として着地させる。
 
-**Scope:** 変更対象は `include/frozenchars/inja_engine.hpp` と回帰追加先の `test/test_template_vm.cpp` に限定する。`render`, `compile_template`, `extract_template_function_calls` のシグネチャは変更しない。C++26 前提で設計し、`std::inplace_vector` は feature-test macro で有効化する。
+**Scope:** 変更対象は `include/frozenchars/inja_engine.hpp` と回帰追加先の `test/test_template_vm.cpp` に限定する。`render`, `compile_template`, `extract_template_function_calls` のシグネチャは変更しない。C++26 前提で設計し、`std::inplace_vector` は `__cpp_lib_inplace_vector >= 202306L` で有効化する。glaze については、このリポジトリが現在解決する依存セットで `glz::to_tie(T const&)` が有効であることを前提条件とし、満たさない場合はこの修正とは別の依存整理タスクとして扱う。
 
-**Non-goals:** 旧 glaze 版との後方互換維持、新しい公開 API 追加、追加ベンチマーク基盤の導入、compile-fail ハーネス新設は行わない。
+**Non-goals:** 旧 glaze 版との後方互換維持、新しい公開 API 追加、追加ベンチマーク基盤の導入、compile-fail ハーネス新設、glaze バージョン固定作業は行わない。
 
 ---
 
@@ -19,7 +19,7 @@
    - 未使用の `always_false_v` を削除する。
 
 2. **ランタイム変換 / lookup ブロック**
-   - `append_value` の整数・浮動小数 `std::to_chars` 失敗を `render_error` にする。
+   - `append_value` の整数変換失敗、および非有限浮動小数 / 浮動小数変換失敗を `render_error` にする。
    - glaze 連携の `glz::to_tie(const_cast<...>)` を `glz::to_tie(value)` に置き換え、現行 glaze 前提へ揃える。
    - `runtime_options_ref` と `runtime_options` の関連 API に Doxygen コメントを追加し、`std::cref` 利用を明示する。
 
@@ -51,15 +51,15 @@
 
 ### 2. runtime conversion and lookup changes
 
-`append_value` では `std::int64_t` と `double` の両分岐で `std::to_chars` の戻り値 `ec` を必ず検査し、失敗時は `render_error` を投げる。成功時のみ `out.append` し、空文字列を黙って出力する経路をなくす。
+`append_value` では `std::int64_t` 分岐で `std::to_chars` の戻り値 `ec` を必ず検査し、失敗時は `render_error` を投げる。`double` 分岐は先に `std::isfinite(*p)` を確認し、`NaN` / `+inf` / `-inf` は `render_error` とする。そのうえで `std::to_chars` の `ec` も検査し、失敗時は同様に例外化する。これにより空文字列の黙殺だけでなく、非有限値の `"nan"` / `"inf"` 出力も防ぐ。
 
-glaze 有効時は `convert_reflectable`, `lookup_in_reflectable`, `lookup_typed_object_view_value`, `make_typed_object_view` 内の `const_cast` を削除し、`glz::to_tie(value)` の直接呼び出しへ統一する。今回の仕様では古い glaze との両立は目的外なので、互換レイヤーやフォールバック helper は持たない。
+glaze 有効時は `convert_reflectable`, `lookup_in_reflectable`, `lookup_typed_object_view_value`, `make_typed_object_view` 内の `const_cast` を削除し、`glz::to_tie(value)` の直接呼び出しへ統一する。ここで要求する最小条件は「このリポジトリで解決される glaze が `T const&` に対して `glz::to_tie` を提供していること」であり、実装中にこの条件が崩れた場合は互換レイヤー追加ではなく依存条件の問題として停止する。今回の仕様では古い glaze との両立は目的外なので、フォールバック helper は持たない。
 
 `runtime_options_ref` には `std::cref(opts)` を使う意図を Doxygen で明記する。合わせて `add_function`, `reserve_functions`, `add_include`, `reserve_includes` の利用意図も補強し、ランタイム拡張設定の使い方をヘッダ単体で追えるようにする。
 
 ### 3. path splitting and hot-path optimization
 
-`split_variable_path` の戻り値は `std::vector<std::string_view>` から `path_segments` に変える。`path_segments` は最大 16 要素の小バッファ型とし、`__cpp_lib_inplace_vector >= 202406L` のときは `std::inplace_vector<std::string_view, 16>`、それ以外は `std::array<std::string_view, 16>` とサイズカウンタで実装する。17 要素目は `render_error{"variable path too deep (max 16 segments)"}` とする。
+`split_variable_path` の戻り値は `std::vector<std::string_view>` から `path_segments` に変える。`path_segments` は最大 16 要素の小バッファ型とし、`__cpp_lib_inplace_vector >= 202306L` のときは `std::inplace_vector<std::string_view, 16>`、それ以外は `std::array<std::string_view, 16>` とサイズカウンタで実装する。必要なら `<version>` で feature-test macro を参照しつつ、`<inplace_vector>` 自体は有効時のみ include する。17 要素目は `render_error{"variable path too deep (max 16 segments)"}` とする。これは署名互換を保ったまま導入する **意図的な挙動変更** であり、極端に深いパスを許容するよりホットパスでの動的確保排除を優先する。
 
 `path_segments` は `std::span<std::string_view const>` へ渡せるようにし、`join_segments`, `lookup_in_inja_value`, `lookup_in_typed_value`, `resolve_loop_property`, `resolve_local_binding` などの span ベース API は維持する。呼び出し側だけを `path_segments` 受け取り後に span 化する構成にし、関数境界の変更を最小化する。
 
@@ -70,7 +70,7 @@ glaze 有効時は `convert_reflectable`, `lookup_in_reflectable`, `lookup_typed
 ## Error Handling
 
 - `else` の重複は consteval パース中に `throw "template parse error: unexpected else"` を維持する。
-- `append_value` の数値変換失敗は `render_error` として呼び出し側へ伝播する。
+- `append_value` の数値変換失敗と非有限 `double` は `render_error` として呼び出し側へ伝播する。
 - 変数パスの空セグメントは既存どおり `render_error{"empty identifier"}`、深さ超過は新規に `variable path too deep (max 16 segments)` とする。
 - glaze 経由の lookup / object view は現行 API 前提のため、古い依存への救済分岐は持たない。
 
@@ -82,9 +82,9 @@ glaze 有効時は `convert_reflectable`, `lookup_in_reflectable`, `lookup_typed
 
 1. `else if` / `else` の正常分岐で `A`, `B`, `C` が期待どおり出る。
 2. `{# upper(x) #}{{ x }}` に対して `extract_template_function_calls` が関数を誤検出しない。
-3. `append_value` が `std::numeric_limits<double>::quiet_NaN()` で `render_error` を投げる。
+3. `append_value` が `std::numeric_limits<double>::quiet_NaN()` と `std::numeric_limits<double>::infinity()` で `render_error` を投げる。
 4. `split_variable_path("a.b.c.d.e")` が 5 セグメントを返し、17 セグメント超過でエラーになる。
-5. 既存の typed root / include / loop 回帰が崩れていない。
+5. 既存の `template runtime supports include template registry`, `template runtime supports custom delimiters`, `typed root lookup does not require whole-tree conversion`, `template runtime supports else if chains`, `template runtime supports nested for loops` が崩れていない。
 
 `else` 二重定義の compile-fail 確認は通常の実行時テストへ無理に組み込まず、ソース近傍コメントで保持する。
 
@@ -92,7 +92,7 @@ glaze 有効時は `convert_reflectable`, `lookup_in_reflectable`, `lookup_typed
 
 ## Implementation Notes
 
-- `#include <inplace_vector>` は feature-test macro を満たすときだけ導入する。
+- `#include <inplace_vector>` は `__cpp_lib_inplace_vector >= 202306L` を満たすときだけ導入する。
 - `path_segments` は `detail` 名前空間内に閉じる。
 - 公開 API のシグネチャ変更は行わない。
 - 変更は `inja_engine.hpp` の責務内で完結させ、別ヘッダへの分割は行わない。
