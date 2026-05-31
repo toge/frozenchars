@@ -104,6 +104,14 @@ TEST_CASE("template parser marks simple-path metadata for if/for/include", "[tem
   REQUIRE(has_include_simple);
 }
 
+TEST_CASE("template function extraction ignores comment blocks", "[template_vm][parser]") {
+  constexpr auto src = "{# upper(x) #}{{ x }}"_fs;
+  constexpr auto calls = extract_template_function_calls<src>();
+
+  static_assert(calls.count == 0);
+  REQUIRE(calls.count == 0);
+}
+
 TEST_CASE("template runtime renders core syntax", "[template_vm][runtime]") {
   constexpr auto src = "Hello {{ name }}{# comment #}{% if items %}:{% for x in items %}{{ x }}{% endfor %}{% endif %}"_fs;
   auto const ctx = root_context{
@@ -263,6 +271,14 @@ TEST_CASE("template runtime supports else if chains", "[template_vm][else_if]") 
 
   auto const ctx_small = root_context{.n = 3};
   REQUIRE(render<src>(ctx_small) == "small");
+}
+
+TEST_CASE("template runtime resolves else if chains including tail else", "[template_vm][else_if]") {
+  constexpr auto src = "{% if n == 1 %}A{% else if n == 2 %}B{% else %}C{% endif %}"_fs;
+
+  REQUIRE(render<src>(root_context{.n = 1}) == "A");
+  REQUIRE(render<src>(root_context{.n = 2}) == "B");
+  REQUIRE(render<src>(root_context{.n = 3}) == "C");
 }
 
 TEST_CASE("template runtime supports set assignment", "[template_vm][set]") {

@@ -139,9 +139,6 @@ struct environment_traits<Environment> {
 template <typename T>
 using remove_cvref_t = std::remove_cvref_t<T>;
 
-template <typename>
-inline constexpr auto always_false_v = false;
-
 #if FROZENCHARS_HAS_GLAZE
 template <typename T>
 concept glaze_reflectable = requires {
@@ -313,6 +310,7 @@ struct node {
   bool for_has_key{};
   bool for_iter_is_simple_path{};
   bool include_expr_is_simple_path{};
+  bool is_plain_else{};
 };
 
 /**
@@ -344,7 +342,7 @@ struct bytecode {
  * @return trim 後のビュー
  */
 [[nodiscard]] constexpr auto trim_view(std::string_view s) -> std::string_view {
-  auto begin = std::size_t{0};
+  auto begin = 0uz;
   auto end = s.size();
   while (begin < end && is_space(s[begin])) {
     ++begin;
@@ -496,9 +494,9 @@ consteval auto parse_program() -> bytecode {
   }
 
   auto stack = std::array<std::size_t, MAX_NODES>{};
-  auto stack_size = std::size_t{0};
-  auto for_depth = std::size_t{0};
-  auto max_for_depth = std::size_t{0};
+  auto stack_size = 0uz;
+  auto for_depth = 0uz;
+  auto max_for_depth = 0uz;
 
   auto push_node = [&](node_kind kind, std::size_t begin, std::size_t end) consteval -> std::size_t {
     if (program.count >= MAX_NODES) {
@@ -513,9 +511,9 @@ consteval auto parse_program() -> bytecode {
   // 2. {{ }}, {# #}, {% %} を識別してノード化
   // 3. if/for の対応関係は stack で後方解決
   auto process_statement = [&](std::string_view stmt, std::size_t begin, std::size_t end) consteval {
+    auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
     if (stmt.starts_with("if ")) {
       auto const idx = push_node(node_kind::if_stmt, begin, end);
-      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
       auto const cond_body = stmt.substr(3);
       auto const cond_sv = trim_view(cond_body);
       if (cond_sv.empty()) {
@@ -535,7 +533,9 @@ consteval auto parse_program() -> bytecode {
       }
       auto const if_idx = stack[stack_size - 1];
       auto const else_idx = push_node(node_kind::else_stmt, begin, end);
-      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
+      if (!stmt.starts_with("else if ")) {
+        program.nodes[else_idx].is_plain_else = true;
+      }
 
       if (program.nodes[if_idx].else_index == std::numeric_limits<std::size_t>::max()) {
         program.nodes[if_idx].else_index = else_idx;
@@ -544,11 +544,7 @@ consteval auto parse_program() -> bytecode {
         while (program.nodes[tail_else].else_index != std::numeric_limits<std::size_t>::max()) {
           tail_else = program.nodes[tail_else].else_index;
         }
-        auto const tail_stmt = trim_view(src.substr(
-          program.nodes[tail_else].begin,
-          program.nodes[tail_else].end - program.nodes[tail_else].begin
-        ));
-        if (tail_stmt == "else") {
+        if (program.nodes[tail_else].is_plain_else) {
           throw "template parse error: unexpected else";
         }
         program.nodes[tail_else].else_index = else_idx;
@@ -581,7 +577,6 @@ consteval auto parse_program() -> bytecode {
         throw "template parse error: invalid for statement";
       }
       auto const idx = push_node(node_kind::for_stmt, begin, end);
-      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
       auto body = stmt.substr(4);
       auto const in_pos_local = body.find(" in ");
       auto const lhs = trim_view(body.substr(0, in_pos_local));
@@ -635,7 +630,6 @@ consteval auto parse_program() -> bytecode {
     // set/include は単独ステートメントノードとして保持し、実行時に評価する。
     if (stmt.starts_with("set ")) {
       auto const idx = push_node(node_kind::set_stmt, begin, end);
-      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
       auto body = stmt.substr(4);
       auto const eq_pos_local = body.find('=');
       if (eq_pos_local == std::string_view::npos) {
@@ -654,7 +648,6 @@ consteval auto parse_program() -> bytecode {
     }
     if (stmt.starts_with("include ")) {
       auto const idx = push_node(node_kind::include_stmt, begin, end);
-      auto const stmt_offset = static_cast<std::size_t>(stmt.data() - src.data());
       auto const name_body = stmt.substr(8);
       auto const name_sv = trim_view(name_body);
       if (name_sv.empty()) {
@@ -668,7 +661,7 @@ consteval auto parse_program() -> bytecode {
     throw "template parse error: unsupported statement";
   };
 
-  auto pos = std::size_t{0};
+  auto pos = 0uz;
   while (pos < src.size()) {
     auto const next = find_next_open<Delims>(src, pos);
     auto const tag = next.pos;
@@ -2498,10 +2491,12 @@ template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
   auto constexpr expr_close = Delims::expression_close.sv();
   auto constexpr stmt_open = Delims::statement_open.sv();
   auto constexpr stmt_close = Delims::statement_close.sv();
+  auto constexpr comment_open = Delims::comment_open.sv();
+  auto constexpr comment_close = Delims::comment_close.sv();
   auto constexpr line_prefix = Delims::line_statement_prefix.sv();
 
   auto result = frozenchars::inja::function_call_set<256>{};
-  auto pos = std::size_t{0};
+  auto pos = 0uz;
 
   while (pos < src_sv.size()) {
     // 行文プレフィックスを先頭で確認（行頭のみ）
@@ -2518,15 +2513,27 @@ template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
 
     auto const expr_pos = src_sv.find(expr_open, pos);
     auto const stmt_pos = src_sv.find(stmt_open, pos);
+    auto const comment_pos = src_sv.find(comment_open, pos);
     auto const next = std::min(
-      expr_pos != std::string_view::npos ? expr_pos : std::string_view::npos,
-      stmt_pos != std::string_view::npos ? stmt_pos : std::string_view::npos
+      std::min(
+        expr_pos != std::string_view::npos ? expr_pos : std::string_view::npos,
+        stmt_pos != std::string_view::npos ? stmt_pos : std::string_view::npos
+      ),
+      comment_pos != std::string_view::npos ? comment_pos : std::string_view::npos
     );
     if (next == std::string_view::npos) {
       break;
     }
 
-    if (next == expr_pos && (stmt_pos == std::string_view::npos || expr_pos < stmt_pos)) {
+    if (next == comment_pos && (expr_pos == std::string_view::npos || comment_pos < expr_pos) &&
+        (stmt_pos == std::string_view::npos || comment_pos < stmt_pos)) {
+      auto const content_begin = comment_pos + comment_open.size();
+      auto const close = src_sv.find(comment_close, content_begin);
+      if (close == std::string_view::npos) {
+        break;
+      }
+      pos = close + comment_close.size();
+    } else if (next == expr_pos && (stmt_pos == std::string_view::npos || expr_pos < stmt_pos)) {
       auto const content_begin = expr_pos + expr_open.size();
       auto const close = src_sv.find(expr_close, content_begin);
       if (close == std::string_view::npos) {
