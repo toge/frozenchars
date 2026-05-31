@@ -4,6 +4,7 @@
 
 #include <glaze/glaze.hpp>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -56,6 +57,12 @@ struct partial_context {
 };
 
 } // namespace
+
+#if FROZENCHARS_HAS_GLAZE
+static_assert(requires(root_context const& ctx) {
+  glz::to_tie(ctx);
+});
+#endif
 
 TEST_CASE("inja_value basic types", "[template_vm][value]") {
   auto const v_null = inja_value{};
@@ -208,6 +215,23 @@ TEST_CASE("template runtime errors", "[template_vm][runtime_error]") {
   constexpr auto bad_path = "{{ name.first }}"_fs;
   auto const bad_path_ctx = root_context{.name = "Tom"};
   REQUIRE_THROWS_WITH(render<bad_path>(bad_path_ctx), "cannot resolve path: name.first");
+}
+
+TEST_CASE("append_value rejects non-finite doubles", "[template_vm][runtime_error]") {
+  auto out = std::string{};
+
+  REQUIRE_THROWS_AS(
+    frozenchars::inja::detail::append_value(
+      out, inja_value{std::numeric_limits<double>::quiet_NaN()}
+    ),
+    render_error
+  );
+  REQUIRE_THROWS_AS(
+    frozenchars::inja::detail::append_value(
+      out, inja_value{std::numeric_limits<double>::infinity()}
+    ),
+    render_error
+  );
 }
 
 TEST_CASE("template_vm public API", "[template_vm][api]") {

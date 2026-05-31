@@ -6,6 +6,7 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <expected>
 #include <functional>
 #include <limits>
@@ -89,6 +90,11 @@ struct runtime_options {
   // include 解決時のフォールバック
   include_callback include_call{};
 
+  /**
+   * @brief 関数を登録する。
+   * @param name 関数名
+   * @param callback 関数本体
+   */
   auto add_function(std::string name, function_callback callback) -> void {
     function_call.insert_or_assign(std::move(name), std::move(callback));
   }
@@ -101,6 +107,11 @@ struct runtime_options {
     function_call.reserve(count);
   }
 
+  /**
+   * @brief include テンプレートを登録する。
+   * @param name include 名
+   * @param content include 本体
+   */
   auto add_include(std::string name, std::string content) -> void {
     include_templates.insert_or_assign(std::move(name), std::move(content));
   }
@@ -114,6 +125,15 @@ struct runtime_options {
   }
 };
 
+/**
+ * @brief runtime_options を const 参照で保持する軽量ラッパー。
+ *
+ * 使用例:
+ * @code
+ * auto const opts = runtime_options{};
+ * render<src>(root, std::cref(opts));
+ * @endcode
+ */
 using runtime_options_ref = std::optional<std::reference_wrapper<runtime_options const>>;
 
 namespace detail {
@@ -207,7 +227,7 @@ template <typename T>
   auto out = inja_object{};
   constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
   out.reserve(count);
-  auto tied = glz::to_tie(const_cast<U&>(value));
+  auto tied = glz::to_tie(value);
   auto ok = true;
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (
@@ -824,17 +844,22 @@ inline auto append_value(OutputBuffer& out, inja_value const& v) -> void {
   if (auto const* p = std::get_if<std::int64_t>(&v.storage)) {
     auto buf = std::array<char, 24>{};
     auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), *p);
-    if (ec == std::errc{}) {
-      out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
+    if (ec != std::errc{}) {
+      throw render_error{"integer to string conversion failed"};
     }
+    out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
     return;
   }
   if (auto const* p = std::get_if<double>(&v.storage)) {
     auto buf = std::array<char, 32>{};
-    auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), *p);
-    if (ec == std::errc{}) {
-      out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
+    if (!std::isfinite(*p)) {
+      throw render_error{"double to string conversion failed"};
     }
+    auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), *p);
+    if (ec != std::errc{}) {
+      throw render_error{"double to string conversion failed"};
+    }
+    out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
     return;
   }
   if (auto const* p = std::get_if<bool>(&v.storage)) {
@@ -1365,7 +1390,7 @@ template <typename T>
                                                  std::string_view full_path) -> lookup_result {
   using U = remove_cvref_t<T>;
   constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
-  auto tied = glz::to_tie(const_cast<U&>(value));
+  auto tied = glz::to_tie(value);
   auto const segment = segments[index];
   auto found = false;
   auto result = lookup_result{std::unexpected(lookup_status::not_found)};
@@ -1460,7 +1485,7 @@ template <typename T>
     .for_each_fn = [](void const* object_ptr, void* state_ptr,
                       void (*emit)(void*, std::string_view, inja_value&&)) -> void {
       auto const& object = *static_cast<U const*>(object_ptr);
-      auto tied = glz::to_tie(const_cast<U&>(object));
+      auto tied = glz::to_tie(object);
       constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
       [&]<std::size_t... Is>(std::index_sequence<Is...>) {
         (
@@ -1498,7 +1523,7 @@ template <typename T>
     return lookup_typed_object_view_value(it->second, segments, index + 1);
   } else if constexpr (glaze_reflectable<U>) {
     constexpr auto count = static_cast<std::size_t>(glz::reflect<U>::size);
-    auto tied = glz::to_tie(const_cast<U&>(value));
+    auto tied = glz::to_tie(value);
     auto const segment = segments[index];
     auto result = std::optional<typed_object_view>{};
     [&]<std::size_t... Is>(std::index_sequence<Is...>) {
