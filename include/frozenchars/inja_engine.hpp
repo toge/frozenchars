@@ -13,6 +13,9 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#if defined(__cpp_lib_inplace_vector) && __cpp_lib_inplace_vector >= 202306L
+#include <inplace_vector>
+#endif
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -1306,8 +1309,56 @@ enum class lookup_status : std::uint8_t {
 
 using lookup_result = std::expected<inja_value, lookup_status>;
 
-[[nodiscard]] inline auto split_variable_path(std::string_view name) -> std::vector<std::string_view> {
-  auto segments = std::vector<std::string_view>{};
+struct path_segments {
+  static constexpr auto max_depth = std::size_t{16};
+
+#if defined(__cpp_lib_inplace_vector) && __cpp_lib_inplace_vector >= 202306L
+  using storage_type = std::inplace_vector<std::string_view, max_depth>;
+#else
+  using storage_type = std::array<std::string_view, max_depth>;
+#endif
+
+  storage_type storage{};
+  std::size_t size_{};
+
+  auto push_back(std::string_view sv) -> void {
+    if (size() >= max_depth) {
+      throw render_error{"variable path too deep (max 16 segments)"};
+    }
+#if defined(__cpp_lib_inplace_vector) && __cpp_lib_inplace_vector >= 202306L
+    storage.push_back(sv);
+#else
+    storage[size_++] = sv;
+#endif
+  }
+
+  [[nodiscard]] auto size() const -> std::size_t {
+#if defined(__cpp_lib_inplace_vector) && __cpp_lib_inplace_vector >= 202306L
+    return storage.size();
+#else
+    return size_;
+#endif
+  }
+
+  [[nodiscard]] auto operator[](std::size_t index) const -> std::string_view {
+    return storage[index];
+  }
+
+  [[nodiscard]] auto front() const -> std::string_view {
+    return storage.front();
+  }
+
+  [[nodiscard]] auto data() const -> std::string_view const* {
+    return storage.data();
+  }
+
+  [[nodiscard]] auto span() const -> std::span<std::string_view const> {
+    return {data(), size()};
+  }
+};
+
+[[nodiscard]] inline auto split_variable_path(std::string_view name) -> path_segments {
+  auto segments = path_segments{};
   auto begin = std::size_t{0};
   while (begin <= name.size()) {
     auto const end = name.find('.', begin);
@@ -1373,7 +1424,7 @@ using lookup_result = std::expected<inja_value, lookup_status>;
   if (it == root.end()) {
     return std::unexpected(lookup_status::not_found);
   }
-  return lookup_in_inja_value(it->second, segments, 1, name);
+  return lookup_in_inja_value(it->second, segments.span(), 1, name);
 }
 
 #if FROZENCHARS_HAS_GLAZE
@@ -1447,7 +1498,7 @@ template <typename T>
 template <typename Context>
 [[nodiscard]] inline auto lookup_in_typed_root(Context const& root, std::string_view name) -> lookup_result {
   auto const segments = split_variable_path(name);
-  return lookup_in_typed_value(root, segments, 0, name);
+  return lookup_in_typed_value(root, segments.span(), 0, name);
 }
 
 struct typed_object_view {
@@ -1549,7 +1600,7 @@ template <typename T>
 template <typename Context>
 [[nodiscard]] inline auto lookup_typed_object_view_root(Context const& root, std::string_view name) -> std::optional<typed_object_view> {
   auto const segments = split_variable_path(name);
-  return lookup_typed_object_view_value(root, segments, 0);
+  return lookup_typed_object_view_value(root, segments.span(), 0);
 }
 #else
 struct typed_object_view {
@@ -1562,14 +1613,14 @@ template <typename Context>
 #endif
 
 [[nodiscard]] inline auto resolve_local_binding(local_binding const& binding,
-                                                std::span<std::string_view const> segments) -> std::optional<inja_value> {
+                                                path_segments const& segments) -> std::optional<inja_value> {
   if (segments.front() != binding.name) {
     return std::nullopt;
   }
   if (segments.size() == 1) {
     return binding.value;
   }
-  auto resolved = lookup_in_inja_value(binding.value, segments, 1, join_segments(segments));
+  auto resolved = lookup_in_inja_value(binding.value, segments.span(), 1, join_segments(segments.span()));
   if (!resolved.has_value()) {
     return std::nullopt;
   }
@@ -1577,7 +1628,7 @@ template <typename Context>
 }
 
 [[nodiscard]] inline auto resolve_loop_property(local_frame const& frame,
-                                                std::span<std::string_view const> segments) -> std::optional<inja_value> {
+                                                path_segments const& segments) -> std::optional<inja_value> {
   if (segments.size() != 2 || segments.front() != "loop") {
     return std::nullopt;
   }
@@ -2357,16 +2408,24 @@ auto render_program_with_lookup(RootLookup root_lookup,
         if (std::holds_alternative<inja_array>(iterable.storage)) {
           auto const& arr_variant = std::get<inja_array>(iterable.storage);
           std::visit([&](auto const& arr) {
+            using array_type = std::remove_cvref_t<decltype(arr)>;
             for (auto idx = std::size_t{0}; idx < arr.size(); ++idx) {
               auto frame = local_frame{};
               frame.loop.index = static_cast<std::int64_t>(idx);
               frame.loop.index1 = static_cast<std::int64_t>(idx + 1);
               frame.loop.is_first = idx == 0;
               frame.loop.is_last = idx + 1 == arr.size();
-              frame.value = local_binding{
-                .name = std::string{value_name},
-                .value = to_inja_value_or_throw(arr[idx]),
-              };
+              if constexpr (std::same_as<array_type, std::vector<inja_value>>) {
+                frame.value = local_binding{
+                  .name = std::string{value_name},
+                  .value = arr[idx],
+                };
+              } else {
+                frame.value = local_binding{
+                  .name = std::string{value_name},
+                  .value = inja_value{arr[idx]},
+                };
+              }
               if (has_key) {
                 frame.key = local_binding{
                   .name = std::string{key_name},

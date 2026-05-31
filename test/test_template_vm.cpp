@@ -111,6 +111,33 @@ TEST_CASE("template parser marks simple-path metadata for if/for/include", "[tem
   REQUIRE(has_include_simple);
 }
 
+TEST_CASE("split_variable_path enforces the small-buffer depth contract", "[template_vm][lookup]") {
+  auto const segments = frozenchars::inja::detail::split_variable_path("a.b.c.d.e");
+  REQUIRE(segments.size() == 5);
+  REQUIRE(segments[0] == "a");
+  REQUIRE(segments[4] == "e");
+
+  REQUIRE_THROWS_WITH(
+    frozenchars::inja::detail::split_variable_path("a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q"),
+    "variable path too deep (max 16 segments)"
+  );
+}
+
+TEST_CASE("render reports deep variable paths through lookup", "[template_vm][lookup]") {
+  constexpr auto src = "{{ a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q }}"_fs;
+  auto const root = [] {
+    auto value = inja_value{std::int64_t{1}};
+    for (auto const key : std::array{
+           "q", "p", "o", "n", "m", "l", "k", "j", "i", "h", "g", "f", "e", "d", "c", "b", "a"
+         }) {
+      value = inja_value{inja_object{{std::string{key}, std::move(value)}}};
+    }
+    return value;
+  }();
+
+  REQUIRE_THROWS_WITH(render<src>(root), "variable path too deep (max 16 segments)");
+}
+
 TEST_CASE("template function extraction ignores comment blocks", "[template_vm][parser]") {
   constexpr auto src = "{# upper(x) #}{{ x }}"_fs;
   constexpr auto calls = extract_template_function_calls<src>();
@@ -229,6 +256,12 @@ TEST_CASE("append_value rejects non-finite doubles", "[template_vm][runtime_erro
   REQUIRE_THROWS_AS(
     frozenchars::inja::detail::append_value(
       out, inja_value{std::numeric_limits<double>::infinity()}
+    ),
+    render_error
+  );
+  REQUIRE_THROWS_AS(
+    frozenchars::inja::detail::append_value(
+      out, inja_value{-std::numeric_limits<double>::infinity()}
     ),
     render_error
   );
