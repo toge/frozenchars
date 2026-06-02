@@ -12,38 +12,6 @@
 
 namespace frozenchars {
 
-namespace detail {
-
-template <std::integral T>
-constexpr auto checked_mul(T a, T b, T& result) noexcept -> bool {
-  if (b != 0 && a > std::numeric_limits<T>::max() / b) {
-    return true; // overflow
-  }
-  if (b != 0 && a < std::numeric_limits<T>::min() / b) {
-    return true; // underflow
-  }
-  result = a * b;
-  return false;
-}
-
-template <std::integral T>
-constexpr auto checked_add(T a, T b, T& result) noexcept -> bool {
-  if (b > 0 && a > std::numeric_limits<T>::max() - b) { return true; }
-  if (b < 0 && a < std::numeric_limits<T>::min() - b) { return true; }
-  result = a + b;
-  return false;
-}
-
-template <std::integral T>
-constexpr auto checked_sub(T a, T b, T& result) noexcept -> bool {
-  if (b < 0 && a > std::numeric_limits<T>::max() + b) { return true; }
-  if (b > 0 && a < std::numeric_limits<T>::min() + b) { return true; }
-  result = a - b;
-  return false;
-}
-
-} // namespace detail
-
 /**
  * @brief 文字列を数値に変換する
  *
@@ -53,7 +21,7 @@ constexpr auto checked_sub(T a, T b, T& result) noexcept -> bool {
  * @return auto 変換後の数値
  */
 template <typename T, size_t N>
-auto constexpr parse_number(FrozenString<N> const& str) -> T {
+[[nodiscard]] auto constexpr parse_number(FrozenString<N> const& str) -> T {
   auto const sv = str.sv();
   if (sv.empty()) {
     throw std::invalid_argument("empty string");
@@ -73,7 +41,12 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
   }
 
   if constexpr (std::integral<T>) {
-    T res = 0;
+    if constexpr (std::unsigned_integral<T>) {
+      if (neg) {
+        throw std::out_of_range("negative value for unsigned type");
+      }
+    }
+
     int base = 10;
     if (sv.size() > start + 1 && sv[start] == '0') {
       if (sv.size() > start + 2 && (sv[start + 1] == 'x' || sv[start + 1] == 'X')) {
@@ -89,33 +62,65 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
     }
 
     if (start >= sv.size() && base != 10) {
-      // Handle cases like "0x" or "0b" which might be invalid depending on requirements
-      // But usually at least one digit is expected after prefix.
-      // test_parse_number.cpp seems to expect exception for missing_hex ("0x")
       throw std::invalid_argument("missing digits after prefix");
     }
 
-    for (size_t i = start; i < sv.size(); ++i) {
-      int digit = 0;
-      if (sv[i] >= '0' && sv[i] <= '9') digit = sv[i] - '0';
-      else if (sv[i] >= 'a' && sv[i] <= 'f') digit = sv[i] - 'a' + 10;
-      else if (sv[i] >= 'A' && sv[i] <= 'F') digit = sv[i] - 'A' + 10;
-      else throw std::invalid_argument("invalid digit");
-
-      if (digit >= base) throw std::invalid_argument("digit out of base range");
-
+    if constexpr (std::same_as<T, unsigned long long>) {
+      T res = 0;
+      auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
+      if (ec == std::errc::invalid_argument) {
+        throw std::invalid_argument("invalid digit");
+      }
+      if (ec == std::errc::result_out_of_range) {
+        throw std::out_of_range("overflow");
+      }
+      if (ptr != sv.data() + sv.size()) {
+        throw std::invalid_argument("invalid digit");
+      }
+      return res;
+    } else if constexpr (std::unsigned_integral<T>) {
+      unsigned long long res = 0;
+      auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
+      if (ec == std::errc::invalid_argument) {
+        throw std::invalid_argument("invalid digit");
+      }
+      if (ec == std::errc::result_out_of_range) {
+        throw std::out_of_range("overflow");
+      }
+      if (ptr != sv.data() + sv.size()) {
+        throw std::invalid_argument("invalid digit");
+      }
+      if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
+        throw std::out_of_range("overflow");
+      }
+      return static_cast<T>(res);
+    } else {
+      long long res = 0;
+      auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
+      if (ec == std::errc::invalid_argument) {
+        throw std::invalid_argument("invalid digit");
+      }
+      if (ec == std::errc::result_out_of_range) {
+        throw std::out_of_range("overflow");
+      }
+      if (ptr != sv.data() + sv.size()) {
+        throw std::invalid_argument("invalid digit");
+      }
       if (neg) {
-        if (detail::checked_mul(res, static_cast<T>(base), res) || detail::checked_sub(res, static_cast<T>(digit), res)) {
-          throw std::out_of_range("overflow");
+        if (res < 0 || static_cast<unsigned long long>(res) > static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL) {
+          throw std::out_of_range("underflow");
         }
+        return -static_cast<T>(res);
       } else {
-        if (detail::checked_mul(res, static_cast<T>(base), res) || detail::checked_add(res, static_cast<T>(digit), res)) {
+        if (res < 0 || res > std::numeric_limits<T>::max()) {
           throw std::out_of_range("overflow");
         }
+        return static_cast<T>(res);
       }
     }
-    return res;
   } else if constexpr (std::floating_point<T>) {
+    // Note: std::from_chars for floating-point is not constexpr in C++23,
+    // so we use manual parsing here.
     T res = 0;
     size_t i = start;
     bool has_digits = false;
@@ -145,9 +150,7 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
       int exp = 0;
       bool has_exp_digits = false;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-        if (detail::checked_mul(exp, 10, exp) || detail::checked_add(exp, static_cast<int>(sv[i] - '0'), exp)) {
-          exp = 1000; // Force overflow later
-        }
+        exp = exp * 10 + static_cast<int>(sv[i] - '0');
         ++i;
         has_exp_digits = true;
       }
@@ -157,9 +160,7 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
       if (eneg) {
         for (int j = 0; j < exp; ++j) {
           res /= 10.0;
-          if (res == 0) {
-            break;
-          }
+          if (res == 0) break;
         }
       } else {
         for (int j = 0; j < exp; ++j) {
@@ -184,7 +185,7 @@ auto constexpr parse_number(FrozenString<N> const& str) -> T {
 }
 
 template <typename T, size_t N>
-auto constexpr parse_number(char const (&str)[N]) -> T {
+[[nodiscard]] auto constexpr parse_number(char const (&str)[N]) -> T {
   return parse_number<T>(FrozenString{str});
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <charconv>
 #include <ranges>
 #include <utility>
 #include <algorithm>
@@ -13,26 +14,13 @@ namespace frozenchars::detail {
  * @param v 変換する整数
  * @return auto consteval 変換された文字列とその長さのペア
  */
-auto consteval to_dec_chars(long long v) noexcept {
+[[nodiscard]] auto consteval to_dec_chars(long long v) noexcept {
   auto buffer = std::array<char, 21>{};
-  if (v == 0) {
-    buffer[0] = '0';
-    return std::pair{buffer, 1uz};
+  auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v);
+  if (ec != std::errc{}) {
+    return std::pair{buffer, 0uz};
   }
-  auto const neg = v < 0;
-  auto val = neg ? (v == -9223372036854775807LL - 1 ? 9223372036854775807LL : -v) : v;
-  auto i = 0uz;
-  while (val > 0) {
-    buffer[i++] = static_cast<char>('0' + (val % 10));
-    val /= 10;
-  }
-  if (neg) {
-    buffer[i++] = '-';
-  }
-  for (auto const j : std::views::iota(0uz, i / 2)) {
-    std::swap(buffer[j], buffer[i - j - 1]);
-  }
-  return std::pair{buffer, i};
+  return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
 }
 
 /**
@@ -41,22 +29,14 @@ auto consteval to_dec_chars(long long v) noexcept {
  * @param value 変換する整数
  * @return auto 変換文字列とその長さのペア
  */
-auto consteval to_hex_chars(long long value) noexcept {
+[[nodiscard]] auto consteval to_hex_chars(long long value) noexcept {
   auto buffer = std::array<char, 17>{};
-  auto v = static_cast<unsigned long long>(value);
-  if (v == 0) {
-    buffer[0] = '0';
-    return std::pair{buffer, 1uz};
+  auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(),
+                                       static_cast<unsigned long long>(value), 16);
+  if (ec != std::errc{}) {
+    return std::pair{buffer, 0uz};
   }
-  auto i = 0uz;
-  auto constexpr digits = "0123456789abcdef";
-  while (v > 0) {
-    buffer[i++] = digits[v % 16]; v /= 16;
-  }
-  for (auto const j : std::views::iota(0uz, i / 2)) {
-    std::swap(buffer[j], buffer[i - j - 1]);
-  }
-  return std::pair{buffer, i};
+  return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
 }
 
 /**
