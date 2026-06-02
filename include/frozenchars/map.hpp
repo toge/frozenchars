@@ -118,16 +118,7 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
   return h;
 }
 
-inline constexpr auto k_fnv_offset_basis = 14695981039346656037ull;
-inline constexpr auto k_fnv_prime = 1099511628211ull;
-
-constexpr auto fnv1a_hash(std::string_view key, std::uint32_t seed) noexcept -> std::uint64_t {
-  auto hash = k_fnv_offset_basis ^ static_cast<std::uint64_t>(seed);
-  for (auto const ch : key) hash = (hash ^ static_cast<unsigned char>(ch)) * k_fnv_prime;
-  return hash;
-}
-
-consteval auto next_pow2(std::size_t n) -> std::size_t {
+[[nodiscard]] consteval auto next_pow2(std::size_t n) -> std::size_t {
   std::size_t res = 1; while (res < n) res <<= 1; return res;
 }
 
@@ -181,26 +172,6 @@ template <std::size_t TableSize, FrozenString... Keys>
     if (!collision) return result_t{seed, table};
   }
   throw "frozen_map seed search exhausted";
-}
-
-template <std::uint32_t MaxSeedExclusive, FrozenString... Keys>
-consteval auto find_seed() -> std::uint32_t {
-  static_assert(!has_duplicate_keys<Keys...>(), "frozen_map keys must be unique");
-  if constexpr (MaxSeedExclusive == 0) throw "frozen_map seed search exhausted";
-  else {
-    constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
-    for (auto seed = 0u; seed < MaxSeedExclusive; ++seed) {
-      std::array<bool, sizeof...(Keys)> used_slots{};
-      auto collision = false;
-      for (auto const key_view : key_views) {
-        auto const slot = static_cast<std::size_t>(fnv1a_hash(key_view, seed) % sizeof...(Keys));
-        if (used_slots[slot]) { collision = true; break; }
-        used_slots[slot] = true;
-      }
-      if (!collision) return seed;
-    }
-    throw "frozen_map seed search exhausted";
-  }
 }
 
 template <typename EntryLike>

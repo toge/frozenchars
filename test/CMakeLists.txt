@@ -45,12 +45,6 @@ assert_frozen_map_compile_fail(
 )
 
 assert_frozen_map_compile_fail(
-  NAME frozen_map_seed_limit_zero
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_seed_limit_zero.cpp
-  EXPECTED_TEXT "frozen_map seed search exhausted"
-)
-
-assert_frozen_map_compile_fail(
   NAME frozen_map_make_frozen_map_wrong_arity
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_wrong_arity.cpp
   EXPECTED_TEXT "make_frozen_map requires exactly one entry per key"

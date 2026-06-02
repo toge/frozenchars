@@ -100,14 +100,6 @@ TEST_CASE("frozen_map exposes container-like type aliases and size helpers", "[f
   static_assert(!Map::empty());
 }
 
-TEST_CASE("frozen_map derives compile-time seed metadata", "[frozen_map]") {
-  static_assert(detail::fnv1a_hash("timeout", 0) == 6954259676504937608ull);
-  static_assert(detail::find_seed<1'000'001, "timeout"_fs, "retry"_fs, "backoff"_fs>() == 13u);
-  static_assert(detail::fnv1a_hash("timeout", 13) % 3 == 0);
-  static_assert(detail::fnv1a_hash("retry", 13) % 3 == 2);
-  static_assert(detail::fnv1a_hash("backoff", 13) % 3 == 1);
-}
-
 TEST_CASE("frozen_map lookup and miss handling", "[frozen_map]") {
   frozen_map<int, "timeout"_fs, "retry"_fs> map{};
 
