@@ -17,7 +17,7 @@ namespace frozenchars {
  * @return auto 変換文字列 (バッファサイズは最悪ケース 3 * length + 1)
  */
 template <size_t N>
-auto consteval url_encode(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval url_encode(FrozenString<N> const& str) noexcept {
   constexpr auto OUT_CAP = 3 * (N > 0 ? N - 1 : 0) + 1;
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
@@ -44,7 +44,7 @@ auto consteval url_encode(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval url_encode(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval url_encode(char const (&str)[N]) noexcept {
   return url_encode(FrozenString{str});
 }
 
@@ -56,7 +56,7 @@ auto consteval url_encode(char const (&str)[N]) noexcept {
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval url_encode() noexcept {
+[[nodiscard]] auto consteval url_encode() noexcept {
   constexpr auto OUT_LEN = detail::count_url_encoded_size(Str);
   auto res = FrozenString<OUT_LEN + 1>{};
   auto offset = 0uz;
@@ -84,7 +84,7 @@ auto consteval url_encode() noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval url_decode(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval url_decode(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto const s = str.sv();
@@ -111,7 +111,7 @@ auto consteval url_decode(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval url_decode(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval url_decode(char const (&str)[N]) noexcept {
   return url_decode(FrozenString{str});
 }
 
@@ -123,7 +123,7 @@ auto consteval url_decode(char const (&str)[N]) noexcept {
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval url_decode() noexcept {
+[[nodiscard]] auto consteval url_decode() noexcept {
   constexpr auto OUT_LEN = detail::count_url_decoded_size(Str);
   auto res = FrozenString<OUT_LEN + 1>{};
   auto offset = 0uz;
@@ -151,7 +151,7 @@ auto consteval url_decode() noexcept {
  * @return auto 変換文字列 (バッファサイズは ((length + 2) / 3) * 4 + 1)
  */
 template <size_t N>
-auto consteval base64_encode(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval base64_encode(FrozenString<N> const& str) noexcept {
   constexpr auto OUT_CAP = detail::count_base64_encoded_size(N > 0 ? N - 1 : 0) + 1;
   auto res = FrozenString<OUT_CAP>{};
   auto const s = str.sv();
@@ -181,7 +181,7 @@ auto consteval base64_encode(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval base64_encode(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval base64_encode(char const (&str)[N]) noexcept {
   return base64_encode(FrozenString{str});
 }
 
@@ -193,7 +193,7 @@ auto consteval base64_encode(char const (&str)[N]) noexcept {
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval base64_encode() noexcept {
+[[nodiscard]] auto consteval base64_encode() noexcept {
   return shrink_to_fit<base64_encode(Str)>();
 }
 
@@ -206,7 +206,7 @@ auto consteval base64_encode() noexcept {
  * @return auto 変換後のバイナリ/文字列
  */
 template <size_t N>
-auto consteval base64_decode(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval base64_decode(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{}; // デコード後は必ず元のサイズ以下になる
   auto const s = str.sv();
   auto offset = 0uz;
@@ -250,7 +250,7 @@ auto consteval base64_decode(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval base64_decode(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval base64_decode(char const (&str)[N]) noexcept {
   return base64_decode(FrozenString{str});
 }
 
@@ -262,7 +262,7 @@ auto consteval base64_decode(char const (&str)[N]) noexcept {
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval base64_decode() noexcept {
+[[nodiscard]] auto consteval base64_decode() noexcept {
   constexpr auto OUT_LEN = detail::count_base64_decoded_size(Str);
   auto res = FrozenString<OUT_LEN + 1>{};
   auto const s = Str.sv();

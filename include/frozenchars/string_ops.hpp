@@ -17,7 +17,7 @@ namespace frozenchars {
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval shrink_to_fit() noexcept {
+[[nodiscard]] auto consteval shrink_to_fit() noexcept {
   auto constexpr fit_len = [] {
     for (auto i = 0uz; i < Str.buffer.size(); ++i) {
       if (Str.buffer[i] == '\0') {
@@ -46,7 +46,7 @@ auto consteval shrink_to_fit() noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill, size_t N>
-auto consteval pad_left(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+[[nodiscard]] auto consteval pad_left(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   auto res = FrozenString<NEW_SIZE>{};
 
@@ -73,7 +73,7 @@ auto consteval pad_left(FrozenString<N> const& str) noexcept -> FrozenString<std
 }
 
 template <size_t Width, char Fill, size_t N>
-auto consteval pad_left(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval pad_left(char const (&str)[N]) noexcept {
   return pad_left<Width, Fill>(FrozenString{str});
 }
 
@@ -87,7 +87,7 @@ auto consteval pad_left(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill, size_t N>
-auto consteval pad_right(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+[[nodiscard]] auto consteval pad_right(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   auto res = FrozenString<NEW_SIZE>{};
 
@@ -114,7 +114,7 @@ auto consteval pad_right(FrozenString<N> const& str) noexcept -> FrozenString<st
 }
 
 template <size_t Width, char Fill, size_t N>
-auto consteval pad_right(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval pad_right(char const (&str)[N]) noexcept {
   return pad_right<Width, Fill>(FrozenString{str});
 }
 
@@ -127,7 +127,7 @@ auto consteval pad_right(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Count, size_t N>
-auto consteval repeat(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval repeat(FrozenString<N> const& str) noexcept {
   auto constexpr UNIT_LEN = N > 0 ? N - 1 : 0;
   auto constexpr NEW_SIZE = UNIT_LEN * Count + 1;
 
@@ -156,7 +156,7 @@ auto consteval repeat(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Count, size_t N>
-auto consteval repeat(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval repeat(char const (&str)[N]) noexcept {
   return repeat<Count>(FrozenString{str});
 }
 
@@ -170,7 +170,7 @@ auto consteval repeat(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
-auto consteval right(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval right(FrozenString<N> const& str) noexcept {
   return pad_left<Width, Fill>(str);
 }
 
@@ -184,7 +184,7 @@ auto consteval right(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
-auto consteval right(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval right(char const (&str)[N]) noexcept {
   return right<Width, Fill>(FrozenString{str});
 }
 
@@ -198,7 +198,7 @@ auto consteval right(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
-auto consteval left(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval left(FrozenString<N> const& str) noexcept {
   return pad_right<Width, Fill>(str);
 }
 
@@ -212,7 +212,7 @@ auto consteval left(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
-auto consteval left(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval left(char const (&str)[N]) noexcept {
   return left<Width, Fill>(FrozenString{str});
 }
 
@@ -226,7 +226,7 @@ auto consteval left(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
-auto consteval center(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+[[nodiscard]] auto consteval center(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   if (str.length >= Width) {
     auto res = FrozenString<NEW_SIZE>{};
@@ -266,7 +266,7 @@ auto consteval center(FrozenString<N> const& str) noexcept -> FrozenString<std::
  * @return auto 生成した文字列
  */
 template <size_t Width, char Fill = ' ', size_t N>
-auto consteval center(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval center(char const (&str)[N]) noexcept {
   return center<Width, Fill>(FrozenString{str});
 }
 
@@ -278,7 +278,7 @@ auto consteval center(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t N>
-auto consteval toupper(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval toupper(FrozenString<N> const& str) noexcept {
   auto res = str;
   for (auto i = 0uz; i < res.length; ++i) {
     auto const c = res.buffer[i];
@@ -297,7 +297,7 @@ auto consteval toupper(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t N>
-auto consteval toupper(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval toupper(char const (&str)[N]) noexcept {
   return toupper(FrozenString{str});
 }
 
@@ -309,7 +309,7 @@ auto consteval toupper(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t N>
-auto consteval tolower(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval tolower(FrozenString<N> const& str) noexcept {
   auto res = str;
   for (auto i = 0uz; i < res.length; ++i) {
     auto const c = res.buffer[i];
@@ -328,7 +328,7 @@ auto consteval tolower(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t N>
-auto consteval tolower(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval tolower(char const (&str)[N]) noexcept {
   return tolower(FrozenString{str});
 }
 
@@ -376,7 +376,7 @@ namespace detail {
  * @return auto 生成した文字列
  */
 template <FrozenString From, FrozenString To, size_t N>
-consteval auto replace(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, N + To.size() + 1)> {
+[[nodiscard]] consteval auto replace(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, N + To.size() + 1)> {
   constexpr auto NEW_SIZE = std::max(N, N + To.size() + 1);
   auto res = FrozenString<NEW_SIZE>{};
 
@@ -406,7 +406,7 @@ consteval auto replace(FrozenString<N> const& str) noexcept -> FrozenString<std:
 }
 
 template <FrozenString From, FrozenString To, size_t N>
-auto consteval replace(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval replace(char const (&str)[N]) noexcept {
   return replace<From, To>(FrozenString{str});
 }
 
@@ -420,7 +420,7 @@ auto consteval replace(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t N>
-auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_t len) noexcept {
+[[nodiscard]] auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_t len) noexcept {
   auto res = FrozenString<N>{};
   auto const requested_len = len >= 0
     ? static_cast<size_t>(len)
@@ -454,7 +454,7 @@ auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_
  */
 template <auto Str, size_t Pos, std::ptrdiff_t Len>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval substr() noexcept {
+[[nodiscard]] auto consteval substr() noexcept {
   return shrink_to_fit<substr(Str, Pos, Len)>();
 }
 
@@ -462,7 +462,7 @@ auto consteval substr() noexcept {
  * @brief 文字列の部分文字列を生成する（NTTP引数版）
  */
 template <size_t Pos, std::ptrdiff_t Len, size_t N>
-auto consteval substr(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval substr(FrozenString<N> const& str) noexcept {
   return substr(str, Pos, Len);
 }
 
@@ -476,12 +476,12 @@ auto consteval substr(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <size_t Pos, std::ptrdiff_t Len, size_t N>
-auto consteval substr(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval substr(char const (&str)[N]) noexcept {
   return substr(FrozenString{str}, Pos, Len);
 }
 
 template <size_t N>
-auto consteval substr(char const (&str)[N], size_t pos, std::ptrdiff_t len) noexcept {
+[[nodiscard]] auto consteval substr(char const (&str)[N], size_t pos, std::ptrdiff_t len) noexcept {
   return substr(FrozenString{str}, pos, len);
 }
 
@@ -495,7 +495,7 @@ auto consteval substr(char const (&str)[N], size_t pos, std::ptrdiff_t len) noex
  * @return auto 生成した文字列
  */
 template <FrozenString From, FrozenString To, size_t N>
-consteval auto replace_all(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N * 4, 2048uz)> {
+[[nodiscard]] consteval auto replace_all(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N * 4, 2048uz)> {
   constexpr auto MAX_REPLACE_SIZE = std::max(N * 4, 2048uz);
   auto res = FrozenString<MAX_REPLACE_SIZE>{};
 
@@ -523,24 +523,24 @@ consteval auto replace_all(FrozenString<N> const& str) noexcept -> FrozenString<
 }
 
 template <FrozenString From, FrozenString To, size_t N>
-auto consteval replace_all(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval replace_all(char const (&str)[N]) noexcept {
   return replace_all<From, To>(FrozenString{str});
 }
 
 template <size_t Width, char Fill = ' ', typename T>
   requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
-auto consteval pad_left(T const& v) noexcept {
+[[nodiscard]] auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
 template <size_t Width, char Fill = ' ', typename T>
   requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
-auto consteval pad_right(T const& v) noexcept {
+[[nodiscard]] auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
 }
 
 template <FrozenString Delim, size_t ElemN, size_t Count>
-auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
+[[nodiscard]] auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
   constexpr auto NEW_SIZE = (ElemN * Count) + (Delim.size() * Count) + 1;
   auto res = FrozenString<NEW_SIZE>{};
   auto offset = 0uz;
@@ -561,18 +561,18 @@ auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept 
 
 template <FrozenString Delim, typename... Args>
   requires (sizeof...(Args) > 0)
-auto consteval join(Args const&... args) noexcept {
+[[nodiscard]] auto consteval join(Args const&... args) noexcept {
   auto const arr = std::array<FrozenString<2048>, sizeof...(Args)>{freeze(args)...};
   return join<Delim>(arr);
 }
 
 template <size_t Width, char Fill = '0', Integral T>
-auto consteval pad_left(T const& v) noexcept {
+[[nodiscard]] auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
 template <size_t Width, char Fill = '0', Integral T>
-auto consteval pad_right(T const& v) noexcept {
+[[nodiscard]] auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
 }
 
@@ -584,7 +584,7 @@ auto consteval pad_right(T const& v) noexcept {
  * @return auto 変換後の文字列
  */
 template <typename... Args>
-auto consteval concat(Args const&... args) noexcept {
+[[nodiscard]] auto consteval concat(Args const&... args) noexcept {
   return (freeze(args) + ...);
 }
 
@@ -597,7 +597,7 @@ auto consteval concat(Args const&... args) noexcept {
  * @return auto 生成した文字列
  */
 template <auto Pred, size_t N>
-auto consteval ltrim_if(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval ltrim_if(FrozenString<N> const& str) noexcept {
   return detail::trim_copy<true, false, Pred>(str);
 }
 
@@ -610,7 +610,7 @@ auto consteval ltrim_if(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <auto Pred, size_t N>
-auto consteval rtrim_if(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval rtrim_if(FrozenString<N> const& str) noexcept {
   return detail::trim_copy<false, true, Pred>(str);
 }
 
@@ -623,7 +623,7 @@ auto consteval rtrim_if(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <auto Pred, size_t N>
-auto consteval trim_if(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval trim_if(FrozenString<N> const& str) noexcept {
   return detail::trim_copy<true, true, Pred>(str);
 }
 
@@ -636,7 +636,7 @@ auto consteval trim_if(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <char TrimChar = ' ', size_t N>
-auto consteval ltrim(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval ltrim(FrozenString<N> const& str) noexcept {
   return ltrim_if<detail::is_char<TrimChar>>(str);
 }
 
@@ -649,7 +649,7 @@ auto consteval ltrim(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <char TrimChar = ' ', size_t N>
-auto consteval rtrim(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval rtrim(FrozenString<N> const& str) noexcept {
   return rtrim_if<detail::is_char<TrimChar>>(str);
 }
 
@@ -662,7 +662,7 @@ auto consteval rtrim(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <char TrimChar = ' ', size_t N>
-auto consteval trim(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval trim(FrozenString<N> const& str) noexcept {
   return trim_if<detail::is_char<TrimChar>>(str);
 }
 
@@ -675,7 +675,7 @@ auto consteval trim(FrozenString<N> const& str) noexcept {
  * @return auto 生成した文字列
  */
 template <char TrimChar = ' ', size_t N>
-auto consteval ltrim(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval ltrim(char const (&str)[N]) noexcept {
   return ltrim<TrimChar>(FrozenString{str});
 }
 
@@ -688,7 +688,7 @@ auto consteval ltrim(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <char TrimChar = ' ', size_t N>
-auto consteval rtrim(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval rtrim(char const (&str)[N]) noexcept {
   return rtrim<TrimChar>(FrozenString{str});
 }
 
@@ -701,28 +701,28 @@ auto consteval rtrim(char const (&str)[N]) noexcept {
  * @return auto 生成した文字列
  */
 template <char TrimChar = ' ', size_t N>
-auto consteval trim(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval trim(char const (&str)[N]) noexcept {
   return trim<TrimChar>(FrozenString{str});
 }
 
 template <char TrimChar = ' ', typename Ptr>
   requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
             || std::same_as<std::remove_cvref_t<Ptr>, char*>)
-auto consteval ltrim(Ptr&& str) noexcept {
+[[nodiscard]] auto consteval ltrim(Ptr&& str) noexcept {
   return ltrim<TrimChar>(freeze(str));
 }
 
 template <char TrimChar = ' ', typename Ptr>
   requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
             || std::same_as<std::remove_cvref_t<Ptr>, char*>)
-auto consteval rtrim(Ptr&& str) noexcept {
+[[nodiscard]] auto consteval rtrim(Ptr&& str) noexcept {
   return rtrim<TrimChar>(freeze(str));
 }
 
 template <char TrimChar = ' ', typename Ptr>
   requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
             || std::same_as<std::remove_cvref_t<Ptr>, char*>)
-auto consteval trim(Ptr&& str) noexcept {
+[[nodiscard]] auto consteval trim(Ptr&& str) noexcept {
   return trim<TrimChar>(freeze(str));
 }
 
@@ -735,7 +735,7 @@ auto consteval trim(Ptr&& str) noexcept {
  * @return auto 変換後の文字列
  */
 template <auto Pred, size_t N>
-auto consteval collapse_spaces_if(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval collapse_spaces_if(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto in_sequence = false;
@@ -764,7 +764,7 @@ auto consteval collapse_spaces_if(FrozenString<N> const& str) noexcept {
  * @return auto 変換後の文字列
  */
 template <size_t N>
-auto consteval collapse_spaces(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval collapse_spaces(FrozenString<N> const& str) noexcept {
   return collapse_spaces_if<detail::is_space_char>(str);
 }
 
@@ -776,7 +776,7 @@ auto consteval collapse_spaces(FrozenString<N> const& str) noexcept {
  * @return auto 変換後の文字列
  */
 template <size_t N>
-auto consteval collapse_spaces(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval collapse_spaces(char const (&str)[N]) noexcept {
   return collapse_spaces(FrozenString{str});
 }
 
@@ -814,7 +814,7 @@ auto constexpr is_sql_punct(char c) noexcept {
  * @return auto 圧縮後の文字列
  */
 template <size_t N>
-auto consteval minify_markup(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -938,7 +938,7 @@ auto consteval minify_markup(FrozenString<N> const& str) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_html(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str) noexcept {
   return detail::minify_markup(str);
 }
 
@@ -950,7 +950,7 @@ auto consteval minify_html(FrozenString<N> const& str) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_html(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval minify_html(char const (&str)[N]) noexcept {
   return minify_html(FrozenString{str});
 }
 
@@ -962,7 +962,7 @@ auto consteval minify_html(char const (&str)[N]) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_xml(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str) noexcept {
   return detail::minify_markup(str);
 }
 
@@ -974,7 +974,7 @@ auto consteval minify_xml(FrozenString<N> const& str) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_xml(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval minify_xml(char const (&str)[N]) noexcept {
   return minify_xml(FrozenString{str});
 }
 
@@ -989,7 +989,7 @@ auto consteval minify_xml(char const (&str)[N]) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_json(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_json(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -1061,7 +1061,7 @@ auto consteval minify_json(FrozenString<N> const& str) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_json(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval minify_json(char const (&str)[N]) noexcept {
   return minify_json(FrozenString{str});
 }
 
@@ -1076,7 +1076,7 @@ auto consteval minify_json(char const (&str)[N]) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto line_start = 0uz;
@@ -1165,7 +1165,7 @@ auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_yaml(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval minify_yaml(char const (&str)[N]) noexcept {
   return minify_yaml(FrozenString{str});
 }
 
@@ -1179,7 +1179,7 @@ auto consteval minify_yaml(char const (&str)[N]) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_sql(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -1308,7 +1308,7 @@ auto consteval minify_sql(FrozenString<N> const& str) noexcept {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-auto consteval minify_sql(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval minify_sql(char const (&str)[N]) noexcept {
   return minify_sql(FrozenString{str});
 }
 

@@ -17,11 +17,11 @@ namespace frozenchars::ops {
 template <auto Pred = detail::is_space_char>
 struct trim_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::trim_if<Pred>(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::trim_if<Pred>(FrozenString{str});
   }
 };
@@ -29,11 +29,11 @@ struct trim_adaptor : pipe_adaptor_base {
 template <auto Pred = detail::is_space_char>
 struct ltrim_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::ltrim_if<Pred>(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::ltrim_if<Pred>(FrozenString{str});
   }
 };
@@ -41,33 +41,33 @@ struct ltrim_adaptor : pipe_adaptor_base {
 template <auto Pred = detail::is_space_char>
 struct rtrim_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::rtrim_if<Pred>(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::rtrim_if<Pred>(FrozenString{str});
   }
 };
 
 struct toupper_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::toupper(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::toupper(FrozenString{str});
   }
 };
 
 struct tolower_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::tolower(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::tolower(FrozenString{str});
   }
 };
@@ -75,11 +75,11 @@ struct tolower_adaptor : pipe_adaptor_base {
 template <auto Pred = detail::is_space_char>
 struct collapse_spaces_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::collapse_spaces_if<Pred>(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::collapse_spaces_if<Pred>(FrozenString{str});
   }
 };
@@ -93,35 +93,35 @@ struct substr_adaptor : pipe_adaptor_base {
   {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::substr(str, pos, len);
   }
 };
 
 struct capitalize_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::capitalize(str);
   }
 };
 
 struct to_snake_case_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::to_snake_case(str);
   }
 };
 
 struct to_camel_case_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::to_camel_case(str);
   }
 };
 
 struct to_pascal_case_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::to_pascal_case(str);
   }
 };
@@ -131,10 +131,10 @@ struct remove_leading_spaces_adaptor : pipe_adaptor_base {
   size_t n;
   constexpr remove_leading_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_leading_spaces_if<Pred>(str, n);
   }
-  consteval auto operator()(size_t count) const noexcept {
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
     return remove_leading_spaces_adaptor<Pred>{count};
   }
 };
@@ -143,7 +143,7 @@ struct remove_comment_lines_adaptor : pipe_adaptor_base {
   std::string_view comment_seq;
   constexpr remove_comment_lines_adaptor(std::string_view seq = "#") noexcept : comment_seq(seq) {}
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_comment_lines(str, comment_seq);
   }
 };
@@ -152,7 +152,7 @@ struct remove_comments_adaptor : pipe_adaptor_base {
   std::string_view comment_seq;
   constexpr remove_comments_adaptor(std::string_view seq = "#") noexcept : comment_seq(seq) {}
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_comments(str, comment_seq);
   }
 };
@@ -162,10 +162,10 @@ struct remove_trailing_spaces_adaptor : pipe_adaptor_base {
   size_t n;
   constexpr remove_trailing_spaces_adaptor(size_t count = 0) noexcept : n(count) {}
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_trailing_spaces_if<Pred>(str, n);
   }
-  consteval auto operator()(size_t count) const noexcept {
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
     return remove_trailing_spaces_adaptor<Pred>{count};
   }
 };
@@ -178,19 +178,19 @@ struct remove_range_comments_adaptor : pipe_adaptor_base {
   {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_range_comments(str, start_seq, end_seq);
   }
 };
 
 struct remove_regex_comment_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_regex_comment(str);
   }
 
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::remove_regex_comment(FrozenString{str});
   }
 };
@@ -200,11 +200,11 @@ struct join_lines_adaptor : pipe_adaptor_base {
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const {
     return frozenchars::join_lines(str, sep);
   }
 
-  consteval auto operator()(std::string_view s) const noexcept {
+  [[nodiscard]] consteval auto operator()(std::string_view s) const noexcept {
     return join_lines_adaptor{s};
   }
 };
@@ -212,21 +212,21 @@ struct join_lines_adaptor : pipe_adaptor_base {
 template <FrozenString Sep>
 struct join_lines_nttp_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::join_lines<Sep>(str);
   }
 };
 
 struct trim_trailing_spaces_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::trim_trailing_spaces(str);
   }
 };
 
 struct remove_empty_lines_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_empty_lines(str);
   }
 };
@@ -236,11 +236,11 @@ struct remove_leading_empty_lines_adaptor : pipe_adaptor_base {
   constexpr remove_leading_empty_lines_adaptor(size_t count = 0) noexcept : n(count) {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_leading_empty_lines(str, n);
   }
 
-  consteval auto operator()(size_t count) const noexcept {
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
     return remove_leading_empty_lines_adaptor{count};
   }
 };
@@ -250,18 +250,18 @@ struct remove_trailing_empty_lines_adaptor : pipe_adaptor_base {
   constexpr remove_trailing_empty_lines_adaptor(size_t count = 0) noexcept : n(count) {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_trailing_empty_lines(str, n);
   }
 
-  consteval auto operator()(size_t count) const noexcept {
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
     return remove_trailing_empty_lines_adaptor{count};
   }
 };
 
 struct collapse_empty_lines_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::collapse_empty_lines(str);
   }
 };
@@ -271,7 +271,7 @@ struct prefix_lines_adaptor : pipe_adaptor_base {
   FrozenString<M> prefix;
   constexpr prefix_lines_adaptor(FrozenString<M> p) noexcept : prefix(p) {}
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::prefix_lines(str, prefix);
   }
 };
@@ -281,7 +281,7 @@ struct postfix_lines_adaptor : pipe_adaptor_base {
   FrozenString<M> postfix;
   constexpr postfix_lines_adaptor(FrozenString<M> p) noexcept : postfix(p) {}
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::postfix_lines(str, postfix);
   }
 };
@@ -294,35 +294,35 @@ struct surround_lines_adaptor : pipe_adaptor_base {
   : prefix(pr), postfix(po) {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::surround_lines(str, prefix, postfix);
   }
 };
 
 struct url_encode_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::url_encode(str);
   }
 };
 
 struct url_decode_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::url_decode(str);
   }
 };
 
 struct base64_encode_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::base64_encode(str);
   }
 };
 
 struct base64_decode_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::base64_decode(str);
   }
 };
@@ -332,11 +332,11 @@ struct base64_decode_adaptor : pipe_adaptor_base {
  */
 struct minify_html_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::minify_html(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::minify_html(FrozenString{str});
   }
 };
@@ -346,11 +346,11 @@ struct minify_html_adaptor : pipe_adaptor_base {
  */
 struct minify_xml_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::minify_xml(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::minify_xml(FrozenString{str});
   }
 };
@@ -360,11 +360,11 @@ struct minify_xml_adaptor : pipe_adaptor_base {
  */
 struct minify_json_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::minify_json(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::minify_json(FrozenString{str});
   }
 };
@@ -374,11 +374,11 @@ struct minify_json_adaptor : pipe_adaptor_base {
  */
 struct minify_yaml_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::minify_yaml(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::minify_yaml(FrozenString{str});
   }
 };
@@ -388,11 +388,11 @@ struct minify_yaml_adaptor : pipe_adaptor_base {
  */
 struct minify_sql_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::minify_sql(str);
   }
   template <size_t N>
-  consteval auto operator()(char const (&str)[N]) const noexcept {
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
     return frozenchars::minify_sql(FrozenString{str});
   }
 };
@@ -441,45 +441,45 @@ template <auto Pred> inline constexpr remove_leading_spaces_adaptor<Pred> remove
 template <auto Pred> inline constexpr remove_trailing_spaces_adaptor<Pred> remove_trailing_spaces_if{};
 
 template <size_t M>
-consteval auto prefix_lines(FrozenString<M> const& prefix) noexcept {
+[[nodiscard]] consteval auto prefix_lines(FrozenString<M> const& prefix) noexcept {
   return prefix_lines_adaptor<M>{prefix};
 }
 
 template <size_t M>
-consteval auto postfix_lines(FrozenString<M> const& postfix) noexcept {
+[[nodiscard]] consteval auto postfix_lines(FrozenString<M> const& postfix) noexcept {
   return postfix_lines_adaptor<M>{postfix};
 }
 
 template <size_t M1, size_t M2>
-consteval auto surround_lines(FrozenString<M1> const& prefix, FrozenString<M2> const& postfix) noexcept {
+[[nodiscard]] consteval auto surround_lines(FrozenString<M1> const& prefix, FrozenString<M2> const& postfix) noexcept {
   return surround_lines_adaptor<M1, M2>{prefix, postfix};
 }
 
 template <size_t M>
-consteval auto surround_lines(FrozenString<M> const& both) noexcept {
+[[nodiscard]] consteval auto surround_lines(FrozenString<M> const& both) noexcept {
   return surround_lines_adaptor<M, M>{both, both};
 }
 
-consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
+[[nodiscard]] consteval auto substr(std::size_t pos, std::ptrdiff_t len) noexcept {
   return substr_adaptor{pos, len};
 }
 
-consteval auto remove_comment_lines(std::string_view comment_seq = "#") noexcept {
+[[nodiscard]] consteval auto remove_comment_lines(std::string_view comment_seq = "#") noexcept {
   return remove_comment_lines_adaptor{comment_seq};
 }
 
-consteval auto remove_comments(std::string_view comment_seq = "#") noexcept {
+[[nodiscard]] consteval auto remove_comments(std::string_view comment_seq = "#") noexcept {
   return remove_comments_adaptor{comment_seq};
 }
 
-consteval auto remove_range_comments(std::string_view start_seq, std::string_view end_seq) noexcept {
+[[nodiscard]] consteval auto remove_range_comments(std::string_view start_seq, std::string_view end_seq) noexcept {
   return remove_range_comments_adaptor{start_seq, end_seq};
 }
 
 template <FrozenString Delim>
 struct join_adaptor : pipe_adaptor_base {
   template <size_t ElemN, size_t Count>
-  consteval auto operator()(std::array<FrozenString<ElemN>, Count> const& arr) const noexcept {
+  [[nodiscard]] consteval auto operator()(std::array<FrozenString<ElemN>, Count> const& arr) const noexcept {
     return frozenchars::join<Delim>(arr);
   }
 };
@@ -488,7 +488,7 @@ template <FrozenString Delim>
 inline constexpr join_adaptor<Delim> join{};
 
 template <size_t ElemN, size_t Count, FrozenString Delim>
-consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
+[[nodiscard]] consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
                          join_adaptor<Delim> const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
@@ -516,11 +516,11 @@ auto constexpr operator|(FrozenString<N> const&& lhs, data_t) noexcept {
 template <size_t Width, char Fill = ' '>
 struct pad_left_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::pad_left<Width, Fill>(str);
   }
   template <Integral T>
-  consteval auto operator()(T const& v) const noexcept {
+  [[nodiscard]] consteval auto operator()(T const& v) const noexcept {
     return frozenchars::pad_left<Width, Fill>(v);
   }
 };
@@ -531,11 +531,11 @@ inline constexpr pad_left_adaptor<Width, Fill> pad_left{};
 template <size_t Width, char Fill = ' '>
 struct pad_right_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::pad_right<Width, Fill>(str);
   }
   template <Integral T>
-  consteval auto operator()(T const& v) const noexcept {
+  [[nodiscard]] consteval auto operator()(T const& v) const noexcept {
     return frozenchars::pad_right<Width, Fill>(v);
   }
 };
@@ -546,7 +546,7 @@ inline constexpr pad_right_adaptor<Width, Fill> pad_right{};
 template <FrozenString From, FrozenString To>
 struct replace_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::replace<From, To>(str);
   }
 };
@@ -557,7 +557,7 @@ inline constexpr replace_adaptor<From, To> replace{};
 template <FrozenString From, FrozenString To>
 struct replace_all_adaptor : pipe_adaptor_base {
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const noexcept {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::replace_all<From, To>(str);
   }
 };
@@ -569,7 +569,7 @@ inline constexpr replace_all_adaptor<From, To> replace_all{};
  * @brief 数値型に対してアダプタを適用するパイプ演算子
  */
 template <Integral T, PipeAdaptor Adaptor>
-auto consteval operator|(T const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
+[[nodiscard]] auto consteval operator|(T const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
 

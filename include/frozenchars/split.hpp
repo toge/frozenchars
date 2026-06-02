@@ -19,7 +19,7 @@ namespace frozenchars {
  */
 template <auto IsDelimiter = detail::is_any_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
-auto consteval split_count(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval split_count(FrozenString<N> const& str) noexcept {
   return detail::split_count_impl<IsDelimiter>(str);
 }
 
@@ -27,7 +27,7 @@ auto consteval split_count(FrozenString<N> const& str) noexcept {
  * @brief 文字列を区切り判定関数で分割したときのトークン数を返す（実行時引数版）
  */
 template <size_t N, typename Pred>
-auto consteval split_count(FrozenString<N> const& str, Pred is_delimiter) noexcept {
+[[nodiscard]] auto consteval split_count(FrozenString<N> const& str, Pred is_delimiter) noexcept {
   return detail::split_count_impl(str, is_delimiter);
 }
 
@@ -35,7 +35,7 @@ auto consteval split_count(FrozenString<N> const& str, Pred is_delimiter) noexce
  * @brief 文字列リテラルを区切り判定関数で分割したときのトークン数を返す
  */
 template <auto IsDelimiter = detail::is_any_whitespace, size_t N>
-auto consteval split_count(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval split_count(char const (&str)[N]) noexcept {
   return split_count<IsDelimiter>(FrozenString{str});
 }
 
@@ -43,7 +43,7 @@ auto consteval split_count(char const (&str)[N]) noexcept {
  * @brief 文字列リテラルを区切り判定関数で分割したときのトークン数を返す（実行時引数版）
  */
 template <size_t N, typename Pred>
-auto consteval split_count(char const (&str)[N], Pred is_delimiter) noexcept {
+[[nodiscard]] auto consteval split_count(char const (&str)[N], Pred is_delimiter) noexcept {
   return split_count(FrozenString{str}, is_delimiter);
 }
 
@@ -52,7 +52,7 @@ auto consteval split_count(char const (&str)[N], Pred is_delimiter) noexcept {
  */
 template <size_t Count, auto IsDelimiter = detail::is_any_whitespace, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
-auto consteval split(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval split(FrozenString<N> const& str) noexcept {
   auto res = std::array<FrozenString<N>, Count>{};
   for (auto& token : res) token.length = 0;
 
@@ -79,7 +79,7 @@ auto consteval split(FrozenString<N> const& str) noexcept {
  * @brief 文字列を区切り判定関数で分割して std::array に変換する（実行時引数版）
  */
 template <size_t Count, size_t N, typename Pred>
-auto consteval split(FrozenString<N> const& str, Pred is_delimiter) noexcept {
+[[nodiscard]] auto consteval split(FrozenString<N> const& str, Pred is_delimiter) noexcept {
   auto res = std::array<FrozenString<N>, Count>{};
   for (auto& token : res) token.length = 0;
 
@@ -106,7 +106,7 @@ auto consteval split(FrozenString<N> const& str, Pred is_delimiter) noexcept {
  * @brief 文字列リテラルを区切り判定関数で分割する
  */
 template <size_t Count, auto IsDelimiter = detail::is_any_whitespace, size_t N>
-auto consteval split(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval split(char const (&str)[N]) noexcept {
   return split<Count, IsDelimiter>(FrozenString{str});
 }
 
@@ -155,7 +155,7 @@ inline constexpr auto split_v = detail::split_result<Str, IsDelim>::value;
 template <auto Str, auto IsDelim = detail::is_any_whitespace>
   requires (detail::is_frozen_string_v<decltype(Str)>
             && std::predicate<decltype(IsDelim), char>)
-auto consteval split() noexcept {
+[[nodiscard]] auto consteval split() noexcept {
   return split_v<Str, IsDelim>;
 }
 
@@ -163,7 +163,7 @@ auto consteval split() noexcept {
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する
  */
 template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = int, size_t N>
-auto consteval split_numbers(FrozenString<N> const& str) {
+[[nodiscard]] auto consteval split_numbers(FrozenString<N> const& str) {
   using Result = std::remove_cv_t<Int>;
   auto res = std::array<Result, N>{};
   auto const token_count = split_count<IsDelimiter>(str);
@@ -178,7 +178,7 @@ auto consteval split_numbers(FrozenString<N> const& str) {
  * @brief 文字列を区切り判定関数で分割し数値配列へ変換する（実行時引数版）
  */
 template <typename Pred, ParseNumberTarget Int = int, size_t N>
-auto consteval split_numbers(FrozenString<N> const& str, Pred is_delimiter) {
+[[nodiscard]] auto consteval split_numbers(FrozenString<N> const& str, Pred is_delimiter) {
   using Result = std::remove_cv_t<Int>;
   auto res = std::array<Result, N>{};
   auto const token_count = split_count(str, is_delimiter);
@@ -193,7 +193,7 @@ auto consteval split_numbers(FrozenString<N> const& str, Pred is_delimiter) {
  * @brief 文字列を空白区切りで分割し指定数値型配列へ変換する
  */
 template <ParseNumberTarget Int, size_t N>
-auto consteval split_numbers(FrozenString<N> const& str) {
+[[nodiscard]] auto consteval split_numbers(FrozenString<N> const& str) {
   return split_numbers<detail::is_any_whitespace, Int>(str);
 }
 
@@ -201,7 +201,7 @@ auto consteval split_numbers(FrozenString<N> const& str) {
  * @brief 文字列リテラルを区切り判定関数で分割し数値配列へ変換する
  */
 template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = int, size_t N>
-auto consteval split_numbers(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<IsDelimiter, Int>(FrozenString{str});
 }
 
@@ -209,7 +209,7 @@ auto consteval split_numbers(char const (&str)[N]) noexcept {
  * @brief 文字列リテラルを空白区切りで分割し指定数値型配列へ変換する
  */
 template <ParseNumberTarget Int, size_t N>
-auto consteval split_numbers(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval split_numbers(char const (&str)[N]) noexcept {
   return split_numbers<detail::is_any_whitespace, Int>(FrozenString{str});
 }
 
@@ -217,7 +217,7 @@ auto consteval split_numbers(char const (&str)[N]) noexcept {
  * @brief 文字列を単一の区切り文字で分割したときのトークン数を返す
  */
 template <size_t N>
-auto consteval split_count(FrozenString<N> const& str, char delim) noexcept {
+[[nodiscard]] auto consteval split_count(FrozenString<N> const& str, char delim) noexcept {
   return split_count(str, [delim](char c) { return c == delim; });
 }
 
@@ -225,7 +225,7 @@ auto consteval split_count(FrozenString<N> const& str, char delim) noexcept {
  * @brief 文字列を単一の区切り文字で分割して std::array に変換する
  */
 template <size_t Count, size_t N>
-auto consteval split(FrozenString<N> const& str, char delim) noexcept {
+[[nodiscard]] auto consteval split(FrozenString<N> const& str, char delim) noexcept {
   return split<Count>(str, [delim](char c) { return c == delim; });
 }
 
@@ -233,7 +233,7 @@ auto consteval split(FrozenString<N> const& str, char delim) noexcept {
  * @brief 文字列リテラルを単一の区切り文字で分割して std::array に変換する
  */
 template <size_t Count, size_t N>
-auto consteval split(char const (&str)[N], char delim) noexcept {
+[[nodiscard]] auto consteval split(char const (&str)[N], char delim) noexcept {
   return split<Count>(FrozenString{str}, delim);
 }
 

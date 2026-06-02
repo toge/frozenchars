@@ -28,7 +28,7 @@ struct unknown_type {};
  * @tparam S 判定対象の FrozenString
  */
 template <auto S>
-consteval auto map_string_to_type() {
+[[nodiscard]] consteval auto map_string_to_type() {
   auto constexpr s = S.sv();
   if constexpr (s == "bool") return type_identity<bool>{};
   else if constexpr (s == "char") return type_identity<char>{};

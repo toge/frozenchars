@@ -14,7 +14,7 @@ namespace frozenchars {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval capitalize(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval capitalize(FrozenString<N> const& str) noexcept {
   auto res = tolower(str);
   if (res.length > 0) {
     auto const c = res.buffer[0];
@@ -33,7 +33,7 @@ auto consteval capitalize(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval capitalize(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval capitalize(char const (&str)[N]) noexcept {
   return capitalize(FrozenString{str});
 }
 
@@ -46,7 +46,7 @@ auto consteval capitalize(char const (&str)[N]) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval to_snake_case(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval to_snake_case(FrozenString<N> const& str) noexcept {
   constexpr auto OUT_CAP = 2 * (N > 0 ? N - 1 : 0) + 1;
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
@@ -70,7 +70,7 @@ auto consteval to_snake_case(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval to_snake_case(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval to_snake_case(char const (&str)[N]) noexcept {
   return to_snake_case(FrozenString{str});
 }
 
@@ -84,7 +84,7 @@ auto consteval to_snake_case(char const (&str)[N]) noexcept {
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-auto consteval to_snake_case() noexcept {
+[[nodiscard]] auto consteval to_snake_case() noexcept {
   constexpr auto EXTRA = detail::count_snake_underscores(Str);
   constexpr auto OUT_CAP = Str.length + EXTRA + 1;
   auto res = FrozenString<OUT_CAP>{};
@@ -110,7 +110,7 @@ auto consteval to_snake_case() noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval to_camel_case(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval to_camel_case(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto next_upper = false;
@@ -138,7 +138,7 @@ auto consteval to_camel_case(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval to_camel_case(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval to_camel_case(char const (&str)[N]) noexcept {
   return to_camel_case(FrozenString{str});
 }
 
@@ -151,7 +151,7 @@ auto consteval to_camel_case(char const (&str)[N]) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval to_pascal_case(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval to_pascal_case(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto next_upper = true;
@@ -179,7 +179,7 @@ auto consteval to_pascal_case(FrozenString<N> const& str) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval to_pascal_case(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval to_pascal_case(char const (&str)[N]) noexcept {
   return to_pascal_case(FrozenString{str});
 }
 

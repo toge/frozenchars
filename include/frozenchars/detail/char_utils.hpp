@@ -45,7 +45,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 判定する文字
  * @return auto 16進数字文字なら true
  */
-auto consteval is_hex_digit(char const c) noexcept {
+[[nodiscard]] auto consteval is_hex_digit(char const c) noexcept {
   return (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'f')
     || (c >= 'A' && c <= 'F');
@@ -57,7 +57,7 @@ auto consteval is_hex_digit(char const c) noexcept {
  * @param c 変換する16進数字
  * @return auto 変換結果の数字
  */
-auto consteval hex_digit_to_value(char const c) {
+[[nodiscard]] auto consteval hex_digit_to_value(char const c) {
   if (c >= '0' && c <= '9') {
     return static_cast<std::uint8_t>(c - '0');
   }
@@ -77,7 +77,7 @@ auto consteval hex_digit_to_value(char const c) {
  * @param lo 下位4bitを表す16進数字
  * @return auto 変換結果
  */
-auto consteval parse_hex_byte(char const hi, char const lo) {
+[[nodiscard]] auto consteval parse_hex_byte(char const hi, char const lo) {
   if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
     throw std::invalid_argument("parse_hex_color: invalid hex digit");
   }
@@ -90,7 +90,7 @@ auto consteval parse_hex_byte(char const hi, char const lo) {
  * @param c 変換する16進数字
  * @return auto 変換結果
  */
-auto consteval parse_hex_shorthand_byte(char const c) {
+[[nodiscard]] auto consteval parse_hex_shorthand_byte(char const c) {
   auto const value = hex_digit_to_value(c);
   return static_cast<std::uint8_t>((value << 4u) | value);
 }
@@ -117,7 +117,7 @@ auto constexpr is_unreserved(char const c) noexcept {
  * @return std::size_t エンコード後の文字数
  */
 template <size_t N>
-auto consteval count_url_encoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
+[[nodiscard]] auto consteval count_url_encoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
   auto count = 0uz;
   for (auto const c : str.sv()) {
     if (is_unreserved(c)) {
@@ -137,7 +137,7 @@ auto consteval count_url_encoded_size(FrozenString<N> const& str) noexcept -> st
  * @return std::size_t デコード後の文字数
  */
 template <size_t N>
-auto consteval count_url_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
+[[nodiscard]] auto consteval count_url_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
   auto count = 0uz;
   auto const s = str.sv();
   for (auto i = 0uz; i < s.size(); ++i) {
@@ -221,7 +221,7 @@ auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
  * @return std::size_t デコード後のバイト数（パディングを考慮）
  */
 template <size_t N>
-auto consteval count_base64_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
+[[nodiscard]] auto consteval count_base64_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
   auto const s = str.sv();
   if (s.empty()) {
     return 0;

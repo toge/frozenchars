@@ -19,7 +19,7 @@ namespace frozenchars::detail {
  * @return std::size_t 見つかった位置、見つからなかった場合はstd::string_view::npos
  */
 template <size_t N>
-auto consteval find_substring(FrozenString<N> const& str,
+[[nodiscard]] auto consteval find_substring(FrozenString<N> const& str,
                               std::string_view needle,
                               std::size_t pos = 0uz) noexcept -> std::size_t {
   if (needle.empty()) {
@@ -53,7 +53,7 @@ auto consteval find_substring(FrozenString<N> const& str,
  * @return std::size_t 挿入されるアンダースコアの数
  */
 template <size_t N>
-auto consteval count_snake_underscores(FrozenString<N> const& str) noexcept -> std::size_t {
+[[nodiscard]] auto consteval count_snake_underscores(FrozenString<N> const& str) noexcept -> std::size_t {
   auto count = 0uz;
   for (auto i = 1uz; i < str.length; ++i) {
     if (str.buffer[i] >= 'A' && str.buffer[i] <= 'Z') {
@@ -74,7 +74,7 @@ auto consteval count_snake_underscores(FrozenString<N> const& str) noexcept -> s
  * @return auto 生成した文字列
  */
 template <bool TrimLeft, bool TrimRight, auto Pred = is_space_char, size_t N>
-auto consteval trim_copy(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval trim_copy(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto start = 0uz;
   auto end = str.length;

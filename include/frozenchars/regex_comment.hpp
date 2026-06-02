@@ -83,7 +83,7 @@ auto constexpr remove_regex_comment(char const (&pattern)[N]) noexcept {
 
 template <auto Pattern>
   requires detail::is_frozen_string_v<decltype(Pattern)>
-auto consteval remove_regex_comment() noexcept {
+[[nodiscard]] auto consteval remove_regex_comment() noexcept {
   return shrink_to_fit<remove_regex_comment(Pattern)>();
 }
 

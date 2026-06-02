@@ -142,7 +142,7 @@ concept FrozenStringLike = detail::is_frozen_string_v<T>;
  * @brief 文字列リテラルから FrozenString を作成する
  */
 template <size_t N>
-constexpr auto freeze(char const (&str)[N]) noexcept -> FrozenString<N> {
+[[nodiscard]] constexpr auto freeze(char const (&str)[N]) noexcept -> FrozenString<N> {
   return FrozenString<N>{str};
 }
 

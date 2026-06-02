@@ -43,7 +43,7 @@ namespace frozenchars {
  * @brief NTTP（非型テンプレート引数）を介して安全にformat_stringを生成するヘルパー
  */
 template <frozenchars::FrozenString Str, typename... Args>
-consteval auto to_format_string() noexcept {
+[[nodiscard]] consteval auto to_format_string() noexcept {
   return std::format_string<Args...>{Str.sv()};
 }
 

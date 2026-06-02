@@ -18,7 +18,7 @@ namespace frozenchars::detail {
  */
 template <auto IsDelimiter, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
-auto consteval split_count_impl(FrozenString<N> const& str) noexcept -> size_t {
+[[nodiscard]] auto consteval split_count_impl(FrozenString<N> const& str) noexcept -> size_t {
   auto count = 0uz;
   auto in_token = false;
   for (auto i = 0uz; i < str.length; ++i) {
@@ -38,7 +38,7 @@ auto consteval split_count_impl(FrozenString<N> const& str) noexcept -> size_t {
  * @brief 文字列を区切り判定関数で分割したときのトークン数を数える（実行時引数版）
  */
 template <size_t N, typename Pred>
-auto consteval split_count_impl(FrozenString<N> const& str, Pred is_delimiter) noexcept -> size_t {
+[[nodiscard]] auto consteval split_count_impl(FrozenString<N> const& str, Pred is_delimiter) noexcept -> size_t {
   auto count = 0uz;
   auto in_token = false;
   for (auto i = 0uz; i < str.length; ++i) {
@@ -64,7 +64,7 @@ auto consteval split_count_impl(FrozenString<N> const& str, Pred is_delimiter) n
  */
 template <auto IsDelimiter, size_t N>
   requires std::predicate<decltype(IsDelimiter), char>
-auto consteval max_token_len_impl(FrozenString<N> const& str) noexcept -> size_t {
+[[nodiscard]] auto consteval max_token_len_impl(FrozenString<N> const& str) noexcept -> size_t {
   auto max_len = 0uz;
   auto cur_len = 0uz;
   for (auto i = 0uz; i < str.length; ++i) {

@@ -36,7 +36,7 @@ concept FreezablePair = requires(T const& t) {
  */
 template <class Key, class Value>
 requires (Freezable<Key> && Freezable<Value>)
-auto consteval make_querystring_impl(Key&& key, Value&& value) {
+[[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value) {
   return concat(
     url_encode(freeze(key)), "=", url_encode(freeze(value))
   );
@@ -44,7 +44,7 @@ auto consteval make_querystring_impl(Key&& key, Value&& value) {
 
 template <class Key, class Value, class... Tail>
 requires (sizeof...(Tail) % 2 == 0 && Freezable<Key> && Freezable<Value>)
-auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
+[[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
   return concat(
     url_encode(freeze(key)), "=", url_encode(freeze(value)),
     "&",
@@ -58,14 +58,14 @@ auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
  * @return "key1=val1&key2=val2" 形式の文字列
  */
 template <FreezablePair T>
-auto consteval make_querystring_impl(T&& t) {
+[[nodiscard]] auto consteval make_querystring_impl(T&& t) {
   return concat(
     url_encode(freeze(std::get<0>(t))), "=", url_encode(freeze(std::get<1>(t)))
   );
 }
 
 template <FreezablePair Head, class... Tail>
-auto consteval make_querystring_impl(Head&& head, Tail&&... tail) {
+[[nodiscard]] auto consteval make_querystring_impl(Head&& head, Tail&&... tail) {
   return concat(
     url_encode(freeze(std::get<0>(head))), "=", url_encode(freeze(std::get<1>(head))),
     "&",
@@ -82,7 +82,7 @@ auto consteval make_querystring_impl(Head&& head, Tail&&... tail) {
  * @return クエリ文字列（先頭に '?' が付く）
  */
 template<class ... Args>
-auto consteval make_querystring(Args&&... args) {
+[[nodiscard]] auto consteval make_querystring(Args&&... args) {
   return concat("?", detail::make_querystring_impl(args...));
 }
 
@@ -93,7 +93,7 @@ auto consteval make_querystring(Args&&... args) {
  * @return クエリ文字列（先頭に '?' が付く）
  */
 template<class ... Args>
-auto consteval make_querystring(std::tuple<Args...> const& t) {
+[[nodiscard]] auto consteval make_querystring(std::tuple<Args...> const& t) {
   return concat("?", std::apply([](auto&&... args) {
     return detail::make_querystring_impl(args...);
   }, t));

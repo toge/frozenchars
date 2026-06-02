@@ -65,7 +65,7 @@ auto consteval to_hex_chars(long long value) noexcept {
  * @param value 変換する整数
  * @return auto 変換文字列とその長さのペア
  */
-auto consteval to_bin_chars(long long value) noexcept {
+[[nodiscard]] auto consteval to_bin_chars(long long value) noexcept {
   auto buffer = std::array<char, 65>{};
   auto v = static_cast<unsigned long long>(value);
   if (v == 0) {
@@ -88,7 +88,7 @@ auto consteval to_bin_chars(long long value) noexcept {
  * @param value 変換する整数
  * @return auto 変換された文字列とその長さのペア
  */
-auto consteval to_oct_chars(long long value) noexcept {
+[[nodiscard]] auto consteval to_oct_chars(long long value) noexcept {
   auto buffer = std::array<char, 23>{};
   auto v = static_cast<unsigned long long>(value);
   if (v == 0) {
@@ -112,7 +112,7 @@ auto consteval to_oct_chars(long long value) noexcept {
  * @param precision 小数点以下の桁数
  * @return auto 変換文字列とその長さのペア
  */
-auto consteval to_float_chars(double value, int const precision) noexcept {
+[[nodiscard]] auto consteval to_float_chars(double value, int const precision) noexcept {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
   if (value < 0) {

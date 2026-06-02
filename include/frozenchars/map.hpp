@@ -129,7 +129,7 @@ consteval auto next_pow2(std::size_t n) -> std::size_t {
 }
 
 template <FrozenString... Keys>
-consteval auto has_duplicate_keys() -> bool {
+[[nodiscard]] consteval auto has_duplicate_keys() -> bool {
   if constexpr (sizeof...(Keys) == 0) return false;
   else {
     constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
@@ -162,7 +162,7 @@ struct lookup_seed_result {
  * キー数が多い場合、コンパイル時の計算量制限を回避するためにこの関数の呼び出しはスキップされる必要がある。
  */
 template <std::size_t TableSize, FrozenString... Keys>
-consteval auto find_lookup_seed() {
+[[nodiscard]] consteval auto find_lookup_seed() {
   using result_t = lookup_seed_result<TableSize, sizeof...(Keys)>;
   using index_t = typename result_t::index_t;
   constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };

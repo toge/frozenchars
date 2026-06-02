@@ -13,7 +13,7 @@ namespace frozenchars::literals {
  * @return auto 変換文字列
  */
 template <FrozenString FS>
-auto consteval operator""_fs() noexcept {
+[[nodiscard]] auto consteval operator""_fs() noexcept {
   auto res = FrozenString<FS.sv().size() + 1>{};
   auto const s = FS.sv();
   for (auto i = 0uz; i < s.size(); ++i) {

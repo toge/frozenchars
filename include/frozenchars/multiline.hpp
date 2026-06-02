@@ -18,7 +18,7 @@ namespace frozenchars::detail {
  */
 template <auto Str>
   requires is_frozen_string_v<decltype(Str)>
-consteval auto count_newlines() noexcept -> std::size_t {
+[[nodiscard]] consteval auto count_newlines() noexcept -> std::size_t {
   auto count = 0uz;
   for (auto i = 0uz; i < Str.length; ++i) {
     if (Str.buffer[i] == '\n') {
@@ -37,7 +37,7 @@ consteval auto count_newlines() noexcept -> std::size_t {
  */
 template <auto Str>
   requires is_frozen_string_v<decltype(Str)>
-consteval auto count_logical_lines() noexcept -> std::size_t {
+[[nodiscard]] consteval auto count_logical_lines() noexcept -> std::size_t {
   if (Str.length == 0) {
     return 0uz;
   }
@@ -65,7 +65,7 @@ namespace frozenchars {
  * @return auto 変換文字列
  */
 template <auto Pred, size_t N>
-auto consteval remove_leading_spaces_if(FrozenString<N> const& str, size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_leading_spaces_if(FrozenString<N> const& str, size_t n = 0) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -97,12 +97,12 @@ auto consteval remove_leading_spaces_if(FrozenString<N> const& str, size_t n = 0
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_leading_spaces(FrozenString<N> const& str, size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_leading_spaces(FrozenString<N> const& str, size_t n = 0) noexcept {
   return remove_leading_spaces_if<detail::is_space_char>(str, n);
 }
 
 template <size_t N>
-auto consteval remove_leading_spaces(char const (&str)[N], size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_leading_spaces(char const (&str)[N], size_t n = 0) noexcept {
   return remove_leading_spaces(FrozenString{str}, n);
 }
 
@@ -115,7 +115,7 @@ auto consteval remove_leading_spaces(char const (&str)[N], size_t n = 0) noexcep
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_comment_lines(FrozenString<N> const& str, std::string_view comment_seq = "#") noexcept {
+[[nodiscard]] auto consteval remove_comment_lines(FrozenString<N> const& str, std::string_view comment_seq = "#") noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -146,7 +146,7 @@ auto consteval remove_comment_lines(FrozenString<N> const& str, std::string_view
 }
 
 template <size_t N>
-auto consteval remove_comment_lines(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
+[[nodiscard]] auto consteval remove_comment_lines(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
   return remove_comment_lines(FrozenString{str}, comment_seq);
 }
 
@@ -159,7 +159,7 @@ auto consteval remove_comment_lines(char const (&str)[N], std::string_view comme
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_comments(FrozenString<N> const& str, std::string_view comment_seq = "#") noexcept {
+[[nodiscard]] auto consteval remove_comments(FrozenString<N> const& str, std::string_view comment_seq = "#") noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -196,7 +196,7 @@ auto consteval remove_comments(FrozenString<N> const& str, std::string_view comm
 }
 
 template <size_t N>
-auto consteval remove_comments(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
+[[nodiscard]] auto consteval remove_comments(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
   return remove_comments(FrozenString{str}, comment_seq);
 }
 
@@ -210,7 +210,7 @@ auto consteval remove_comments(char const (&str)[N], std::string_view comment_se
  * @return auto 変換文字列
  */
 template <auto Pred, size_t N>
-auto consteval remove_trailing_spaces_if(FrozenString<N> const& str, size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_trailing_spaces_if(FrozenString<N> const& str, size_t n = 0) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -246,12 +246,12 @@ auto consteval remove_trailing_spaces_if(FrozenString<N> const& str, size_t n = 
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_trailing_spaces(FrozenString<N> const& str, size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_trailing_spaces(FrozenString<N> const& str, size_t n = 0) noexcept {
   return remove_trailing_spaces_if<detail::is_space_char>(str, n);
 }
 
 template <size_t N>
-auto consteval remove_trailing_spaces(char const (&str)[N], size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_trailing_spaces(char const (&str)[N], size_t n = 0) noexcept {
   return remove_trailing_spaces(FrozenString{str}, n);
 }
 
@@ -263,7 +263,7 @@ auto consteval remove_trailing_spaces(char const (&str)[N], size_t n = 0) noexce
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval trim_trailing_spaces(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval trim_trailing_spaces(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -290,7 +290,7 @@ auto consteval trim_trailing_spaces(FrozenString<N> const& str) noexcept {
 }
 
 template <size_t N>
-auto consteval trim_trailing_spaces(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval trim_trailing_spaces(char const (&str)[N]) noexcept {
   return trim_trailing_spaces(FrozenString{str});
 }
 
@@ -304,7 +304,7 @@ auto consteval trim_trailing_spaces(char const (&str)[N]) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_range_comments(FrozenString<N> const& str, std::string_view start_seq, std::string_view end_seq) noexcept {
+[[nodiscard]] auto consteval remove_range_comments(FrozenString<N> const& str, std::string_view start_seq, std::string_view end_seq) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -343,7 +343,7 @@ auto consteval remove_range_comments(FrozenString<N> const& str, std::string_vie
 }
 
 template <size_t N>
-auto consteval remove_range_comments(char const (&str)[N], std::string_view start_seq, std::string_view end_seq) noexcept {
+[[nodiscard]] auto consteval remove_range_comments(char const (&str)[N], std::string_view start_seq, std::string_view end_seq) noexcept {
   return remove_range_comments(FrozenString{str}, start_seq, end_seq);
 }
 
@@ -356,7 +356,7 @@ auto consteval remove_range_comments(char const (&str)[N], std::string_view star
  * @return auto 結合結果
  */
 template <size_t N>
-auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") {
+[[nodiscard]] auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") {
   constexpr auto MAX_SEP_LEN = 32uz;
   if (sep.size() > MAX_SEP_LEN) {
     throw "join_lines: separator exceeds MAX_SEP_LEN (32). Use join_lines<Sep>(str) for longer separators.";
@@ -388,7 +388,7 @@ auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "")
 }
 
 template <size_t N>
-auto consteval join_lines(char const (&str)[N], std::string_view sep = "") {
+[[nodiscard]] auto consteval join_lines(char const (&str)[N], std::string_view sep = "") {
   return join_lines(FrozenString{str}, sep);
 }
 
@@ -402,7 +402,7 @@ auto consteval join_lines(char const (&str)[N], std::string_view sep = "") {
  */
 template <auto Sep, size_t N>
   requires detail::is_frozen_string_v<decltype(Sep)>
-auto consteval join_lines(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval join_lines(FrozenString<N> const& str) noexcept {
   constexpr auto OUT_CAP = N + (N * Sep.length) + 1;
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
@@ -438,7 +438,7 @@ auto consteval join_lines(FrozenString<N> const& str) noexcept {
  */
 template <auto Str, auto Sep>
   requires (detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(Sep)>)
-auto consteval join_lines() noexcept {
+[[nodiscard]] auto consteval join_lines() noexcept {
   return shrink_to_fit<join_lines<Sep>(Str)>();
 }
 
@@ -452,7 +452,7 @@ auto consteval join_lines() noexcept {
  */
 template <auto Sep, size_t N>
   requires detail::is_frozen_string_v<decltype(Sep)>
-auto consteval join_lines(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval join_lines(char const (&str)[N]) noexcept {
   return join_lines<Sep>(FrozenString{str});
 }
 
@@ -464,7 +464,7 @@ auto consteval join_lines(char const (&str)[N]) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_empty_lines(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval remove_empty_lines(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -492,7 +492,7 @@ auto consteval remove_empty_lines(FrozenString<N> const& str) noexcept {
 }
 
 template <size_t N>
-auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
   return remove_empty_lines(FrozenString{str});
 }
 
@@ -505,7 +505,7 @@ auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_leading_empty_lines(FrozenString<N> const& str, size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_leading_empty_lines(FrozenString<N> const& str, size_t n = 0) noexcept {
   auto copy_from = 0uz;
   auto i = 0uz;
   auto removed = 0uz;
@@ -545,7 +545,7 @@ auto consteval remove_leading_empty_lines(FrozenString<N> const& str, size_t n =
 }
 
 template <size_t N>
-auto consteval remove_leading_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_leading_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
   return remove_leading_empty_lines(FrozenString{str}, n);
 }
 
@@ -558,7 +558,7 @@ auto consteval remove_leading_empty_lines(char const (&str)[N], size_t n = 0) no
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval remove_trailing_empty_lines(FrozenString<N> const& str, size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_trailing_empty_lines(FrozenString<N> const& str, size_t n = 0) noexcept {
   auto cut = str.length;
   auto removed = 0uz;
 
@@ -588,7 +588,7 @@ auto consteval remove_trailing_empty_lines(FrozenString<N> const& str, size_t n 
 }
 
 template <size_t N>
-auto consteval remove_trailing_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
+[[nodiscard]] auto consteval remove_trailing_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
   return remove_trailing_empty_lines(FrozenString{str}, n);
 }
 
@@ -600,7 +600,7 @@ auto consteval remove_trailing_empty_lines(char const (&str)[N], size_t n = 0) n
  * @return auto 変換文字列
  */
 template <size_t N>
-auto consteval collapse_empty_lines(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval collapse_empty_lines(FrozenString<N> const& str) noexcept {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
@@ -642,7 +642,7 @@ auto consteval collapse_empty_lines(FrozenString<N> const& str) noexcept {
 }
 
 template <size_t N>
-auto consteval collapse_empty_lines(char const (&str)[N]) noexcept {
+[[nodiscard]] auto consteval collapse_empty_lines(char const (&str)[N]) noexcept {
   return collapse_empty_lines(FrozenString{str});
 }
 
@@ -656,7 +656,7 @@ auto consteval collapse_empty_lines(char const (&str)[N]) noexcept {
  * @return auto 変換文字列
  */
 template <size_t N, size_t M>
-auto consteval prefix_lines(FrozenString<N> const& str, FrozenString<M> const& prefix) noexcept {
+[[nodiscard]] auto consteval prefix_lines(FrozenString<N> const& str, FrozenString<M> const& prefix) noexcept {
   // 最大必要サイズの見積もり
   // 各文字が改行の場合、全文字の前にprefixが付く可能性がある
   constexpr auto OUT_CAP = N + (N * M);
@@ -691,7 +691,7 @@ auto consteval prefix_lines(FrozenString<N> const& str, FrozenString<M> const& p
 }
 
 template <size_t N, size_t M>
-auto consteval prefix_lines(char const (&str)[N], char const (&prefix)[M]) noexcept {
+[[nodiscard]] auto consteval prefix_lines(char const (&str)[N], char const (&prefix)[M]) noexcept {
   return prefix_lines(FrozenString{str}, FrozenString{prefix});
 }
 
@@ -705,7 +705,7 @@ auto consteval prefix_lines(char const (&str)[N], char const (&prefix)[M]) noexc
  * @return auto 変換文字列
  */
 template <size_t N, size_t M>
-auto consteval postfix_lines(FrozenString<N> const& str, FrozenString<M> const& postfix) noexcept {
+[[nodiscard]] auto consteval postfix_lines(FrozenString<N> const& str, FrozenString<M> const& postfix) noexcept {
   constexpr auto OUT_CAP = N + (N * M);
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
@@ -732,7 +732,7 @@ auto consteval postfix_lines(FrozenString<N> const& str, FrozenString<M> const& 
 }
 
 template <size_t N, size_t M>
-auto consteval postfix_lines(char const (&str)[N], char const (&postfix)[M]) noexcept {
+[[nodiscard]] auto consteval postfix_lines(char const (&str)[N], char const (&postfix)[M]) noexcept {
   return postfix_lines(FrozenString{str}, FrozenString{postfix});
 }
 
@@ -748,7 +748,7 @@ auto consteval postfix_lines(char const (&str)[N], char const (&postfix)[M]) noe
  * @return auto 変換文字列
  */
 template <size_t N, size_t M1, size_t M2>
-auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M1> const& prefix, FrozenString<M2> const& postfix) noexcept {
+[[nodiscard]] auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M1> const& prefix, FrozenString<M2> const& postfix) noexcept {
   constexpr auto OUT_CAP = N + (N * (M1 + M2));
   auto res = FrozenString<OUT_CAP>{};
   auto offset = 0uz;
@@ -787,17 +787,17 @@ auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M1> const
  * @return auto 変換文字列
  */
 template <size_t N, size_t M>
-auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M> const& both) noexcept {
+[[nodiscard]] auto consteval surround_lines(FrozenString<N> const& str, FrozenString<M> const& both) noexcept {
   return surround_lines(str, both, both);
 }
 
 template <size_t N, size_t M1, size_t M2>
-auto consteval surround_lines(char const (&str)[N], char const (&prefix)[M1], char const (&postfix)[M2]) noexcept {
+[[nodiscard]] auto consteval surround_lines(char const (&str)[N], char const (&prefix)[M1], char const (&postfix)[M2]) noexcept {
   return surround_lines(FrozenString{str}, FrozenString{prefix}, FrozenString{postfix});
 }
 
 template <size_t N, size_t M>
-auto consteval surround_lines(char const (&str)[N], char const (&both)[M]) noexcept {
+[[nodiscard]] auto consteval surround_lines(char const (&str)[N], char const (&both)[M]) noexcept {
   return surround_lines(FrozenString{str}, FrozenString{both});
 }
 

@@ -16,7 +16,7 @@ namespace frozenchars {
  * @param str 対象文字列
  * @return auto consteval `(r, g, b)` の順に並んだタプル
  */
-auto consteval parse_hex_rgb(std::string_view str) {
+[[nodiscard]] auto consteval parse_hex_rgb(std::string_view str) {
   if (str.empty() || str[0] != '#' || (str.size() != 4 && str.size() != 7)) {
     throw std::invalid_argument("parse_hex_rgb: expected #RGB or #RRGGBB");
   }
@@ -44,7 +44,7 @@ auto consteval parse_hex_rgb(std::string_view str) {
  * @return auto `(r, g, b)` の順に並んだタプル
  */
 template <size_t N>
-auto consteval parse_hex_rgb(char const (&str)[N]) {
+[[nodiscard]] auto consteval parse_hex_rgb(char const (&str)[N]) {
   return parse_hex_rgb(std::string_view{str, N - 1});
 }
 
@@ -54,7 +54,7 @@ auto consteval parse_hex_rgb(char const (&str)[N]) {
  * @param str 対象文字列
  * @return auto  `(r, g, b, a)` の順に並んだタプル
  */
-auto consteval parse_hex_rgba(std::string_view str) {
+[[nodiscard]] auto consteval parse_hex_rgba(std::string_view str) {
   if (str.empty() || str[0] != '#' || (str.size() != 5 && str.size() != 9)) {
     throw std::invalid_argument("parse_hex_rgba: expected #RGBA or #RRGGBBAA");
   }
@@ -84,7 +84,7 @@ auto consteval parse_hex_rgba(std::string_view str) {
  * @return auto `(r, g, b, a)` の順に並んだタプル
  */
 template <size_t N>
-auto consteval parse_hex_rgba(char const (&str)[N]) {
+[[nodiscard]] auto consteval parse_hex_rgba(char const (&str)[N]) {
   return parse_hex_rgba(std::string_view{str, N - 1});
 }
 
@@ -98,7 +98,7 @@ auto consteval parse_hex_rgba(char const (&str)[N]) {
  * @return auto `(b, g, r)` の順のタプル
  */
 template <typename R, typename G, typename B>
-auto consteval to_bgr(std::tuple<R, G, B> const& rgb) {
+[[nodiscard]] auto consteval to_bgr(std::tuple<R, G, B> const& rgb) {
   return std::tuple<B, G, R>{std::get<2>(rgb), std::get<1>(rgb), std::get<0>(rgb)};
 }
 
@@ -113,7 +113,7 @@ auto consteval to_bgr(std::tuple<R, G, B> const& rgb) {
  * @return auto `(b, g, r, a)` の順のタプル
  */
 template <typename R, typename G, typename B, typename A>
-auto consteval to_bgra(std::tuple<R, G, B, A> const& rgba) {
+[[nodiscard]] auto consteval to_bgra(std::tuple<R, G, B, A> const& rgba) {
   return std::tuple<B, G, R, A>{std::get<2>(rgba), std::get<1>(rgba), std::get<0>(rgba), std::get<3>(rgba)};
 }
 
@@ -128,7 +128,7 @@ auto consteval to_bgra(std::tuple<R, G, B, A> const& rgba) {
  * @return auto `(a, b, g, r)` の順のタプル
  */
 template <typename R, typename G, typename B, typename A>
-auto consteval to_abgr(std::tuple<R, G, B, A> const& rgba) {
+[[nodiscard]] auto consteval to_abgr(std::tuple<R, G, B, A> const& rgba) {
   return std::tuple<A, B, G, R>{std::get<3>(rgba), std::get<2>(rgba), std::get<1>(rgba), std::get<0>(rgba)};
 }
 

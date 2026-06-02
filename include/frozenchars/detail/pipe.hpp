@@ -49,13 +49,13 @@ struct composed_adaptor : pipe_adaptor_base {
   consteval explicit composed_adaptor(Adaptors... args) : adaptors(std::move(args)...) {}
 
   template <size_t N>
-  consteval auto operator()(FrozenString<N> const& str) const {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const {
     return apply_impl<0>(str);
   }
 
 private:
   template <size_t I, size_t N>
-  consteval auto apply_impl(FrozenString<N> const& str) const {
+  [[nodiscard]] consteval auto apply_impl(FrozenString<N> const& str) const {
     if constexpr (I == sizeof...(Adaptors)) {
       return str;
     } else {
@@ -72,7 +72,7 @@ private:
  * @return 合成されたアダプタ
  */
 template <PipeAdaptor... Adaptors>
-consteval auto compose(Adaptors... adaptors) {
+[[nodiscard]] consteval auto compose(Adaptors... adaptors) {
   return composed_adaptor<Adaptors...>(std::move(adaptors)...);
 }
 
@@ -80,7 +80,7 @@ consteval auto compose(Adaptors... adaptors) {
  * @brief FrozenString に対してアダプタを適用するパイプ演算子
  */
 template <size_t N, PipeAdaptor Adaptor>
-auto consteval operator|(FrozenString<N> const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
+[[nodiscard]] auto consteval operator|(FrozenString<N> const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
 

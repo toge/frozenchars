@@ -28,7 +28,7 @@ struct type_mapping {
  * @return consteval 型のリスト（std::tuple）
  */
 template <bool EmptyMeansVoid, auto Str>
-consteval auto parse_to_tuple_impl() noexcept {
+[[nodiscard]] consteval auto parse_to_tuple_impl() noexcept {
   auto constexpr trimmed = trim(Str);
 
   if constexpr (trimmed.length == 0) {
@@ -110,7 +110,7 @@ consteval auto parse_to_tuple_impl() noexcept {
 }
 
 template <auto Str>
-consteval auto parse_to_tuple() {
+[[nodiscard]] consteval auto parse_to_tuple() {
   return parse_to_tuple_impl<false, Str>();
 }
 
