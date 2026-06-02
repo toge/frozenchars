@@ -31,32 +31,34 @@ TEST_CASE("FrozenString works with std::format", "[format]") {
   REQUIRE(std::format("{:>12}", prefix) == "       MyApp");
 }
 
-TEST_CASE("FrozenString format wrappers cover std format family", "[format]") {
+TEST_CASE("to_sv bridges FrozenString NTTP into std format family", "[format]") {
   auto formatted = std::string{"prefix:"};
-  std::ignore = frozenchars::format_to<"{} {}"_fs>(std::back_inserter(formatted), "hello", 42);
+  std::ignore = std::format_to(std::back_inserter(formatted), frozenchars::to_sv<"{} {}"_fs>(),
+                                "hello", 42);
   REQUIRE(formatted == "prefix:hello 42");
 
   auto buffer = std::array<char, 5>{};
-  auto const truncated = frozenchars::format_to_n<"{}"_fs>(buffer.begin(), 5, "abcdef");
+  auto const truncated =
+      std::format_to_n(buffer.begin(), 5, frozenchars::to_sv<"{}"_fs>(), "abcdef");
   REQUIRE(truncated.size == 6);
   REQUIRE(std::string_view{buffer.data(), buffer.size()} == "abcde");
 
-  REQUIRE(frozenchars::formatted_size<"{}-{}"_fs>("ab", 12) == 5);
+  REQUIRE(std::formatted_size(frozenchars::to_sv<"{}-{}"_fs>(), "ab", 12) == 5);
 
   auto const classic = std::locale::classic();
-  REQUIRE(frozenchars::format_with_locale<"{} {}"_fs>(classic, "a", 1) == "a 1");
+  REQUIRE(std::format(classic, frozenchars::to_sv<"{} {}"_fs>(), "a", 1) == "a 1");
 
   auto localized = std::string{};
-  std::ignore =
-      frozenchars::format_to_with_locale<"{}"_fs>(std::back_inserter(localized), classic, 1234);
+  std::ignore = std::format_to(std::back_inserter(localized),
+                               classic, frozenchars::to_sv<"{}"_fs>(), 1234);
   REQUIRE(localized == "1234");
 
   auto locale_buffer = std::array<char, 3>{};
-  auto const locale_truncated =
-      frozenchars::format_to_n_with_locale<"{}"_fs>(locale_buffer.begin(), 3, classic, "xyz123");
+  auto const locale_truncated = std::format_to_n(
+      locale_buffer.begin(), 3, classic, frozenchars::to_sv<"{}"_fs>(), "xyz123");
   REQUIRE(locale_truncated.size == 6);
   REQUIRE(std::string_view{locale_buffer.data(), locale_buffer.size()} == "xyz");
-  REQUIRE(frozenchars::formatted_size_with_locale<"{}"_fs>(classic, "xyz123") == 6);
+  REQUIRE(std::formatted_size(classic, frozenchars::to_sv<"{}"_fs>(), "xyz123") == 6);
 }
 #endif
 

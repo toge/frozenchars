@@ -69,14 +69,14 @@ assert_frozen_map_compile_fail(
 )
 
 assert_frozen_map_compile_fail(
-  NAME frozen_format_missing_arg
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_missing_arg.cpp
+  NAME to_sv_missing_arg
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/to_sv_missing_arg.cpp
   EXPECTED_TEXT "format"
 )
 
 assert_frozen_map_compile_fail(
-  NAME to_format_string_type_mismatch
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/to_format_string_type_mismatch.cpp
+  NAME to_sv_type_mismatch
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/to_sv_type_mismatch.cpp
   EXPECTED_TEXT "format"
 )
 
