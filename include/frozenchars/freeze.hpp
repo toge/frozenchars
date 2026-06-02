@@ -114,35 +114,19 @@ template <size_t N>
  * 各種char型のvector
 \*/
 template <typename Alloc>
-auto consteval freeze(std::vector<char, Alloc>& arg) noexcept {
-  return freeze(std::span<char>{arg.data(), arg.size()});
-}
-template <typename Alloc>
-auto consteval freeze(std::vector<char, Alloc> const& arg) noexcept {
+[[nodiscard]] auto consteval freeze(std::vector<char, Alloc> const& arg) noexcept {
   return freeze(std::span<char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto consteval freeze(std::vector<signed char, Alloc>& arg) noexcept {
-  return freeze(std::span<signed char>{arg.data(), arg.size()});
-}
-template <typename Alloc>
-auto consteval freeze(std::vector<signed char, Alloc> const& arg) noexcept {
+[[nodiscard]] auto consteval freeze(std::vector<signed char, Alloc> const& arg) noexcept {
   return freeze(std::span<signed char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto consteval freeze(std::vector<unsigned char, Alloc>& arg) noexcept {
-  return freeze(std::span<unsigned char>{arg.data(), arg.size()});
-}
-template <typename Alloc>
-auto consteval freeze(std::vector<unsigned char, Alloc> const& arg) noexcept {
+[[nodiscard]] auto consteval freeze(std::vector<unsigned char, Alloc> const& arg) noexcept {
   return freeze(std::span<unsigned char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-auto consteval freeze(std::vector<std::byte, Alloc>& arg) noexcept {
-  return freeze(std::span<std::byte>{arg.data(), arg.size()});
-}
-template <typename Alloc>
-auto consteval freeze(std::vector<std::byte, Alloc> const& arg) noexcept {
+[[nodiscard]] auto consteval freeze(std::vector<std::byte, Alloc> const& arg) noexcept {
   return freeze(std::span<std::byte const>{arg.data(), arg.size()});
 }
 
