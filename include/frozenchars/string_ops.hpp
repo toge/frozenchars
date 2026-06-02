@@ -364,6 +364,33 @@ namespace detail {
     }
     return std::string_view::npos;
   }
+
+  template <auto Str, auto From>
+    requires (is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
+  [[nodiscard]] consteval auto count_occurrences() noexcept -> std::size_t {
+    auto count = 0uz;
+    auto pos = 0uz;
+    while (pos < Str.length) {
+      auto const found = find_impl(Str, From, pos);
+      if (found == std::string_view::npos) break;
+      ++count;
+      pos = found + From.length;
+    }
+    return count;
+  }
+
+  template <auto Str, auto From, auto To>
+    requires (is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)> && is_frozen_string_v<decltype(To)>)
+  [[nodiscard]] consteval auto replace_all_exact_size() noexcept -> std::size_t {
+    constexpr auto occurrences = count_occurrences<Str, From>();
+    if constexpr (occurrences == 0) {
+      return Str.length + 1;
+    } else {
+      constexpr auto removed = occurrences * From.length;
+      constexpr auto added = occurrences * To.length;
+      return Str.length - removed + added + 1;
+    }
+  }
 }
 
 /**
@@ -525,6 +552,44 @@ template <FrozenString From, FrozenString To, size_t N>
 template <FrozenString From, FrozenString To, size_t N>
 [[nodiscard]] auto consteval replace_all(char const (&str)[N]) noexcept {
   return replace_all<From, To>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列内のすべての指定した部分文字列を置換した文字列を生成する（NTTP版・正確なサイズ）
+ *
+ * @tparam Str 処理対象の文字列（FrozenString NTTP）
+ * @tparam From 置換前の文字列
+ * @tparam To 置換後の文字列
+ * @return auto 生成した文字列
+ */
+template <auto Str, auto From, auto To>
+  requires (detail::is_frozen_string_v<decltype(Str)>
+            && detail::is_frozen_string_v<decltype(From)>
+            && detail::is_frozen_string_v<decltype(To)>)
+[[nodiscard]] consteval auto replace_all() noexcept -> FrozenString<detail::replace_all_exact_size<Str, From, To>()> {
+  constexpr auto NEW_SIZE = detail::replace_all_exact_size<Str, From, To>();
+  auto res = FrozenString<NEW_SIZE>{};
+  auto offset = 0uz;
+  auto pos = 0uz;
+  while (pos < Str.length) {
+    auto const found = detail::find_impl(Str, From, pos);
+    if (found == std::string_view::npos) {
+      while (pos < Str.length) {
+        res.buffer[offset++] = Str.buffer[pos++];
+      }
+      break;
+    }
+    while (pos < found) {
+      res.buffer[offset++] = Str.buffer[pos++];
+    }
+    for (auto i = 0uz; i < To.length; ++i) {
+      res.buffer[offset++] = To.buffer[i];
+    }
+    pos = found + From.length;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
 }
 
 template <size_t Width, char Fill = ' ', typename T>
