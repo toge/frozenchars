@@ -17,7 +17,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <cstring>
 #include <ranges>
 #include <span>
 
@@ -49,7 +48,7 @@ namespace crc32c {
 
 static constexpr std::uint32_t k_polynomial = 0x82F63B78;
 
-consteval auto make_table() {
+[[nodiscard]] consteval auto make_table() {
   std::array<std::uint32_t, 256> table{};
   for (std::uint32_t i = 0; i < 256; ++i) {
     std::uint32_t res = i;
@@ -84,8 +83,10 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
       auto const d = key.data();
       std::size_t i = 0;
       for (; i + 8 <= n; i += 8) {
-          std::uint64_t chunk;
-          std::memcpy(&chunk, d + i, 8);
+          std::uint64_t chunk = 0;
+          for (std::size_t j = 0; j < 8; ++j) {
+            chunk |= static_cast<std::uint64_t>(static_cast<unsigned char>(d[i + j])) << (j * 8);
+          }
           crc = _mm_crc32_u64(crc, chunk);
       }
       for (; i < n; ++i) crc = _mm_crc32_u8(static_cast<std::uint32_t>(crc), static_cast<std::uint8_t>(d[i]));
@@ -96,8 +97,10 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
       auto const d = reinterpret_cast<const std::uint8_t*>(key.data());
       std::size_t i = 0;
       for (; i + 8 <= n; i += 8) {
-          std::uint64_t chunk;
-          std::memcpy(&chunk, d + i, 8);
+          std::uint64_t chunk = 0;
+          for (std::size_t j = 0; j < 8; ++j) {
+            chunk |= static_cast<std::uint64_t>(d[i + j]) << (j * 8);
+          }
           crc = __crc32cd(crc, chunk);
       }
       for (; i < n; ++i) crc = __crc32cb(crc, d[i]);
@@ -462,14 +465,9 @@ private:
       if (key.size() != pk.len) return false;
       std::uint64_t low = 0, high = 0;
       auto const d = key.data(); auto const n = key.size();
-      if (!std::is_constant_evaluated()) {
-        if (n >= 8) { std::memcpy(&low, d, 8); if (n > 8) std::memcpy(&high, d + 8, n - 8); }
-        else std::memcpy(&low, d, n);
-      } else {
-        for (std::size_t i = 0; i < n; ++i) {
-          if (i < 8) low |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << (i * 8));
-          else high |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << ((i - 8) * 8));
-        }
+      for (std::size_t i = 0; i < n; ++i) {
+        if (i < 8) low |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << (i * 8));
+        else high |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << ((i - 8) * 8));
       }
       return (low == pk.data[0] && high == pk.data[1]);
     }
