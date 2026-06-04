@@ -4,7 +4,7 @@ project(frozenchars LANGUAGES CXX)
 set(FROZENCHARS_VERSION "0.1.0")
 
 option(ENABLE_TESTS "Enable tests" ON)
-option(ENABLE_INJA "Enable inja template engine support (requires glaze)" OFF)
+option(ENABLE_INJA "Enable inja template engine support (requires glaze)" ON)
 
 ## add stdc++ compiler flag
 include(CheckCXXCompilerFlag)
@@ -51,18 +51,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-if(ENABLE_INJA)
-  find_package(glaze CONFIG REQUIRED)
-endif()
-
 add_library(frozenchars INTERFACE)
 add_library(frozenchars::frozenchars ALIAS frozenchars)
 
 target_compile_features(frozenchars INTERFACE ${STD_CPP})
 
 if(ENABLE_INJA)
-  target_link_libraries(frozenchars INTERFACE glaze::glaze)
-  target_compile_definitions(frozenchars INTERFACE FROZENCHARS_ENABLE_INJA=1)
+    find_package(glaze CONFIG REQUIRED)
+    target_link_libraries(frozenchars INTERFACE glaze::glaze)
+    target_compile_definitions(frozenchars INTERFACE FROZENCHARS_ENABLE_INJA=1)
 endif()
 
 target_include_directories(frozenchars
@@ -84,16 +81,16 @@ install(DIRECTORY
 )
 
 if(ENABLE_INJA)
-  install(FILES
-      ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_engine.hpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_function.hpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_value.hpp
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
-  )
-  install(DIRECTORY
-      ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
-  )
+    install(FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_engine.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_function.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_value.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
+    )
+    install(DIRECTORY
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
+    )
 endif()
 
 write_basic_package_version_file(
