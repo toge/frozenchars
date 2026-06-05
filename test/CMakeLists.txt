@@ -85,3 +85,8 @@ add_executable(example_split ../example_split.cpp)
 target_compile_features(example_split PRIVATE ${STD_CPP})
 target_link_libraries(example_split PRIVATE frozenchars::frozenchars)
 add_test(NAME example_split COMMAND example_split)
+
+add_executable(example_frozen_map_use_cases ../example_frozen_map_use_cases.cpp)
+target_compile_features(example_frozen_map_use_cases PRIVATE ${STD_CPP})
+target_link_libraries(example_frozen_map_use_cases PRIVATE frozenchars::frozenchars)
+add_test(NAME example_frozen_map_use_cases COMMAND example_frozen_map_use_cases)
