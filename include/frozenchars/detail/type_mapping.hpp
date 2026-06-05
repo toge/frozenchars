@@ -51,6 +51,12 @@ template <auto S>
   else if constexpr (s == "uint16_t" || s == "uint16") return type_identity<std::uint16_t>{};
   else if constexpr (s == "uint32_t" || s == "uint32") return type_identity<std::uint32_t>{};
   else if constexpr (s == "uint64_t" || s == "uint64") return type_identity<std::uint64_t>{};
+  // 長い整数型と文字型
+  else if constexpr (s == "long long" || s == "ll") return type_identity<long long>{};
+  else if constexpr (s == "unsigned long long" || s == "ull") return type_identity<unsigned long long>{};
+  else if constexpr (s == "char16_t") return type_identity<char16_t>{};
+  else if constexpr (s == "char32_t") return type_identity<char32_t>{};
+  else if constexpr (s == "wchar_t") return type_identity<wchar_t>{};
   else return type_identity<unknown_type>{};
 }
 
