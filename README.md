@@ -933,6 +933,58 @@ static_assert(std::is_same_v<T3, std::tuple<int, void, std::optional<std::tuple<
 `parse_to_tuple` 自体は型計算用のヘルパーなので、実行時に `std::tuple` オブジェクトを返す関数ではありません。
 未知の型名や不正な構文は、ランタイムではなくコンパイル時エラーになります。
 
+#### `parse_to_variant`（型列文字列 → `std::variant<...>`）
+
+`parse_to_variant<Str>()` は、固定文字列で書いた型リストをパースし、
+対応する `std::variant<...>` 型を保持する `type_identity` を返します。
+
+```cpp
+using V1 = typename decltype(parse_to_variant<"int, string, bool"_fs>())::type;
+static_assert(std::is_same_v<V1, std::variant<int, std::string, bool>>);
+
+// _t エイリアスを使った簡潔な書き方
+using V2 = parse_to_variant_t<"int, string, bool"_fs>;
+static_assert(std::is_same_v<V2, std::variant<int, std::string, bool>>);
+```
+
+- `void` 型は `std::monostate` にマッピングされます
+- `parse_to_tuple` と同じ構文が使えます（optional, ネスト, サフィックス）
+
+#### 型エイリアス
+
+冗長な `typename decltype(...)::type` パターンを省略するエイリアス:
+
+```cpp
+// parse_to_tuple の型エイリアス
+template <auto Str>
+using parse_to_tuple_t = typename decltype(parse_to_tuple<Str>())::type;
+
+// parse_to_variant の型エイリアス
+template <auto Str>
+using parse_to_variant_t = typename decltype(parse_to_variant<Str>())::type;
+
+// type_mapping の値エイリアス
+template <auto S>
+inline constexpr auto type_mapping_v = type_mapping<S>::type;
+```
+
+#### ポインタ/参照型
+
+サフィックスでポインタ型・参照型を指定できます:
+
+| 構文 | 型 |
+|------|-----|
+| `"int*"_fs` | `int*` |
+| `"int&"_fs` | `int&` |
+| `"int&&"_fs` | `int&&` |
+
+```cpp
+using T = parse_to_tuple_t<"int*, string&, bool&&"_fs>;
+static_assert(std::is_same_v<T, std::tuple<int*, std::string&, bool&&>>);
+```
+
+- `void*`, `void&` は未対応（コンパイルエラー）
+
 
 ### inja風テンプレート（constexprパース + 実行時レンダリング）
 
