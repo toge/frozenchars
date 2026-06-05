@@ -612,3 +612,22 @@ TEST_CASE("frozen_map keys_in_declaration_order preserves declaration order", "[
   std::array<std::string_view, 3> const expected_sorted{"backoff", "retry", "timeout"};
   REQUIRE(std::ranges::equal(sorted_keys, expected_sorted));
 }
+
+TEST_CASE("frozen_map contains_all checks a set of keys at once", "[frozen_map]") {
+  frozen_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs> m{
+    std::array<int, 3>{30, 5, 100}
+  };
+
+  // 全部存在 → true
+  static_assert(m.contains_all<"timeout"_fs, "retry"_fs>());  // consteval-able
+  REQUIRE(m.contains_all<"timeout"_fs, "retry"_fs>());
+  REQUIRE(m.contains_all<"timeout"_fs, "backoff"_fs>());
+
+  // 1つでも欠けると false
+  REQUIRE_FALSE(m.contains_all<"timeout"_fs, "missing"_fs>());
+  REQUIRE_FALSE(m.contains_all<"missing"_fs, "timeout"_fs>());
+
+  // 空パックは true
+  static_assert(m.contains_all<>());  // vacuous true
+  REQUIRE(m.contains_all<>());
+}

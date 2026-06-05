@@ -326,6 +326,14 @@ public:
   [[nodiscard]] constexpr auto contains(std::string_view key) const noexcept -> bool {
     return find_index_raw(key) != size();
   }
+  /**
+   * @brief 複数のキーが全て存在するかを一括判定する (consteval)
+   * @details 空パックに対しては true (vacuous truth) を返す。
+   */
+  template <FrozenString... QueryKeys>
+  [[nodiscard]] static consteval auto contains_all() noexcept -> bool {
+    return ((contains_impl<QueryKeys>()) && ... && true);
+  }
   [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
     auto const i = find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
@@ -353,6 +361,14 @@ public:
 private:
   /// キー文字列のビュー配列
   static constexpr std::array<std::string_view, size()> key_views_{ std::string_view{Keys.buffer.data(), Keys.length}... };
+
+  /**
+   * @brief 単一 NTTP キーがマップ内に存在するか (contains_all 内部用)
+   */
+  template <FrozenString Key>
+  [[nodiscard]] static consteval auto contains_impl() noexcept -> bool {
+    return ((Key.sv() == std::string_view{Keys.buffer.data(), Keys.length}) || ... || false);
+  }
 
   /// 全キーの最大長
   static constexpr auto k_max_key_len_ = std::max({Keys.length...});
