@@ -39,6 +39,36 @@ TEST_CASE("parser all") {
     using T = typename decltype(parse_to_tuple<" int ? , [ int , int ] ? , string "_fs>())::type;
     static_assert(std::is_same_v<T, std::tuple<std::optional<int>, std::optional<std::tuple<int, int>>, std::string>>);
   }
+
+  // 6. ポインタ型
+  {
+    using T = typename decltype(parse_to_tuple<"int*"_fs>())::type;
+    static_assert(std::is_same_v<T, std::tuple<int*>>);
+  }
+
+  // 7. 参照型
+  {
+    using T = typename decltype(parse_to_tuple<"int&"_fs>())::type;
+    static_assert(std::is_same_v<T, std::tuple<int&>>);
+  }
+
+  // 8. 右辺値参照型
+  {
+    using T = typename decltype(parse_to_tuple<"int&&"_fs>())::type;
+    static_assert(std::is_same_v<T, std::tuple<int&&>>);
+  }
+
+  // 9. ポインタの参照（参照 → ポインタの順で適用）
+  {
+    using T = typename decltype(parse_to_tuple<"int*&"_fs>())::type;
+    static_assert(std::is_same_v<T, std::tuple<int*&>>);
+  }
+
+  // 10. 複数型の混合
+  {
+    using T = typename decltype(parse_to_tuple<"int*, string&, bool&&"_fs>())::type;
+    static_assert(std::is_same_v<T, std::tuple<int*, std::string&, bool&&>>);
+  }
 }
 
 TEST_CASE("parser voids") {
