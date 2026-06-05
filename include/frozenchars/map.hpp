@@ -333,6 +333,10 @@ public:
   }
   [[nodiscard]] constexpr auto get(std::string_view key) noexcept -> std::optional<std::reference_wrapper<T>> { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; return std::nullopt; }
   [[nodiscard]] constexpr auto get(std::string_view key) const noexcept -> std::optional<std::reference_wrapper<T const>> { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; return std::nullopt; }
+  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const noexcept -> T {
+    if (auto const slot = find_index_opt(key); slot) [[likely]] return values_[*slot];
+    return default_value;
+  }
   constexpr auto operator[](std::string_view key) -> T& { return at(key); }
   constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map const&, mapped_type>>

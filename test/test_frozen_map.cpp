@@ -581,3 +581,22 @@ TEST_CASE("frozen_map sorted keys", "[frozen_map]") {
   std::array<std::string_view, 3> expected{"backoff", "retry", "timeout"};
   REQUIRE(std::ranges::equal(keys, expected));
 }
+
+TEST_CASE("frozen_map get_value_or returns value or default", "[frozen_map]") {
+  frozen_map<std::string_view, "dev"_fs, "stg"_fs> map{
+    std::array<std::string_view, 2>{"https://dev.example.com", "https://stg.example.com"}
+  };
+
+  // 既存キーはそのまま返す
+  REQUIRE(map.get_value_or("dev", "fallback") == "https://dev.example.com");
+
+  // 未知キーは default を返す (optional<reference_wrapper>::value_or が使えない問題を 1 行で解決)
+  REQUIRE(map.get_value_or("prd", "https://example.com") == "https://example.com");
+
+  // 整数型でも動く
+  frozen_map<int, "timeout"_fs, "retry"_fs> cfg{
+    std::array<int, 2>{30, 5}
+  };
+  REQUIRE(cfg.get_value_or("timeout", 0) == 30);
+  REQUIRE(cfg.get_value_or("unknown", 999) == 999);
+}
