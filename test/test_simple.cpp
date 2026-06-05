@@ -788,4 +788,54 @@ TEST_CASE("minify helpers") {
     "WHERE  c = 'x  y'  AND d = 1 ;"_fs);
   static_assert(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
   REQUIRE(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
+
+  auto constexpr html2 = minify_html(
+    "<div>  hello  </div>\n"
+    "<span>  world  </span>"_fs);
+  static_assert(html2.sv() == "<div>hello</div><span>world</span>");
+  REQUIRE(html2.sv() == "<div>hello</div><span>world</span>");
+
+  auto constexpr html3 = minify_html(
+    "<div class = \"x\" >\n"
+    "  <input type = \"text\" />\n"
+    "</div>"_fs);
+  static_assert(html3.sv() == "<div class=\"x\"><input type=\"text\"/></div>");
+  REQUIRE(html3.sv() == "<div class=\"x\"><input type=\"text\"/></div>");
+}
+
+TEST_CASE("sql_uppercase_keywords") {
+  auto constexpr q1 = sql_uppercase_keywords(
+    "select * from users where id = 1"_fs);
+  static_assert(q1.sv() == "SELECT * FROM users WHERE id = 1");
+  REQUIRE(q1.sv() == "SELECT * FROM users WHERE id = 1");
+
+  auto constexpr q2 = sql_uppercase_keywords(
+    "insert into users (name, age) values ('alice', 30)"_fs);
+  static_assert(q2.sv() == "INSERT INTO users (name, age) VALUES ('alice', 30)");
+  REQUIRE(q2.sv() == "INSERT INTO users (name, age) VALUES ('alice', 30)");
+
+  auto constexpr q3 = sql_uppercase_keywords(
+    "select * from tbl where name = 'select'"_fs);
+  static_assert(q3.sv() == "SELECT * FROM tbl WHERE name = 'select'");
+  REQUIRE(q3.sv() == "SELECT * FROM tbl WHERE name = 'select'");
+
+  auto constexpr q4 = sql_uppercase_keywords(
+    "select * from `users` where `id` = 1"_fs);
+  static_assert(q4.sv() == "SELECT * FROM `users` WHERE `id` = 1");
+  REQUIRE(q4.sv() == "SELECT * FROM `users` WHERE `id` = 1");
+
+  auto constexpr q5 = sql_uppercase_keywords(
+    "select * from [users] where [id] = 1"_fs);
+  static_assert(q5.sv() == "SELECT * FROM [users] WHERE [id] = 1");
+  REQUIRE(q5.sv() == "SELECT * FROM [users] WHERE [id] = 1");
+
+  auto constexpr q6 = sql_uppercase_keywords(
+    "select -- comment\n* from tbl"_fs);
+  static_assert(q6.sv() == "SELECT -- comment\n* FROM tbl");
+  REQUIRE(q6.sv() == "SELECT -- comment\n* FROM tbl");
+
+  auto constexpr q7 = sql_uppercase_keywords(
+    "create table if not exists users (id int primary key, name varchar(100) not null)"_fs);
+  static_assert(q7.sv() == "CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
+  REQUIRE(q7.sv() == "CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
 }

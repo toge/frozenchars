@@ -951,7 +951,6 @@ template <size_t N>
         --offset;
       }
       in_tag = false;
-      pending_space = false;
       res.buffer[offset++] = c;
       ++i;
       continue;
@@ -966,16 +965,15 @@ template <size_t N>
     // 連続空白は1つに集約し、記号の前後には不要空白を入れない
     if (pending_space) {
       auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
-      auto const next = c;
       auto const should_emit_space =
         prev != '\0'
         && prev != '<'
         && prev != '>'
         && prev != '='
         && prev != '/'
-        && next != '>'
-        && next != '='
-        && next != '/';
+        && c != '>'
+        && c != '='
+        && c != '/';
       if (should_emit_space) {
         res.buffer[offset++] = ' ';
       }
@@ -991,6 +989,116 @@ template <size_t N>
   res.buffer[offset] = '\0';
   res.length = offset;
   return res;
+}
+
+} // namespace detail
+
+// ===== SQL keyword uppercase =====
+
+namespace detail {
+
+/**
+ * @brief SQL 識別子の先頭文字か判定する
+ *
+ * @param c 判定対象文字
+ * @return auto 識別子先頭なら true
+ */
+auto constexpr is_sql_id_start(char c) noexcept {
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+/**
+ * @brief SQL 識別子の構成文字か判定する
+ *
+ * @param c 判定対象文字
+ * @return auto 識別子構成文字なら true
+ */
+auto constexpr is_sql_id_char(char c) noexcept {
+  return is_sql_id_start(c) || (c >= '0' && c <= '9');
+}
+
+/**
+ * @brief SQL 予約語リスト（大文字、昇順ソート済み）
+ */
+inline constexpr char const* sql_reserved_words[] = {
+  "ABS",        "ALL",        "ALLOCATE",   "ALTER",       "AND",
+  "ANY",        "ARE",        "ARRAY",      "AS",          "ASENSITIVE",
+  "ASYMMETRIC", "AT",         "AUTHORIZATION", "BEGIN",   "BETWEEN",
+  "BIGINT",     "BINARY",     "BLOB",       "BOOLEAN",     "BOTH",
+  "BY",         "CALL",       "CASCADE",    "CASCADED",    "CASE",
+  "CAST",       "CHAR",       "CHARACTER",  "CHECK",       "CLOB",
+  "CLOSE",      "COALESCE",   "COLLATE",    "COLUMN",      "COMMIT",
+  "CONNECT",    "CONSTRAINT", "CONTAINS",   "CONTINUE",    "CORRESPONDING",
+  "CREATE",     "CROSS",      "CURRENT",    "CURRENT_DATE","CURRENT_DEFAULT_TRANSFORM_GROUP",
+  "CURRENT_PATH", "CURRENT_ROLE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_TRANSFORM_GROUP_FOR_TYPE",
+  "CURRENT_USER","CURSOR",     "DATE",       "DATETIME",    "DEALLOCATE",
+  "DEC",        "DECIMAL",    "DECLARE",    "DEFAULT",     "DELETE",
+  "DEREF",      "DESC",       "DETERMINISTIC","DISCONNECT","DISTINCT",
+  "DOUBLE",     "DROP",       "DYNAMIC",    "EACH",        "ELSE",
+  "ELSEIF",     "END",        "ESCAPE",     "EXCEPT",      "EXCEPTION",
+  "EXEC",       "EXECUTE",    "EXISTS",     "EXTERNAL",    "EXTRACT",
+  "FALSE",      "FETCH",      "FLOAT",      "FOR",         "FOREIGN",
+  "FREE",       "FROM",       "FULL",       "FUNCTION",    "GET",
+  "GLOBAL",     "GRANT",      "GROUP",      "GROUPING",    "HANDLER",
+  "HAVING",     "HOLD",       "IDENTITY",   "IF",          "IMMEDIATE",
+  "IN",         "INDICATOR",  "INNER",      "INOUT",       "INPUT",
+  "INSENSITIVE","INSERT",     "INT",        "INTEGER",     "INTERSECT",
+  "INTO",       "IS",         "ITERATE",    "JOIN",        "KEY",
+  "LANGUAGE",   "LARGE",      "LATERAL",    "LEADING",     "LEAVE",
+  "LEFT",       "LIKE",       "LIMIT",      "LOCAL",       "LOCALTIME",
+  "LOCALTIMESTAMP","LOOP",    "MATCH",      "MEMBER",      "MERGE",
+  "METHOD",     "MINUS",      "MOD",        "MODIFIES",    "MODULE",
+  "MULTISET",   "NATIONAL",   "NATURAL",    "NCHAR",       "NCLOB",
+  "NEW",        "NO",         "NONE",       "NOT",         "NULL",
+  "NUMERIC",    "OF",         "OLD",        "ON",          "ONLY",
+  "OPEN",       "OR",         "ORDER",      "OUT",         "OUTER",
+  "OUTPUT",     "OVERLAPS",   "PARAMETER",  "PARTITION",   "PRECEDING",
+  "PRIMARY",    "PROCEDURE",  "RANGE",      "READS",       "REAL",
+  "RECURSIVE",  "REF",        "REFERENCES", "REFERENCING", "RELEASE",
+  "RESULT",     "RETURN",     "RETURNS",    "REVOKE",      "RIGHT",
+  "ROLLBACK",   "ROLLUP",     "ROW",        "ROWS",        "SAVEPOINT",
+  "SCROLL",     "SEARCH",     "SECOND",     "SELECT",      "SENSITIVE",
+  "SESSION_USER","SET",        "SHOW",       "SIMILAR",     "SMALLINT",
+  "SOME",       "SPECIFIC",   "SPECIFICTYPE","SQL",        "SQLCODE",
+  "SQLEXCEPTION","SQLSTATE",  "SQLWARNING", "START",       "STATIC",
+  "SUBMULTISET","SUBSTRING",  "SYMMETRIC",  "TABLE",       "TEMPORARY",
+  "THEN",       "TIME",       "TIMESTAMP",  "TIMEZONE_HOUR","TIMEZONE_MINUTE",
+  "TO",         "TRAILING",   "TRANSACTION","TREAT",       "TRIGGER",
+  "TRIM",       "TRUE",       "UNDO",       "UNION",       "UNIQUE",
+  "UNKNOWN",    "UNNEST",     "UPDATE",     "UPPER",       "USER",
+  "USING",      "VALUE",      "VALUES",     "VARCHAR",     "VARYING",
+  "VIEW",       "WHEN",       "WHENEVER",   "WHERE",       "WHILE",
+  "WINDOW",     "WITH",       "WITHIN",     "WITHOUT",     "YEAR",
+};
+
+/**
+ * @brief SQL 予約語かどうかを二分探索で判定する
+ *
+ * @param word 判定対象の識別子（大文字）
+ * @param len 文字列長
+ * @return auto 予約語なら true
+ */
+auto consteval sql_is_reserved(char const* word, size_t len) noexcept {
+  auto constexpr count = sizeof(sql_reserved_words) / sizeof(sql_reserved_words[0]);
+  auto lo = 0uz;
+  auto hi = count;
+  while (lo < hi) {
+    auto const mid = lo + (hi - lo) / 2;
+    auto const r = sql_reserved_words[mid];
+    auto j = 0uz;
+    while (j < len && r[j] != '\0' && word[j] == r[j]) {
+      ++j;
+    }
+    auto const cmp = (j < len && r[j] != '\0') ? (static_cast<unsigned char>(word[j]) - static_cast<unsigned char>(r[j])) : (j < len ? 1 : (r[j] != '\0' ? -1 : 0));
+    if (cmp == 0) {
+      return true;
+    } else if (cmp < 0) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return false;
 }
 
 } // namespace detail
@@ -1375,6 +1483,179 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval minify_sql(char const (&str)[N]) noexcept {
   return minify_sql(FrozenString{str});
+}
+
+/**
+ * @brief SQL 予約語を大文字に変換する
+ *
+ * 文字列リテラル・識別子引用の内部は保持し、予約語だけを大文字化します。
+ * 識別子の判定は英数字とアンダースコアのみのトークンとし、
+ * ドット区切りのカラム参照（`t.col`）やキャスト（`INT::text`）にも対応します。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto 変換後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval sql_uppercase_keywords(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto in_single = false;
+  auto in_double = false;
+  auto in_backtick = false;
+  auto in_bracket = false;
+
+  while (i < str.length) {
+    auto const c = str.buffer[i];
+
+    // SQL 文字列・識別子引用の内部はそのまま保持する
+    if (in_single) {
+      res.buffer[offset++] = c;
+      if (c == '\'') {
+        if (i + 1 < str.length && str.buffer[i + 1] == '\'') {
+          res.buffer[offset++] = '\'';
+          i += 2;
+          continue;
+        }
+        in_single = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (in_double) {
+      res.buffer[offset++] = c;
+      if (c == '"') {
+        if (i + 1 < str.length && str.buffer[i + 1] == '"') {
+          res.buffer[offset++] = '"';
+          i += 2;
+          continue;
+        }
+        in_double = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (in_backtick) {
+      res.buffer[offset++] = c;
+      if (c == '`') {
+        in_backtick = false;
+      }
+      ++i;
+      continue;
+    }
+
+    if (in_bracket) {
+      res.buffer[offset++] = c;
+      if (c == ']') {
+        in_bracket = false;
+      }
+      ++i;
+      continue;
+    }
+
+    // ラインコメント/ブロックコメントはそのまま保持する
+    if (c == '-' && i + 1 < str.length && str.buffer[i + 1] == '-') {
+      while (i < str.length && str.buffer[i] != '\n') {
+        res.buffer[offset++] = str.buffer[i++];
+      }
+      continue;
+    }
+
+    if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '*') {
+      while (i < str.length) {
+        res.buffer[offset++] = str.buffer[i];
+        if (str.buffer[i] == '*' && i + 1 < str.length && str.buffer[i + 1] == '/') {
+          res.buffer[offset++] = str.buffer[i + 1];
+          i += 2;
+          break;
+        }
+        ++i;
+      }
+      continue;
+    }
+
+    // 引用符の開始
+    if (c == '\'') {
+      in_single = true;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+    if (c == '"') {
+      in_double = true;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+    if (c == '`') {
+      in_backtick = true;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+    if (c == '[') {
+      in_bracket = true;
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+
+    // 識別子トークンを抽出し、予約語なら大文字化する
+    if (detail::is_sql_id_start(c)) {
+      auto const word_start = i;
+      while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
+        ++i;
+      }
+      auto const word_len = i - word_start;
+
+      // トークンを大文字に変換して予約語照合する
+      auto upper_buf = std::array<char, 256>{};
+      if (word_len <= upper_buf.size()) {
+        for (auto j = 0uz; j < word_len; ++j) {
+          auto const ch = str.buffer[word_start + j];
+          upper_buf[j] = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+        }
+        if (detail::sql_is_reserved(upper_buf.data(), word_len)) {
+          for (auto j = 0uz; j < word_len; ++j) {
+            res.buffer[offset++] = upper_buf[j];
+          }
+        } else {
+          for (auto j = 0uz; j < word_len; ++j) {
+            res.buffer[offset++] = str.buffer[word_start + j];
+          }
+        }
+      } else {
+        // 長すぎる識別子はそのまま保持
+        for (auto j = 0uz; j < word_len; ++j) {
+          res.buffer[offset++] = str.buffer[word_start + j];
+        }
+      }
+      continue;
+    }
+
+    // その他の文字はそのまま出力する
+    res.buffer[offset++] = c;
+    ++i;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief SQL 予約語リテラルを大文字に変換する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto 変換後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval sql_uppercase_keywords(char const (&str)[N]) noexcept {
+  return sql_uppercase_keywords(FrozenString{str});
 }
 
 } // namespace frozenchars
