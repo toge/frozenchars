@@ -80,6 +80,12 @@ assert_frozen_map_compile_fail(
   EXPECTED_TEXT "format"
 )
 
+assert_frozen_map_compile_fail(
+  NAME parse_to_tuple_void_pointer
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/parse_to_tuple_void_pointer.cpp
+  EXPECTED_TEXT "Unknown type name"
+)
+
 # example_split executable
 add_executable(example_split ../example_split.cpp)
 target_compile_features(example_split PRIVATE ${STD_CPP})
@@ -90,3 +96,8 @@ add_executable(example_frozen_map_use_cases ../example_frozen_map_use_cases.cpp)
 target_compile_features(example_frozen_map_use_cases PRIVATE ${STD_CPP})
 target_link_libraries(example_frozen_map_use_cases PRIVATE frozenchars::frozenchars)
 add_test(NAME example_frozen_map_use_cases COMMAND example_frozen_map_use_cases)
+
+add_executable(example_parse_to_tuple_use_cases ../example_parse_to_tuple_use_cases.cpp)
+target_compile_features(example_parse_to_tuple_use_cases PRIVATE ${STD_CPP})
+target_link_libraries(example_parse_to_tuple_use_cases PRIVATE frozenchars::frozenchars)
+add_test(NAME example_parse_to_tuple_use_cases COMMAND example_parse_to_tuple_use_cases)
