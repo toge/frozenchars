@@ -113,6 +113,11 @@ TEST_CASE("frozen_map lookup and miss handling", "[frozen_map]") {
   REQUIRE_FALSE(map.get("missing").has_value());
   REQUIRE_THROWS_AS(map.at("missing"), std::out_of_range);
   REQUIRE_THROWS_AS(map["missing"], std::out_of_range);
+
+  SECTION("at() exception includes the missing key") {
+    REQUIRE_THROWS_WITH(map.at("timeut"),
+      Catch::Matchers::ContainsSubstring("timeut"));
+  }
 }
 
 TEST_CASE("frozen_map supports find and count", "[frozen_map]") {

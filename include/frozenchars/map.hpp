@@ -322,12 +322,14 @@ public:
   [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
     auto const i = find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
-    throw std::out_of_range("frozen_map key not found");
+    throw std::out_of_range(
+      std::string{"frozen_map key not found: "} + std::string{key});
   }
   [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
     auto const i = find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
-    throw std::out_of_range("frozen_map key not found");
+    throw std::out_of_range(
+      std::string{"frozen_map key not found: "} + std::string{key});
   }
   [[nodiscard]] constexpr auto get(std::string_view key) noexcept -> std::optional<std::reference_wrapper<T>> { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; return std::nullopt; }
   [[nodiscard]] constexpr auto get(std::string_view key) const noexcept -> std::optional<std::reference_wrapper<T const>> { if (auto const index = find_index_opt(key); index) [[likely]] return values_[*index]; return std::nullopt; }
