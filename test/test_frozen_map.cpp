@@ -631,3 +631,30 @@ TEST_CASE("frozen_map contains_all checks a set of keys at once", "[frozen_map]"
   static_assert(m.contains_all<>());  // vacuous true
   REQUIRE(m.contains_all<>());
 }
+
+TEST_CASE("frozen_map operator== compares values across all keys", "[frozen_map]") {
+  frozen_map<int, "timeout"_fs, "retry"_fs> a{std::array<int, 2>{30, 5}};
+  frozen_map<int, "timeout"_fs, "retry"_fs> b{std::array<int, 2>{30, 5}};
+  frozen_map<int, "timeout"_fs, "retry"_fs> c{std::array<int, 2>{60, 5}};
+  frozen_map<std::string_view, "host"_fs, "path"_fs> s1{
+    std::array<std::string_view, 2>{"https://example.com", "/api"}
+  };
+  frozen_map<std::string_view, "host"_fs, "path"_fs> s2{
+    std::array<std::string_view, 2>{"https://example.com", "/api"}
+  };
+  frozen_map<std::string_view, "host"_fs, "path"_fs> s3{
+    std::array<std::string_view, 2>{"https://example.com", "/v2"}
+  };
+
+  // 同じ値 → true
+  REQUIRE(a == b);
+  REQUIRE_FALSE(a != b);
+  REQUIRE(s1 == s2);
+  REQUIRE_FALSE(s1 != s2);
+
+  // 値が違う → false
+  REQUIRE_FALSE(a == c);
+  REQUIRE(a != c);
+  REQUIRE_FALSE(s1 == s3);
+  REQUIRE(s1 != s3);
+}

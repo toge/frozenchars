@@ -290,6 +290,19 @@ public:
   static constexpr auto max_size() noexcept -> size_type { return size(); }
   [[nodiscard]] static constexpr auto empty() noexcept -> bool { return false; }
   /**
+   * @brief 同じキー集合を持つ 2 つの frozen_map の全値が等しいかを判定する
+   * @details キー集合（Keys...）が一致する場合にのみ ADL で見つかる hidden friend として定義される。
+   *          値型 T に operator== が定義されている必要がある。
+   */
+  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
+    }(std::make_index_sequence<size()>{});
+  }
+  [[nodiscard]] friend constexpr auto operator!=(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
+    return !(lhs == rhs);
+  }
+  /**
    * @brief 辞書順にソートされたキー配列を取得する
    */
   [[nodiscard]] static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
