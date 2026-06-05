@@ -383,4 +383,48 @@ template <auto Str>
   return parse_to_variant_impl<false, Str>();
 }
 
+/**
+ * @brief parse_to_tuple の型エイリアス版
+ *
+ * @tparam Str 入力文字列（FrozenString）
+ * @details parse_to_tuple<Str>()::type と同じ型を直接返す。
+ *
+ *  使用例:
+ *    @code
+ *    using T = parse_to_tuple_t<"int, string"_fs>;
+ *    // T = std::tuple<int, std::string>
+ *    @endcode
+ */
+template <auto Str>
+using parse_to_tuple_t = typename decltype(parse_to_tuple<Str>())::type;
+
+/**
+ * @brief parse_to_variant の型エイリアス版
+ *
+ * @tparam Str 入力文字列（FrozenString）
+ * @details parse_to_variant<Str>()::type と同じ型を直接返す。
+ *
+ *  使用例:
+ *    @code
+ *    using V = parse_to_variant_t<"int, string"_fs>;
+ *    // V = std::variant<int, std::string>
+ *    @endcode
+ */
+template <auto Str>
+using parse_to_variant_t = typename decltype(parse_to_variant<Str>())::type;
+
+/**
+ * @brief type_mapping の型エイリアス版
+ *
+ * @tparam S 変換対象の FrozenString
+ * @details type_mapping<S>::type を直接返す型エイリアス。
+ *
+ *  使用例:
+ *    @code
+ *    static_assert(std::is_same_v<type_mapping_v<"int"_fs>, int>);
+ *    @endcode
+ */
+template <auto S>
+using type_mapping_v = typename type_mapping<S>::type;
+
 } // namespace frozenchars

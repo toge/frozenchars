@@ -317,6 +317,27 @@ TEST_CASE("parser void holes and whitespace") {
       double>>);
 }
 
+TEST_CASE("parser type aliases") {
+  // parse_to_tuple_t
+  {
+    using T = parse_to_tuple_t<"int, string, bool"_fs>;
+    static_assert(std::is_same_v<T, std::tuple<int, std::string, bool>>);
+  }
+
+  // parse_to_variant_t
+  {
+    using V = parse_to_variant_t<"int, string, bool"_fs>;
+    static_assert(std::is_same_v<V, std::variant<int, std::string, bool>>);
+  }
+
+  // type_mapping_v
+  {
+    static_assert(std::is_same_v<type_mapping_v<"int"_fs>, int>);
+    static_assert(std::is_same_v<type_mapping_v<"string"_fs>, std::string>);
+    static_assert(std::is_same_v<type_mapping_v<"bool"_fs>, bool>);
+  }
+}
+
 TEST_CASE("parser maximum arity mixed cases") {
   static_assert(parse_to_tuple_is_v<
     "bool,[char,int?],,string?,[float,double]?,sv,sz,uint64"_fs,
