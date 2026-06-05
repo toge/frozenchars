@@ -9,6 +9,38 @@ template <auto Src, typename Expected>
 inline constexpr bool parse_to_tuple_is_v =
   std::is_same_v<typename decltype(frozenchars::parse_to_tuple<Src>())::type, Expected>;
 
+TEST_CASE("parser to_variant") {
+  // 基本的な variant
+  {
+    using V = typename decltype(parse_to_variant<"int, string, bool"_fs>())::type;
+    static_assert(std::is_same_v<V, std::variant<int, std::string, bool>>);
+  }
+
+  // optional を含む variant
+  {
+    using V = typename decltype(parse_to_variant<"int?, string"_fs>())::type;
+    static_assert(std::is_same_v<V, std::variant<std::optional<int>, std::string>>);
+  }
+
+  // ネスト tuple を含む variant
+  {
+    using V = typename decltype(parse_to_variant<"int, [double, double]"_fs>())::type;
+    static_assert(std::is_same_v<V, std::variant<int, std::tuple<double, double>>>);
+  }
+
+  // 単一型
+  {
+    using V = typename decltype(parse_to_variant<"int"_fs>())::type;
+    static_assert(std::is_same_v<V, std::variant<int>>);
+  }
+
+  // void 要素は std::monostate にマッピング
+  {
+    using V = typename decltype(parse_to_variant<"int,,bool"_fs>())::type;
+    static_assert(std::is_same_v<V, std::variant<int, std::monostate, bool>>);
+  }
+}
+
 TEST_CASE("parser all") {
   // 1. 単純な型の optional 対応
   {
