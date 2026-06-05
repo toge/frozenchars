@@ -827,6 +827,70 @@ static_assert(map["ddd"] == 0);
 > **依存関係について**:
 > 高速なSIMD/ハードウェア命令を利用するため、内部でネイティブのイントリンシック命令（または SIMDe）を使用しています。非x86/ARM環境や古いCPUでは、自動的に `constexpr` 対応のソフトウェア実装にフォールバックされます。
 
+#### `get_value_or` — デフォルト付き取得
+
+キーが存在する場合はその値を、存在しない場合は指定したデフォルト値を返します。
+
+```cpp
+auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+  std::pair{"timeout", 30},
+  std::pair{"retry", 5}
+);
+
+assert(map.get_value_or("timeout", 0) == 30);
+assert(map.get_value_or("missing", 99) == 99);
+```
+
+`get()` が `std::optional<std::reference_wrapper<...>>` を返すのに対し、`get_value_or` は値をコピーして返すため、デフォルト値との分岐を一行で書けます。
+
+#### `contains_all` — 複数キーの一括存在判定
+
+複数のキーが全てマップ内に存在するかをコンパイル時に判定します。空パックに対しては `true`（vacuous truth）を返します。
+
+```cpp
+static_assert(map.contains_all<"timeout"_fs, "retry"_fs>());
+static_assert(!map.contains_all<"timeout"_fs, "missing"_fs>());
+static_assert(map.contains_all<>()); // 空パック → true
+```
+
+`consteval` で評価されるため、不正なキーをコンパイルエラーにできます。ランタイムで複数の `contains` を呼ぶより意図が明確です。
+
+#### `keys_in_declaration_order` — 宣言順キー配列
+
+キーを宣言順で `std::span` として返します。`keys()` がソート済み配列を返すのに対し、宣言時の順序を保ちます。
+
+```cpp
+auto map = make_frozen_map<int,
+  kv{"aaa", 1}, kv{"bbb", 2}, kv{"ccc", 3}
+>();
+
+for (auto key : map.keys_in_declaration_order()) {
+  // "aaa", "bbb", "ccc" の順で処理
+}
+```
+
+要素の配置順と一致するため、走査時にキャッシュ効率が良いです。
+
+#### `operator==` / `operator!=` — 値ごとの等価比較
+
+同じキー集合を持つ 2 つの `frozen_map` の全値が等しいかを判定します。値型 `T` に `operator==` が定義されている必要があります。
+
+```cpp
+auto a = make_frozen_map<int, "x"_fs, "y"_fs>(
+  std::pair{"x", 1}, std::pair{"y", 2}
+);
+auto b = make_frozen_map<int, "x"_fs, "y"_fs>(
+  std::pair{"x", 1}, std::pair{"y", 2}
+);
+
+assert(a == b);
+assert(a != make_frozen_map<int, "x"_fs, "y"_fs>(
+  std::pair{"x", 1}, std::pair{"y", 99}
+));
+```
+
+キー集合が異なる型同士では比較できません（コンパイルエラー）。
+
 ### `parse_to_tuple`（型列文字列 → `std::tuple<...>`）
 
 `parse_to_tuple<Str>()` は、固定文字列で書いた型リストをパースし、
