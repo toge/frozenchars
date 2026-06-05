@@ -600,3 +600,15 @@ TEST_CASE("frozen_map get_value_or returns value or default", "[frozen_map]") {
   REQUIRE(cfg.get_value_or("timeout", 0) == 30);
   REQUIRE(cfg.get_value_or("unknown", 999) == 999);
 }
+
+TEST_CASE("frozen_map keys_in_declaration_order preserves declaration order", "[frozen_map]") {
+  using Map = frozen_map<int, "timeout"_fs, "retry"_fs, "backoff"_fs>;
+  auto const decl_keys = Map::keys_in_declaration_order();
+  std::array<std::string_view, 3> const expected_decl{"timeout", "retry", "backoff"};
+  REQUIRE(std::ranges::equal(decl_keys, expected_decl));
+
+  // 既存の keys() はソート順を維持 (後方互換)
+  auto const sorted_keys = Map::keys();
+  std::array<std::string_view, 3> const expected_sorted{"backoff", "retry", "timeout"};
+  REQUIRE(std::ranges::equal(sorted_keys, expected_sorted));
+}

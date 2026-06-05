@@ -295,6 +295,13 @@ public:
   [[nodiscard]] static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
     return sorted_key_views_;
   }
+  /**
+   * @brief 宣言順のキー配列を取得する
+   */
+  [[nodiscard]] static constexpr auto keys_in_declaration_order() noexcept
+    -> std::span<std::string_view const, size()> {
+    return key_views_;
+  }
   [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator {
     auto const i = find_index_raw(key);
     return i != size() ? iterator{this, i} : end();
