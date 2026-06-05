@@ -82,6 +82,10 @@ void use_case_3_config_bundle() {
   std::cout << "  retry   = " << kHttp["retry"]   << '\n';
   std::cout << "  backoff = " << kHttp["backoff"] << '\n';
 
+  // one-line get-with-default: replaces optional<reference_wrapper>.value_or()
+  std::cout << "  timeout (get_value_or) = " << kHttp.get_value_or("timeout", -1) << '\n';
+  std::cout << "  missing (get_value_or) = " << kHttp.get_value_or("missing", -1) << '\n';
+
   // 未知キーは実行時例外 (typo を開発中に気づける)
   auto const bad_key = std::string_view{"timeut"};
   if (kHttp.contains(bad_key)) {
@@ -163,6 +167,14 @@ void use_case_6_inja_schema() {
               << (kEmailVars.contains(v) ? "ok" : "MISSING in schema") << '\n';
   }
 
+  // set-membership check: all keys present at once (consteval)
+  static constexpr bool has_core =
+    kEmailVars.contains_all<"user_name"_fs, "verify_url"_fs>();
+  static constexpr bool has_all =
+    kEmailVars.contains_all<"user_name"_fs, "verify_url"_fs, "expires_at"_fs>();
+  std::cout << "  contains_all (user+url): " << has_core << '\n';
+  std::cout << "  contains_all (all 3):    " << has_all << '\n';
+
 #if HAS_INJA
   // 実際の inja レンダリング
   constexpr auto tmpl = frozenchars::FrozenString{
@@ -173,9 +185,9 @@ void use_case_6_inja_schema() {
   // (std::string への変換はランタイムの通常コンストラクタでOK)
   auto ctx = frozenchars::inja::inja_object{};
   ctx.reserve(kEmailVars.size());
-  for (auto it = kEmailVars.begin(); it != kEmailVars.end(); ++it) {
-    auto const& [k, v] = *it;
-    ctx.emplace(std::string{k}, frozenchars::inja::inja_value{std::string{v}});
+  // keys_in_declaration_order() returns the non-sorted key span (declaration order)
+  for (auto const& k : kEmailVars.keys_in_declaration_order()) {
+    ctx.emplace(std::string{k}, frozenchars::inja::inja_value{std::string{kEmailVars[k]}});
   }
   auto const rendered = frozenchars::inja::render<tmpl>(
     frozenchars::inja::inja_value{std::move(ctx)});
@@ -212,6 +224,18 @@ void use_case_7_handler_dispatch() {
   }
 }
 
+// Bonus: operator== / operator!= (value-wise comparison)
+void use_case_bonus_equality() {
+  std::cout << "\n--- Bonus: operator== / operator!= ---" << std::endl;
+
+  using endpoint_map = frozen_map<std::string_view, "protocol"_fs, "host"_fs, "port"_fs>;
+  endpoint_map ep1{std::array<std::string_view, 3>{"https", "example.com", "443"}};
+  endpoint_map ep2{std::array<std::string_view, 3>{"https", "example.com", "443"}};
+  endpoint_map ep3{std::array<std::string_view, 3>{"http", "example.com", "80"}};
+  std::cout << "ep1 == ep2: " << (ep1 == ep2) << '\n';  // 1
+  std::cout << "ep1 != ep3: " << (ep1 != ep3) << '\n';  // 1
+}
+
 } // namespace
 
 int main() {
@@ -222,6 +246,7 @@ int main() {
   use_case_5_glaze_schema();
   use_case_6_inja_schema();
   use_case_7_handler_dispatch();
+  use_case_bonus_equality();
 
   std::cout << "\nAll 7 frozen_map use cases demonstrated.\n";
   return 0;
