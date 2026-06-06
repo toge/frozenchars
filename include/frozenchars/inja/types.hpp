@@ -184,6 +184,20 @@ struct node {
   bool for_iter_is_simple_path{};
   bool include_expr_is_simple_path{};
   bool is_plain_else{};
+
+  // コンパイル時にトークン化されたパスセグメント（最大 4 段）。
+  // expr_kind == simple_path のときだけ有効。
+  fixed_string path_seg_0{};
+  fixed_string path_seg_1{};
+  fixed_string path_seg_2{};
+  fixed_string path_seg_3{};
+  std::uint8_t path_depth{};
+
+  // 式の分類
+  expr_kind expr_e_kind{expr_kind::complex};
+  expr_kind if_cond_e_kind{expr_kind::complex};
+  expr_kind for_iter_e_kind{expr_kind::complex};
+  expr_kind include_expr_e_kind{expr_kind::complex};
 };
 
 /**
