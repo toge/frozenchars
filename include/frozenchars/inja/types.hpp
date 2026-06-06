@@ -202,6 +202,25 @@ struct loop_state {
   bool is_last{};
 };
 
+/**
+ * @brief 式のノードの種類。
+ */
+enum class expr_kind : std::uint8_t {
+  simple_path,  ///< 単一または複数セグメントの変数パス
+  complex,      ///< 関数呼び出し・演算子を含む式
+};
+
+/**
+ * @brief コンパイル時にトークン化された変数パス。
+ *
+ * セグメント列を NTTP として保持し、accessor に直接渡せる形にする。
+ * 実行時にパスを分割する split_variable_path を排除するのが目的。
+ */
+template <fixed_string... Segments>
+struct precomputed_path {
+  static constexpr std::size_t depth = sizeof...(Segments);
+};
+
 struct local_binding {
   std::string name;
   inja_value value;
