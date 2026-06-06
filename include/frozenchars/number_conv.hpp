@@ -110,7 +110,7 @@ template <typename T, size_t N>
         if (res < 0 || static_cast<unsigned long long>(res) > static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL) {
           throw std::out_of_range("underflow");
         }
-        return -static_cast<T>(res);
+        return static_cast<T>(-res);
       } else {
         if (res < 0 || res > std::numeric_limits<T>::max()) {
           throw std::out_of_range("overflow");

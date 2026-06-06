@@ -22,13 +22,6 @@
 #include <unordered_map>
 #include <vector>
 
-#if defined(__has_include) && __has_include(<glaze/glaze.hpp>)
-#include <glaze/glaze.hpp>
-#define FROZENCHARS_HAS_GLAZE 1
-#else
-#define FROZENCHARS_HAS_GLAZE 0
-#endif
-
 #include "../inja_access.hpp"
 #include "../inja_function.hpp"
 #include "../inja_value.hpp"
@@ -2136,10 +2129,13 @@ private:
         case node_kind::expr: {
           // ファストパス: コンパイル時にバインドされた appender があれば直接呼び出す。
           // split_variable_path も lookup_in_reflectable の線形探索も経由しない。
-          if (node.simple_appender != nullptr) {
-            node.simple_appender(root_ptr, out);
-            ++i;
-            break;
+          // simple_appender は std::string& にバインドされているため、OutputBuffer が std::string の場合のみ利用可能。
+          if constexpr (std::is_same_v<OutputBuffer, std::string>) {
+            if (node.simple_appender != nullptr) {
+              node.simple_appender(root_ptr, out);
+              ++i;
+              break;
+            }
           }
           auto const expr  = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
           auto const value = eval_expr_with_simple_path(expr, node.expr_is_simple_path);

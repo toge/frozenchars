@@ -3,11 +3,19 @@
 #include "inja_types.hpp"
 #include <array>
 #include <cstddef>
-#include <glaze/glaze.hpp>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+
+#if __has_include(<glaze/glaze.hpp>)
+#include <glaze/glaze.hpp>
+#define FROZENCHARS_HAS_GLAZE 1
+#else
+#define FROZENCHARS_HAS_GLAZE 0
+#endif
+
+#if FROZENCHARS_HAS_GLAZE
 
 namespace frozenchars::inja {
 
@@ -81,3 +89,5 @@ struct accessor<T, Head, Rest...> {
 };
 
 }  // namespace frozenchars::inja
+
+#endif  // FROZENCHARS_HAS_GLAZE

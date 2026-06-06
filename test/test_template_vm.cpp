@@ -97,11 +97,11 @@ TEST_CASE("template parser marks simple-path metadata for if/for/include", "[tem
   auto has_include_simple = false;
   for (auto i = std::size_t{0}; i < program.count; ++i) {
     auto const& n = program.nodes[i];
-    if (n.kind == frozenchars::inja::detail::node_kind::if_stmt) {
+    if (n.kind == node_kind::if_stmt) {
       has_if_simple = n.if_cond_is_simple_path;
-    } else if (n.kind == frozenchars::inja::detail::node_kind::for_stmt) {
+    } else if (n.kind == node_kind::for_stmt) {
       has_for_simple = n.for_iter_is_simple_path;
-    } else if (n.kind == frozenchars::inja::detail::node_kind::include_stmt) {
+    } else if (n.kind == node_kind::include_stmt) {
       has_include_simple = n.include_expr_is_simple_path;
     }
   }
