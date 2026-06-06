@@ -1,6 +1,6 @@
 #pragma once
 
-#include "inja_function.hpp"
+#include "inja_types.hpp"
 #include <glaze/glaze.hpp>
 #include <string_view>
 #include <type_traits>

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -82,5 +83,45 @@ class render_error : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
 };
+
+// ============================================================
+// fixed_string - NTTP 対応固定長文字列型
+// ============================================================
+
+/**
+ * @brief テンプレート引数として文字列リテラルを渡すための NTTP 対応固定長文字列型。
+ *
+ * structured type の要件（全メンバ public、参照なし）を満たす。
+ * コンパイラが `std::string_view` を構造的型として扱わない環境（libstdc++ 16 など）でも
+ * 使用可能な代替。
+ */
+template <std::size_t N>
+struct fixed_string {
+  char data[N]{};
+
+  constexpr fixed_string(char const (&s)[N]) noexcept {
+    for (auto i = 0uz; i < N; ++i) {
+      data[i] = s[i];
+    }
+  }
+
+  [[nodiscard]] constexpr auto sv() const noexcept -> std::string_view {
+    return {data, N - 1};
+  }
+
+  [[nodiscard]] constexpr auto operator==(std::string_view s) const noexcept -> bool {
+    return sv() == s;
+  }
+
+  template <std::size_t M>
+  [[nodiscard]] constexpr auto operator==(fixed_string<M> const& other) const noexcept -> bool {
+    return sv() == other.sv();
+  }
+
+  auto operator<=>(fixed_string const&) const = default;
+};
+
+template <std::size_t N>
+fixed_string(char const (&)[N]) -> fixed_string<N>;
 
 }  // namespace frozenchars::inja

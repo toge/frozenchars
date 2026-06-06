@@ -9,48 +9,10 @@
 #include <type_traits>
 #include <vector>
 
+#include "inja_types.hpp"
 #include "inja_value.hpp"
 
 namespace frozenchars::inja {
-
-// ============================================================
-// fixed_string - NTTP 対応固定長文字列型
-// ============================================================
-
-/**
- * @brief テンプレート引数として関数名を渡すための NTTP 対応固定長文字列型。
- *
- * structured type の要件（全メンバ public、参照なし）を満たす。
- * `fn<"upper", impl>` のように文字列リテラルを NTTP として利用するために使用する。
- */
-template <std::size_t N>
-struct fixed_string {
-  char data[N]{};
-
-  constexpr fixed_string(char const (&s)[N]) noexcept {
-    for (auto i = 0uz; i < N; ++i) {
-      data[i] = s[i];
-    }
-  }
-
-  [[nodiscard]] constexpr auto sv() const noexcept -> std::string_view {
-    return {data, N - 1};
-  }
-
-  [[nodiscard]] constexpr auto operator==(std::string_view s) const noexcept -> bool {
-    return sv() == s;
-  }
-
-  template <std::size_t M>
-  [[nodiscard]] constexpr auto operator==(fixed_string<M> const& other) const noexcept -> bool {
-    return sv() == other.sv();
-  }
-
-  auto operator<=>(fixed_string const&) const = default;
-};
-
-template <std::size_t N>
-fixed_string(char const (&)[N]) -> fixed_string<N>;
 
 // ============================================================
 // fn - function_list エントリ型

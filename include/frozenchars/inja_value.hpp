@@ -13,6 +13,8 @@
 #include <variant>
 #include <vector>
 
+#include "inja_types.hpp"
+
 #ifndef FROZENCHARS_OBJECT_MAP_HEADER
 #include <unordered_map>
 #define FROZENCHARS_OBJECT_MAP_HEADER
@@ -153,14 +155,6 @@ struct inja_value {
   bool operator==(inja_value const& rhs) const {
     return storage == rhs.storage;
   }
-};
-
-/**
- * @brief テンプレート評価時の実行時エラー。
- */
-class render_error : public std::runtime_error {
-public:
-  using std::runtime_error::runtime_error;
 };
 
 /**
