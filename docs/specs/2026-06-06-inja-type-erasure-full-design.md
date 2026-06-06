@@ -366,3 +366,110 @@ struct local_frame {
 - 各実装ステップでビルド確認（`bash build.sh`）
 - ベンチで段階的に性能向上を確認
 - 全テスト緑で完了
+
+---
+
+## 実装メモ: function pointer dispatch 設計
+
+Task 7-9 の実装で判明した課題と解決策。
+
+### 課題
+`accessor<Ctx, "name">::resolve(ctx)` は NTTP として `"name"` を必要とする。
+しかし `node.path_seg_0` は `bytecode` 内のランタイム値（consteval 解析結果）で、
+テンプレート引数としては渡せない。
+
+ベンチマーク (`lookup-heavy`, `numeric-literal`) は glaze 反射型コンテキスト
+(`lookup_context`, `numeric_context`) を使うため、`inja_object` 専用 fast path
+(Task 8 の素朴な実装) では効果がない。
+
+### 解決策: per-node function pointer table
+
+`render_program<Src, Context, ...>` 内で、`Context` を知った状態で各 simple-path
+ノードに対して function pointer を構築し、bytecode に追加する。
+
+```cpp
+template <auto Src, typename Context, ...>
+auto render_program(Context const& root) -> std::string {
+  constexpr auto program = parse_program<Src>();  // consteval
+
+  // node に追加する field: セグメントを直接 string_view で参照する関数ポインタ
+  // void(*)(Context const& root, std::string& out)
+  // 構築は初回のみ。static キャッシュで使い回す。
+
+  for (std::size_t i = 0; i < program.count; ++i) {
+    auto& n = program.nodes[i];
+    if (n.expr_e_kind == expr_kind::simple_path && n.path_depth == 1) {
+      n.simple_appender = build_simple_appender<Context>(n.path_seg_0);
+    }
+  }
+
+  // render loop:
+  //   if (n.simple_appender) {
+  //     n.simple_appender(root, out);
+  //   } else {
+  //     // 旧 path
+  //   }
+}
+```
+
+`build_simple_appender<Context>` は Context の `glz::reflect<Context>::keys` を
+イテレートして、各フィールド名に対応する `accessor<Context, "name">::resolve`
+の関数ポインタを返す。`if constexpr` または fold expression でコンパイル時に
+すべての accessor インスタンスを生成する。
+
+```cpp
+template <typename Context>
+auto build_simple_appender(std::array<char, 16> const& seg_buf) ->
+    void(*)(Context const&, std::string&) {
+  auto const seg = seg_to_sv(seg_buf);
+
+  // glz::reflect<Context>::keys を走査
+  constexpr auto keys = glz::reflect<Context>::keys;
+  void* result = nullptr;
+
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    auto try_match = [&]<std::size_t I>() {
+      if (result) return;
+      if (seg == std::string_view{keys[I]}) {
+        // コンパイル時 accessor インスタンス化
+        constexpr auto fixed = fixed_string_for(keys[I]);  // N=16 固定
+        result = reinterpret_cast<void*>(&appender_impl<
+            typename Context::field_types[I>,  // ← ここが難しい
+            accessor<Context, fixed>>);
+      }
+    };
+    (try_match.template operator()<Is>(), ...);
+  }(std::make_index_sequence<keys.size()>{});
+
+  return reinterpret_cast<void(*)(Context const&, std::string&)>(result);
+}
+```
+
+課題: 関数ポインタのシグネチャは `void(Context const&, std::string&)` だが、
+accessor の `resolve` の戻り型は field の型に依存する (string / int / double /
+array / object)。統一シグネチャにするには、戻り値を `std::string` または
+`std::variant` で再 boxing する必要がある（inja_value 削除の主旨に反する）。
+
+### 代替案: タグ付け union
+
+```cpp
+using simple_appender_fn = std::variant<
+    void(*)(std::string const&, std::string&),       // string field
+    void(*)(std::int64_t, std::string&),             // int field
+    void(*)(double, std::string&),                   // double field
+    void(*)(bool, std::string&),                     // bool field
+    void(*)(/* complex type */, std::string&)         // nested
+>;
+```
+
+`std::variant` のサイズは増えるが、`std::visit` で dispatch できる。
+
+### 推奨アプローチ
+
+1. 初回は `std::string(*)(Context const&)` シグネチャに統一し、関数内で
+   field の型に応じて `std::to_chars` などで変換
+2. `inja_value` への boxing は廃止しつつ、string への変換は維持
+3. function pointer テーブルは `static thread_local` でキャッシュ
+
+実装は Task 8.5/8 のスコープ。Tasks 0-6 で型基盤が完成しているため、
+このアプローチは Tasks 7-9 を独立したサブエージェントで安全に実装可能。
