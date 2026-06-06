@@ -159,9 +159,23 @@ concept range_like =
 constexpr auto MAX_NODES = std::size_t{1024 * 4};
 
 /**
+ * @brief 式のノードの種類。
+ *
+ * ノード定義から前置するため、ここで先に宣言する。
+ */
+enum class expr_kind : std::uint8_t {
+  simple_path,  ///< 単一または複数セグメントの変数パス
+  complex,      ///< 関数呼び出し・演算子を含む式
+};
+
+/**
  * @brief テンプレート構文ノードの種類。
  */
 enum class node_kind : std::uint8_t { text, expr, if_stmt, else_stmt, endif_stmt, for_stmt, endfor_stmt, set_stmt, include_stmt };
+
+/// パスセグメントの最大文字数（null 終端を除く）。
+/// ノードごとに 4 セグメント保持するため、バイトコードサイズを抑える目的で 16 に制限。
+constexpr auto MAX_SEG_LEN = std::size_t{15};
 
 /**
  * @brief パース済みテンプレートの単一ノード。
@@ -185,12 +199,12 @@ struct node {
   bool include_expr_is_simple_path{};
   bool is_plain_else{};
 
-  // コンパイル時にトークン化されたパスセグメント（最大 4 段）。
-  // expr_kind == simple_path のときだけ有効。
-  fixed_string path_seg_0{};
-  fixed_string path_seg_1{};
-  fixed_string path_seg_2{};
-  fixed_string path_seg_3{};
+  // コンパイル時にトークン化されたパスセグメント（最大 4 段、各 15 文字 + null）。
+  // expr_e_kind == simple_path のときだけ有効。char 配列で 64 バイトに抑える。
+  std::array<char, MAX_SEG_LEN + 1> path_seg_0{};
+  std::array<char, MAX_SEG_LEN + 1> path_seg_1{};
+  std::array<char, MAX_SEG_LEN + 1> path_seg_2{};
+  std::array<char, MAX_SEG_LEN + 1> path_seg_3{};
   std::uint8_t path_depth{};
 
   // 式の分類
@@ -217,12 +231,15 @@ struct loop_state {
 };
 
 /**
- * @brief 式のノードの種類。
+ * @brief char 配列のセグメントを string_view に変換する（null 終端対応）。
  */
-enum class expr_kind : std::uint8_t {
-  simple_path,  ///< 単一または複数セグメントの変数パス
-  complex,      ///< 関数呼び出し・演算子を含む式
-};
+[[nodiscard]] constexpr auto seg_to_sv(std::array<char, MAX_SEG_LEN + 1> const& buf) -> std::string_view {
+  auto len = std::size_t{0};
+  while (len < buf.size() && buf[len] != '\0') {
+    ++len;
+  }
+  return {buf.data(), len};
+}
 
 /**
  * @brief コンパイル時にトークン化された変数パス。
