@@ -212,6 +212,11 @@ struct node {
   expr_kind if_cond_e_kind{expr_kind::complex};
   expr_kind for_iter_e_kind{expr_kind::complex};
   expr_kind include_expr_e_kind{expr_kind::complex};
+
+  // 実行時に解決される function pointer。RootContext 型に依存するため consteval
+  // では埋め込めず、render 時に fill する。nullptr なら旧経路にフォールバック。
+  // シグネチャ: void(void const* /*ctx*/, std::string& /*out*/)
+  void (*simple_appender)(void const*, std::string&){};
 };
 
 /**

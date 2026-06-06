@@ -30,6 +30,7 @@
 #endif
 
 #include "../string.hpp"
+#include "../inja_access.hpp"
 #include "../inja_function.hpp"
 #include "../inja_value.hpp"
 #include "types.hpp"
@@ -151,57 +152,6 @@ template <typename T>
 
 /**
  * @brief テンプレートで保持する最大ノード数。
- */
-constexpr auto MAX_NODES = std::size_t{1024 * 4};
-
-/**
- * @brief テンプレート構文ノードの種類。
- */
-enum class node_kind : std::uint8_t { text, expr, if_stmt, else_stmt, endif_stmt, for_stmt, endfor_stmt, set_stmt, include_stmt };
-
-/**
- * @brief パース済みテンプレートの単一ノード。
- */
-struct node {
-  /// ノード種別
-  node_kind kind{};
-  /// 元テンプレート中の開始位置（半開区間）
-  std::size_t begin{};
-  /// 元テンプレート中の終了位置（半開区間）
-  std::size_t end{};
-  /// if ノードに紐づく else ノード位置
-  std::size_t else_index{std::numeric_limits<std::size_t>::max()};
-  /// if / for ノードに紐づく閉じノード位置
-  std::size_t end_index{std::numeric_limits<std::size_t>::max()};
-
-  /// 解析済みオフセット（consteval 段階で確定）
-  std::size_t aux_begin{std::numeric_limits<std::size_t>::max()};
-  std::size_t aux_end{std::numeric_limits<std::size_t>::max()};
-  std::size_t aux2_begin{std::numeric_limits<std::size_t>::max()};
-  std::size_t aux2_end{std::numeric_limits<std::size_t>::max()};
-  std::size_t aux3_begin{std::numeric_limits<std::size_t>::max()};
-  std::size_t aux3_end{std::numeric_limits<std::size_t>::max()};
-  bool expr_is_simple_path{};
-  bool if_cond_is_simple_path{};
-  bool for_has_key{};
-  bool for_iter_is_simple_path{};
-  bool include_expr_is_simple_path{};
-  bool is_plain_else{};
-};
-
-/**
- * @brief consteval パースで生成されるバイトコード相当データ。
- *
- * 現状は命令配列ではなく、実行に必要なノード列を保持する。
- */
-struct bytecode {
-  /// ノード列
-  std::array<node, MAX_NODES> nodes{};
-  /// 使用ノード数
-  std::size_t count{};
-  /// for の最大ネスト深さ
-  std::size_t max_for_depth{};
-};
 
 /**
  * @brief 空白文字判定（テンプレート用）。
@@ -735,6 +685,96 @@ inline auto append_value(OutputBuffer& out, inja_value const& v) -> void {
     return;
   }
   throw render_error{"cannot convert value to string"};
+}
+
+// ============================================================
+// field_appender / make_appender_for / fill_appender_table
+// ============================================================
+
+/**
+ * @brief フィールド参照→文字列化のコンパイル時特殊化。
+ *
+ * `accessor<C, "name">::resolve(ctx)` の戻り型に応じて out へ直接 append する。
+ * inja_value を経由しないので、boxing コストがゼロ。
+ */
+template <typename Ctx, fixed_string Field>
+struct field_appender {
+  using accessor_t = accessor<Ctx, Field>;
+  using field_type = typename accessor_t::field_type;
+
+  static auto append(void const* ctx, std::string& out) -> void {
+    auto const& c = *static_cast<Ctx const*>(ctx);
+    auto const& v = accessor_t::resolve(c);
+    using V = std::remove_cvref_t<decltype(v)>;
+    if constexpr (std::is_same_v<V, std::string>) {
+      out.append(v);
+    } else if constexpr (std::is_same_v<V, std::string_view>) {
+      out.append(v);
+    } else if constexpr (std::same_as<V, bool>) {
+      out.append(v ? std::string_view{"true"} : std::string_view{"false"});
+    } else if constexpr (std::integral<V> && !std::same_as<V, bool>) {
+      auto buf = std::array<char, 24>{};
+      auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), static_cast<std::int64_t>(v));
+      if (ec != std::errc{}) {
+        throw render_error{"integer to string conversion failed"};
+      }
+      out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
+    } else if constexpr (std::floating_point<V>) {
+      auto buf = std::array<char, 32>{};
+      if (!std::isfinite(v)) {
+        throw render_error{"double to string conversion failed"};
+      }
+      auto const [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), static_cast<double>(v));
+      if (ec != std::errc{}) {
+        throw render_error{"double to string conversion failed"};
+      }
+      out.append(std::string_view{buf.data(), static_cast<std::size_t>(end - buf.data())});
+    } else {
+      auto converted = try_to_inja_value(v);
+      if (converted.has_value()) {
+        append_value(out, *converted);
+      }
+    }
+  }
+};
+
+/**
+ * @brief glaze 反射型コンテキスト用の appender をセグメント名から検索する。
+ */
+template <typename Ctx>
+auto make_appender_for(std::string_view seg) -> void (*)(void const*, std::string&) {
+  if constexpr (glaze_reflectable<Ctx>) {
+    constexpr auto keys = glz::reflect<Ctx>::keys;
+    void (*result)(void const*, std::string&) = nullptr;
+    auto matched = false;
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+      auto try_match = [&]<std::size_t I>() {
+        if (matched) return;
+        if (seg != std::string_view{keys[I]}) return;
+        constexpr auto field_name = make_key_fixed_string<I, Ctx>();
+        result = &field_appender<Ctx, field_name>::append;
+        matched = true;
+      };
+      (try_match.template operator()<Is>(), ...);
+    }(std::make_index_sequence<keys.size()>{});
+    return result;
+  } else {
+    return nullptr;
+  }
+}
+
+/**
+ * @brief bytecode の simple_path ノード全てに appender を埋める。
+ */
+template <typename RootContext>
+auto fill_appender_table(bytecode& program) -> void {
+  for (std::size_t i = 0; i < program.count; ++i) {
+    auto& n = program.nodes[i];
+    if (n.expr_e_kind != expr_kind::simple_path) continue;
+    if (n.path_depth == 0 || n.path_depth > 4) continue;
+    auto const seg0 = seg_to_sv(n.path_seg_0);
+    n.simple_appender = make_appender_for<RootContext>(seg0);
+  }
 }
 
 /// @brief Forward declaration は不要（builtin_function_list + evaluate_function<FunctionList> が担う）
@@ -2119,11 +2159,12 @@ template <auto Src,
           typename RootObjectLookup,
           is_environment_binding EnvironmentBinding = default_environment,
           typename Delims = frozenchars::inja::default_delimiters>
-auto render_program_with_lookup(RootLookup root_lookup,
+auto render_program_with_lookup(bytecode const& program,
+                                void const* root_ptr,
+                                RootLookup root_lookup,
                                 RootObjectLookup root_object_lookup,
                                 OutputBuffer& out,
                                 runtime_options_ref runtime_options = std::nullopt) -> void {
-  auto constexpr program = detail::parse_program<Src, Delims>();
   auto constexpr src = Src.sv();
   auto frames = std::vector<local_frame>{};
   frames.reserve(1 + program.max_for_depth);
@@ -2161,6 +2202,13 @@ auto render_program_with_lookup(RootLookup root_lookup,
         break;
       }
       case node_kind::expr: {
+        // ファストパス: コンパイル時にバインドされた appender があれば直接呼び出す。
+        // split_variable_path も lookup_in_reflectable の線形探索も経由しない。
+        if (node.simple_appender != nullptr) {
+          node.simple_appender(root_ptr, out);
+          ++i;
+          break;
+        }
         auto const expr = src.substr(node.aux_begin, node.aux_end - node.aux_begin);
         auto const value = eval_expr_with_simple_path(expr, node.expr_is_simple_path);
         append_value(out, value);
@@ -2370,8 +2418,10 @@ auto render_program(inja_object const& root, OutputBuffer& out, runtime_options_
   auto object_lookup = [&](std::string_view) -> std::optional<typed_object_view> {
     return std::nullopt;
   };
+  auto constexpr program_const = parse_program<Src, Delims>();
+  auto program = program_const;
   render_program_with_lookup<Src, OutputBuffer, decltype(lookup), decltype(object_lookup), EnvironmentBinding, Delims>(
-    lookup, object_lookup, out, runtime_options
+    program, &root, lookup, object_lookup, out, runtime_options
   );
 }
 
@@ -2385,8 +2435,14 @@ auto render_program(Context const& root, OutputBuffer& out, runtime_options_ref 
   auto object_lookup = [&](std::string_view name) -> std::optional<typed_object_view> {
     return lookup_typed_object_view_root(root, name);
   };
+  // bytecode は consteval で構築し、appender table は初回呼び出し時にキャッシュする。
+  static auto program = []() {
+    auto p = parse_program<Src, Delims>();
+    fill_appender_table<Context>(p);
+    return p;
+  }();
   render_program_with_lookup<Src, OutputBuffer, decltype(lookup), decltype(object_lookup), EnvironmentBinding, Delims>(
-    lookup, object_lookup, out, runtime_options
+    program, &root, lookup, object_lookup, out, runtime_options
   );
 }
 #endif

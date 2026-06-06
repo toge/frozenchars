@@ -100,7 +100,7 @@ template <auto Src, typename Delims = frozenchars::inja::default_delimiters>
  */
 template <auto Src, detail::is_environment_binding EnvironmentBinding = detail::default_environment,
           typename Delims = frozenchars::inja::default_delimiters>
-[[nodiscard]] consteval auto compile_template() -> detail::bytecode {
+[[nodiscard]] consteval auto compile_template() -> bytecode {
   using function_list_t = typename detail::environment_traits<EnvironmentBinding>::function_list_type;
   auto constexpr calls = extract_template_function_calls<Src, Delims>();
   for (auto i = 0uz; i < calls.count; ++i) {

@@ -99,6 +99,8 @@ template <std::size_t N>
 struct fixed_string {
   char data[N]{};
 
+  constexpr fixed_string() noexcept = default;
+
   constexpr fixed_string(char const (&s)[N]) noexcept {
     for (auto i = 0uz; i < N; ++i) {
       data[i] = s[i];
@@ -106,7 +108,11 @@ struct fixed_string {
   }
 
   [[nodiscard]] constexpr auto sv() const noexcept -> std::string_view {
-    return {data, N - 1};
+    auto len = std::size_t{0};
+    while (len < N && data[len] != '\0') {
+      ++len;
+    }
+    return {data, len};
   }
 
   [[nodiscard]] constexpr auto operator==(std::string_view s) const noexcept -> bool {

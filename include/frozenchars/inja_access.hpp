@@ -2,6 +2,9 @@
 
 #include "inja_types.hpp"
 #include <glaze/glaze.hpp>
+#include <array>
+#include <cstddef>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -22,6 +25,24 @@ consteval auto find_key_index() -> std::size_t {
     }
     return find_key_index<T, Segment, I + 1>();
   }
+}
+
+/**
+ * @brief glaze のキー名（コンパイル時 sv）から fixed_string を作る。
+ *
+ * キー名の長さ + 1 (null 終端) を N とする fixed_string を consteval で構築する。
+ * `glz::reflect<T>::keys[I]` の値を NTTP に変換する唯一の方法。
+ */
+template <std::size_t I, typename T>
+consteval auto make_key_fixed_string() {
+  using U = std::remove_cvref_t<T>;
+  constexpr auto key = glz::reflect<U>::keys[I];
+  constexpr std::size_t N = key.size() + 1;
+  fixed_string<N> out{};
+  for (std::size_t i = 0; i < key.size(); ++i) {
+    out.data[i] = key[i];
+  }
+  return out;
 }
 
 }  // namespace detail
