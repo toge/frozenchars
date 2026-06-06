@@ -27,15 +27,7 @@ struct object_view;
  * 配列・オブジェクトは再帰構造のため std::unique_ptr 経由で保持する。
  */
 struct value_view {
-  std::variant<
-    std::monostate,
-    bool,
-    std::int64_t,
-    double,
-    std::string_view,
-    std::unique_ptr<array_view const>,
-    std::unique_ptr<object_view const>
-  > storage{std::monostate{}};
+  std::variant<std::monostate, bool, std::int64_t, double, std::string_view, std::unique_ptr<array_view const>, std::unique_ptr<object_view const>> storage{std::monostate{}};
 };
 
 /**
@@ -59,20 +51,12 @@ struct object_view {
  * inja_value よりは小さい（inja_array の variant 4 種が 1 種に統合）。
  */
 struct temp_value {
-  std::variant<
-    std::monostate,
-    bool,
-    std::int64_t,
-    double,
-    std::string,
-    std::vector<temp_value>,
-    std::map<std::string, temp_value>
-  > storage{std::monostate{}};
+  std::variant<std::monostate, bool, std::int64_t, double, std::string, std::vector<temp_value>, std::map<std::string, temp_value>> storage{std::monostate{}};
 
   temp_value() = default;
 
   template <typename T>
-  requires(!std::same_as<std::remove_cvref_t<T>, temp_value>)
+    requires(!std::same_as<std::remove_cvref_t<T>, temp_value>)
   temp_value(T&& v) : storage(std::forward<T>(v)) {}
 };
 
@@ -80,7 +64,7 @@ struct temp_value {
  * @brief テンプレート評価時の実行時エラー
  */
 class render_error : public std::runtime_error {
-public:
+  public:
   using std::runtime_error::runtime_error;
 };
 
@@ -115,9 +99,7 @@ struct fixed_string {
     return {data, len};
   }
 
-  [[nodiscard]] constexpr auto operator==(std::string_view s) const noexcept -> bool {
-    return sv() == s;
-  }
+  [[nodiscard]] constexpr auto operator==(std::string_view s) const noexcept -> bool { return sv() == s; }
 
   template <std::size_t M>
   [[nodiscard]] constexpr auto operator==(fixed_string<M> const& other) const noexcept -> bool {
