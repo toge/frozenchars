@@ -32,6 +32,8 @@
 - `include/frozenchars.hpp` … アンブレラヘッダ。個別ヘッダを使わずこれを 1 行インクルードするのが慣習。
 - `include/frozenchars/` … 機能別ヘッダ（`string.hpp`, `freeze.hpp`, `string_ops.hpp`, `map.hpp`, `inja_engine.hpp`, `inja_value.hpp`, `inja_function.hpp` など）。
 - `include/frozenchars/inja/` … inja テンプレ VM の内部実装（`types.hpp`, `engine_impl.hpp`, `api.hpp`, `detail/`）。`inja_engine.hpp` 経由でのみ公開。
+- `include/frozenchars/inja_types.hpp` … inja の新型定義（`value_view`, `temp_value`, `render_error`, `fixed_string`, `expr_kind`, `precomputed_path`）。`inja_value.hpp` を置き換える予定。
+- `include/frozenchars/inja_access.hpp` … コンパイル時フィールドアクセサ（`accessor<T, "name">::resolve(obj)`）。glaze 反射型に対して NTTP ベースの O(1) フィールドアクセスを提供。
 - `include/frozenchars/detail/` … `pipe.hpp`, `freeze_impl.hpp`, `number_conv.hpp`, `char_utils.hpp` などの実装詳細。外部公開は非想定。
 - `test/` … Catch2 ベースの単体テスト。`test/CMakeLists.txt` は `file(GLOB test_src test_*.cpp)` で自動収集。
 - `test/compile_fail/` … **失敗すべき**コンパイルのスナップショット。`assert_frozen_map_compile_fail(NAME SOURCE EXPECTED_TEXT)` が `try_compile` でビルド失敗とエラーメッセージの含有を検証する。新種の `static_assert` を追加したら、ここにもケースを追加する。
