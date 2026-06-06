@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -72,6 +73,14 @@ struct temp_value {
   template <typename T>
   requires(!std::same_as<std::remove_cvref_t<T>, temp_value>)
   temp_value(T&& v) : storage(std::forward<T>(v)) {}
+};
+
+/**
+ * @brief テンプレート評価時の実行時エラー
+ */
+class render_error : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
 };
 
 }  // namespace frozenchars::inja

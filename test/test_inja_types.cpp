@@ -1,5 +1,6 @@
 #include "frozenchars/inja_types.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -24,4 +25,10 @@ TEST_CASE("temp_value: variant types", "[inja_types]") {
   REQUIRE(std::get<std::int64_t>(a.storage) == 42);
   REQUIRE(std::get<double>(b.storage) == 3.14);
   REQUIRE(std::get<bool>(c.storage) == true);
+}
+
+TEST_CASE("render_error: derives from std::runtime_error", "[inja_types]") {
+  frozenchars::inja::render_error err{"test message"};
+  REQUIRE(std::string{err.what()} == "test message");
+  REQUIRE(dynamic_cast<std::runtime_error*>(&err) != nullptr);
 }
