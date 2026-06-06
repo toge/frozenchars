@@ -4,6 +4,7 @@
 #include <glaze/glaze.hpp>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 namespace frozenchars::inja {
 
@@ -26,11 +27,12 @@ consteval auto find_key_index() -> std::size_t {
 }  // namespace detail
 
 /**
- * @brief 単一セグメントのアクセサ
+ * @brief パスのコンパイル時アクセサ
  *
- * `accessor<T, "field">::resolve(obj)` で `obj.field` への const 参照を返す。
+ * `accessor<T, "a", "b", "c">::resolve(obj)` で `obj.a.b.c` への const 参照を返す。
+ * 末端 1 セグメント版を partial specialisation し、多段版は再帰的に組み合わせる。
  */
-template <typename T, fixed_string Segment>
+template <typename T, fixed_string... Segments>
 struct accessor;
 
 template <typename T, fixed_string Segment>
@@ -42,6 +44,22 @@ struct accessor<T, Segment> {
 
   [[nodiscard]] static auto resolve(U const& obj) -> field_type const& {
     return glz::get<index>(glz::to_tie(obj));
+  }
+};
+
+/**
+ * @brief 多段パスのアクセサ（再帰）
+ *
+ * 先頭セグメントでフィールドを取得し、残りのセグメントで再帰的に accessor を適用する。
+ */
+template <typename T, fixed_string Head, fixed_string... Rest>
+  requires(sizeof...(Rest) > 0) && requires { glz::reflect<std::remove_cvref_t<T>>::keys; }
+struct accessor<T, Head, Rest...> {
+  using head = accessor<T, Head>;
+  using tail = accessor<typename head::field_type, Rest...>;
+
+  [[nodiscard]] static auto resolve(std::remove_cvref_t<T> const& obj) -> typename tail::field_type const& {
+    return tail::resolve(head::resolve(obj));
   }
 };
 
