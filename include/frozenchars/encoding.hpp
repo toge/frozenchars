@@ -10,6 +10,122 @@
 namespace frozenchars {
 
 /**
+ * @brief 文字列を16進エンコードする
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列 (バッファサイズは 2 * length + 1)
+ */
+template <size_t N>
+[[nodiscard]] auto consteval hex_encode(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 2 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto const s = str.sv();
+  auto offset = 0uz;
+
+  for (auto const c : s) {
+    auto const byte = static_cast<std::uint8_t>(c);
+    res.buffer[offset++] = detail::value_to_hex_digit(byte >> 4);
+    res.buffer[offset++] = detail::value_to_hex_digit(byte & 0x0F);
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを16進エンコードする
+ */
+template <size_t N>
+[[nodiscard]] auto consteval hex_encode(char const (&str)[N]) noexcept {
+  return hex_encode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を16進デコードする
+ */
+template <size_t N>
+[[nodiscard]] auto consteval hex_decode(FrozenString<N> const& str) noexcept {
+  auto const s = str.sv();
+  auto const OUT_CAP = s.size() / 2 + 1;
+  auto res = FrozenString<N>{}; // 元のバッファサイズを流用（デコード後は必ず小さくなる）
+  auto offset = 0uz;
+
+  for (auto i = 0uz; i + 1 < s.size(); i += 2) {
+    res.buffer[offset++] = static_cast<char>(detail::parse_hex_byte(s[i], s[i + 1]));
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを16進デコードする
+ */
+template <size_t N>
+[[nodiscard]] auto consteval hex_decode(char const (&str)[N]) noexcept {
+  return hex_decode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を16進エンコードする (NTTP版)
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval hex_encode() noexcept {
+  return shrink_to_fit<hex_encode(Str)>();
+}
+
+/**
+ * @brief 文字列を16進デコードする (NTTP版)
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval hex_decode() noexcept {
+  return shrink_to_fit<hex_decode(Str)>();
+}
+
+/**
+ * @brief 文字列をアスキー形式に変換する (16進エンコード)
+ */
+template <size_t N>
+[[nodiscard]] auto consteval to_ascii(FrozenString<N> const& str) noexcept {
+  return hex_encode(str);
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval to_ascii(char const (&str)[N]) noexcept {
+  return hex_encode(str);
+}
+
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval to_ascii() noexcept {
+  return hex_encode<Str>();
+}
+
+/**
+ * @brief アスキー形式から文字列を復元する (16進デコード)
+ */
+template <size_t N>
+[[nodiscard]] auto consteval from_ascii(FrozenString<N> const& str) noexcept {
+  return hex_decode(str);
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval from_ascii(char const (&str)[N]) noexcept {
+  return hex_decode(str);
+}
+
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval from_ascii() noexcept {
+  return hex_decode<Str>();
+}
+
+/**
  * @brief 文字列をURLエンコードする
  *
  * @tparam N 文字列の長さ (終端文字'\0'を含む)

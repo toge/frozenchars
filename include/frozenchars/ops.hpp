@@ -327,6 +327,20 @@ struct base64_decode_adaptor : pipe_adaptor_base {
   }
 };
 
+struct hex_encode_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::hex_encode(str);
+  }
+};
+
+struct hex_decode_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::hex_decode(str);
+  }
+};
+
 /**
  * @brief HTML minify をパイプ演算子で適用するアダプタ
  */
@@ -433,6 +447,10 @@ inline constexpr url_encode_adaptor url_encode{};
 inline constexpr url_decode_adaptor url_decode{};
 inline constexpr base64_encode_adaptor base64_encode{};
 inline constexpr base64_decode_adaptor base64_decode{};
+inline constexpr hex_encode_adaptor hex_encode{};
+inline constexpr hex_decode_adaptor hex_decode{};
+inline constexpr hex_encode_adaptor to_ascii{};
+inline constexpr hex_decode_adaptor from_ascii{};
 inline constexpr minify_html_adaptor minify_html{};
 inline constexpr minify_xml_adaptor minify_xml{};
 inline constexpr minify_json_adaptor minify_json{};
