@@ -91,6 +91,14 @@ if(ENABLE_INJA)
         ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
     )
+    install(FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/fast_inja.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
+    )
+    install(DIRECTORY
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/fast_inja
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
+    )
 endif()
 
 write_basic_package_version_file(

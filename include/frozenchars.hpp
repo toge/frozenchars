@@ -22,3 +22,4 @@
 #include "frozenchars/inja_value.hpp"
 #include "frozenchars/inja_function.hpp"
 #include "frozenchars/inja_engine.hpp"
+#include "frozenchars/fast_inja.hpp"
