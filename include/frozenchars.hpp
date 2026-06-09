@@ -15,6 +15,7 @@
 #include "frozenchars/format.hpp"
 #include "frozenchars/url.hpp"
 #include "frozenchars/number_conv.hpp"
+#include "frozenchars/wildcard.hpp"
 #include "frozenchars/ctre.hpp"
 #include "frozenchars/regex_comment.hpp"
 #include "frozenchars/map.hpp"
