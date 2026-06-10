@@ -157,3 +157,13 @@ TEST_CASE("wildcard: alternatives with nested alternatives") {
   REQUIRE(wildcard_match<"(a|(bc|de))">("de"));
   REQUIRE_FALSE(wildcard_match<"(a|(bc|de))">("bd"));
 }
+
+TEST_CASE("wildcard: unbalanced alternatives") {
+  // Unbalanced '(' should be treated as literal '('
+  REQUIRE(wildcard_match<"(ab">("(ab"));
+  REQUIRE_FALSE(wildcard_match<"(ab">("ab"));
+  
+  // Nested unbalanced '('
+  REQUIRE(wildcard_match<"((ab">("((ab"));
+  REQUIRE_FALSE(wildcard_match<"((ab">("(ab"));
+}

@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -81,6 +82,11 @@ template <PipeAdaptor... Adaptors>
  */
 template <size_t N, PipeAdaptor Adaptor>
 [[nodiscard]] auto consteval operator|(FrozenString<N> const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
+  return rhs(lhs);
+}
+
+template <PipeAdaptor Adaptor>
+[[nodiscard]] constexpr auto operator|(std::string_view lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
 
