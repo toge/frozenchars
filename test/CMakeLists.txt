@@ -30,6 +30,36 @@ add_executable(bench_inja_runtime benchmark_inja_runtime.cpp)
 target_link_libraries(bench_inja_runtime PRIVATE frozenchars::frozenchars)
 target_compile_features(bench_inja_runtime PUBLIC ${STD_CPP})
 
+# wildcards benchmark dependency: fetched at configure time
+# (https://github.com/zemasoft/wildcards)
+include(FetchContent)
+cmake_policy(SET CMP0169 OLD)
+FetchContent_Declare(
+  wildcards
+  GIT_REPOSITORY https://github.com/zemasoft/wildcards.git
+  GIT_TAG        master
+  GIT_SHALLOW    TRUE
+)
+FetchContent_Populate(wildcards)
+# Patch is_alt bug: return-type mismatch in cfg_HAS_CONSTEXPR14 +
+# !cfg_HAS_FULL_FEATURED_CONSTEXPR14 path (upstream has
+# `return throw_logic_error(p, ...)` returning PatternIterator from bool fn).
+set(_wc_patched "${wildcards_SOURCE_DIR}/single_include/wildcards.hpp")
+file(READ "${_wc_patched}" _wc_content)
+string(REPLACE
+  "break;\ncase is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nreturn throw_logic_error(\np, \"The program execution should never end up here throwing this exception\");\n#endif"
+  "break;\ncase is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nthrow_logic_error(\np, \"The program execution should never end up here throwing this exception\");\nreturn false;\n#endif"
+  _wc_content "${_wc_content}")
+file(WRITE "${_wc_patched}" "${_wc_content}")
+unset(_wc_patched)
+unset(_wc_content)
+add_library(wildcards INTERFACE)
+target_include_directories(wildcards INTERFACE ${wildcards_SOURCE_DIR}/single_include)
+
+add_executable(bench_wildcard bench_wildcard.cpp)
+target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards)
+target_compile_features(bench_wildcard PUBLIC ${STD_CPP})
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
 assert_frozen_map_compile_fail(
