@@ -143,9 +143,6 @@ namespace detail {
   }
 
   /**
-   * @brief テンプレートで保持する最大ノード数。
-
-  /**
    * @brief 空白文字判定（テンプレート用）。
    * @param c 判定対象文字
    * @return 空白なら true
@@ -2109,7 +2106,7 @@ private:
         }
         auto const looked = lookup(expr);
         if (looked.has_value()) {
-          return std::move(*looked);
+          return *looked;
         }
         if (looked.error() == lookup_status::not_convertible) {
           throw render_error{"value cannot be converted to inja_value"};

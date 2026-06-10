@@ -48,7 +48,6 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval hex_decode(FrozenString<N> const& str) noexcept {
   auto const s = str.sv();
-  auto const OUT_CAP = s.size() / 2 + 1;
   auto res = FrozenString<N>{}; // 元のバッファサイズを流用（デコード後は必ず小さくなる）
   auto offset = 0uz;
 

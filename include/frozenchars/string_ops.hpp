@@ -883,7 +883,6 @@ template <size_t N>
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
-  auto in_tag = false;
   auto in_quote = '\0';
   auto pending_space = false;
 
@@ -939,7 +938,6 @@ template <size_t N>
       if (offset > 0 && res.buffer[offset - 1] == ' ') {
         --offset;
       }
-      in_tag = true;
       pending_space = false;
       res.buffer[offset++] = c;
       ++i;
@@ -950,7 +948,6 @@ template <size_t N>
       if (offset > 0 && res.buffer[offset - 1] == ' ') {
         --offset;
       }
-      in_tag = false;
       res.buffer[offset++] = c;
       ++i;
       continue;

@@ -206,7 +206,7 @@ struct constant_list {
     return (... || (Entries::name == name));
   }
 
-  [[nodiscard]] static auto lookup(std::string_view name) -> std::optional<inja_value> {
+  [[nodiscard]] static auto lookup([[maybe_unused]] std::string_view name) -> std::optional<inja_value> {
     auto result = std::optional<inja_value>{};
     std::ignore = (false || ... || (Entries::name == name
       ? (result.emplace(Entries::get()), true)

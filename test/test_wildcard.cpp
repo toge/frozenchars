@@ -106,13 +106,13 @@ TEST_CASE("wildcard: negated character sets") {
 }
 
 TEST_CASE("wildcard: sets with * and ?") {
-  REQUIRE(wildcard_match<"file[0-9].txt">("file[0-9].txt"));
-  REQUIRE(wildcard_match<"file[0-9].txt">("file0-9.txt"));
+  REQUIRE(wildcard_match<"file[0-9].txt">("file0.txt"));
+  REQUIRE(wildcard_match<"file[0-9].txt">("file9.txt"));
   REQUIRE(wildcard_match<"a[xyz]c">("axc"));
   REQUIRE(wildcard_match<"a[xyz]c">("azc"));
   REQUIRE_FALSE(wildcard_match<"a[xyz]c">("abc"));
   REQUIRE(wildcard_match<"*[xyz]*">("prefix_z_suffix"));
-  REQUIRE_FALSE(wildcard_match<"*[xyz]*">("prefix_w_suffix"));
+  REQUIRE_FALSE(wildcard_match<"*[xyz]*">("abc_def_ghi"));
 }
 
 TEST_CASE("wildcard: alternatives") {

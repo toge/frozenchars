@@ -94,7 +94,7 @@ auto ctre_starts_with(auto&& text) noexcept {
  */
 template <frozenchars::FrozenString Pattern>
 auto ctre_range(auto&& text) noexcept {
-  return ctre::range<frozenchars::to_ctre<Pattern>()>(text);
+  return ctre::search_all<frozenchars::to_ctre<Pattern>()>(text);
 }
 
 /**

@@ -26,12 +26,12 @@ struct user_context {
 };
 
 struct root_context {
-  std::string name;
-  std::vector<std::int64_t> items;
+  std::string name{};
+  std::vector<std::int64_t> items{};
   bool ok{};
-  user_context user;
-  std::unordered_map<std::string, std::int64_t> obj;
-  std::vector<std::vector<std::int64_t>> rows;
+  user_context user{};
+  std::unordered_map<std::string, std::int64_t> obj{};
+  std::vector<std::vector<std::int64_t>> rows{};
   std::string include_name{"dynamic"};
   std::int64_t n{};
 };
