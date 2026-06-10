@@ -737,7 +737,7 @@ namespace detail {
       void (*result)(void const*, std::string&) = nullptr;
       auto matched                              = false;
       [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        auto try_match = [&]<std::size_t I>() {
+        [[maybe_unused]] auto try_match = [&]<std::size_t I>() {
           if (matched)
             return;
           if (seg != std::string_view{keys[I]})
