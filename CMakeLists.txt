@@ -3,23 +3,8 @@ project(frozenchars LANGUAGES CXX)
 
 set(FROZENCHARS_VERSION "0.1.0")
 
-option(ENABLE_TESTS "Enable tests" ON)
 option(ENABLE_INJA "Enable inja template engine support (requires glaze)" ON)
-
-## add stdc++ compiler flag
-include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++26" COMPILER_SUPPORTS_CXX26)
-CHECK_CXX_COMPILER_FLAG("-std=c++23" COMPILER_SUPPORTS_CXX23)
-CHECK_CXX_COMPILER_FLAG("-std=c++20" COMPILER_SUPPORTS_CXX20)
-if(COMPILER_SUPPORTS_CXX26)
-    set(STD_CPP cxx_std_26)
-elseif(COMPILER_SUPPORTS_CXX23)
-    set(STD_CPP cxx_std_23)
-elseif(COMPILER_SUPPORTS_CXX20)
-    set(STD_CPP cxx_std_20)
-else()
-    message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++20 support. Please use a different C++ compiler.")
-endif()
+option(BUILD_TEST "Enable tests" ON)
 
 ## add warning
 if (CMAKE_COMPILER_IS_GNUCXX)
@@ -53,8 +38,7 @@ include(CMakePackageConfigHelpers)
 
 add_library(frozenchars INTERFACE)
 add_library(frozenchars::frozenchars ALIAS frozenchars)
-
-target_compile_features(frozenchars INTERFACE ${STD_CPP})
+target_compile_features(frozenchars INTERFACE cxx_std_23)
 
 if(ENABLE_INJA)
     find_package(glaze CONFIG REQUIRED)
@@ -117,7 +101,7 @@ install(EXPORT frozencharsTargets
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
 )
 
-if(ENABLE_TESTS)
+if(BUILD_TEST)
     enable_testing()
     add_subdirectory(test)
 endif()
