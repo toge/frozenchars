@@ -9,6 +9,12 @@
 
 #include "frozenchars.hpp"
 
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 14)
+#define MAYBE_CONSTEXPR constexpr
+#else
+#define MAYBE_CONSTEXPR const
+#endif
+
 #if defined(__has_include) && __has_include(<glaze/json.hpp>)
 #define HAS_GLAZE 1
 #include <glaze/json.hpp>
@@ -37,7 +43,7 @@ void print_section(std::string_view title) {
 void use_case_1_http_status() {
   print_section("1. HTTP status -> message (replaces static unordered_map)");
 
-  static constexpr frozen_map<std::string_view,
+  static MAYBE_CONSTEXPR frozen_map<std::string_view,
     "200"_fs, "404"_fs, "500"_fs> kStatus{
     "OK", "Not Found", "Internal Server Error"
   };
@@ -55,7 +61,7 @@ void use_case_1_http_status() {
 void use_case_2_env_dispatch() {
   print_section("2. Env name -> URL (replaces string switch)");
 
-  static constexpr frozen_map<std::string_view,
+  static MAYBE_CONSTEXPR frozen_map<std::string_view,
     "dev"_fs, "stg"_fs, "prd"_fs> kEnv{
     "https://dev.example.com",
     "https://stg.example.com",
@@ -75,7 +81,7 @@ void use_case_2_env_dispatch() {
 void use_case_3_config_bundle() {
   print_section("3. HTTP client config bundle (replaces scattered constexpr)");
 
-  static constexpr frozen_map<int,
+  static MAYBE_CONSTEXPR frozen_map<int,
     "timeout"_fs, "retry"_fs, "backoff"_fs> kHttp{ 30, 5, 2 };
 
   std::cout << "  timeout = " << kHttp["timeout"] << '\n';
@@ -101,7 +107,7 @@ void use_case_3_config_bundle() {
 void use_case_4_to_legacy() {
   print_section("4. to<std::map>() / to<std::array>() for legacy interop");
 
-  static constexpr frozen_map<std::string,
+  static const frozen_map<std::string,
     "host"_fs, "port"_fs, "user"_fs> kServer{
     "localhost", "8080", "admin"
   };
@@ -156,7 +162,7 @@ void use_case_6_inja_schema() {
 
   // テンプレートが必要とする変数のスキーマ (値は inja に流すデフォルト)
   // 値は string_view にして consteval/constexpr 構築を保証する。
-  static constexpr frozen_map<std::string_view,
+  static MAYBE_CONSTEXPR frozen_map<std::string_view,
     "user_name"_fs, "verify_url"_fs, "expires_at"_fs> kEmailVars{
     "anonymous", "https://example.com/verify", "1 hour"
   };
@@ -208,7 +214,7 @@ void use_case_7_handler_dispatch() {
   print_section("7. Extension -> handler (function pointer dispatch)");
 
   using Handler = std::string (*)(std::string_view);
-  static constexpr auto kLoaders = make_frozen_map<Handler,
+  static MAYBE_CONSTEXPR auto kLoaders = make_frozen_map<Handler,
     "json"_fs, "csv"_fs, "tsv"_fs>(
     std::pair{"json", &load_json},
     std::pair{"csv",  &load_csv},
