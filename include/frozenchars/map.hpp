@@ -124,12 +124,13 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
 
 template <FrozenString... Keys>
 [[nodiscard]] consteval auto has_duplicate_keys() -> bool {
-  if constexpr (sizeof...(Keys) == 0) return false;
+  if constexpr (sizeof...(Keys) <= 1) return false;
   else {
     constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
-    for (auto i = 0uz; i < key_views.size(); ++i)
-      for (auto j = i + 1; j < key_views.size(); ++j)
-        if (key_views[i] == key_views[j]) return true;
+    auto sorted = key_views;
+    std::ranges::sort(sorted);
+    for (auto i = 1uz; i < sorted.size(); ++i)
+      if (sorted[i - 1] == sorted[i]) return true;
     return false;
   }
 }
@@ -428,12 +429,12 @@ private:
     std::ranges::sort(res);
     return res;
   }();
-  /// 高速ルックアップテーブルを使用するかどうかのしきい値。41キー以上はコンパイル時間を考慮し線形探索にフォールバック。
-  static constexpr auto k_lookup_threshold = 40uz;
+  /// 高速ルックアップテーブルを使用するかどうかのしきい値。65キー以上はコンパイル時間を考慮し線形探索にフォールバック。
+  static constexpr auto k_lookup_threshold = 64uz;
   /// ルックアップテーブルを使用するかどうかのフラグ
   static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
   /// ルックアップテーブルのサイズ（2のべき乗）。使用しない場合は最小サイズ。
-  static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 2) : 1uz;
+  static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz;
   /// スロット選択用のマスク
   static constexpr auto mask_ = table_size_ - 1;
 
