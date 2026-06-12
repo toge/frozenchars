@@ -465,7 +465,13 @@ private:
         for (std::size_t i = 0; i < Keys.length; ++i) res[idx].data[i / 8] |= (static_cast<std::uint64_t>(static_cast<unsigned char>(Keys.buffer[i])) << ((i % 8) * 8));
         idx++; }(), ...); return res;
   }
-  static constexpr auto padded_keys_ = make_padded_keys();
+  static constexpr auto padded_keys_ = [] {
+    if constexpr (all_keys_short) {
+      return make_padded_keys();
+    } else {
+      return std::array<PaddedKey, size()>{};
+    }
+  }();
 
   /**
    * @brief 与えられたキーが指定インデックスのキーと一致するか判定する

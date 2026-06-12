@@ -30,6 +30,10 @@ add_executable(bench_inja_runtime benchmark_inja_runtime.cpp)
 target_link_libraries(bench_inja_runtime PRIVATE frozenchars::frozenchars)
 target_compile_features(bench_inja_runtime PUBLIC ${STD_CPP})
 
+add_executable(bench_frozen_map bench_frozen_map.cpp)
+target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars)
+target_compile_features(bench_frozen_map PUBLIC ${STD_CPP})
+
 # wildcards benchmark dependency: fetched at configure time
 # (https://github.com/zemasoft/wildcards)
 include(FetchContent)

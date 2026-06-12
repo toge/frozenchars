@@ -97,6 +97,12 @@ namespace detail {
       if (c == '*') {
         while (pi < pi_end && PAT.data()[pi] == '*') ++pi;
 
+        // Fast path: no remaining pattern after * — always matches.
+        if (pi == pi_end) {
+          if (partial) return {true, ti};
+          return {true, text.size()};
+        }
+
         // Fast path: if the remaining pattern starts with a literal chunk,
         // use std::string_view::find() to skip non-matching text positions.
         // libstdc++'s find() is SIMD-optimized, making this much faster than
@@ -213,11 +219,14 @@ namespace detail {
             if (bc == '(') { ++depth; continue; }
             if (bc == ')') { --depth; continue; }
             if (bc == '|' && depth == 0) {
-              // partial=true: branch doesn't need to consume all text
               auto br = wildcard_match_impl<PAT>(text, ti, branch_start, i, true);
               if (br.matched) {
-                auto rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
-                if (rr.matched) return rr;
+                if (after_alt >= pi_end) {
+                  if (partial || br.pos == text.size()) return br;
+                } else {
+                  auto rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+                  if (rr.matched) return rr;
+                }
               }
               branch_start = i + 1uz;
             }
@@ -226,7 +235,11 @@ namespace detail {
           {
             auto br = wildcard_match_impl<PAT>(text, ti, branch_start, close, true);
             if (br.matched) {
-              return wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              if (after_alt >= pi_end) {
+                if (partial || br.pos == text.size()) return br;
+              } else {
+                return wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              }
             }
           }
           return {false, ti};
