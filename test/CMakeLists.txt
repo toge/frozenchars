@@ -12,27 +12,27 @@ target_link_libraries(all_test PRIVATE
   Catch2::Catch2WithMain
   ctre::ctre
 )
-target_compile_features(all_test PUBLIC ${STD_CPP})
+target_compile_features(all_test PUBLIC cxx_std_23)
 
 add_test(NAME all_test COMMAND all_test -r junit)
 
 add_executable(example_smoke ../example.cpp)
 target_link_libraries(example_smoke PRIVATE frozenchars::frozenchars)
-target_compile_features(example_smoke PUBLIC ${STD_CPP})
+target_compile_features(example_smoke PUBLIC cxx_std_23)
 add_test(NAME example_smoke COMMAND example_smoke)
 
 add_executable(example_render_with_output_buffer ../example_render_with_output_buffer.cpp)
 target_link_libraries(example_render_with_output_buffer PRIVATE frozenchars::frozenchars)
-target_compile_features(example_render_with_output_buffer PUBLIC ${STD_CPP})
+target_compile_features(example_render_with_output_buffer PUBLIC cxx_std_23)
 add_test(NAME example_render_with_output_buffer COMMAND example_render_with_output_buffer)
 
 add_executable(bench_inja_runtime benchmark_inja_runtime.cpp)
 target_link_libraries(bench_inja_runtime PRIVATE frozenchars::frozenchars)
-target_compile_features(bench_inja_runtime PUBLIC ${STD_CPP})
+target_compile_features(bench_inja_runtime PUBLIC cxx_std_23)
 
 add_executable(bench_frozen_map bench_frozen_map.cpp)
 target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars)
-target_compile_features(bench_frozen_map PUBLIC ${STD_CPP})
+target_compile_features(bench_frozen_map PUBLIC cxx_std_23)
 
 # wildcards benchmark dependency: fetched at configure time
 # (https://github.com/zemasoft/wildcards)
@@ -62,7 +62,7 @@ target_include_directories(wildcards INTERFACE ${wildcards_SOURCE_DIR}/single_in
 
 add_executable(bench_wildcard bench_wildcard.cpp)
 target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards)
-target_compile_features(bench_wildcard PUBLIC ${STD_CPP})
+target_compile_features(bench_wildcard PUBLIC cxx_std_23)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
@@ -122,16 +122,16 @@ assert_frozen_map_compile_fail(
 
 # example_split executable
 add_executable(example_split ../example_split.cpp)
-target_compile_features(example_split PRIVATE ${STD_CPP})
+target_compile_features(example_split PRIVATE cxx_std_23)
 target_link_libraries(example_split PRIVATE frozenchars::frozenchars)
 add_test(NAME example_split COMMAND example_split)
 
 add_executable(example_frozen_map_use_cases ../example_frozen_map_use_cases.cpp)
-target_compile_features(example_frozen_map_use_cases PRIVATE ${STD_CPP})
+target_compile_features(example_frozen_map_use_cases PRIVATE cxx_std_23)
 target_link_libraries(example_frozen_map_use_cases PRIVATE frozenchars::frozenchars)
 add_test(NAME example_frozen_map_use_cases COMMAND example_frozen_map_use_cases)
 
 add_executable(example_parse_to_tuple_use_cases ../example_parse_to_tuple_use_cases.cpp)
-target_compile_features(example_parse_to_tuple_use_cases PRIVATE ${STD_CPP})
+target_compile_features(example_parse_to_tuple_use_cases PRIVATE cxx_std_23)
 target_link_libraries(example_parse_to_tuple_use_cases PRIVATE frozenchars::frozenchars)
 add_test(NAME example_parse_to_tuple_use_cases COMMAND example_parse_to_tuple_use_cases)

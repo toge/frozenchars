@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.25)
 project(frozen_map_compile_fail LANGUAGES CXX)
 add_library(compile_fail_case STATIC \"${ARG_SOURCE}\")
 target_include_directories(compile_fail_case PRIVATE \"\${FROZENCHARS_SOURCE_DIR}/include\")
-target_compile_features(compile_fail_case PUBLIC ${STD_CPP})
+target_compile_features(compile_fail_case PUBLIC cxx_std_23)
 ")
 
   try_compile(
