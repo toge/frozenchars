@@ -35,27 +35,17 @@ namespace detail {
 
   /**
    * @brief '(' に対応する ')' の位置を探す（ネスト対応）
-   *
-   * @tparam PAT パターン文字列（FrozenString NTTP）
-   * @param pos '(' の位置
-   * @return size_t ')' の位置。対応する ')' が見つからない場合は PAT.size() を返す。
-   *         呼び出し側は戻り値が PAT.size() 未満であることを確認してから使用すること。
    */
   template <FrozenString PAT>
   [[nodiscard]] constexpr size_t find_matching_close_paren(size_t pos) noexcept {
     auto i = pos + 1uz;
     auto depth = 1;
     while (i < PAT.size() && depth > 0) {
-      if (PAT.data()[i] == '\\') {
-        i += 2;
-        continue;
-      }
+      if (PAT.data()[i] == '\\') { i += 2; continue; }
       if (PAT.data()[i] == '(') ++depth;
       else if (PAT.data()[i] == ')') --depth;
       ++i;
     }
-    // depth == 0: 正常終了。i は ')' の次を指しているので i - 1 が ')' の位置。
-    // depth > 0: 対応する ')' が見つからなかった。PAT.size() を返してエラーを示す。
     return (depth == 0) ? i - 1 : PAT.size();
   }
 
@@ -257,52 +247,84 @@ namespace detail {
     return {ti == text.size(), ti};
   }
 
-
 } // namespace detail
 
 /**
  * @brief ワイルドカードパターンでテキストがマッチするか判定する
- *
- * パターン構文:
- * - `*` : 任意の文字列（空文字列を含む）
- * - `?` : 任意の1文字
- * - `\\` : エスケープ（次の特殊文字をリテラルとして扱う）
- * - `[abc]` : セット内の任意の1文字にマッチ
- * - `[!abc]` : セット外の任意の1文字にマッチ
- * - `[a-z]`  : 範囲内の任意の1文字にマッチ（ASCII 文字を対象とする）
- * - `[-abc]` : セット先頭の `-` はリテラルとして扱う
- * - `[abc-]` : セット末尾の `-` はリテラルとして扱う
- * - `[a\\-z]`: `\\-` はエスケープされた `-` リテラル（範囲指定にならない）
- * - `(ab|cd)` : alternatives のいずれかにマッチ
- * - その他の文字: リテラル一致
- *
- * パターンは NTTP (Non-Type Template Parameter) として渡される。
- * テキストがコンパイル時定数の場合は consteval で全評価、
- * 実行時の場合はコンパイル時最適化された高速マッチングを実行。
- *
- * @tparam PAT ワイルドカードパターン（FrozenString NTTP）
- * @param text マッチング対象のテキスト
- * @return auto マッチした場合 true
- *
- * @code
- * // 実行時テキスト
- * bool result = frozenchars::wildcard_match<"a*b">(text);
- *
- * // コンパイル時テキスト
- * constexpr auto r = frozenchars::wildcard_match<"a*b">("axxb"_fs);
- * static_assert(r);
- *
- * // セット
- * constexpr auto s = frozenchars::wildcard_match<"[abc]">("b"_fs);
- * static_assert(s);
- *
- * // alternatives
- * constexpr auto t = frozenchars::wildcard_match<"(ab|cd)">("cd"_fs);
- * static_assert(t);
- * @endcode
  */
 template <FrozenString PAT>
 [[nodiscard]] constexpr bool wildcard_match(std::string_view text) noexcept {
+  // 単純パターン高速パス: リテラル + '?' のみ
+  constexpr auto is_simple = []() consteval {
+    // エスケープを含むパターンは単純パス非対象（simple_match は \\ 未対応）
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      auto const c = PAT.data()[i];
+      if (c == '\\' || c == '*' || c == '[' || c == '(') return false;
+    }
+    return true;
+  }();
+
+  // エスケープ文字の有無
+  constexpr auto has_escape = []() consteval {
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] == '\\') return true;
+    }
+    return false;
+  }();
+
+  if constexpr (is_simple) {
+    if (text.size() != PAT.size()) return false;
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] == '?') continue;
+      if (text[i] != PAT.data()[i]) return false;
+    }
+    return true;
+  }
+
+  // 早期リジェクト: エスケープ文字を含む場合はスキップ（正しい位置計算が複雑なため）
+  if constexpr (!has_escape) {
+    // プレフィックス早期リジェクト
+    constexpr auto pref_len = []() consteval {
+      for (auto i = 0uz; i < PAT.size(); ++i) {
+        auto const c = PAT.data()[i];
+        if (c == '*' || c == '?' || c == '[' || c == '(') return i;
+      }
+      return PAT.size();
+    }();
+
+    // サフィックス早期リジェクト
+    constexpr auto suff_start = []() consteval {
+      auto last = PAT.size();
+      for (auto i = PAT.size(); i > 0; --i) {
+        if (PAT.data()[i - 1] == '*') { last = i - 1; break; }
+      }
+      if (last == PAT.size()) return PAT.size();
+      for (auto i = last + 1; i < PAT.size(); ++i) {
+        auto const c = PAT.data()[i];
+        if (c == '*' || c == '?' || c == '[' || c == '(') return PAT.size();
+      }
+      return last + 1;
+    }();
+
+    if (pref_len > 0 && text.size() >= pref_len) {
+      for (auto i = 0uz; i < pref_len; ++i) {
+        if (text[i] != PAT.data()[i]) return false;
+      }
+    } else if (pref_len > 0) {
+      return false;
+    }
+
+    if (suff_start < PAT.size()) {
+      auto const suff_len = PAT.size() - suff_start;
+      if (text.size() < suff_len) return false;
+      for (auto i = 0uz; i < suff_len; ++i) {
+        if (text[text.size() - suff_len + i] != PAT.data()[suff_start + i]) return false;
+      }
+    }
+
+    return detail::wildcard_match_impl<PAT>(text, pref_len, pref_len, suff_start).matched;
+  }
+
   return detail::wildcard_match_impl<PAT>(text, 0, 0, PAT.size()).matched;
 }
 
