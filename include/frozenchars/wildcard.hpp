@@ -2,6 +2,7 @@
 
 #include "string.hpp"
 #include <cstddef>
+#include <optional>
 #include <string_view>
 
 namespace frozenchars {
@@ -65,7 +66,7 @@ namespace detail {
    * @param ti テキスト内の現在位置
    * @param pi パターン内の開始位置
    * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
-   * @return match_result
+   * @return match_result1
    */
   template <FrozenString PAT>
   [[nodiscard]] constexpr match_result
@@ -377,6 +378,80 @@ template <FrozenString PAT, size_t M>
 template <FrozenString PAT, size_t M>
 [[nodiscard]] bool wildcard_match(FrozenString<M> const& text) noexcept {
   return wildcard_match<PAT>(text.sv());
+}
+
+/**
+ * @brief ワイルドカードパターンでテキスト内の最初のマッチ部分を検索する
+ *
+ * @tparam PAT ワイルドカードパターン（FrozenString NTTP）
+ * @param text 検索対象のテキスト
+ * @return std::optional<std::string_view> マッチした部分文字列。非マッチなら std::nullopt
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr std::optional<std::string_view> wildcard_find(std::string_view text) noexcept {
+  for (auto i = 0uz; i <= text.size(); ++i) {
+    auto const r = detail::wildcard_match_impl<PAT>(text, i, 0, PAT.size(), true);
+    if (r.matched && r.pos > i) {
+      return text.substr(i, r.pos - i);
+    }
+  }
+  return std::nullopt;
+}
+
+/**
+ * @brief ワイルドカードパターンでテキスト内のマッチ部分を全て検索する
+ *
+ * @tparam PAT ワイルドカードパターン（FrozenString NTTP）
+ * @param text 検索対象のテキスト
+ * @return マッチ部分を順次 std::string_view として返す range
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_all(std::string_view text) noexcept {
+  struct sentinel_type {};
+
+  struct iterator {
+    std::string_view text_;
+    size_t start_ = 0;
+    size_t end_ = 0;
+    bool done_ = true;
+
+    std::string_view operator*() const noexcept {
+      return text_.substr(start_, end_ - start_);
+    }
+
+    iterator& operator++() noexcept {
+      auto search_from = end_;
+      while (search_from <= text_.size()) {
+        auto const r = detail::wildcard_match_impl<PAT>(text_, search_from, 0, PAT.size(), true);
+        if (r.matched && r.pos > search_from) {
+          start_ = search_from;
+          end_ = r.pos;
+          done_ = false;
+          return *this;
+        }
+        ++search_from;
+      }
+      done_ = true;
+      return *this;
+    }
+
+    bool operator!=(sentinel_type) const noexcept { return !done_; }
+  };
+
+  struct range {
+    std::string_view text_;
+
+    iterator begin() const noexcept {
+      auto it = iterator{};
+      it.text_ = text_;
+      ++it;
+      return it;
+    }
+
+    sentinel_type end() const noexcept { return {}; }
+  };
+
+  return range{text};
 }
 
 namespace ops {

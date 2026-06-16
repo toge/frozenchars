@@ -167,3 +167,136 @@ TEST_CASE("wildcard: unbalanced alternatives") {
   REQUIRE(wildcard_match<"((ab">("((ab"));
   REQUIRE_FALSE(wildcard_match<"((ab">("(ab"));
 }
+
+TEST_CASE("wildcard_find: basic * matching") {
+  auto r = wildcard_find<"a*c">("xxabcxx");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "abc");
+}
+
+TEST_CASE("wildcard_find: first match position") {
+  auto r = wildcard_find<"abc">("abcabcabc");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "abc");
+  REQUIRE(r->data() == std::string_view{"abcabcabc"}.data());
+}
+
+TEST_CASE("wildcard_find: no match") {
+  REQUIRE_FALSE(wildcard_find<"abc">("xxxxx").has_value());
+  REQUIRE_FALSE(wildcard_find<"a?c">("ac").has_value());
+  REQUIRE_FALSE(wildcard_find<"*">("hello").has_value());
+}
+
+TEST_CASE("wildcard_find: edge cases") {
+  REQUIRE_FALSE(wildcard_find<"">("").has_value());
+  REQUIRE_FALSE(wildcard_find<"">("a").has_value());
+  REQUIRE_FALSE(wildcard_find<"a">("").has_value());
+  REQUIRE(wildcard_find<"a">("a")->size() == 1);
+}
+
+TEST_CASE("wildcard_find: ? matching") {
+  auto r = wildcard_find<"a?c">("xabcyaac");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "abc");
+}
+
+TEST_CASE("wildcard_find: runtime text") {
+  auto text = std::string("hello world");
+  auto r = wildcard_find<"hello">(text);
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "hello");
+  auto r2 = wildcard_find<"*world">(text);
+  REQUIRE(r2.has_value());
+  REQUIRE(*r2 == "hello world");
+}
+
+TEST_CASE("wildcard_find: character sets") {
+  auto r = wildcard_find<"[abc]">("xyzcba");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "c");
+}
+
+TEST_CASE("wildcard_find: negated character sets") {
+  auto r = wildcard_find<"[!abc]">("aaxby");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "x");
+}
+
+TEST_CASE("wildcard_find: alternatives") {
+  auto r = wildcard_find<"(ab|cd)">("xyzcdab");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "cd");
+}
+
+TEST_CASE("wildcard_find_all: multiple matches") {
+  auto count = 0;
+  for (auto sv : wildcard_find_all<"abc">("abcabcabc")) {
+    ++count;
+    REQUIRE(sv == "abc");
+  }
+  REQUIRE(count == 3);
+}
+
+TEST_CASE("wildcard_find_all: multiple matches with ?") {
+  auto expected = std::array{"abc", "aac", "azc"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"a?c">("xabcyaaczazc")) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 3);
+}
+
+TEST_CASE("wildcard_find_all: no matches") {
+  auto count = 0;
+  for ([[maybe_unused]] auto _ : wildcard_find_all<"abc">("xxxxx")) ++count;
+  REQUIRE(count == 0);
+}
+
+TEST_CASE("wildcard_find_all: non-overlapping") {
+  // "aa" in "aaaa" should find 2 non-overlapping matches
+  auto count = 0;
+  for ([[maybe_unused]] auto _ : wildcard_find_all<"aa">("aaaa")) ++count;
+  REQUIRE(count == 2);
+}
+
+TEST_CASE("wildcard_find_all: edge cases") {
+  auto count = 0;
+  for ([[maybe_unused]] auto _ : wildcard_find_all<"">("")) ++count;
+  REQUIRE(count == 0);
+
+  count = 0;
+  for ([[maybe_unused]] auto _ : wildcard_find_all<"">("abc")) ++count;
+  REQUIRE(count == 0);
+
+  count = 0;
+  for ([[maybe_unused]] auto _ : wildcard_find_all<"a">("")) ++count;
+  REQUIRE(count == 0);
+}
+
+TEST_CASE("wildcard_find_all: runtime text") {
+  auto text = std::string("ab_ab_ab");
+  auto count = 0;
+  for (auto sv : wildcard_find_all<"ab">(text)) {
+    ++count;
+    REQUIRE(sv == "ab");
+  }
+  REQUIRE(count == 3);
+}
+
+TEST_CASE("wildcard_find_all: character sets") {
+  auto expected = std::array{"c", "b", "a"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"[abc]">("dcbad")) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 3);
+}
+
+TEST_CASE("wildcard_find_all: alternatives") {
+  auto expected = std::array{"ab", "cd"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"(ab|cd)">("xyzabcd")) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 2);
+}
