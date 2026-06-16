@@ -1779,7 +1779,11 @@ private:
             if (rval == 0) {
               throw render_error{"modulo by zero"};
             }
-            lhs = inja_value{std::get<std::int64_t>(lhs.storage) % rval};
+            auto const lval = std::get<std::int64_t>(lhs.storage);
+            if (rval == -1 && lval == std::numeric_limits<std::int64_t>::min()) {
+              throw render_error{"modulo overflow"};
+            }
+            lhs = inja_value{lval % rval};
           }
         } else {
           break;
@@ -1799,7 +1803,11 @@ private:
           return inja_value{};
         }
         if (std::holds_alternative<std::int64_t>(v.storage)) {
-          return inja_value{-std::get<std::int64_t>(v.storage)};
+          auto const val = std::get<std::int64_t>(v.storage);
+          if (val == std::numeric_limits<std::int64_t>::min()) {
+            throw render_error{"integer negation overflow"};
+          }
+          return inja_value{-val};
         }
         auto const num = try_as_double(v);
         if (!num.has_value()) {

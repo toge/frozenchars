@@ -2,6 +2,8 @@
 
 #include <array>
 #include <charconv>
+#include <cmath>
+#include <limits>
 #include <ranges>
 #include <utility>
 #include <algorithm>
@@ -95,8 +97,17 @@ namespace frozenchars::detail {
 [[nodiscard]] auto consteval to_float_chars(double value, int const precision) noexcept {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
+
+  if (!std::isfinite(value)) {
+    return std::pair{buffer, i};
+  }
+
   if (value < 0) {
     buffer[i++] = '-'; value = -value;
+  }
+
+  if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
+    return std::pair{buffer, i};
   }
 
   auto integral = static_cast<long long>(value);

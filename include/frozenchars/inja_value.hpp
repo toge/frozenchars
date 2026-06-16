@@ -507,6 +507,9 @@ requires(sizeof...(Args) % 2 == 0)
  * @return 一致をすべて置換した文字列
  */
 [[nodiscard]] inline auto fn_replace(std::string_view str, std::string_view old_str, std::string_view new_str) -> std::string {
+  if (old_str.empty()) {
+    throw render_error{"replace() search string must not be empty"};
+  }
   auto result = std::string{str};
   auto pos = size_t{0};
   while ((pos = result.find(old_str, pos)) != std::string::npos) {
@@ -724,6 +727,9 @@ requires(sizeof...(Args) % 2 == 0)
 [[nodiscard]] inline auto fn_abs(inja_value const& num) -> inja_value {
   if (std::holds_alternative<std::int64_t>(num.storage)) {
     auto const val = std::get<std::int64_t>(num.storage);
+    if (val == std::numeric_limits<std::int64_t>::min()) {
+      throw render_error{"abs() overflow"};
+    }
     return inja_value{std::abs(val)};
   }
   if (std::holds_alternative<double>(num.storage)) {
@@ -950,7 +956,11 @@ requires(sizeof...(Args) % 2 == 0)
     return val;
   }
   if (std::holds_alternative<double>(val.storage)) {
-    return inja_value{static_cast<std::int64_t>(std::get<double>(val.storage))};
+    auto const d = std::get<double>(val.storage);
+    if (!std::isfinite(d) || d < static_cast<double>(std::numeric_limits<std::int64_t>::min()) || d > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+      throw render_error{"int() cannot convert out-of-range double"};
+    }
+    return inja_value{static_cast<std::int64_t>(d)};
   }
   if (std::holds_alternative<bool>(val.storage)) {
     return inja_value{std::get<bool>(val.storage) ? 1 : 0};

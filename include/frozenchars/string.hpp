@@ -16,6 +16,7 @@ namespace frozenchars {
  */
 template <size_t N>
 struct FrozenString {
+  static_assert(N > 0, "FrozenString requires N > 0");
   std::array<char, N> buffer{};
   size_t length = 0;
 

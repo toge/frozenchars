@@ -121,8 +121,8 @@ template <auto Token>
  */
 template <bool EmptyMeansVoid, auto Str>
 [[nodiscard]] consteval auto parse_to_tuple_impl() noexcept {
-  // 前後の空白を除去
-  auto constexpr trimmed = trim(Str);
+  // 前後の空白を除去（タブ・改行含む）
+  auto constexpr trimmed = trim_if<detail::is_any_whitespace>(Str);
 
   // --- 空文字列の処理 ---
   if constexpr (trimmed.length == 0) {
@@ -183,10 +183,9 @@ template <bool EmptyMeansVoid, auto Str>
       // 末尾が '?' なら optional
       auto constexpr is_opt = (trimmed.length > 0 && trimmed.buffer[trimmed.length - 1] == '?');
       if constexpr (is_opt) {
-        // '?' を除いた型名を取得して optional でラップ
-        auto constexpr name = trim(substr(trimmed, 0, static_cast<std::ptrdiff_t>(trimmed.length - 1)));
-        using T = typename type_mapping<name>::type;
-        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name before '?'");
+        // '?' を除いた型名を取得して optional でラップ（サフィックス対応）
+        auto constexpr name = trim_if<detail::is_any_whitespace>(substr(trimmed, 0, static_cast<std::ptrdiff_t>(trimmed.length - 1)));
+        using T = typename decltype(parse_type_with_suffix<name>())::type;
         static_assert(!std::is_same_v<T, void>, "'void?' is not supported");
         return detail::type_identity<std::tuple<std::optional<T>>>{};
       } else {
@@ -196,7 +195,7 @@ template <bool EmptyMeansVoid, auto Str>
       }
     } else {
       // カンマで分割 → 先頭トークン + 残りの再帰パース
-      auto constexpr token = trim(substr(trimmed, 0, comma_pos));
+      auto constexpr token = trim_if<detail::is_any_whitespace>(substr(trimmed, 0, comma_pos));
       // トークン末尾の '?' チェック
       auto constexpr is_opt = (token.length > 0 && token.buffer[token.length - 1] == '?');
       // カンマ以降の残り文字列
@@ -210,12 +209,10 @@ template <bool EmptyMeansVoid, auto Str>
         return detail::type_identity<Combined>{};
       } else if constexpr (is_opt) {
         // optional トークン → '?' を除いた名前で型を取得し、サフィックスを適用
-        auto constexpr name = trim(substr(token, 0, static_cast<std::ptrdiff_t>(token.length - 1)));
-        using T = typename type_mapping<name>::type;
-        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name before '?'");
-        static_assert(!std::is_same_v<T, void>, "'void?' is not supported");
-        // optional 内のサフィックスは未対応（int*? など）
-        using Combined = decltype(std::tuple_cat(std::declval<std::tuple<std::optional<T>>>(), std::declval<RestTuple>()));
+        auto constexpr name = trim_if<detail::is_any_whitespace>(substr(token, 0, static_cast<std::ptrdiff_t>(token.length - 1)));
+        using Suffixed = typename decltype(parse_type_with_suffix<name>())::type;
+        static_assert(!std::is_same_v<Suffixed, void>, "'void?' is not supported");
+        using Combined = decltype(std::tuple_cat(std::declval<std::tuple<std::optional<Suffixed>>>(), std::declval<RestTuple>()));
         return detail::type_identity<Combined>{};
       } else {
         // 通常のトークン → サフィックスを検出して型に変換して結合
@@ -268,8 +265,8 @@ template <auto Str>
  */
 template <bool EmptyMeansVoid, auto Str>
 [[nodiscard]] consteval auto parse_to_variant_impl() noexcept {
-  // 前後の空白を除去
-  auto constexpr trimmed = trim(Str);
+  // 前後の空白を除去（タブ・改行含む）
+  auto constexpr trimmed = trim_if<detail::is_any_whitespace>(Str);
 
   // --- 空文字列の処理 ---
   if constexpr (trimmed.length == 0) {
@@ -322,10 +319,9 @@ template <bool EmptyMeansVoid, auto Str>
       // カンマなし → 単一の型トークン
       auto constexpr is_opt = (trimmed.length > 0 && trimmed.buffer[trimmed.length - 1] == '?');
       if constexpr (is_opt) {
-        // '?' を除いた型名を取得して optional でラップ
-        auto constexpr name = trim(substr(trimmed, 0, static_cast<std::ptrdiff_t>(trimmed.length - 1)));
-        using T = typename type_mapping<name>::type;
-        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name before '?'");
+        // '?' を除いた型名を取得して optional でラップ（サフィックス対応）
+        auto constexpr name = trim_if<detail::is_any_whitespace>(substr(trimmed, 0, static_cast<std::ptrdiff_t>(trimmed.length - 1)));
+        using T = typename decltype(parse_type_with_suffix<name>())::type;
         static_assert(!std::is_same_v<T, void>, "'void?' is not supported");
         return detail::type_identity<std::variant<std::optional<T>>>{};
       } else {
@@ -346,12 +342,11 @@ template <bool EmptyMeansVoid, auto Str>
         // 空トークン（カンマが連続）→ monostate として扱う
         return detail::type_identity<detail::variant_cat_t<std::variant<std::monostate>, RestVariant>>{};
       } else if constexpr (is_opt) {
-        // optional トークン → '?' を除いた名前で型を取得
-        auto constexpr name = trim(substr(token, 0, static_cast<std::ptrdiff_t>(token.length - 1)));
-        using T = typename type_mapping<name>::type;
-        static_assert(!std::is_same_v<T, detail::unknown_type>, "Unknown type name before '?'");
-        static_assert(!std::is_same_v<T, void>, "'void?' is not supported");
-        return detail::type_identity<detail::variant_cat_t<std::variant<std::optional<T>>, RestVariant>>{};
+        // optional トークン → '?' を除いた名前で型を取得し、サフィックスを適用
+        auto constexpr name = trim_if<detail::is_any_whitespace>(substr(token, 0, static_cast<std::ptrdiff_t>(token.length - 1)));
+        using Suffixed = typename decltype(parse_type_with_suffix<name>())::type;
+        static_assert(!std::is_same_v<Suffixed, void>, "'void?' is not supported");
+        return detail::type_identity<detail::variant_cat_t<std::variant<std::optional<Suffixed>>, RestVariant>>{};
       } else {
         // 通常のトークン → サフィックスを検出して型に変換して結合
         using Suffixed = typename decltype(parse_type_with_suffix<token>())::type;

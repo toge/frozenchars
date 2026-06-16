@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <string_view>
 
 namespace frozenchars {
@@ -335,10 +336,13 @@ template <size_t N>
 namespace detail {
   template <size_t N, size_t M>
   consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> const& needle, size_t pos = 0) noexcept {
-    if (M == 0 || M > N) {
+    if (needle.length == 0) {
+      return pos;
+    }
+    if (needle.length > haystack.length || pos > haystack.length - needle.length) {
       return std::string_view::npos;
     }
-    if (M == 1) { // Special case for char
+    if (needle.length == 1) { // Special case for char
       for (auto i = pos; i < haystack.length; ++i) {
         if (haystack.buffer[i] == needle.buffer[0]) {
           return i;
@@ -347,9 +351,6 @@ namespace detail {
       return std::string_view::npos;
     }
     auto const needle_len = needle.length;
-    if (needle_len == 0) {
-      return pos;
-    }
     for (auto i = pos; i <= haystack.length - needle_len; ++i) {
       bool match = true;
       for (auto j = 0uz; j < needle_len; ++j) {
@@ -451,7 +452,9 @@ template <size_t N>
   auto res = FrozenString<N>{};
   auto const requested_len = len >= 0
     ? static_cast<size_t>(len)
-    : static_cast<size_t>(-len);
+    : (len == std::numeric_limits<std::ptrdiff_t>::min()
+        ? static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()) + 1uz
+        : static_cast<size_t>(-len));
   auto const anchor = std::min(pos, str.length);
   auto start = anchor;
   auto actual_len = 0uz;
