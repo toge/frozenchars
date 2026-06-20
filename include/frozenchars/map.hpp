@@ -38,8 +38,55 @@ struct frozen_map_entry {
 
 namespace detail {
 
+/**
+ * @brief std::forward_like (C++23, P2445R1) のフォールバック実装
+ * @details libstdc++ 13 系など std::forward_like が未実装の環境向け。
+ *          __cpp_lib_forward_like が定義されている場合は使用しない。
+ * @tparam Self 価値カテゴリと const 性の基準となる型（forward_like<Self> の Self）
+ * @tparam T 変換対象の値の型
+ * @param x 変換対象の値への参照
+ * @return Self の価値カテゴリ・const 性を反映した x への参照
+ */
 template <typename Self, typename T>
-using forward_like_t = decltype(std::forward_like<Self>(std::declval<T&>()));
+[[nodiscard]] constexpr auto&& forward_like_impl(T&& x) noexcept {
+  constexpr bool is_adding_const = std::is_const_v<std::remove_reference_t<Self>>;
+  if constexpr (std::is_lvalue_reference_v<Self&&>) {
+    if constexpr (is_adding_const) {
+      return std::as_const(x);
+    } else {
+      return static_cast<T&>(x);
+    }
+  } else {
+    if constexpr (is_adding_const) {
+      return std::move(std::as_const(x));
+    } else {
+      return std::move(x);
+    }
+  }
+}
+
+/**
+ * @brief std::forward_like の内部ディスパッチャ
+ * @details std::forward_like と同名だと ADL 経由で std::forward_like と衝突するため、
+ *          意図的に異なる名前を使用する。
+ *          処理系がサポートしていれば std::forward_like に委譲し、
+ *          未サポートの場合は forward_like_impl にフォールバックする。
+ * @tparam Self 価値カテゴリと const 性の基準となる型
+ * @tparam T 変換対象の値の型
+ * @param x 変換対象の値への参照
+ * @return Self の価値カテゴリ・const 性を反映した x への参照
+ */
+template <typename Self, typename T>
+[[nodiscard]] constexpr auto&& forward_like_dispatch(T&& x) noexcept {
+#if defined(__cpp_lib_forward_like)
+  return std::forward_like<Self>(std::forward<T>(x));
+#else
+  return forward_like_impl<Self>(std::forward<T>(x));
+#endif
+}
+
+template <typename Self, typename T>
+using forward_like_t = decltype(forward_like_dispatch<Self>(std::declval<T&>()));
 
 /**
  * @brief ソフトウェア版 CRC32C (Castagnoli) 実装 (Constexpr用)
@@ -564,7 +611,7 @@ private:
       return std::array<T, size()>{ std::move(*values[I])... };
     }(std::make_index_sequence<size()>{});
   }
-  template <typename Self> static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) { return std::forward_like<Self>(self.values_[index]); }
+  template <typename Self> static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) { return detail::forward_like_dispatch<Self>(self.values_[index]); }
   template <typename Result, typename Self, std::size_t... Index> static constexpr auto to_array_result(Self&& self, std::index_sequence<Index...>) -> Result { return Result{ typename Result::value_type{ key_views_[Index], forward_mapped<Self>(std::forward<Self>(self), Index) }... }; }
   template <typename Result, typename Self> static constexpr auto to_associative_result(Self&& self) -> Result {
     Result result{};
