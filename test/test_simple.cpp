@@ -753,16 +753,16 @@ TEST_CASE("minify helpers") {
     "  <span>  hi  </span>\n"
     "  <!-- ignore -->\n"
     "</div>"_fs);
-  static_assert(html.sv() == "<div class=\"x\"><span>hi</span></div>");
-  REQUIRE(html.sv() == "<div class=\"x\"><span>hi</span></div>");
+  static_assert(html.sv() == "<div class=x><span>hi</span></div>");
+  REQUIRE(html.sv() == "<div class=x><span>hi</span></div>");
 
   auto constexpr xml = minify_xml(
     "<root>\n"
     "  <!-- comment -->\n"
     "  <item id = \"1\" > value </item>\n"
     "</root>"_fs);
-  static_assert(xml.sv() == "<root><item id=\"1\">value</item></root>");
-  REQUIRE(xml.sv() == "<root><item id=\"1\">value</item></root>");
+  static_assert(xml.sv() == "<root><item id=1>value</item></root>");
+  REQUIRE(xml.sv() == "<root><item id=1>value</item></root>");
 
   auto constexpr json = minify_json(
     "{\n"
@@ -789,6 +789,27 @@ TEST_CASE("minify helpers") {
   static_assert(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
   REQUIRE(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
 
+  auto constexpr sql_type = minify_sql(
+    "SELECT  INTEGER,  BOOLEAN  FROM  tbl\n"
+    "WHERE  col :: text = 'x'"_fs);
+  static_assert(sql_type.sv() == "SELECT INT,BOOL FROM tbl WHERE col::text='x'");
+  REQUIRE(sql_type.sv() == "SELECT INT,BOOL FROM tbl WHERE col::text='x'");
+
+  auto constexpr sql_no_shorten = minify_sql(
+    "SELECT INTEGER FROM tbl"_fs, false);
+  static_assert(sql_no_shorten.sv() == "SELECT INTEGER FROM tbl");
+  REQUIRE(sql_no_shorten.sv() == "SELECT INTEGER FROM tbl");
+
+  auto constexpr sql_charvar = minify_sql(
+    "SELECT  CHARACTER  VARYING(100)  FROM  tbl"_fs);
+  static_assert(sql_charvar.sv() == "SELECT VARCHAR(100) FROM tbl");
+  REQUIRE(sql_charvar.sv() == "SELECT VARCHAR(100) FROM tbl");
+
+  auto constexpr sql_operators = minify_sql(
+    "a  ||  b  ->  'key'  @>  '{1}'"_fs);
+  static_assert(sql_operators.sv() == "a||b->'key'@>'{1}'");
+  REQUIRE(sql_operators.sv() == "a||b->'key'@>'{1}'");
+
   auto constexpr html2 = minify_html(
     "<div>  hello  </div>\n"
     "<span>  world  </span>"_fs);
@@ -799,8 +820,8 @@ TEST_CASE("minify helpers") {
     "<div class = \"x\" >\n"
     "  <input type = \"text\" />\n"
     "</div>"_fs);
-  static_assert(html3.sv() == "<div class=\"x\"><input type=\"text\"/></div>");
-  REQUIRE(html3.sv() == "<div class=\"x\"><input type=\"text\"/></div>");
+  static_assert(html3.sv() == "<div class=x><input /></div>");
+  REQUIRE(html3.sv() == "<div class=x><input /></div>");
 }
 
 TEST_CASE("sql_uppercase_keywords") {

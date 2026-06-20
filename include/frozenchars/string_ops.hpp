@@ -1060,7 +1060,162 @@ namespace detail {
    * @return auto 記号なら true
    */
   auto constexpr is_sql_punct(char c) noexcept {
-    return c == ',' || c == ';' || c == '(' || c == ')' || c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>';
+    return c == ',' || c == ';' || c == '(' || c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' || c == ':' || c == '|' || c == '@' || c == '#';
+  }
+
+  /**
+   * @brief 布爾属性名か判定する
+   *
+   * @param name 属性名の先頭ポインタ
+   * @param len 属性名の長さ
+   * @return auto 布爾属性なら true
+   */
+  auto constexpr is_boolean_attribute(char const* name, size_t len) noexcept {
+    // oxfmt-ignore
+    return (len == 8 && name[0] == 'd' && name[1] == 'i' && name[2] == 's' && name[3] == 'a' && name[4] == 'b' && name[5] == 'l' && name[6] == 'e' && name[7] == 'd')
+        || (len == 7 && name[0] == 'c' && name[1] == 'h' && name[2] == 'e' && name[3] == 'c' && name[4] == 'k' && name[5] == 'e' && name[6] == 'd')
+        || (len == 8 && name[0] == 'r' && name[1] == 'e' && name[2] == 'a' && name[3] == 'd' && name[4] == 'o' && name[5] == 'n' && name[6] == 'l' && name[7] == 'y')
+        || (len == 8 && name[0] == 'r' && name[1] == 'e' && name[2] == 'q' && name[3] == 'u' && name[4] == 'i' && name[5] == 'r' && name[6] == 'e' && name[7] == 'd')
+        || (len == 9 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'f' && name[5] == 'o' && name[6] == 'c' && name[7] == 'u' && name[8] == 's')
+        || (len == 9 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'p' && name[5] == 'l' && name[6] == 'a' && name[7] == 'y' && name[8] == '\0')
+        || (len == 8 && name[0] == 'c' && name[1] == 'o' && name[2] == 'n' && name[3] == 't' && name[4] == 'r' && name[5] == 'o' && name[6] == 'l' && name[7] == 's')
+        || (len == 4 && name[0] == 'l' && name[1] == 'o' && name[2] == 'o' && name[3] == 'p')
+        || (len == 5 && name[0] == 'm' && name[1] == 'u' && name[2] == 't' && name[3] == 'e' && name[4] == 'd')
+        || (len == 6 && name[0] == 'h' && name[1] == 'i' && name[2] == 'd' && name[3] == 'd' && name[4] == 'e' && name[5] == 'n')
+        || (len == 5 && name[0] == 'd' && name[1] == 'e' && name[2] == 'f' && name[3] == 'e' && name[4] == 'r')
+        || (len == 5 && name[0] == 'a' && name[1] == 's' && name[2] == 'y' && name[3] == 'n' && name[4] == 'c')
+        || (len == 9 && name[0] == 'n' && name[1] == 'o' && name[2] == 'v' && name[3] == 'a' && name[4] == 'l' && name[5] == 'i' && name[6] == 'd' && name[7] == 'a' && name[8] == 't')
+        || (len == 13 && name[0] == 'f' && name[1] == 'o' && name[2] == 'r' && name[3] == 'm' && name[4] == 'n' && name[5] == 'o' && name[6] == 'v' && name[7] == 'a' && name[8] == 'l' && name[9] == 'i' && name[10] == 'd' && name[11] == 'a' && name[12] == 't')
+        || (len == 8 && name[0] == 'r' && name[1] == 'e' && name[2] == 'v' && name[3] == 'e' && name[4] == 'r' && name[5] == 's' && name[6] == 'e' && name[7] == 'd')
+        || (len == 6 && name[0] == 'o' && name[1] == 'p' && name[2] == 'e' && name[3] == 'n' && name[4] == 'e' && name[5] == 'd')
+        || (len == 8 && name[0] == 's' && name[1] == 'e' && name[2] == 'l' && name[3] == 'e' && name[4] == 'c' && name[5] == 't' && name[6] == 'e' && name[7] == 'd')
+        || (len == 6 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'p' && name[5] == 'l')
+        || (len == 6 && name[0] == 'n' && name[1] == 'o' && name[2] == 'w' && name[3] == 'r' && name[4] == 'a' && name[5] == 'p')
+        || (len == 6 && name[0] == 's' && name[1] == 'c' && name[2] == 'o' && name[3] == 'p' && name[4] == 'e' && name[5] == 'd')
+        || (len == 8 && name[0] == 's' && name[1] == 'e' && name[2] == 'a' && name[3] == 'm' && name[4] == 'l' && name[5] == 'e' && name[6] == 's' && name[7] == 's')
+        || (len == 6 && name[0] == 'i' && name[1] == 's' && name[2] == 'm' && name[3] == 'a' && name[4] == 'p' && name[5] == '\0')
+        || (len == 8 && name[0] == 'i' && name[1] == 't' && name[2] == 'e' && name[3] == 'm' && name[4] == 's' && name[5] == 'c' && name[6] == 'o' && name[7] == 'p')
+        || (len == 9 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'p' && name[5] == 'l' && name[6] == 'a' && name[7] == 'y' && name[8] == '\0');
+  }
+
+  /**
+   * @brief 冗長な属性か判定する（デフォルト値と一致する場合）
+   *
+   * @param tag タグ名の先頭ポインタ
+   * @param tag_len タグ名の長さ
+   * @param attr_name 属性名の先頭ポインタ
+   * @param attr_len 属性名の長さ
+   * @param attr_val 属性値の先頭ポインタ
+   * @param val_len 属性値の長さ
+   * @return auto 冗長なら true
+   */
+  auto constexpr is_redundant_attribute(char const* tag, size_t tag_len, char const* attr_name, size_t attr_len, char const* attr_val, size_t val_len) noexcept {
+    // <script type="text/javascript"> → type 属性は冗長
+    if (tag_len == 6 && tag[0] == 's' && tag[1] == 'c' && tag[2] == 'r' && tag[3] == 'i' && tag[4] == 'p' && tag[5] == 't' && attr_len == 4 && attr_name[0] == 't' && attr_name[1] == 'y' && attr_name[2] == 'p' && attr_name[3] == 'e') {
+      // text/javascript, application/javascript, module 等
+      if (val_len == 15 && attr_val[0] == 't' && attr_val[1] == 'e' && attr_val[2] == 'x' && attr_val[3] == 't' && attr_val[4] == '/' && attr_val[5] == 'j' && attr_val[6] == 'a' && attr_val[7] == 'v' && attr_val[8] == 'a' && attr_val[9] == 's' && attr_val[10] == 'c' && attr_val[11] == 'r' && attr_val[12] == 'i' && attr_val[13] == 'p' && attr_val[14] == 't') {
+        return true;
+      }
+      if (val_len == 19 && attr_val[0] == 'a' && attr_val[1] == 'p' && attr_val[2] == 'p' && attr_val[3] == 'l' && attr_val[4] == 'i' && attr_val[5] == 'c' && attr_val[6] == 'a' && attr_val[7] == 't' && attr_val[8] == 'i' && attr_val[9] == 'o' && attr_val[10] == 'n' && attr_val[11] == '/' && attr_val[12] == 'j' && attr_val[13] == 'a' && attr_val[14] == 'v' && attr_val[15] == 'a' && attr_val[16] == 's' && attr_val[17] == 'c' && attr_val[18] == 'r') {
+        return true;
+      }
+      if (val_len == 6 && attr_val[0] == 'm' && attr_val[1] == 'o' && attr_val[2] == 'd' && attr_val[3] == 'u' && attr_val[4] == 'l' && attr_val[5] == 'e') {
+        return true;
+      }
+    }
+    // <style type="text/css"> → type 属性は冗長
+    if (tag_len == 5 && tag[0] == 's' && tag[1] == 't' && tag[2] == 'y' && tag[3] == 'l' && tag[4] == 'e' && attr_len == 4 && attr_name[0] == 't' && attr_name[1] == 'y' && attr_name[2] == 'p' && attr_name[3] == 'e') {
+      if (val_len == 8 && attr_val[0] == 't' && attr_val[1] == 'e' && attr_val[2] == 'x' && attr_val[3] == 't' && attr_val[4] == '/' && attr_val[5] == 'c' && attr_val[6] == 's' && attr_val[7] == 's') {
+        return true;
+      }
+    }
+    // <input type="text"> → type 属性は冗長（デフォルトが text）
+    if (tag_len == 5 && tag[0] == 'i' && tag[1] == 'n' && tag[2] == 'p' && tag[3] == 'u' && tag[4] == 't' && attr_len == 4 && attr_name[0] == 't' && attr_name[1] == 'y' && attr_name[2] == 'p' && attr_name[3] == 'e') {
+      if (val_len == 4 && attr_val[0] == 't' && attr_val[1] == 'e' && attr_val[2] == 'x' && attr_val[3] == 't') {
+        return true;
+      }
+    }
+    // <form method="get"> → method 属性は冗長（デフォルトが get）
+    if (tag_len == 4 && tag[0] == 'f' && tag[1] == 'o' && tag[2] == 'r' && tag[3] == 'm' && attr_len == 6 && attr_name[0] == 'm' && attr_name[1] == 'e' && attr_name[2] == 't' && attr_name[3] == 'h' && attr_name[4] == 'o' && attr_name[5] == 'd') {
+      if (val_len == 3 && attr_val[0] == 'g' && attr_val[1] == 'e' && attr_val[2] == 't') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @brief 省略可能な終了タグか判定する
+   *
+   * @param tag タグ名の先頭ポインタ
+   * @param tag_len タグ名の長さ
+   * @return auto 省略可能なら true
+   */
+  auto constexpr is_optional_end_tag(char const* tag, size_t tag_len) noexcept {
+    // oxfmt-ignore
+    return (tag_len == 2 && tag[0] == 'l' && tag[1] == 'i')
+        || (tag_len == 2 && tag[0] == 'd' && tag[1] == 't')
+        || (tag_len == 2 && tag[0] == 'd' && tag[1] == 'd')
+        || (tag_len == 1 && tag[0] == 'p')
+        || (tag_len == 2 && tag[0] == 't' && tag[1] == 'r')
+        || (tag_len == 2 && tag[0] == 't' && tag[1] == 'd')
+        || (tag_len == 2 && tag[0] == 't' && tag[1] == 'h')
+        || (tag_len == 6 && tag[0] == 't' && tag[1] == 'h' && tag[2] == 'e' && tag[3] == 'a' && tag[4] == 'd' && tag[5] == '\0')
+        || (tag_len == 6 && tag[0] == 't' && tag[1] == 'b' && tag[2] == 'o' && tag[3] == 'd' && tag[4] == 'y' && tag[5] == '\0')
+        || (tag_len == 5 && tag[0] == 't' && tag[1] == 'f' && tag[2] == 'o' && tag[3] == 'o' && tag[4] == 't')
+        || (tag_len == 6 && tag[0] == 'o' && tag[1] == 'p' && tag[2] == 't' && tag[3] == 'i' && tag[4] == 'o' && tag[5] == 'n')
+        || (tag_len == 7 && tag[0] == 'o' && tag[1] == 'p' && tag[2] == 't' && tag[3] == 'g' && tag[4] == 'r' && tag[5] == 'o' && tag[6] == 'u')
+        || (tag_len == 8 && tag[0] == 'c' && tag[1] == 'o' && tag[2] == 'l' && tag[3] == 'g' && tag[4] == 'r' && tag[5] == 'o' && tag[6] == 'u' && tag[7] == 'p')
+        || (tag_len == 8 && tag[0] == 'c' && tag[1] == 'a' && tag[2] == 'p' && tag[3] == 't' && tag[4] == 'i' && tag[5] == 'o' && tag[6] == 'n' && tag[7] == '\0');
+  }
+
+  /**
+   * @brief 属性値がクォート不要か判定する
+   *
+   * @param val 属性値の先頭ポインタ
+   * @param len 属性値の長さ
+   * @return auto クォート不要なら true
+   */
+  auto constexpr can_remove_attribute_quotes(char const* val, size_t len) noexcept {
+    if (len == 0) {
+      return false;
+    }
+    for (size_t j = 0; j < len; ++j) {
+      auto const ch = val[j];
+      if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\f' || ch == '\r' || ch == '"' || ch == '\'' || ch == '`' || ch == '=' || ch == '<' || ch == '>') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * @brief タグ名が一致するか判定する（大文字小文字不区別）
+   *
+   * @param tag タグ名の先頭ポインタ
+   * @param tag_len タグ名の長さ
+   * @param ref 比較対象文字列
+   * @param ref_len 比較対象の長さ
+   * @return auto 一致なら true
+   */
+  auto constexpr tag_equal_ci(char const* tag, size_t tag_len, char const* ref, size_t ref_len) noexcept {
+    if (tag_len != ref_len) {
+      return false;
+    }
+    for (size_t j = 0; j < tag_len; ++j) {
+      auto a = tag[j];
+      auto b = ref[j];
+      if (a >= 'A' && a <= 'Z') {
+        a = static_cast<char>(a + 32);
+      }
+      if (b >= 'A' && b <= 'Z') {
+        b = static_cast<char>(b + 32);
+      }
+      if (a != b) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -1068,6 +1223,8 @@ namespace detail {
    *
    * 文字列リテラル内の文字は保持し、タグ周辺の不要空白と
    * コメント（`<!-- ... -->`）を除去します。
+   * さらに、冗長な属性の削除、布爾属性の圧縮、省略可能な終了タグの除去、
+   * 属性値のクォート除去を行います。
    *
    * @tparam N 文字列長（終端文字を含む）
    * @param str 入力文字列
@@ -1126,7 +1283,201 @@ namespace detail {
         if (offset > 0 && res.buffer[offset - 1] == ' ') {
           --offset;
         }
-        pending_space        = false;
+        pending_space = false;
+
+        // 閉じタグの省略: </tag> のうち省略可能なタグをスキップ
+        if (i + 1 < str.length && str.buffer[i + 1] == '/') {
+          // タグ名を読み取る
+          auto tag_start = i + 2;
+          auto tag_end   = tag_start;
+          while (tag_end < str.length && str.buffer[tag_end] != '>' && !is_markup_space(str.buffer[tag_end])) {
+            ++tag_end;
+          }
+          // '>' まで進めてタグ全体をスキップ
+          auto scan = tag_end;
+          while (scan < str.length && str.buffer[scan] != '>') {
+            ++scan;
+          }
+          if (scan < str.length) {
+            ++scan;
+          }
+          if (is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
+            i = scan;
+            continue;
+          }
+          // 省略不可の閉じタグはそのまま出力
+          for (auto k = i; k < scan; ++k) {
+            res.buffer[offset++] = str.buffer[k];
+          }
+          i = scan;
+          continue;
+        }
+
+        // 開いたタグ: 属性の最適化を行う
+        if (i + 1 < str.length && str.buffer[i + 1] != '/' && str.buffer[i + 1] != '!' && str.buffer[i + 1] != '?') {
+          // タグ名を読み取る
+          auto tag_start = i + 1;
+          auto tag_end   = tag_start;
+          while (tag_end < str.length && str.buffer[tag_end] != '>' && !is_markup_space(str.buffer[tag_end])) {
+            ++tag_end;
+          }
+          auto const tag_len = tag_end - tag_start;
+
+          // タグの閉じ '>' までスキャンして属性を処理する
+          auto pos = tag_end;
+          // '<' とタグ名を出力
+          res.buffer[offset++] = '<';
+          for (auto k = tag_start; k < tag_end; ++k) {
+            res.buffer[offset++] = str.buffer[k];
+          }
+
+          // 属性を解析して出力する
+          while (pos < str.length && str.buffer[pos] != '>') {
+            // 空白をスキップして単一空白を出力
+            if (is_markup_space(str.buffer[pos])) {
+              // 次に有効な属性があるか先読み
+              auto peek = pos;
+              while (peek < str.length && is_markup_space(str.buffer[peek])) {
+                ++peek;
+              }
+              // 次が属性名（アルファベット or '_' or ':'）の場合のみ空白を出力
+              if (peek < str.length && str.buffer[peek] != '>' && str.buffer[peek] != '/') {
+                // 連続空白を1つに集約（既に1つ目を出力済みならスキップ）
+                if (res.buffer[offset - 1] != ' ') {
+                  res.buffer[offset++] = ' ';
+                }
+              }
+              pos = peek;
+              continue;
+            }
+
+            // '/' (自己閉じ) ならそのまま出力
+            if (str.buffer[pos] == '/') {
+              if (offset > 0 && res.buffer[offset - 1] != ' ' && res.buffer[offset - 1] != '<') {
+                res.buffer[offset++] = ' ';
+              }
+              res.buffer[offset++] = '/';
+              ++pos;
+              continue;
+            }
+
+            // 属性名の先頭: アルファベット, '_', ':'
+            if ((str.buffer[pos] >= 'a' && str.buffer[pos] <= 'z') || (str.buffer[pos] >= 'A' && str.buffer[pos] <= 'Z') || str.buffer[pos] == '_' || str.buffer[pos] == ':') {
+              // 属性名を読み取る
+              auto attr_start = pos;
+              while (pos < str.length && str.buffer[pos] != '=' && str.buffer[pos] != '>' && !is_markup_space(str.buffer[pos])) {
+                ++pos;
+              }
+              auto const attr_len = pos - attr_start;
+
+              // '=' を探す（空白を飛ばして）
+              auto eq_pos = pos;
+              while (eq_pos < str.length && is_markup_space(str.buffer[eq_pos])) {
+                ++eq_pos;
+              }
+
+              if (eq_pos < str.length && str.buffer[eq_pos] == '=') {
+                // 属性値を読み取る
+                auto val_start = eq_pos + 1;
+                while (val_start < str.length && is_markup_space(str.buffer[val_start])) {
+                  ++val_start;
+                }
+                auto val_quote = '\0';
+                auto val_end   = val_start;
+                if (val_start < str.length && (str.buffer[val_start] == '"' || str.buffer[val_start] == '\'')) {
+                  val_quote = str.buffer[val_start];
+                  ++val_end;
+                  while (val_end < str.length && str.buffer[val_end] != val_quote) {
+                    ++val_end;
+                  }
+                  if (val_end < str.length) {
+                    ++val_end;
+                  }
+                } else {
+                  while (val_end < str.length && !is_markup_space(str.buffer[val_end]) && str.buffer[val_end] != '>') {
+                    ++val_end;
+                  }
+                }
+                auto const val_content_start = val_quote != '\0' ? val_start + 1 : val_start;
+                auto const val_content_end   = val_quote != '\0' ? val_end - 1 : val_end;
+                auto const val_content_len   = val_content_end - val_content_start;
+
+                // 冗長属性チェック
+                if (is_redundant_attribute(str.buffer.data() + tag_start, tag_len, str.buffer.data() + attr_start, attr_len, str.buffer.data() + val_content_start, val_content_len)) {
+                  pos = val_end;
+                  continue;
+                }
+
+                // 布爾属性チェック: value が属性名と同一なら value を省略
+                if (val_content_len == attr_len) {
+                  auto is_same = true;
+                  for (size_t k = 0; k < attr_len; ++k) {
+                    if (str.buffer[attr_start + k] != str.buffer[val_content_start + k]) {
+                      is_same = false;
+                      break;
+                    }
+                  }
+                  if (is_same && is_boolean_attribute(str.buffer.data() + attr_start, attr_len)) {
+                    // 属性名のみ出力
+                    for (auto k = attr_start; k < attr_start + attr_len; ++k) {
+                      res.buffer[offset++] = str.buffer[k];
+                    }
+                    pos = val_end;
+                    continue;
+                  }
+                }
+
+                // 通常の属性: 値のクォート除去を試みる
+                // 属性値が安全ならクォートなしで出力
+                auto can_unquote = val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
+                if (can_unquote) {
+                  // 属性名
+                  for (auto k = attr_start; k < attr_start + attr_len; ++k) {
+                    res.buffer[offset++] = str.buffer[k];
+                  }
+                  res.buffer[offset++] = '=';
+                  // クォートなしの値
+                  for (auto k = val_content_start; k < val_content_end; ++k) {
+                    res.buffer[offset++] = str.buffer[k];
+                  }
+                } else {
+                  // 属性名
+                  for (auto k = attr_start; k < attr_start + attr_len; ++k) {
+                    res.buffer[offset++] = str.buffer[k];
+                  }
+                  res.buffer[offset++] = '=';
+                  // クォート付きの値
+                  for (auto k = val_start; k < val_end; ++k) {
+                    res.buffer[offset++] = str.buffer[k];
+                  }
+                }
+                pos = val_end;
+              } else {
+                // 布爾属性（= なし）: そのまま出力
+                for (auto k = attr_start; k < pos; ++k) {
+                  res.buffer[offset++] = str.buffer[k];
+                }
+              }
+              continue;
+            }
+
+            // その他の文字（タグ内）はそのまま出力
+            res.buffer[offset++] = str.buffer[pos];
+            ++pos;
+          }
+
+          // '>' を出力（不要な末尾空白を削除）
+          while (offset > 0 && res.buffer[offset - 1] == ' ') {
+            --offset;
+          }
+          if (pos < str.length && str.buffer[pos] == '>') {
+            res.buffer[offset++] = '>';
+            ++pos;
+          }
+          i = pos;
+          continue;
+        }
+
         res.buffer[offset++] = c;
         ++i;
         continue;
@@ -1470,6 +1821,48 @@ namespace detail {
     return false;
   }
 
+  /**
+   * @brief SQL 型キーワード短縮マッピング
+   */
+  struct sql_type_mapping {
+    char const* long_form;
+    size_t      long_len;
+    char const* short_form;
+    size_t      short_len;
+  };
+
+  inline constexpr sql_type_mapping sql_type_shortenings[] = {
+      {"BOOLEAN",   7, "BOOL",  4},
+      {"CHARACTER", 9, "CHAR",  4},
+      {"INTEGER",   7, "INT",   3},
+  };
+
+  /**
+   * @brief SQL 型キーワードの短縮マッピングを検索する
+   *
+   * @param word 大文字変換済みの識別子
+   * @param len 文字列長
+   * @return auto マッピングがあればポインタ、なければ nullptr
+   */
+  auto consteval sql_find_type_shortening(char const* word, size_t len) noexcept -> sql_type_mapping const* {
+    for (auto const& m : sql_type_shortenings) {
+      if (len != m.long_len) {
+        continue;
+      }
+      auto match = true;
+      for (auto j = 0uz; j < len; ++j) {
+        if (word[j] != m.long_form[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return &m;
+      }
+    }
+    return nullptr;
+  }
+
 }  // namespace detail
 
 /**
@@ -1715,13 +2108,15 @@ template <size_t N>
  * @brief SQL 文字列を minify する
  *
  * 文字列リテラル・識別子引用を保持しつつ、コメントと不要空白を削除します。
+ * shorten_types が true の場合、型キーワードも短縮します（INTEGER→INT 等）。
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
+ * @param shorten_types 型キーワード短縮を有効にするか（既定 true）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str) noexcept {
+[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str, bool shorten_types = true) noexcept {
   auto res           = FrozenString<N>{};
   auto offset        = 0uz;
   auto i             = 0uz;
@@ -1814,10 +2209,67 @@ template <size_t N>
       auto const prev          = offset == 0 ? '\0' : res.buffer[offset - 1];
       auto const prev_is_punct = detail::is_sql_punct(prev);
       auto const next_is_punct = detail::is_sql_punct(c);
-      if (prev != '\0' && !prev_is_punct && !next_is_punct) {
+      auto const next_is_close = c == ')';
+      if (prev != '\0' && !prev_is_punct && !next_is_punct && !next_is_close) {
         res.buffer[offset++] = ' ';
       }
       pending_space = false;
+    }
+
+    // 型キーワードの短縮
+    if (shorten_types && detail::is_sql_id_start(c)) {
+      auto const word_start = i;
+      while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
+        ++i;
+      }
+      auto const word_len = i - word_start;
+
+      auto upper_buf = std::array<char, 256>{};
+      if (word_len <= upper_buf.size()) {
+        for (auto j = 0uz; j < word_len; ++j) {
+          auto const ch = str.buffer[word_start + j];
+          upper_buf[j]  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+        }
+
+        auto const* mapping = detail::sql_find_type_shortening(upper_buf.data(), word_len);
+        if (mapping != nullptr) {
+          if (word_len == 9 && upper_buf[0] == 'C') {
+            auto peek = i;
+            while (peek < str.length && detail::is_any_whitespace(str.buffer[peek])) {
+              ++peek;
+            }
+            if (peek + 7 <= str.length) {
+              auto varying_match = true;
+              for (auto j = 0uz; j < 7; ++j) {
+                auto const ch        = str.buffer[peek + j];
+                auto const upper_ch  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+                if (upper_ch != "VARYING"[j]) {
+                  varying_match = false;
+                  break;
+                }
+              }
+              if (varying_match && peek + 7 < str.length && !detail::is_sql_id_char(str.buffer[peek + 7])) {
+                constexpr char VARCHAR[] = "VARCHAR";
+                for (auto j = 0uz; j < 7; ++j) {
+                  res.buffer[offset++] = VARCHAR[j];
+                }
+                i = peek + 7;
+                pending_space = true;
+                continue;
+              }
+            }
+          }
+          for (auto j = 0uz; j < mapping->short_len; ++j) {
+            res.buffer[offset++] = mapping->short_form[j];
+          }
+          continue;
+        }
+      }
+
+      for (auto j = 0uz; j < word_len; ++j) {
+        res.buffer[offset++] = str.buffer[word_start + j];
+      }
+      continue;
     }
 
     if (c == '\'') {
@@ -1847,11 +2299,12 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列リテラル
+ * @param shorten_types 型キーワード短縮を有効にするか（既定 true）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_sql(char const (&str)[N]) noexcept {
-  return minify_sql(FrozenString{str});
+[[nodiscard]] auto consteval minify_sql(char const (&str)[N], bool shorten_types = true) noexcept {
+  return minify_sql(FrozenString{str}, shorten_types);
 }
 
 /**
