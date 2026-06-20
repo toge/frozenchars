@@ -778,6 +778,19 @@ template <FrozenString Delim, size_t N>
   return partition<Delim>(FrozenString{str});
 }
 
+/**
+ * @brief freeze可能な文字列を区切り文字で3分割する
+ *
+ * @tparam Delim 区切り文字列 (FrozenString NTTP)
+ * @param str 対象文字列
+ * @return auto std::tuple (分割前, 区切り文字, 分割後)
+ */
+template <auto Delim>
+  requires detail::is_frozen_string_v<decltype(Delim)>
+[[nodiscard]] auto consteval partition(auto const& str) noexcept {
+  return partition<Delim>(freeze(str));
+}
+
 template <size_t Width, char Fill = ' ', typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_left(T const& v) noexcept {
