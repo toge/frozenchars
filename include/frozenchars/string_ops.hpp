@@ -608,11 +608,26 @@ template <FrozenString Substr, size_t N>
   return detail::find_impl(str, Substr) != std::string_view::npos;
 }
 
+/**
+ * @brief 文字列リテラルが部分文字列を含むかを判定する
+ *
+ * @tparam Substr 検索する部分文字列
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return bool 部分文字列を含むなら true
+ */
 template <FrozenString Substr, size_t N>
 [[nodiscard]] auto consteval contains(char const (&str)[N]) noexcept -> bool {
   return contains<Substr>(FrozenString{str});
 }
 
+/**
+ * @brief freeze可能な文字列が部分文字列を含むかを判定する
+ *
+ * @tparam Substr 検索する部分文字列 (FrozenString NTTP)
+ * @param str 対象文字列
+ * @return bool 部分文字列を含むなら true
+ */
 template <auto Substr>
   requires detail::is_frozen_string_v<decltype(Substr)>
 [[nodiscard]] auto consteval contains(auto const& str) noexcept -> bool {
