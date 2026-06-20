@@ -634,6 +634,150 @@ template <auto Substr>
   return contains<Substr>(freeze(str));
 }
 
+/**
+ * @brief 文字列が指定した接頭辞で始まるかを判定する
+ *
+ * @tparam Prefix 検索する接頭辞
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return bool 指定した接頭辞で始まるなら true
+ */
+template <FrozenString Prefix, size_t N>
+[[nodiscard]] auto consteval starts_with(FrozenString<N> const& str) noexcept -> bool {
+  if constexpr (Prefix.length == 0) {
+    return true;
+  } else {
+    if (str.length < Prefix.length) return false;
+    for (auto i = 0uz; i < Prefix.length; ++i) {
+      if (str.buffer[i] != Prefix.buffer[i]) return false;
+    }
+    return true;
+  }
+}
+
+/**
+ * @brief 文字列リテラルが指定した接頭辞で始まるかを判定する
+ *
+ * @tparam Prefix 検索する接頭辞
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return bool 指定した接頭辞で始まるなら true
+ */
+template <FrozenString Prefix, size_t N>
+[[nodiscard]] auto consteval starts_with(char const (&str)[N]) noexcept -> bool {
+  return starts_with<Prefix>(FrozenString{str});
+}
+
+/**
+ * @brief freeze可能な文字列が指定した接頭辞で始まるかを判定する
+ *
+ * @tparam Prefix 検索する接頭辞 (FrozenString NTTP)
+ * @param str 対象文字列
+ * @return bool 指定した接頭辞で始まるなら true
+ */
+template <auto Prefix>
+  requires detail::is_frozen_string_v<decltype(Prefix)>
+[[nodiscard]] auto consteval starts_with(auto const& str) noexcept -> bool {
+  return starts_with<Prefix>(freeze(str));
+}
+
+/**
+ * @brief 文字列が指定した接尾辞で終わるかを判定する
+ *
+ * @tparam Suffix 検索する接尾辞
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return bool 指定した接尾辞で終わるなら true
+ */
+template <FrozenString Suffix, size_t N>
+[[nodiscard]] auto consteval ends_with(FrozenString<N> const& str) noexcept -> bool {
+  if constexpr (Suffix.length == 0) {
+    return true;
+  } else {
+    if (str.length < Suffix.length) return false;
+    auto const start = str.length - Suffix.length;
+    for (auto i = 0uz; i < Suffix.length; ++i) {
+      if (str.buffer[start + i] != Suffix.buffer[i]) return false;
+    }
+    return true;
+  }
+}
+
+/**
+ * @brief 文字列リテラルが指定した接尾辞で終わるかを判定する
+ *
+ * @tparam Suffix 検索する接尾辞
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return bool 指定した接尾辞で終わるなら true
+ */
+template <FrozenString Suffix, size_t N>
+[[nodiscard]] auto consteval ends_with(char const (&str)[N]) noexcept -> bool {
+  return ends_with<Suffix>(FrozenString{str});
+}
+
+/**
+ * @brief freeze可能な文字列が指定した接尾辞で終わるかを判定する
+ *
+ * @tparam Suffix 検索する接尾辞 (FrozenString NTTP)
+ * @param str 対象文字列
+ * @return bool 指定した接尾辞で終わるなら true
+ */
+template <auto Suffix>
+  requires detail::is_frozen_string_v<decltype(Suffix)>
+[[nodiscard]] auto consteval ends_with(auto const& str) noexcept -> bool {
+  return ends_with<Suffix>(freeze(str));
+}
+
+/**
+ * @brief 文字列を区切り文字で3分割する
+ *
+ * @tparam Delim 区切り文字列
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto std::tuple (分割前, 区切り文字, 分割後)
+ */
+template <FrozenString Delim, size_t N>
+[[nodiscard]] auto consteval partition(FrozenString<N> const& str) noexcept {
+  auto const pos = detail::find_impl(str, Delim);
+  if (pos == std::string_view::npos) {
+    return std::tuple{str, FrozenString<1>{}, FrozenString<1>{}};
+  }
+
+  auto const before_len = pos;
+  auto const after_start = pos + Delim.length;
+  auto const after_len = str.length - after_start;
+
+  auto before = FrozenString<before_len + 1>{};
+  for (auto i = 0uz; i < before_len; ++i) {
+    before.buffer[i] = str.buffer[i];
+  }
+  before.buffer[before_len] = '\0';
+  before.length = before_len;
+
+  auto after = FrozenString<after_len + 1>{};
+  for (auto i = 0uz; i < after_len; ++i) {
+    after.buffer[i] = str.buffer[after_start + i];
+  }
+  after.buffer[after_len] = '\0';
+  after.length = after_len;
+
+  return std::tuple{before, Delim, after};
+}
+
+/**
+ * @brief 文字列リテラルを区切り文字で3分割する
+ *
+ * @tparam Delim 区切り文字列
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto std::tuple (分割前, 区切り文字, 分割後)
+ */
+template <FrozenString Delim, size_t N>
+[[nodiscard]] auto consteval partition(char const (&str)[N]) noexcept {
+  return partition<Delim>(FrozenString{str});
+}
+
 template <size_t Width, char Fill = ' ', typename T>
   requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_left(T const& v) noexcept {

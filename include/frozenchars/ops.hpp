@@ -341,6 +341,38 @@ struct hex_decode_adaptor : pipe_adaptor_base {
   }
 };
 
+struct html_encode_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::html_encode(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::html_encode(FrozenString{str});
+  }
+};
+
+struct html_decode_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::html_decode(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::html_decode(FrozenString{str});
+  }
+};
+
+struct word_wrap_adaptor : pipe_adaptor_base {
+  size_t width;
+  constexpr word_wrap_adaptor(size_t w) noexcept : width(w) {}
+
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::word_wrap(str, width);
+  }
+};
+
 /**
  * @brief HTML minify をパイプ演算子で適用するアダプタ
  */
@@ -451,6 +483,8 @@ inline constexpr hex_encode_adaptor hex_encode{};
 inline constexpr hex_decode_adaptor hex_decode{};
 inline constexpr hex_encode_adaptor to_ascii{};
 inline constexpr hex_decode_adaptor from_ascii{};
+inline constexpr html_encode_adaptor html_encode{};
+inline constexpr html_decode_adaptor html_decode{};
 inline constexpr minify_html_adaptor minify_html{};
 inline constexpr minify_xml_adaptor minify_xml{};
 inline constexpr minify_json_adaptor minify_json{};
@@ -507,6 +541,10 @@ template <size_t M>
 
 [[nodiscard]] consteval auto remove_range_comments(std::string_view start_seq, std::string_view end_seq) noexcept {
   return remove_range_comments_adaptor{start_seq, end_seq};
+}
+
+[[nodiscard]] consteval auto word_wrap(size_t width) noexcept {
+  return word_wrap_adaptor{width};
 }
 
 template <FrozenString Delim>
@@ -597,6 +635,66 @@ struct replace_all_adaptor : pipe_adaptor_base {
 
 template <FrozenString From, FrozenString To>
 inline constexpr replace_all_adaptor<From, To> replace_all{};
+
+template <FrozenString Substr>
+struct contains_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept -> bool {
+    return frozenchars::contains<Substr>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> bool {
+    return frozenchars::contains<Substr>(FrozenString{str});
+  }
+};
+
+template <FrozenString Substr>
+inline constexpr contains_adaptor<Substr> contains{};
+
+template <FrozenString Prefix>
+struct starts_with_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept -> bool {
+    return frozenchars::starts_with<Prefix>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> bool {
+    return frozenchars::starts_with<Prefix>(FrozenString{str});
+  }
+};
+
+template <FrozenString Prefix>
+inline constexpr starts_with_adaptor<Prefix> starts_with{};
+
+template <FrozenString Suffix>
+struct ends_with_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept -> bool {
+    return frozenchars::ends_with<Suffix>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> bool {
+    return frozenchars::ends_with<Suffix>(FrozenString{str});
+  }
+};
+
+template <FrozenString Suffix>
+inline constexpr ends_with_adaptor<Suffix> ends_with{};
+
+template <FrozenString Delim>
+struct partition_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::partition<Delim>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::partition<Delim>(FrozenString{str});
+  }
+};
+
+template <FrozenString Delim>
+inline constexpr partition_adaptor<Delim> partition{};
 
 /**
  * @brief 数値型に対してアダプタを適用するパイプ演算子
