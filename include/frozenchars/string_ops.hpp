@@ -595,6 +595,30 @@ template <auto Str, auto From, auto To>
   return res;
 }
 
+/**
+ * @brief 文字列が部分文字列を含むかを判定する
+ *
+ * @tparam Substr 検索する部分文字列
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return bool 部分文字列を含むなら true
+ */
+template <FrozenString Substr, size_t N>
+[[nodiscard]] auto consteval contains(FrozenString<N> const& str) noexcept -> bool {
+  return detail::find_impl(str, Substr) != std::string_view::npos;
+}
+
+template <FrozenString Substr, size_t N>
+[[nodiscard]] auto consteval contains(char const (&str)[N]) noexcept -> bool {
+  return contains<Substr>(FrozenString{str});
+}
+
+template <auto Substr>
+  requires detail::is_frozen_string_v<decltype(Substr)>
+[[nodiscard]] auto consteval contains(auto const& str) noexcept -> bool {
+  return contains<Substr>(freeze(str));
+}
+
 template <size_t Width, char Fill = ' ', typename T>
   requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_left(T const& v) noexcept {
@@ -1656,6 +1680,107 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval sql_uppercase_keywords(char const (&str)[N]) noexcept {
   return sql_uppercase_keywords(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を指定幅で折り返す（ワードラップ）
+ *
+ * スペース区切りで単語を認識し、指定された幅を超える前に改行を挿入します。
+ * 既存の改行は保持されます。各行の先頭の余分なスペースは削除されます。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @param width 1行の最大幅（文字数）
+ * @return auto 折り返し後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval word_wrap(FrozenString<N> const& str, size_t width) noexcept {
+  if (width == 0) {
+    width = 1;
+  }
+  constexpr auto OUT_CAP = (N > 0 ? N * 2 : 1);
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto col = 0uz;
+
+  for (auto i = 0uz; i < str.length;) {
+    auto const c = str.buffer[i];
+
+    // 改行はそのまま保持
+    if (c == '\n') {
+      if (offset > 0 && col == 0 && res.buffer[offset - 1] == ' ') {
+        --offset;
+      }
+      res.buffer[offset++] = '\n';
+      col = 0;
+      ++i;
+      continue;
+    }
+
+    // 空白文字を検出
+    if (detail::is_any_whitespace(c)) {
+      if (col == 0) {
+        ++i;
+        continue;
+      }
+      // 次の単語を探す
+      auto next_word = i + 1;
+      while (next_word < str.length && detail::is_any_whitespace(str.buffer[next_word]) && str.buffer[next_word] != '\n') {
+        ++next_word;
+      }
+      if (next_word >= str.length) {
+        break;
+      }
+      auto word_end = next_word;
+      while (word_end < str.length && !detail::is_any_whitespace(str.buffer[word_end]) && str.buffer[word_end] != '\n') {
+        ++word_end;
+      }
+      auto const word_len = word_end - next_word;
+
+      // 幅を超える場合は改行を挿入
+      if (col + 1 + word_len > width) {
+        if (offset > 0 && res.buffer[offset - 1] == ' ') {
+          --offset;
+          --col;
+        }
+        res.buffer[offset++] = '\n';
+        col = 0;
+        ++i;
+        continue;
+      }
+
+      res.buffer[offset++] = ' ';
+      ++col;
+      ++i;
+      continue;
+    }
+
+    // 通常の文字
+    res.buffer[offset++] = c;
+    ++col;
+    ++i;
+  }
+
+  while (offset > 0 && res.buffer[offset - 1] == ' ') {
+    --offset;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを指定幅で折り返す（ワードラップ）
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @param width 1行の最大幅（文字数）
+ * @return auto 折り返し後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval word_wrap(char const (&str)[N], size_t width) noexcept {
+  return word_wrap(FrozenString{str}, width);
 }
 
 } // namespace frozenchars
