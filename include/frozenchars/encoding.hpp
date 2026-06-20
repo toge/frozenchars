@@ -414,4 +414,256 @@ template <auto Str>
   return res;
 }
 
+// ===== HTML entity encode/decode =====
+
+namespace detail {
+
+/**
+ * @brief HTML 名前付きエンティティを1文字に変換する
+ *
+ * @param sv 入力文字列
+ * @param i '&' の位置
+ * @param consumed 消費した文字数（出力）
+ * @return char 変換後の文字。未知のエンティティの場合は '\0'
+ */
+auto constexpr html_decode_entity(std::string_view sv, size_t i, size_t& consumed) noexcept -> char {
+  // &lt; - 4 chars
+  if (i + 3 < sv.size() && sv[i + 1] == 'l' && sv[i + 2] == 't' && sv[i + 3] == ';') {
+    consumed = 4;
+    return '<';
+  }
+  // &gt; - 4 chars
+  if (i + 3 < sv.size() && sv[i + 1] == 'g' && sv[i + 2] == 't' && sv[i + 3] == ';') {
+    consumed = 4;
+    return '>';
+  }
+  // &amp; - 5 chars
+  if (i + 4 < sv.size() && sv[i + 1] == 'a' && sv[i + 2] == 'm' && sv[i + 3] == 'p' && sv[i + 4] == ';') {
+    consumed = 5;
+    return '&';
+  }
+  // &quot; - 6 chars
+  if (i + 5 < sv.size() && sv[i + 1] == 'q' && sv[i + 2] == 'u' && sv[i + 3] == 'o' && sv[i + 4] == 't' && sv[i + 5] == ';') {
+    consumed = 6;
+    return '"';
+  }
+  // &#39; - 5 chars (decimal for ')
+  if (i + 4 < sv.size() && sv[i + 1] == '#' && sv[i + 2] == '3' && sv[i + 3] == '9' && sv[i + 4] == ';') {
+    consumed = 5;
+    return '\'';
+  }
+  // &#x27; - 6 chars (hex for ')
+  if (i + 5 < sv.size() && sv[i + 1] == '#' && sv[i + 2] == 'x' && sv[i + 3] == '2' && sv[i + 4] == '7' && sv[i + 5] == ';') {
+    consumed = 6;
+    return '\'';
+  }
+  return '\0';
+}
+
+} // namespace detail
+
+/**
+ * @brief 文字列をHTMLエンコードする
+ *
+ * 以下の文字を HTML エンティティに変換します:
+ * - `&` → `&amp;`
+ * - `<` → `&lt;`
+ * - `>` → `&gt;`
+ * - `"` → `&quot;`
+ * - `'` → `&#39;`
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto エンコード後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval html_encode(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 6 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+
+  for (auto const c : str.sv()) {
+    switch (c) {
+    case '&':
+      res.buffer[offset++] = '&'; res.buffer[offset++] = 'a';
+      res.buffer[offset++] = 'm'; res.buffer[offset++] = 'p';
+      res.buffer[offset++] = ';';
+      break;
+    case '<':
+      res.buffer[offset++] = '&'; res.buffer[offset++] = 'l';
+      res.buffer[offset++] = 't'; res.buffer[offset++] = ';';
+      break;
+    case '>':
+      res.buffer[offset++] = '&'; res.buffer[offset++] = 'g';
+      res.buffer[offset++] = 't'; res.buffer[offset++] = ';';
+      break;
+    case '"':
+      res.buffer[offset++] = '&'; res.buffer[offset++] = 'q';
+      res.buffer[offset++] = 'u'; res.buffer[offset++] = 'o';
+      res.buffer[offset++] = 't'; res.buffer[offset++] = ';';
+      break;
+    case '\'':
+      res.buffer[offset++] = '&'; res.buffer[offset++] = '#';
+      res.buffer[offset++] = '3'; res.buffer[offset++] = '9';
+      res.buffer[offset++] = ';';
+      break;
+    default:
+      res.buffer[offset++] = c;
+      break;
+    }
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをHTMLエンコードする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto エンコード後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval html_encode(char const (&str)[N]) noexcept {
+  return html_encode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をHTMLエンコードする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto エンコード後の文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval html_encode() noexcept {
+  return shrink_to_fit<html_encode(Str)>();
+}
+
+/**
+ * @brief 文字列をHTMLデコードする
+ *
+ * HTML エンティティを元の文字に戻します:
+ * - `&amp;` → `&`
+ * - `&lt;` → `<`
+ * - `&gt;` → `>`
+ * - `&quot;` → `"`
+ * - `&#39;` → `'`
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto デコード後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval html_decode(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto const s = str.sv();
+
+  for (auto i = 0uz; i < s.size(); ++i) {
+    if (s[i] == '&') {
+      size_t consumed = 0;
+      auto const decoded = detail::html_decode_entity(s, i, consumed);
+      if (decoded != '\0') {
+        res.buffer[offset++] = decoded;
+        i += consumed - 1;
+        continue;
+      }
+    }
+    res.buffer[offset++] = s[i];
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルをHTMLデコードする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto デコード後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval html_decode(char const (&str)[N]) noexcept {
+  return html_decode(FrozenString{str});
+}
+
+/**
+ * @brief 文字列をHTMLデコードする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto デコード後の文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval html_decode() noexcept {
+  return shrink_to_fit<html_decode(Str)>();
+}
+
+/**
+ * @brief UTF-8 文字列のコードポイント数を計算する
+ *
+ * UTF-8 エンコードされた文字列を走査し、有効なコードポイントの個数を返します。
+ * 不正なバイト列は1バイトを1コードポイントとしてカウントします（フェイルソフト）。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return size_t コードポイント数
+ */
+template <size_t N>
+[[nodiscard]] auto consteval utf8_length(FrozenString<N> const& str) noexcept -> size_t {
+  auto count = 0uz;
+  auto i = 0uz;
+
+  while (i < str.length) {
+    auto const c = static_cast<unsigned char>(str.buffer[i]);
+    if (c < 0x80) {
+      i += 1;
+    } else if (c < 0xC0) {
+      // Continuation byte without leading byte - invalid, skip
+      i += 1;
+    } else if (c < 0xE0) {
+      i += 2;
+    } else if (c < 0xF0) {
+      i += 3;
+    } else if (c < 0xF8) {
+      i += 4;
+    } else {
+      // Invalid byte, skip
+      i += 1;
+    }
+    ++count;
+  }
+
+  return count;
+}
+
+/**
+ * @brief 文字列リテラルのUTF-8コードポイント数を計算する
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return size_t コードポイント数
+ */
+template <size_t N>
+[[nodiscard]] auto consteval utf8_length(char const (&str)[N]) noexcept -> size_t {
+  return utf8_length(FrozenString{str});
+}
+
+/**
+ * @brief UTF-8 文字列のコードポイント数を計算する（NTTP版）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return size_t コードポイント数
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval utf8_length() noexcept -> size_t {
+  return utf8_length(Str);
+}
+
 } // namespace frozenchars

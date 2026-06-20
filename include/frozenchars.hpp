@@ -1,6 +1,7 @@
 #pragma once
 
 #include "frozenchars/concepts.hpp"
+#include "frozenchars/char_pred.hpp"
 #include "frozenchars/string.hpp"
 #include "frozenchars/freeze.hpp"
 #include "frozenchars/string_ops.hpp"
