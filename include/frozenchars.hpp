@@ -26,3 +26,5 @@
 #include "frozenchars/inja_function.hpp"
 #include "frozenchars/inja_engine.hpp"
 #endif
+#include "frozenchars/json/compress.hpp"
+#include "frozenchars/json/crush.hpp"
