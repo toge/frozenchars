@@ -4,13 +4,13 @@
 #include <cstddef>
 #include <string_view>
 
-#include "string.hpp"
-#include "string_ops.hpp"
 #include "case_conv.hpp"
-#include "multiline.hpp"
 #include "encoding.hpp"
+#include "multiline.hpp"
 #include "regex_comment.hpp"
 #include "split.hpp"
+#include "string.hpp"
+#include "string_ops.hpp"
 
 namespace frozenchars::ops {
 
@@ -85,12 +85,10 @@ struct collapse_spaces_adaptor : pipe_adaptor_base {
 };
 
 struct substr_adaptor : pipe_adaptor_base {
-  std::size_t pos;
+  std::size_t    pos;
   std::ptrdiff_t len;
 
-  constexpr substr_adaptor(std::size_t p, std::ptrdiff_t l) noexcept
-  : pos(p), len(l)
-  {}
+  constexpr substr_adaptor(std::size_t p, std::ptrdiff_t l) noexcept : pos(p), len(l) {}
 
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -134,9 +132,7 @@ struct remove_leading_spaces_adaptor : pipe_adaptor_base {
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_leading_spaces_if<Pred>(str, n);
   }
-  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
-    return remove_leading_spaces_adaptor<Pred>{count};
-  }
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept { return remove_leading_spaces_adaptor<Pred>{count}; }
 };
 
 struct remove_comment_lines_adaptor : pipe_adaptor_base {
@@ -165,17 +161,13 @@ struct remove_trailing_spaces_adaptor : pipe_adaptor_base {
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::remove_trailing_spaces_if<Pred>(str, n);
   }
-  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
-    return remove_trailing_spaces_adaptor<Pred>{count};
-  }
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept { return remove_trailing_spaces_adaptor<Pred>{count}; }
 };
 
 struct remove_range_comments_adaptor : pipe_adaptor_base {
   std::string_view start_seq;
   std::string_view end_seq;
-  constexpr remove_range_comments_adaptor(std::string_view start, std::string_view end) noexcept
-  : start_seq(start), end_seq(end)
-  {}
+  constexpr remove_range_comments_adaptor(std::string_view start, std::string_view end) noexcept : start_seq(start), end_seq(end) {}
 
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -204,9 +196,7 @@ struct join_lines_adaptor : pipe_adaptor_base {
     return frozenchars::join_lines(str, sep);
   }
 
-  [[nodiscard]] consteval auto operator()(std::string_view s) const noexcept {
-    return join_lines_adaptor{s};
-  }
+  [[nodiscard]] consteval auto operator()(std::string_view s) const noexcept { return join_lines_adaptor{s}; }
 };
 
 template <FrozenString Sep>
@@ -240,9 +230,7 @@ struct remove_leading_empty_lines_adaptor : pipe_adaptor_base {
     return frozenchars::remove_leading_empty_lines(str, n);
   }
 
-  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
-    return remove_leading_empty_lines_adaptor{count};
-  }
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept { return remove_leading_empty_lines_adaptor{count}; }
 };
 
 struct remove_trailing_empty_lines_adaptor : pipe_adaptor_base {
@@ -254,9 +242,7 @@ struct remove_trailing_empty_lines_adaptor : pipe_adaptor_base {
     return frozenchars::remove_trailing_empty_lines(str, n);
   }
 
-  [[nodiscard]] consteval auto operator()(size_t count) const noexcept {
-    return remove_trailing_empty_lines_adaptor{count};
-  }
+  [[nodiscard]] consteval auto operator()(size_t count) const noexcept { return remove_trailing_empty_lines_adaptor{count}; }
 };
 
 struct collapse_empty_lines_adaptor : pipe_adaptor_base {
@@ -290,8 +276,7 @@ template <size_t M1, size_t M2>
 struct surround_lines_adaptor : pipe_adaptor_base {
   FrozenString<M1> prefix;
   FrozenString<M2> postfix;
-  constexpr surround_lines_adaptor(FrozenString<M1> pr, FrozenString<M2> po) noexcept
-  : prefix(pr), postfix(po) {}
+  constexpr surround_lines_adaptor(FrozenString<M1> pr, FrozenString<M2> po) noexcept : prefix(pr), postfix(po) {}
 
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -457,55 +442,61 @@ struct sql_uppercase_keywords_adaptor : pipe_adaptor_base {
   }
 };
 
-inline constexpr trim_adaptor<> trim{};
-inline constexpr ltrim_adaptor<> ltrim{};
-inline constexpr rtrim_adaptor<> rtrim{};
-inline constexpr toupper_adaptor toupper{};
-inline constexpr tolower_adaptor tolower{};
+inline constexpr trim_adaptor<>            trim{};
+inline constexpr ltrim_adaptor<>           ltrim{};
+inline constexpr rtrim_adaptor<>           rtrim{};
+inline constexpr toupper_adaptor           toupper{};
+inline constexpr tolower_adaptor           tolower{};
 inline constexpr collapse_spaces_adaptor<> collapse_spaces{};
-inline constexpr capitalize_adaptor capitalize{};
-inline constexpr to_snake_case_adaptor to_snake_case{};
-inline constexpr to_camel_case_adaptor to_camel_case{};
-inline constexpr to_pascal_case_adaptor to_pascal_case{};
-inline constexpr join_lines_adaptor join_lines{};
+inline constexpr capitalize_adaptor        capitalize{};
+inline constexpr to_snake_case_adaptor     to_snake_case{};
+inline constexpr to_camel_case_adaptor     to_camel_case{};
+inline constexpr to_pascal_case_adaptor    to_pascal_case{};
+inline constexpr join_lines_adaptor        join_lines{};
 template <FrozenString Sep>
-inline constexpr join_lines_nttp_adaptor<Sep> join_lines_nttp{};
-inline constexpr trim_trailing_spaces_adaptor trim_trailing_spaces{};
-inline constexpr remove_empty_lines_adaptor remove_empty_lines{};
-inline constexpr remove_leading_empty_lines_adaptor remove_leading_empty_lines{};
+inline constexpr join_lines_nttp_adaptor<Sep>        join_lines_nttp{};
+inline constexpr trim_trailing_spaces_adaptor        trim_trailing_spaces{};
+inline constexpr remove_empty_lines_adaptor          remove_empty_lines{};
+inline constexpr remove_leading_empty_lines_adaptor  remove_leading_empty_lines{};
 inline constexpr remove_trailing_empty_lines_adaptor remove_trailing_empty_lines{};
-inline constexpr collapse_empty_lines_adaptor collapse_empty_lines{};
-inline constexpr url_encode_adaptor url_encode{};
-inline constexpr url_decode_adaptor url_decode{};
-inline constexpr base64_encode_adaptor base64_encode{};
-inline constexpr base64_decode_adaptor base64_decode{};
-inline constexpr hex_encode_adaptor hex_encode{};
-inline constexpr hex_decode_adaptor hex_decode{};
-inline constexpr hex_encode_adaptor to_ascii{};
-inline constexpr hex_decode_adaptor from_ascii{};
-inline constexpr html_encode_adaptor html_encode{};
-inline constexpr html_decode_adaptor html_decode{};
-inline constexpr minify_html_adaptor minify_html{};
-inline constexpr minify_xml_adaptor minify_xml{};
-inline constexpr minify_json_adaptor minify_json{};
-inline constexpr minify_yaml_adaptor minify_yaml{};
-inline constexpr minify_sql_adaptor minify_sql{};
-inline constexpr sql_uppercase_keywords_adaptor sql_uppercase_keywords{};
-inline constexpr remove_leading_spaces_adaptor<> remove_leading_spaces{};
-inline constexpr remove_trailing_spaces_adaptor<> remove_trailing_spaces{};
-inline constexpr remove_regex_comment_adaptor remove_regex_comment{};
+inline constexpr collapse_empty_lines_adaptor        collapse_empty_lines{};
+inline constexpr url_encode_adaptor                  url_encode{};
+inline constexpr url_decode_adaptor                  url_decode{};
+inline constexpr base64_encode_adaptor               base64_encode{};
+inline constexpr base64_decode_adaptor               base64_decode{};
+inline constexpr hex_encode_adaptor                  hex_encode{};
+inline constexpr hex_decode_adaptor                  hex_decode{};
+inline constexpr hex_encode_adaptor                  to_ascii{};
+inline constexpr hex_decode_adaptor                  from_ascii{};
+inline constexpr html_encode_adaptor                 html_encode{};
+inline constexpr html_decode_adaptor                 html_decode{};
+inline constexpr minify_html_adaptor                 minify_html{};
+inline constexpr minify_xml_adaptor                  minify_xml{};
+inline constexpr minify_json_adaptor                 minify_json{};
+inline constexpr minify_yaml_adaptor                 minify_yaml{};
+inline constexpr minify_sql_adaptor                  minify_sql{};
+inline constexpr sql_uppercase_keywords_adaptor      sql_uppercase_keywords{};
+inline constexpr remove_leading_spaces_adaptor<>     remove_leading_spaces{};
+inline constexpr remove_trailing_spaces_adaptor<>    remove_trailing_spaces{};
+inline constexpr remove_regex_comment_adaptor        remove_regex_comment{};
 
 struct data_t {};
 
 inline constexpr data_t data{};
 
 // Predicate variants
-template <auto Pred> inline constexpr trim_adaptor<Pred> trim_if{};
-template <auto Pred> inline constexpr ltrim_adaptor<Pred> ltrim_if{};
-template <auto Pred> inline constexpr rtrim_adaptor<Pred> rtrim_if{};
-template <auto Pred> inline constexpr collapse_spaces_adaptor<Pred> collapse_spaces_if{};
-template <auto Pred> inline constexpr remove_leading_spaces_adaptor<Pred> remove_leading_spaces_if{};
-template <auto Pred> inline constexpr remove_trailing_spaces_adaptor<Pred> remove_trailing_spaces_if{};
+template <auto Pred>
+inline constexpr trim_adaptor<Pred> trim_if{};
+template <auto Pred>
+inline constexpr ltrim_adaptor<Pred> ltrim_if{};
+template <auto Pred>
+inline constexpr rtrim_adaptor<Pred> rtrim_if{};
+template <auto Pred>
+inline constexpr collapse_spaces_adaptor<Pred> collapse_spaces_if{};
+template <auto Pred>
+inline constexpr remove_leading_spaces_adaptor<Pred> remove_leading_spaces_if{};
+template <auto Pred>
+inline constexpr remove_trailing_spaces_adaptor<Pred> remove_trailing_spaces_if{};
 
 template <size_t M>
 [[nodiscard]] consteval auto prefix_lines(FrozenString<M> const& prefix) noexcept {
@@ -559,8 +550,7 @@ template <FrozenString Delim>
 inline constexpr join_adaptor<Delim> join{};
 
 template <size_t ElemN, size_t Count, FrozenString Delim>
-[[nodiscard]] consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs,
-                         join_adaptor<Delim> const& rhs) noexcept(noexcept(rhs(lhs))) {
+[[nodiscard]] consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs, join_adaptor<Delim> const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
 
@@ -704,4 +694,4 @@ template <Integral T, PipeAdaptor Adaptor>
   return rhs(lhs);
 }
 
-} // namespace frozenchars::ops
+}  // namespace frozenchars::ops

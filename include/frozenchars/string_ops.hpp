@@ -1,7 +1,7 @@
 #pragma once
 
-#include "freeze.hpp"
 #include "detail/string_utils.hpp"
+#include "freeze.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -33,7 +33,7 @@ template <auto Str>
     result.buffer[i] = Str.buffer[i];
   }
   result.buffer[fit_len] = '\0';
-  result.length = fit_len;
+  result.length          = fit_len;
   return result;
 }
 
@@ -49,19 +49,19 @@ template <auto Str>
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_left(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
-  auto res = FrozenString<NEW_SIZE>{};
+  auto           res      = FrozenString<NEW_SIZE>{};
 
   if (str.length >= Width) {
     for (auto i = 0uz; i < str.length; ++i) {
       res.buffer[i] = str.buffer[i];
     }
     res.buffer[str.length] = '\0';
-    res.length = str.length;
+    res.length             = str.length;
     return res;
   }
 
   auto const fill_count = Width - str.length;
-  auto offset = 0uz;
+  auto       offset     = 0uz;
   for (auto i = 0uz; i < fill_count; ++i) {
     res.buffer[offset++] = Fill;
   }
@@ -69,7 +69,7 @@ template <size_t Width, char Fill, size_t N>
     res.buffer[offset++] = str.buffer[i];
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -90,14 +90,14 @@ template <size_t Width, char Fill, size_t N>
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_right(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
-  auto res = FrozenString<NEW_SIZE>{};
+  auto           res      = FrozenString<NEW_SIZE>{};
 
   if (str.length >= Width) {
     for (auto i = 0uz; i < str.length; ++i) {
       res.buffer[i] = str.buffer[i];
     }
     res.buffer[str.length] = '\0';
-    res.length = str.length;
+    res.length             = str.length;
     return res;
   }
 
@@ -110,7 +110,7 @@ template <size_t Width, char Fill, size_t N>
     res.buffer[offset++] = Fill;
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -132,9 +132,9 @@ template <size_t Count, size_t N>
   auto constexpr UNIT_LEN = N > 0 ? N - 1 : 0;
   auto constexpr NEW_SIZE = UNIT_LEN * Count + 1;
 
-  auto res = FrozenString<NEW_SIZE>{};
-  auto offset = 0uz;
-  auto const src = str.sv();
+  auto       res    = FrozenString<NEW_SIZE>{};
+  auto       offset = 0uz;
+  auto const src    = str.sv();
 
   for (auto i = 0uz; i < Count; ++i) {
     for (auto const c : src) {
@@ -235,13 +235,13 @@ template <size_t Width, char Fill = ' ', size_t N>
       res.buffer[i] = str.buffer[i];
     }
     res.buffer[str.length] = '\0';
-    res.length = str.length;
+    res.length             = str.length;
     return res;
   }
-  auto const left_fill = (Width - str.length) / 2;
+  auto const left_fill  = (Width - str.length) / 2;
   auto const right_fill = Width - str.length - left_fill;
 
-  auto res = FrozenString<NEW_SIZE>{};
+  auto res    = FrozenString<NEW_SIZE>{};
   auto offset = 0uz;
   for (auto i = 0uz; i < left_fill; ++i) {
     res.buffer[offset++] = Fill;
@@ -253,7 +253,7 @@ template <size_t Width, char Fill = ' ', size_t N>
     res.buffer[offset++] = Fill;
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -342,7 +342,7 @@ namespace detail {
     if (needle.length > haystack.length || pos > haystack.length - needle.length) {
       return std::string_view::npos;
     }
-    if (needle.length == 1) { // Special case for char
+    if (needle.length == 1) {  // Special case for char
       for (auto i = pos; i < haystack.length; ++i) {
         if (haystack.buffer[i] == needle.buffer[0]) {
           return i;
@@ -367,13 +367,14 @@ namespace detail {
   }
 
   template <auto Str, auto From>
-    requires (is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
+    requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
   [[nodiscard]] consteval auto count_occurrences() noexcept -> std::size_t {
     auto count = 0uz;
-    auto pos = 0uz;
+    auto pos   = 0uz;
     while (pos < Str.length) {
       auto const found = find_impl(Str, From, pos);
-      if (found == std::string_view::npos) break;
+      if (found == std::string_view::npos)
+        break;
       ++count;
       pos = found + From.length;
     }
@@ -381,18 +382,18 @@ namespace detail {
   }
 
   template <auto Str, auto From, auto To>
-    requires (is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)> && is_frozen_string_v<decltype(To)>)
+    requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)> && is_frozen_string_v<decltype(To)>)
   [[nodiscard]] consteval auto replace_all_exact_size() noexcept -> std::size_t {
     constexpr auto occurrences = count_occurrences<Str, From>();
     if constexpr (occurrences == 0) {
       return Str.length + 1;
     } else {
       constexpr auto removed = occurrences * From.length;
-      constexpr auto added = occurrences * To.length;
+      constexpr auto added   = occurrences * To.length;
       return Str.length - removed + added + 1;
     }
   }
-}
+}  // namespace detail
 
 /**
  * @brief 文字列の指定した範囲を置換した文字列を生成する
@@ -406,7 +407,7 @@ namespace detail {
 template <FrozenString From, FrozenString To, size_t N>
 [[nodiscard]] consteval auto replace(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, N + To.size() + 1)> {
   constexpr auto NEW_SIZE = std::max(N, N + To.size() + 1);
-  auto res = FrozenString<NEW_SIZE>{};
+  auto           res      = FrozenString<NEW_SIZE>{};
 
   auto const pos = detail::find_impl(str, From);
   if (pos == std::string_view::npos) {
@@ -414,7 +415,7 @@ template <FrozenString From, FrozenString To, size_t N>
       res.buffer[i] = str.buffer[i];
     }
     res.buffer[str.length] = '\0';
-    res.length = str.length;
+    res.length             = str.length;
     return res;
   }
 
@@ -429,7 +430,7 @@ template <FrozenString From, FrozenString To, size_t N>
     res.buffer[offset++] = str.buffer[i];
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -449,28 +450,25 @@ template <FrozenString From, FrozenString To, size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_t len) noexcept {
-  auto res = FrozenString<N>{};
-  auto const requested_len = len >= 0
-    ? static_cast<size_t>(len)
-    : (len == std::numeric_limits<std::ptrdiff_t>::min()
-        ? static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()) + 1uz
-        : static_cast<size_t>(-len));
-  auto const anchor = std::min(pos, str.length);
-  auto start = anchor;
-  auto actual_len = 0uz;
+  auto       res = FrozenString<N>{};
+  auto const requested_len =
+      len >= 0 ? static_cast<size_t>(len) : (len == std::numeric_limits<std::ptrdiff_t>::min() ? static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()) + 1uz : static_cast<size_t>(-len));
+  auto const anchor     = std::min(pos, str.length);
+  auto       start      = anchor;
+  auto       actual_len = 0uz;
 
   if (len >= 0) {
     actual_len = anchor < str.length ? std::min(requested_len, str.length - anchor) : 0uz;
   } else {
     actual_len = std::min(requested_len, anchor);
-    start = anchor - actual_len;
+    start      = anchor - actual_len;
   }
 
   for (auto i = 0uz; i < actual_len; ++i) {
     res.buffer[i] = str.buffer[start + i];
   }
   res.buffer[actual_len] = '\0';
-  res.length = actual_len;
+  res.length             = actual_len;
   return res;
 }
 
@@ -527,10 +525,10 @@ template <size_t N>
 template <FrozenString From, FrozenString To, size_t N>
 [[nodiscard]] consteval auto replace_all(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N * 4, 2048uz)> {
   constexpr auto MAX_REPLACE_SIZE = std::max(N * 4, 2048uz);
-  auto res = FrozenString<MAX_REPLACE_SIZE>{};
+  auto           res              = FrozenString<MAX_REPLACE_SIZE>{};
 
   auto offset = 0uz;
-  auto pos = 0uz;
+  auto pos    = 0uz;
   while (pos < str.length) {
     auto const found = detail::find_impl(str, From, pos);
     if (found == std::string_view::npos) {
@@ -548,7 +546,7 @@ template <FrozenString From, FrozenString To, size_t N>
     pos = found + From.length;
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -566,14 +564,12 @@ template <FrozenString From, FrozenString To, size_t N>
  * @return auto 生成した文字列
  */
 template <auto Str, auto From, auto To>
-  requires (detail::is_frozen_string_v<decltype(Str)>
-            && detail::is_frozen_string_v<decltype(From)>
-            && detail::is_frozen_string_v<decltype(To)>)
+  requires(detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(From)> && detail::is_frozen_string_v<decltype(To)>)
 [[nodiscard]] consteval auto replace_all() noexcept -> FrozenString<detail::replace_all_exact_size<Str, From, To>()> {
   constexpr auto NEW_SIZE = detail::replace_all_exact_size<Str, From, To>();
-  auto res = FrozenString<NEW_SIZE>{};
-  auto offset = 0uz;
-  auto pos = 0uz;
+  auto           res      = FrozenString<NEW_SIZE>{};
+  auto           offset   = 0uz;
+  auto           pos      = 0uz;
   while (pos < Str.length) {
     auto const found = detail::find_impl(Str, From, pos);
     if (found == std::string_view::npos) {
@@ -591,7 +587,7 @@ template <auto Str, auto From, auto To>
     pos = found + From.length;
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -647,9 +643,11 @@ template <FrozenString Prefix, size_t N>
   if constexpr (Prefix.length == 0) {
     return true;
   } else {
-    if (str.length < Prefix.length) return false;
+    if (str.length < Prefix.length)
+      return false;
     for (auto i = 0uz; i < Prefix.length; ++i) {
-      if (str.buffer[i] != Prefix.buffer[i]) return false;
+      if (str.buffer[i] != Prefix.buffer[i])
+        return false;
     }
     return true;
   }
@@ -694,10 +692,12 @@ template <FrozenString Suffix, size_t N>
   if constexpr (Suffix.length == 0) {
     return true;
   } else {
-    if (str.length < Suffix.length) return false;
+    if (str.length < Suffix.length)
+      return false;
     auto const start = str.length - Suffix.length;
     for (auto i = 0uz; i < Suffix.length; ++i) {
-      if (str.buffer[start + i] != Suffix.buffer[i]) return false;
+      if (str.buffer[start + i] != Suffix.buffer[i])
+        return false;
     }
     return true;
   }
@@ -744,23 +744,23 @@ template <FrozenString Delim, size_t N>
     return std::tuple{str, FrozenString<1>{}, FrozenString<1>{}};
   }
 
-  auto const before_len = pos;
+  auto const before_len  = pos;
   auto const after_start = pos + Delim.length;
-  auto const after_len = str.length - after_start;
+  auto const after_len   = str.length - after_start;
 
   auto before = FrozenString<before_len + 1>{};
   for (auto i = 0uz; i < before_len; ++i) {
     before.buffer[i] = str.buffer[i];
   }
   before.buffer[before_len] = '\0';
-  before.length = before_len;
+  before.length             = before_len;
 
   auto after = FrozenString<after_len + 1>{};
   for (auto i = 0uz; i < after_len; ++i) {
     after.buffer[i] = str.buffer[after_start + i];
   }
   after.buffer[after_len] = '\0';
-  after.length = after_len;
+  after.length            = after_len;
 
   return std::tuple{before, Delim, after};
 }
@@ -779,13 +779,13 @@ template <FrozenString Delim, size_t N>
 }
 
 template <size_t Width, char Fill = ' ', typename T>
-  requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+  requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
 template <size_t Width, char Fill = ' ', typename T>
-  requires (!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+  requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
 }
@@ -793,8 +793,8 @@ template <size_t Width, char Fill = ' ', typename T>
 template <FrozenString Delim, size_t ElemN, size_t Count>
 [[nodiscard]] auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
   constexpr auto NEW_SIZE = (ElemN * Count) + (Delim.size() * Count) + 1;
-  auto res = FrozenString<NEW_SIZE>{};
-  auto offset = 0uz;
+  auto           res      = FrozenString<NEW_SIZE>{};
+  auto           offset   = 0uz;
   for (auto i = 0uz; i < Count; ++i) {
     if (i > 0) {
       for (auto const c : Delim.sv()) {
@@ -806,12 +806,12 @@ template <FrozenString Delim, size_t ElemN, size_t Count>
     }
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
 template <FrozenString Delim, typename... Args>
-  requires (sizeof...(Args) > 0)
+  requires(sizeof...(Args) > 0)
 [[nodiscard]] auto consteval join(Args const&... args) noexcept {
   auto const arr = std::array<FrozenString<2048>, sizeof...(Args)>{freeze(args)...};
   return join<Delim>(arr);
@@ -957,22 +957,19 @@ template <char TrimChar = ' ', size_t N>
 }
 
 template <char TrimChar = ' ', typename Ptr>
-  requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
-            || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+  requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval ltrim(Ptr&& str) noexcept {
   return ltrim<TrimChar>(freeze(str));
 }
 
 template <char TrimChar = ' ', typename Ptr>
-  requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
-            || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+  requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval rtrim(Ptr&& str) noexcept {
   return rtrim<TrimChar>(freeze(str));
 }
 
 template <char TrimChar = ' ', typename Ptr>
-  requires (std::same_as<std::remove_cvref_t<Ptr>, char const*>
-            || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+  requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval trim(Ptr&& str) noexcept {
   return trim<TrimChar>(freeze(str));
 }
@@ -987,23 +984,23 @@ template <char TrimChar = ' ', typename Ptr>
  */
 template <auto Pred, size_t N>
 [[nodiscard]] auto consteval collapse_spaces_if(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<N>{};
-  auto offset = 0uz;
+  auto res         = FrozenString<N>{};
+  auto offset      = 0uz;
   auto in_sequence = false;
   for (auto i = 0uz; i < str.length; ++i) {
     auto const c = str.buffer[i];
     if (Pred(c)) {
       if (!in_sequence) {
         res.buffer[offset++] = c;
-        in_sequence = true;
+        in_sequence          = true;
       }
     } else {
       res.buffer[offset++] = c;
-      in_sequence = false;
+      in_sequence          = false;
     }
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1033,258 +1030,434 @@ template <size_t N>
 
 namespace detail {
 
-/**
- * @brief HTML/XML 向けの空白文字判定を行う
- *
- * @param c 判定対象文字
- * @return auto 空白文字なら true
- */
-auto constexpr is_markup_space(char c) noexcept {
-  return is_any_whitespace(c);
-}
+  /**
+   * @brief HTML/XML 向けの空白文字判定を行う
+   *
+   * @param c 判定対象文字
+   * @return auto 空白文字なら true
+   */
+  auto constexpr is_markup_space(char c) noexcept {
+    return is_any_whitespace(c);
+  }
 
-/**
- * @brief SQL で前後空白の削除対象にできる記号か判定する
- *
- * @param c 判定対象文字
- * @return auto 記号なら true
- */
-auto constexpr is_sql_punct(char c) noexcept {
-  return c == ',' || c == ';' || c == '(' || c == ')' || c == '='
-    || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>';
-}
+  /**
+   * @brief SQL で前後空白の削除対象にできる記号か判定する
+   *
+   * @param c 判定対象文字
+   * @return auto 記号なら true
+   */
+  auto constexpr is_sql_punct(char c) noexcept {
+    return c == ',' || c == ';' || c == '(' || c == ')' || c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>';
+  }
 
-/**
- * @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装
- *
- * 文字列リテラル内の文字は保持し、タグ周辺の不要空白と
- * コメント（`<!-- ... -->`）を除去します。
- *
- * @tparam N 文字列長（終端文字を含む）
- * @param str 入力文字列
- * @return auto 圧縮後の文字列
- */
-template <size_t N>
-[[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<N>{};
-  auto offset = 0uz;
-  auto i = 0uz;
-  auto in_quote = '\0';
-  auto pending_space = false;
+  /**
+   * @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装
+   *
+   * 文字列リテラル内の文字は保持し、タグ周辺の不要空白と
+   * コメント（`<!-- ... -->`）を除去します。
+   *
+   * @tparam N 文字列長（終端文字を含む）
+   * @param str 入力文字列
+   * @return auto 圧縮後の文字列
+   */
+  template <size_t N>
+  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str) noexcept {
+    auto res           = FrozenString<N>{};
+    auto offset        = 0uz;
+    auto i             = 0uz;
+    auto in_quote      = '\0';
+    auto pending_space = false;
 
-  while (i < str.length) {
-    // HTML/XML コメントブロックをスキップする
-    if (in_quote == '\0' && i + 3 < str.length
-        && str.buffer[i] == '<'
-        && str.buffer[i + 1] == '!'
-        && str.buffer[i + 2] == '-'
-        && str.buffer[i + 3] == '-') {
-      i += 4;
-      while (i + 2 < str.length
-             && !(str.buffer[i] == '-'
-                  && str.buffer[i + 1] == '-'
-                  && str.buffer[i + 2] == '>')) {
+    while (i < str.length) {
+      // HTML/XML コメントブロックをスキップする
+      if (in_quote == '\0' && i + 3 < str.length && str.buffer[i] == '<' && str.buffer[i + 1] == '!' && str.buffer[i + 2] == '-' && str.buffer[i + 3] == '-') {
+        i += 4;
+        while (i + 2 < str.length && !(str.buffer[i] == '-' && str.buffer[i + 1] == '-' && str.buffer[i + 2] == '>')) {
+          ++i;
+        }
+        if (i + 2 < str.length) {
+          i += 3;
+        }
+        pending_space = true;
+        continue;
+      }
+
+      auto const c = str.buffer[i];
+
+      // クォート内は内容をそのまま保持する
+      if (in_quote != '\0') {
+        res.buffer[offset++] = c;
+        if (c == in_quote) {
+          in_quote = '\0';
+        }
         ++i;
+        continue;
       }
-      if (i + 2 < str.length) {
-        i += 3;
+
+      if (c == '"' || c == '\'') {
+        if (pending_space) {
+          auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
+          if (prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/') {
+            res.buffer[offset++] = ' ';
+          }
+          pending_space = false;
+        }
+        in_quote             = c;
+        res.buffer[offset++] = c;
+        ++i;
+        continue;
       }
-      pending_space = true;
-      continue;
-    }
 
-    auto const c = str.buffer[i];
-
-    // クォート内は内容をそのまま保持する
-    if (in_quote != '\0') {
-      res.buffer[offset++] = c;
-      if (c == in_quote) {
-        in_quote = '\0';
+      // タグ境界の前後空白は削除し、タグ内では単一空白に正規化する
+      if (c == '<') {
+        if (offset > 0 && res.buffer[offset - 1] == ' ') {
+          --offset;
+        }
+        pending_space        = false;
+        res.buffer[offset++] = c;
+        ++i;
+        continue;
       }
-      ++i;
-      continue;
-    }
 
-    if (c == '"' || c == '\'') {
+      if (c == '>') {
+        if (offset > 0 && res.buffer[offset - 1] == ' ') {
+          --offset;
+        }
+        res.buffer[offset++] = c;
+        ++i;
+        continue;
+      }
+
+      if (is_markup_space(c)) {
+        pending_space = true;
+        ++i;
+        continue;
+      }
+
+      // 連続空白は1つに集約し、記号の前後には不要空白を入れない
       if (pending_space) {
-        auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
-        if (prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/') {
+        auto const prev              = offset == 0 ? '\0' : res.buffer[offset - 1];
+        auto const should_emit_space = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/';
+        if (should_emit_space) {
           res.buffer[offset++] = ' ';
         }
         pending_space = false;
       }
-      in_quote = c;
       res.buffer[offset++] = c;
       ++i;
-      continue;
     }
 
-    // タグ境界の前後空白は削除し、タグ内では単一空白に正規化する
-    if (c == '<') {
-      if (offset > 0 && res.buffer[offset - 1] == ' ') {
-        --offset;
-      }
-      pending_space = false;
-      res.buffer[offset++] = c;
-      ++i;
-      continue;
+    if (offset > 0 && res.buffer[offset - 1] == ' ') {
+      --offset;
     }
-
-    if (c == '>') {
-      if (offset > 0 && res.buffer[offset - 1] == ' ') {
-        --offset;
-      }
-      res.buffer[offset++] = c;
-      ++i;
-      continue;
-    }
-
-    if (is_markup_space(c)) {
-      pending_space = true;
-      ++i;
-      continue;
-    }
-
-    // 連続空白は1つに集約し、記号の前後には不要空白を入れない
-    if (pending_space) {
-      auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
-      auto const should_emit_space =
-        prev != '\0'
-        && prev != '<'
-        && prev != '>'
-        && prev != '='
-        && prev != '/'
-        && c != '>'
-        && c != '='
-        && c != '/';
-      if (should_emit_space) {
-        res.buffer[offset++] = ' ';
-      }
-      pending_space = false;
-    }
-    res.buffer[offset++] = c;
-    ++i;
+    res.buffer[offset] = '\0';
+    res.length         = offset;
+    return res;
   }
 
-  if (offset > 0 && res.buffer[offset - 1] == ' ') {
-    --offset;
-  }
-  res.buffer[offset] = '\0';
-  res.length = offset;
-  return res;
-}
-
-} // namespace detail
+}  // namespace detail
 
 // ===== SQL keyword uppercase =====
 
 namespace detail {
 
-/**
- * @brief SQL 識別子の先頭文字か判定する
- *
- * @param c 判定対象文字
- * @return auto 識別子先頭なら true
- */
-auto constexpr is_sql_id_start(char c) noexcept {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-/**
- * @brief SQL 識別子の構成文字か判定する
- *
- * @param c 判定対象文字
- * @return auto 識別子構成文字なら true
- */
-auto constexpr is_sql_id_char(char c) noexcept {
-  return is_sql_id_start(c) || (c >= '0' && c <= '9');
-}
-
-/**
- * @brief SQL 予約語リスト（大文字、昇順ソート済み）
- */
-inline constexpr char const* sql_reserved_words[] = {
-  "ABS",        "ALL",        "ALLOCATE",   "ALTER",       "AND",
-  "ANY",        "ARE",        "ARRAY",      "AS",          "ASENSITIVE",
-  "ASYMMETRIC", "AT",         "AUTHORIZATION", "BEGIN",   "BETWEEN",
-  "BIGINT",     "BINARY",     "BLOB",       "BOOLEAN",     "BOTH",
-  "BY",         "CALL",       "CASCADE",    "CASCADED",    "CASE",
-  "CAST",       "CHAR",       "CHARACTER",  "CHECK",       "CLOB",
-  "CLOSE",      "COALESCE",   "COLLATE",    "COLUMN",      "COMMIT",
-  "CONNECT",    "CONSTRAINT", "CONTAINS",   "CONTINUE",    "CORRESPONDING",
-  "CREATE",     "CROSS",      "CURRENT",    "CURRENT_DATE","CURRENT_DEFAULT_TRANSFORM_GROUP",
-  "CURRENT_PATH", "CURRENT_ROLE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_TRANSFORM_GROUP_FOR_TYPE",
-  "CURRENT_USER","CURSOR",     "DATE",       "DATETIME",    "DEALLOCATE",
-  "DEC",        "DECIMAL",    "DECLARE",    "DEFAULT",     "DELETE",
-  "DEREF",      "DESC",       "DETERMINISTIC","DISCONNECT","DISTINCT",
-  "DOUBLE",     "DROP",       "DYNAMIC",    "EACH",        "ELSE",
-  "ELSEIF",     "END",        "ESCAPE",     "EXCEPT",      "EXCEPTION",
-  "EXEC",       "EXECUTE",    "EXISTS",     "EXTERNAL",    "EXTRACT",
-  "FALSE",      "FETCH",      "FLOAT",      "FOR",         "FOREIGN",
-  "FREE",       "FROM",       "FULL",       "FUNCTION",    "GET",
-  "GLOBAL",     "GRANT",      "GROUP",      "GROUPING",    "HANDLER",
-  "HAVING",     "HOLD",       "IDENTITY",   "IF",          "IMMEDIATE",
-  "IN",         "INDICATOR",  "INNER",      "INOUT",       "INPUT",
-  "INSENSITIVE","INSERT",     "INT",        "INTEGER",     "INTERSECT",
-  "INTO",       "IS",         "ITERATE",    "JOIN",        "KEY",
-  "LANGUAGE",   "LARGE",      "LATERAL",    "LEADING",     "LEAVE",
-  "LEFT",       "LIKE",       "LIMIT",      "LOCAL",       "LOCALTIME",
-  "LOCALTIMESTAMP","LOOP",    "MATCH",      "MEMBER",      "MERGE",
-  "METHOD",     "MINUS",      "MOD",        "MODIFIES",    "MODULE",
-  "MULTISET",   "NATIONAL",   "NATURAL",    "NCHAR",       "NCLOB",
-  "NEW",        "NO",         "NONE",       "NOT",         "NULL",
-  "NUMERIC",    "OF",         "OLD",        "ON",          "ONLY",
-  "OPEN",       "OR",         "ORDER",      "OUT",         "OUTER",
-  "OUTPUT",     "OVERLAPS",   "PARAMETER",  "PARTITION",   "PRECEDING",
-  "PRIMARY",    "PROCEDURE",  "RANGE",      "READS",       "REAL",
-  "RECURSIVE",  "REF",        "REFERENCES", "REFERENCING", "RELEASE",
-  "RESULT",     "RETURN",     "RETURNS",    "REVOKE",      "RIGHT",
-  "ROLLBACK",   "ROLLUP",     "ROW",        "ROWS",        "SAVEPOINT",
-  "SCROLL",     "SEARCH",     "SECOND",     "SELECT",      "SENSITIVE",
-  "SESSION_USER","SET",        "SHOW",       "SIMILAR",     "SMALLINT",
-  "SOME",       "SPECIFIC",   "SPECIFICTYPE","SQL",        "SQLCODE",
-  "SQLEXCEPTION","SQLSTATE",  "SQLWARNING", "START",       "STATIC",
-  "SUBMULTISET","SUBSTRING",  "SYMMETRIC",  "TABLE",       "TEMPORARY",
-  "THEN",       "TIME",       "TIMESTAMP",  "TIMEZONE_HOUR","TIMEZONE_MINUTE",
-  "TO",         "TRAILING",   "TRANSACTION","TREAT",       "TRIGGER",
-  "TRIM",       "TRUE",       "UNDO",       "UNION",       "UNIQUE",
-  "UNKNOWN",    "UNNEST",     "UPDATE",     "UPPER",       "USER",
-  "USING",      "VALUE",      "VALUES",     "VARCHAR",     "VARYING",
-  "VIEW",       "WHEN",       "WHENEVER",   "WHERE",       "WHILE",
-  "WINDOW",     "WITH",       "WITHIN",     "WITHOUT",     "YEAR",
-};
-
-/**
- * @brief SQL 予約語かどうかを二分探索で判定する
- *
- * @param word 判定対象の識別子（大文字）
- * @param len 文字列長
- * @return auto 予約語なら true
- */
-auto consteval sql_is_reserved(char const* word, size_t len) noexcept {
-  auto constexpr count = sizeof(sql_reserved_words) / sizeof(sql_reserved_words[0]);
-  auto lo = 0uz;
-  auto hi = count;
-  while (lo < hi) {
-    auto const mid = lo + (hi - lo) / 2;
-    auto const r = sql_reserved_words[mid];
-    auto j = 0uz;
-    while (j < len && r[j] != '\0' && word[j] == r[j]) {
-      ++j;
-    }
-    auto const cmp = (j < len && r[j] != '\0') ? (static_cast<unsigned char>(word[j]) - static_cast<unsigned char>(r[j])) : (j < len ? 1 : (r[j] != '\0' ? -1 : 0));
-    if (cmp == 0) {
-      return true;
-    } else if (cmp < 0) {
-      hi = mid;
-    } else {
-      lo = mid + 1;
-    }
+  /**
+   * @brief SQL 識別子の先頭文字か判定する
+   *
+   * @param c 判定対象文字
+   * @return auto 識別子先頭なら true
+   */
+  auto constexpr is_sql_id_start(char c) noexcept {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
   }
-  return false;
-}
 
-} // namespace detail
+  /**
+   * @brief SQL 識別子の構成文字か判定する
+   *
+   * @param c 判定対象文字
+   * @return auto 識別子構成文字なら true
+   */
+  auto constexpr is_sql_id_char(char c) noexcept {
+    return is_sql_id_start(c) || (c >= '0' && c <= '9');
+  }
+
+  /**
+   * @brief SQL 予約語リスト（大文字、昇順ソート済み）
+   */
+  inline constexpr char const* sql_reserved_words[] = {
+      "ABS",
+      "ALL",
+      "ALLOCATE",
+      "ALTER",
+      "AND",
+      "ANY",
+      "ARE",
+      "ARRAY",
+      "AS",
+      "ASENSITIVE",
+      "ASYMMETRIC",
+      "AT",
+      "AUTHORIZATION",
+      "BEGIN",
+      "BETWEEN",
+      "BIGINT",
+      "BINARY",
+      "BLOB",
+      "BOOLEAN",
+      "BOTH",
+      "BY",
+      "CALL",
+      "CASCADE",
+      "CASCADED",
+      "CASE",
+      "CAST",
+      "CHAR",
+      "CHARACTER",
+      "CHECK",
+      "CLOB",
+      "CLOSE",
+      "COALESCE",
+      "COLLATE",
+      "COLUMN",
+      "COMMIT",
+      "CONNECT",
+      "CONSTRAINT",
+      "CONTAINS",
+      "CONTINUE",
+      "CORRESPONDING",
+      "CREATE",
+      "CROSS",
+      "CURRENT",
+      "CURRENT_DATE",
+      "CURRENT_DEFAULT_TRANSFORM_GROUP",
+      "CURRENT_PATH",
+      "CURRENT_ROLE",
+      "CURRENT_TIME",
+      "CURRENT_TIMESTAMP",
+      "CURRENT_TRANSFORM_GROUP_FOR_TYPE",
+      "CURRENT_USER",
+      "CURSOR",
+      "DATE",
+      "DATETIME",
+      "DEALLOCATE",
+      "DEC",
+      "DECIMAL",
+      "DECLARE",
+      "DEFAULT",
+      "DELETE",
+      "DEREF",
+      "DESC",
+      "DETERMINISTIC",
+      "DISCONNECT",
+      "DISTINCT",
+      "DOUBLE",
+      "DROP",
+      "DYNAMIC",
+      "EACH",
+      "ELSE",
+      "ELSEIF",
+      "END",
+      "ESCAPE",
+      "EXCEPT",
+      "EXCEPTION",
+      "EXEC",
+      "EXECUTE",
+      "EXISTS",
+      "EXTERNAL",
+      "EXTRACT",
+      "FALSE",
+      "FETCH",
+      "FLOAT",
+      "FOR",
+      "FOREIGN",
+      "FREE",
+      "FROM",
+      "FULL",
+      "FUNCTION",
+      "GET",
+      "GLOBAL",
+      "GRANT",
+      "GROUP",
+      "GROUPING",
+      "HANDLER",
+      "HAVING",
+      "HOLD",
+      "IDENTITY",
+      "IF",
+      "IMMEDIATE",
+      "IN",
+      "INDICATOR",
+      "INNER",
+      "INOUT",
+      "INPUT",
+      "INSENSITIVE",
+      "INSERT",
+      "INT",
+      "INTEGER",
+      "INTERSECT",
+      "INTO",
+      "IS",
+      "ITERATE",
+      "JOIN",
+      "KEY",
+      "LANGUAGE",
+      "LARGE",
+      "LATERAL",
+      "LEADING",
+      "LEAVE",
+      "LEFT",
+      "LIKE",
+      "LIMIT",
+      "LOCAL",
+      "LOCALTIME",
+      "LOCALTIMESTAMP",
+      "LOOP",
+      "MATCH",
+      "MEMBER",
+      "MERGE",
+      "METHOD",
+      "MINUS",
+      "MOD",
+      "MODIFIES",
+      "MODULE",
+      "MULTISET",
+      "NATIONAL",
+      "NATURAL",
+      "NCHAR",
+      "NCLOB",
+      "NEW",
+      "NO",
+      "NONE",
+      "NOT",
+      "NULL",
+      "NUMERIC",
+      "OF",
+      "OLD",
+      "ON",
+      "ONLY",
+      "OPEN",
+      "OR",
+      "ORDER",
+      "OUT",
+      "OUTER",
+      "OUTPUT",
+      "OVERLAPS",
+      "PARAMETER",
+      "PARTITION",
+      "PRECEDING",
+      "PRIMARY",
+      "PROCEDURE",
+      "RANGE",
+      "READS",
+      "REAL",
+      "RECURSIVE",
+      "REF",
+      "REFERENCES",
+      "REFERENCING",
+      "RELEASE",
+      "RESULT",
+      "RETURN",
+      "RETURNS",
+      "REVOKE",
+      "RIGHT",
+      "ROLLBACK",
+      "ROLLUP",
+      "ROW",
+      "ROWS",
+      "SAVEPOINT",
+      "SCROLL",
+      "SEARCH",
+      "SECOND",
+      "SELECT",
+      "SENSITIVE",
+      "SESSION_USER",
+      "SET",
+      "SHOW",
+      "SIMILAR",
+      "SMALLINT",
+      "SOME",
+      "SPECIFIC",
+      "SPECIFICTYPE",
+      "SQL",
+      "SQLCODE",
+      "SQLEXCEPTION",
+      "SQLSTATE",
+      "SQLWARNING",
+      "START",
+      "STATIC",
+      "SUBMULTISET",
+      "SUBSTRING",
+      "SYMMETRIC",
+      "TABLE",
+      "TEMPORARY",
+      "THEN",
+      "TIME",
+      "TIMESTAMP",
+      "TIMEZONE_HOUR",
+      "TIMEZONE_MINUTE",
+      "TO",
+      "TRAILING",
+      "TRANSACTION",
+      "TREAT",
+      "TRIGGER",
+      "TRIM",
+      "TRUE",
+      "UNDO",
+      "UNION",
+      "UNIQUE",
+      "UNKNOWN",
+      "UNNEST",
+      "UPDATE",
+      "UPPER",
+      "USER",
+      "USING",
+      "VALUE",
+      "VALUES",
+      "VARCHAR",
+      "VARYING",
+      "VIEW",
+      "WHEN",
+      "WHENEVER",
+      "WHERE",
+      "WHILE",
+      "WINDOW",
+      "WITH",
+      "WITHIN",
+      "WITHOUT",
+      "YEAR",
+  };
+
+  /**
+   * @brief SQL 予約語かどうかを二分探索で判定する
+   *
+   * @param word 判定対象の識別子（大文字）
+   * @param len 文字列長
+   * @return auto 予約語なら true
+   */
+  auto consteval sql_is_reserved(char const* word, size_t len) noexcept {
+    auto constexpr count = sizeof(sql_reserved_words) / sizeof(sql_reserved_words[0]);
+    auto lo              = 0uz;
+    auto hi              = count;
+    while (lo < hi) {
+      auto const mid = lo + (hi - lo) / 2;
+      auto const r   = sql_reserved_words[mid];
+      auto       j   = 0uz;
+      while (j < len && r[j] != '\0' && word[j] == r[j]) {
+        ++j;
+      }
+      auto const cmp = (j < len && r[j] != '\0') ? (static_cast<unsigned char>(word[j]) - static_cast<unsigned char>(r[j])) : (j < len ? 1 : (r[j] != '\0' ? -1 : 0));
+      if (cmp == 0) {
+        return true;
+      } else if (cmp < 0) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return false;
+  }
+
+}  // namespace detail
 
 /**
  * @brief HTML 文字列を minify する
@@ -1346,11 +1519,11 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_json(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<N>{};
-  auto offset = 0uz;
-  auto i = 0uz;
+  auto res       = FrozenString<N>{};
+  auto offset    = 0uz;
+  auto i         = 0uz;
   auto in_string = false;
-  auto escaped = false;
+  auto escaped   = false;
 
   while (i < str.length) {
     auto const c = str.buffer[i];
@@ -1369,7 +1542,7 @@ template <size_t N>
     }
 
     if (c == '"') {
-      in_string = true;
+      in_string            = true;
       res.buffer[offset++] = c;
       ++i;
       continue;
@@ -1405,7 +1578,7 @@ template <size_t N>
   }
 
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1433,13 +1606,13 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<N>{};
-  auto offset = 0uz;
-  auto line_start = 0uz;
+  auto res            = FrozenString<N>{};
+  auto offset         = 0uz;
+  auto line_start     = 0uz;
   auto last_non_space = std::string_view::npos;
-  auto in_single = false;
-  auto in_double = false;
-  auto escaped = false;
+  auto in_single      = false;
+  auto in_double      = false;
+  auto escaped        = false;
 
   for (auto i = 0uz; i < str.length; ++i) {
     auto const c = str.buffer[i];
@@ -1458,14 +1631,14 @@ template <size_t N>
       if (last_non_space == std::string_view::npos) {
         offset = line_start;
       } else {
-        offset = last_non_space + 1;
+        offset               = last_non_space + 1;
         res.buffer[offset++] = '\n';
       }
-      line_start = offset;
+      line_start     = offset;
       last_non_space = std::string_view::npos;
-      in_single = false;
-      in_double = false;
-      escaped = false;
+      in_single      = false;
+      in_double      = false;
+      escaped        = false;
       continue;
     }
 
@@ -1473,7 +1646,7 @@ template <size_t N>
       break;
     }
 
-    auto const current = str.buffer[i];
+    auto const current   = str.buffer[i];
     res.buffer[offset++] = current;
 
     // クォート状態を更新し、引用符内の # はコメント扱いしない
@@ -1509,7 +1682,7 @@ template <size_t N>
   }
 
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1536,13 +1709,13 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<N>{};
-  auto offset = 0uz;
-  auto i = 0uz;
-  auto in_single = false;
-  auto in_double = false;
-  auto in_backtick = false;
-  auto in_bracket = false;
+  auto res           = FrozenString<N>{};
+  auto offset        = 0uz;
+  auto i             = 0uz;
+  auto in_single     = false;
+  auto in_double     = false;
+  auto in_backtick   = false;
+  auto in_bracket    = false;
   auto pending_space = false;
 
   while (i < str.length) {
@@ -1625,7 +1798,7 @@ template <size_t N>
     }
 
     if (pending_space) {
-      auto const prev = offset == 0 ? '\0' : res.buffer[offset - 1];
+      auto const prev          = offset == 0 ? '\0' : res.buffer[offset - 1];
       auto const prev_is_punct = detail::is_sql_punct(prev);
       auto const next_is_punct = detail::is_sql_punct(c);
       if (prev != '\0' && !prev_is_punct && !next_is_punct) {
@@ -1652,7 +1825,7 @@ template <size_t N>
     --offset;
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1681,13 +1854,13 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval sql_uppercase_keywords(FrozenString<N> const& str) noexcept {
-  auto res = FrozenString<N>{};
-  auto offset = 0uz;
-  auto i = 0uz;
-  auto in_single = false;
-  auto in_double = false;
+  auto res         = FrozenString<N>{};
+  auto offset      = 0uz;
+  auto i           = 0uz;
+  auto in_single   = false;
+  auto in_double   = false;
   auto in_backtick = false;
-  auto in_bracket = false;
+  auto in_bracket  = false;
 
   while (i < str.length) {
     auto const c = str.buffer[i];
@@ -1762,25 +1935,25 @@ template <size_t N>
 
     // 引用符の開始
     if (c == '\'') {
-      in_single = true;
+      in_single            = true;
       res.buffer[offset++] = c;
       ++i;
       continue;
     }
     if (c == '"') {
-      in_double = true;
+      in_double            = true;
       res.buffer[offset++] = c;
       ++i;
       continue;
     }
     if (c == '`') {
-      in_backtick = true;
+      in_backtick          = true;
       res.buffer[offset++] = c;
       ++i;
       continue;
     }
     if (c == '[') {
-      in_bracket = true;
+      in_bracket           = true;
       res.buffer[offset++] = c;
       ++i;
       continue;
@@ -1799,7 +1972,7 @@ template <size_t N>
       if (word_len <= upper_buf.size()) {
         for (auto j = 0uz; j < word_len; ++j) {
           auto const ch = str.buffer[word_start + j];
-          upper_buf[j] = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+          upper_buf[j]  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
         }
         if (detail::sql_is_reserved(upper_buf.data(), word_len)) {
           for (auto j = 0uz; j < word_len; ++j) {
@@ -1825,7 +1998,7 @@ template <size_t N>
   }
 
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1858,9 +2031,9 @@ template <size_t N>
     width = 1;
   }
   constexpr auto OUT_CAP = (N > 0 ? N * 2 : 1);
-  auto res = FrozenString<OUT_CAP>{};
-  auto offset = 0uz;
-  auto col = 0uz;
+  auto           res     = FrozenString<OUT_CAP>{};
+  auto           offset  = 0uz;
+  auto           col     = 0uz;
 
   for (auto i = 0uz; i < str.length;) {
     auto const c = str.buffer[i];
@@ -1871,7 +2044,7 @@ template <size_t N>
         --offset;
       }
       res.buffer[offset++] = '\n';
-      col = 0;
+      col                  = 0;
       ++i;
       continue;
     }
@@ -1903,7 +2076,7 @@ template <size_t N>
           --col;
         }
         res.buffer[offset++] = '\n';
-        col = 0;
+        col                  = 0;
         ++i;
         continue;
       }
@@ -1925,7 +2098,7 @@ template <size_t N>
   }
 
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1942,4 +2115,4 @@ template <size_t N>
   return word_wrap(FrozenString{str}, width);
 }
 
-} // namespace frozenchars
+}  // namespace frozenchars

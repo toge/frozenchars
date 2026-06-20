@@ -13,8 +13,8 @@ TEST_CASE("contains<Substr>(str) - NTTP version") {
 }
 
 TEST_CASE("contains<Substr>(str) - FrozenString version") {
-  constexpr auto str = "hello world"_fs;
-  constexpr auto found = "world"_fs;
+  constexpr auto str       = "hello world"_fs;
+  constexpr auto found     = "world"_fs;
   constexpr auto not_found = "xyz"_fs;
   STATIC_CHECK(contains<found>(str));
   STATIC_CHECK(!contains<not_found>(str));
@@ -33,8 +33,8 @@ TEST_CASE("starts_with<Prefix>(str) - NTTP version") {
 }
 
 TEST_CASE("starts_with<Prefix>(str) - FrozenString version") {
-  constexpr auto str = "hello"_fs;
-  constexpr auto prefix = "hel"_fs;
+  constexpr auto str        = "hello"_fs;
+  constexpr auto prefix     = "hel"_fs;
   constexpr auto not_prefix = "xyz"_fs;
   STATIC_CHECK(starts_with<prefix>(str));
   STATIC_CHECK(!starts_with<not_prefix>(str));
@@ -53,8 +53,8 @@ TEST_CASE("ends_with<Suffix>(str) - NTTP version") {
 }
 
 TEST_CASE("ends_with<Suffix>(str) - FrozenString version") {
-  constexpr auto str = "hello"_fs;
-  constexpr auto suffix = "llo"_fs;
+  constexpr auto str        = "hello"_fs;
+  constexpr auto suffix     = "llo"_fs;
   constexpr auto not_suffix = "xyz"_fs;
   STATIC_CHECK(ends_with<suffix>(str));
   STATIC_CHECK(!ends_with<not_suffix>(str));
