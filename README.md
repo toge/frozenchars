@@ -8,6 +8,7 @@
 - 操作関数のほとんどをconstevalで定義しており、コンパイル時に評価されます。
 - 文字列操作をチェーンできるパイプ演算子も提供しています。
 - コンパイル時の文字列処理を前提にした応用機能もいくつか用意しています。
+- HTML エンティティ変換、ワードラップ、UTF-8 コードポイント数計算などの実用関数も提供しています。
 
 ## クイックスタート
 
@@ -125,6 +126,82 @@ auto constexpr s3 = substr<5, -5>("Hello, World!");    // "Hello"
 static_assert(s1.sv() == "World");
 static_assert(s2.sv() == "Hello");
 static_assert(s3.sv() == "Hello");
+```
+
+## `contains`（部分文字列の有無判定）
+
+`contains<Substr>(str)` は文字列が部分文字列を含むかを判定します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// パイプ演算子版
+static_assert("hello world"_fs | ops::contains<"world">);
+static_assert(!("hello"_fs | ops::contains<"xyz">));
+
+// 直接呼び出し版
+constexpr auto str = "hello world"_fs;
+static_assert(contains<"world"_fs>(str));
+
+// char[] 版
+static_assert(contains<"world">("hello world"));
+```
+
+## `starts_with`（接頭辞チェック）
+
+`starts_with<Prefix>(str)` は文字列が指定した接頭辞で始まるかを判定します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert("hello"_fs | ops::starts_with<"hel">);
+static_assert(!("hello"_fs | ops::starts_with<"llo">));
+static_assert("abc"_fs | ops::starts_with<"">);  // 空プレフィックスは常に true
+```
+
+## `ends_with`（接尾辞チェック）
+
+`ends_with<Suffix>(str)` は文字列が指定した接尾辞で終わるかを判定します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert("hello"_fs | ops::ends_with<"llo">);
+static_assert(!("hello"_fs | ops::ends_with<"hel">));
+static_assert("abc"_fs | ops::ends_with<"">);  // 空サフィックスは常に true
+```
+
+## `partition`（区切り文字で3分割）
+
+`partition<Delim>(str)` は文字列を区切り文字で3分割し、`std::tuple` を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// パイプ演算子版
+constexpr auto [before, delim, after] = "key=value"_fs | ops::partition<"=">;
+static_assert(before.sv() == "key");
+static_assert(delim.sv() == "=");
+static_assert(after.sv() == "value");
+
+// 区切り文字が見つからない場合
+constexpr auto [b2, d2, a2] = "hello"_fs | ops::partition<"=">;
+static_assert(b2.sv() == "hello");
+static_assert(d2.sv() == "");
+static_assert(a2.sv() == "");
+
+// 複数の区切り文字がある場合は最初のもので分割
+constexpr auto [b3, d3, a3] = "a=b=c"_fs | ops::partition<"=">;
+static_assert(b3.sv() == "a");
+static_assert(a3.sv() == "b=c");
 ```
 
 ## `shrink_to_fit`（最初の終端位置に合わせて縮小）
@@ -346,6 +423,118 @@ auto constexpr d2 = base64_decode<"Zg=="_fs>();     // NTTP版（正確なサイ
 
 static_assert(d1.sv() == "Hello");
 static_assert(d2.sv() == "f");
+```
+
+## `html_encode` / `html_decode`（HTMLエンティティ変換）
+
+HTML で特殊な意味を持つ文字をエンティティに変換・復元します。
+
+- `html_encode(...)` : `& < > " '` を `&amp; &lt; &gt; &quot; &#39;` に変換します
+- `html_decode(...)` : 上記の名前参照を元の文字に戻します
+- 未知のエンティティはそのまま保持されます
+- `FrozenString` と文字列リテラルの両方を受け取ります
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr e = html_encode("<hello> & \"world\""_fs);
+// "&lt;hello&gt; &amp; &quot;world&quot;"
+
+auto constexpr d = html_decode("&lt;hello&gt; &amp; &quot;world&quot;"_fs);
+// "<hello> & \"world\""
+
+// NTTP版
+auto constexpr e2 = html_encode<"a<b"_fs>();
+static_assert(e2.sv() == "a&lt;b");
+
+auto constexpr d2 = html_decode<"a&lt;b"_fs>();
+static_assert(d2.sv() == "a<b");
+```
+
+```cpp
+// パイプ演算子
+namespace fops = frozenchars::ops;
+auto constexpr v = "<test>"_fs | fops::html_encode | fops::html_decode;
+static_assert(v.sv() == "<test>");
+```
+
+## `word_wrap`（ワードラップ）
+
+文字列を指定された幅で折り返します。スペース区切りで単語を認識し、指定幅を超える前に改行を挿入します。
+既存の改行は保持され、各行の先頭と末尾の余分な空白は削除されます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr w = word_wrap("the quick brown fox jumps over the lazy dog", 10);
+// "the quick\nbrown fox\njumps over\nthe lazy\ndog"
+
+static_assert(word_wrap("hello world", 80).sv() == "hello world");
+
+// 既存の改行は保持
+auto constexpr w2 = word_wrap("hello\nworld foo bar", 10);
+// "hello\nworld foo\nbar"
+```
+
+```cpp
+// パイプ演算子
+namespace fops = frozenchars::ops;
+auto constexpr w = "hello world foo"_fs | fops::word_wrap(8);
+// "hello\nworld\nfoo"
+```
+
+## 文字種判定述語（`is_alpha` / `is_digit` / ...）
+
+ASCII 文字の分類を行う constexpr 関数です。パイプ演算子の `Pred` テンプレート引数などに利用できます。
+
+| 関数 | 判定内容 |
+|------|----------|
+| `is_upper(c)` | 英大文字（`A`-`Z`） |
+| `is_lower(c)` | 英小文字（`a`-`z`） |
+| `is_alpha(c)` | 英字 |
+| `is_digit(c)` | 10進数字（`0`-`9`） |
+| `is_alnum(c)` | 英数字 |
+| `is_xdigit(c)` | 16進数字（`0`-`9`, `a`-`f`, `A`-`F`） |
+| `is_cntrl(c)` | 制御文字（0x00-0x1F, 0x7F） |
+| `is_graph(c)` | 表示可能文字（スペース以外） |
+| `is_print(c)` | 表示可能文字（スペース含む） |
+| `is_punct(c)` | 句読点 |
+| `is_blank(c)` | 空白（スペースまたはタブ） |
+| `is_space(c)` | ASCII空白文字 |
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+
+static_assert(is_alpha('A'));
+static_assert(is_digit('5'));
+static_assert(is_alnum('z'));
+static_assert(is_xdigit('F'));
+static_assert(is_space(' '));
+static_assert(is_blank('\t'));
+static_assert(is_punct('!'));
+```
+
+## `utf8_length`（UTF-8 コードポイント数）
+
+UTF-8 エンコードされた文字列のコードポイント数を計算します。不正なバイト列は1バイトを1コードポイントとしてカウントします（フェイルソフト）。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr len1 = utf8_length("Hello"_fs);            // 5
+auto constexpr len2 = utf8_length("Hello 世界"_fs);        // 8
+auto constexpr len3 = utf8_length("");                     // 0
+auto constexpr len4 = utf8_length("\xC3\xA9");            // 1（é）
+
+// NTTP版
+auto constexpr len5 = utf8_length<"Hello"_fs>();           // 5
 ```
 
 ## `make_querystring`（クエリ文字列生成）
