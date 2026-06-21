@@ -12,6 +12,8 @@
 
 #if FROZENCHARS_HAS_GLAZE
 
+#include <glaze/glaze.hpp>
+
 namespace frozenchars::inja {
 
 namespace detail {
