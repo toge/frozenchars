@@ -15,8 +15,6 @@ using namespace frozenchars;
 using namespace frozenchars::inja;
 using namespace frozenchars::literals;
 
-namespace {
-
 /**
  * @brief ベンチ 1 ケース分の計測結果。
  */
@@ -32,7 +30,7 @@ struct bench_result {
 /**
  * @brief 最適化で消されないように出力サイズを蓄積するシンク。
  */
-volatile std::size_t g_sink = 0;
+inline volatile std::size_t g_sink = 0;
 
 /**
  * @brief inja レンダリングを繰り返し実行して計測する。
@@ -115,6 +113,7 @@ auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[sink] " << g_sink << '\n';
 }
 
+namespace bench_detail {
 struct item_context {
   std::string name;
   std::int64_t value;
@@ -144,7 +143,8 @@ struct control_context {
   std::vector<item_context> items;
 };
 
-} // namespace
+} // namespace bench_detail
+using namespace bench_detail;
 
 int main(int argc, char** argv) {
   auto iterations = std::uint64_t{20'000};
