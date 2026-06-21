@@ -54,7 +54,6 @@ TEST_CASE("parse_hex_rgb") {
     auto constexpr sv_result  = parse_hex_rgb(std::string_view{"#abc"});
     auto constexpr lit_result = parse_hex_rgb("#abc");
     static_assert(sv_result == lit_result);
-    REQUIRE(sv_result == lit_result);
   }
 }
 
