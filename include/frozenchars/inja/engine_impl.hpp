@@ -731,7 +731,7 @@ namespace detail {
    * @brief glaze 反射型コンテキスト用の appender をセグメント名から検索する。
    */
   template <typename Ctx>
-  auto make_appender_for(std::string_view seg) -> void (*)(void const*, std::string&) {
+  constexpr auto make_appender_for(std::string_view seg) -> void (*)(void const*, std::string&) {
     if constexpr (glaze_reflectable<Ctx>) {
       constexpr auto keys                       = glz::reflect<Ctx>::keys;
       void (*result)(void const*, std::string&) = nullptr;
@@ -758,7 +758,7 @@ namespace detail {
    * @brief bytecode の simple_path ノード全てに appender を埋める。
    */
   template <typename RootContext>
-  auto fill_appender_table(bytecode& program) -> void {
+  constexpr auto fill_appender_table(bytecode& program) -> void {
     for (std::size_t i = 0; i < program.count; ++i) {
       auto& n = program.nodes[i];
       if (n.expr_e_kind != expr_kind::simple_path)
@@ -2354,8 +2354,8 @@ private:
   auto render_program(Context const& root, OutputBuffer& out, runtime_options_ref runtime_options = std::nullopt) -> void {
     auto lookup        = [&](std::string_view name) -> lookup_result { return lookup_in_typed_root(root, name); };
     auto object_lookup = [&](std::string_view name) -> std::optional<typed_object_view> { return lookup_typed_object_view_root(root, name); };
-    // bytecode は consteval で構築し、appender table は初回呼び出し時にキャッシュする。
-    static auto program = []() {
+    // bytecode は consteval で構築し、appender table も constexpr で設定する。
+    static constexpr auto program = []() {
       auto p = parse_program<Src, Delims>();
       fill_appender_table<Context>(p);
       return p;
