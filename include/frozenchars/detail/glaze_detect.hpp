@@ -8,7 +8,6 @@
  */
 #ifndef FROZENCHARS_HAS_GLAZE
 #if defined(__has_include) && __has_include(<glaze/glaze.hpp>)
-#include <glaze/glaze.hpp>
 #define FROZENCHARS_HAS_GLAZE 1
 #else
 #define FROZENCHARS_HAS_GLAZE 0
