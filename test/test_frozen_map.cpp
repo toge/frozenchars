@@ -18,7 +18,7 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-#if defined(__has_include) && __has_include(<glaze/json.hpp>)
+#if FROZENCHARS_HAS_GLAZE
 #include <glaze/json.hpp>
 
 TEST_CASE("frozen_map glaze read_json ignores unknown keys", "[frozen_map][glaze]") {
