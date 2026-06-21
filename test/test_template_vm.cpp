@@ -13,7 +13,7 @@ using namespace frozenchars;
 using namespace frozenchars::inja;
 using namespace frozenchars::literals;
 
-namespace {
+namespace test_detail {
 
 struct profile_context {
   std::string city;
@@ -56,7 +56,9 @@ struct partial_context {
   opaque_payload opaque;
 };
 
-} // namespace
+} // namespace test_detail
+
+using namespace test_detail;
 
 #if FROZENCHARS_HAS_GLAZE
 static_assert(requires(root_context const& ctx) {
