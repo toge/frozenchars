@@ -48,6 +48,8 @@ target_compile_features(frozenchars INTERFACE cxx_std_23)
 if(ENABLE_INJA)
     find_package(glaze CONFIG REQUIRED)
     target_link_libraries(frozenchars INTERFACE glaze::glaze)
+else()
+    target_compile_definitions(frozenchars INTERFACE FROZENCHARS_HAS_GLAZE=0)
 endif()
 
 target_include_directories(frozenchars

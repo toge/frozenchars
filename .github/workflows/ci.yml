@@ -141,7 +141,7 @@ jobs:
           fi
 
       - name: Configure
-        run: cmake -B build -S . -G Ninja -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
+        run: cmake -B build -S . -G Ninja -DENABLE_INJA=OFF -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         run: cmake --build build
