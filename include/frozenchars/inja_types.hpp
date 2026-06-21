@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
-#include <memory>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -15,8 +14,8 @@
 
 namespace frozenchars::inja {
 
-// 配列・オブジェクトは再帰構造になるため、value_view 内で unique_ptr 間接参照する
-// （std::variant は直接再帰を許さない）。
+// 配列・オブジェクトは再帰構造になるため、value_view 内でポインタ間接参照する
+// （std::variant は直接再帰を許さない）。非所有ビューのため生ポインタで十分。
 struct array_view;
 struct object_view;
 
@@ -24,10 +23,10 @@ struct object_view;
  * @brief 非所有値ビュー（ホットパス専用）
  *
  * 文字列は std::string_view で所有しない。葉を覗くためだけの一時オブジェクト。
- * 配列・オブジェクトは再帰構造のため std::unique_ptr 経由で保持する。
+ * 配列・オブジェクトは再帰構造のためポインタ経由で保持する。
  */
 struct value_view {
-  std::variant<std::monostate, bool, std::int64_t, double, std::string_view, std::unique_ptr<array_view const>, std::unique_ptr<object_view const>> storage{std::monostate{}};
+  std::variant<std::monostate, bool, std::int64_t, double, std::string_view, array_view const*, object_view const*> storage{std::monostate{}};
 };
 
 /**
