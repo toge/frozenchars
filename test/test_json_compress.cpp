@@ -19,7 +19,7 @@ TEST_CASE("compress with repeated values", "[json][compress]") {
     R"([{"name":"item","val":1},{"name":"item","val":1}])"_fs>();
   auto const sv = compressed.sv();
   CHECK(sv.starts_with("{\"values\""));
-  CHECK(sv.find("\"name\"") != std::string_view::npos);
+  CHECK(sv.find("name:") != std::string_view::npos);
   CHECK(sv.find("\"item\"") != std::string_view::npos);
 }
 
