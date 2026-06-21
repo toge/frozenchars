@@ -66,29 +66,41 @@ TEST_CASE("ends_with<Suffix>(str) - char[] version") {
 }
 
 TEST_CASE("partition<Delim>(str) - NTTP version") {
-  constexpr auto [before, delim, after] = "key=value"_fs | ops::partition<"=">;
-  STATIC_CHECK(before.sv() == "key");
-  STATIC_CHECK(delim.sv() == "=");
-  STATIC_CHECK(after.sv() == "value");
+  auto const [before, delim, after] = "key=value"_fs | ops::partition<"=">;
+  static_assert(std::get<0>("key=value"_fs | ops::partition<"=">).sv() == "key");
+  static_assert(std::get<1>("key=value"_fs | ops::partition<"=">).sv() == "=");
+  static_assert(std::get<2>("key=value"_fs | ops::partition<"=">).sv() == "value");
+  REQUIRE(before.sv() == "key");
+  REQUIRE(delim.sv() == "=");
+  REQUIRE(after.sv() == "value");
 }
 
 TEST_CASE("partition<Delim>(str) - no match") {
-  constexpr auto [before, delim, after] = "hello"_fs | ops::partition<"=">;
-  STATIC_CHECK(before.sv() == "hello");
-  STATIC_CHECK(delim.sv() == "");
-  STATIC_CHECK(after.sv() == "");
+  auto const [before, delim, after] = "hello"_fs | ops::partition<"=">;
+  static_assert(std::get<0>("hello"_fs | ops::partition<"=">).sv() == "hello");
+  static_assert(std::get<1>("hello"_fs | ops::partition<"=">).sv() == "");
+  static_assert(std::get<2>("hello"_fs | ops::partition<"=">).sv() == "");
+  REQUIRE(before.sv() == "hello");
+  REQUIRE(delim.sv() == "");
+  REQUIRE(after.sv() == "");
 }
 
 TEST_CASE("partition<Delim>(str) - multiple delimiters") {
-  constexpr auto [before, delim, after] = "a=b=c"_fs | ops::partition<"=">;
-  STATIC_CHECK(before.sv() == "a");
-  STATIC_CHECK(delim.sv() == "=");
-  STATIC_CHECK(after.sv() == "b=c");
+  auto const [before, delim, after] = "a=b=c"_fs | ops::partition<"=">;
+  static_assert(std::get<0>("a=b=c"_fs | ops::partition<"=">).sv() == "a");
+  static_assert(std::get<1>("a=b=c"_fs | ops::partition<"=">).sv() == "=");
+  static_assert(std::get<2>("a=b=c"_fs | ops::partition<"=">).sv() == "b=c");
+  REQUIRE(before.sv() == "a");
+  REQUIRE(delim.sv() == "=");
+  REQUIRE(after.sv() == "b=c");
 }
 
 TEST_CASE("partition<Delim>(str) - char[] version") {
-  constexpr auto [before, delim, after] = partition<"=">("key=value");
-  STATIC_CHECK(before.sv() == "key");
-  STATIC_CHECK(delim.sv() == "=");
-  STATIC_CHECK(after.sv() == "value");
+  auto const [before, delim, after] = partition<"=">("key=value");
+  static_assert(std::get<0>(partition<"=">("key=value")).sv() == "key");
+  static_assert(std::get<1>(partition<"=">("key=value")).sv() == "=");
+  static_assert(std::get<2>(partition<"=">("key=value")).sv() == "value");
+  REQUIRE(before.sv() == "key");
+  REQUIRE(delim.sv() == "=");
+  REQUIRE(after.sv() == "value");
 }

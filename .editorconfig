@@ -6,7 +6,7 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.hpp,*.cpp]
+[*.{hpp,cpp}]
 indent_style = space
-indent_size = space
+indent_size = 2
 tab_width = 2

@@ -22,7 +22,7 @@
 #define HAS_GLAZE 0
 #endif
 
-#if defined(FROZENCHARS_ENABLE_INJA)
+#if FROZENCHARS_HAS_GLAZE
 #define HAS_INJA 1
 #else
 #define HAS_INJA 0

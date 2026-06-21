@@ -822,6 +822,30 @@ TEST_CASE("minify helpers") {
     "</div>"_fs);
   static_assert(html3.sv() == "<div class=x><input /></div>");
   REQUIRE(html3.sv() == "<div class=x><input /></div>");
+
+  // A1 修正: boolean 属性 autoplay の値省略
+  auto constexpr html4 = minify_html("<video autoplay=\"autoplay\"></video>"_fs);
+  static_assert(html4.sv() == "<video autoplay></video>");
+  REQUIRE(html4.sv() == "<video autoplay></video>");
+
+  // A1 修正: boolean 属性 ismap の値省略
+  auto constexpr html5 = minify_html("<img ismap=\"ismap\" />"_fs);
+  static_assert(html5.sv() == "<img ismap />");
+  REQUIRE(html5.sv() == "<img ismap />");
+
+  // A1 修正: boolean 属性 itemscope の値省略
+  auto constexpr html6 = minify_html("<div itemscope=\"itemscope\">x</div>"_fs);
+  static_assert(html6.sv() == "<div itemscope>x</div>");
+  REQUIRE(html6.sv() == "<div itemscope>x</div>");
+
+  // A2 修正: 省略可能な終了タグ thead/tbody/caption
+  auto constexpr html7 = minify_html(
+    "<table><caption>T</caption>"
+    "<thead><tr><th>H</th></tr></thead>"
+    "<tbody><tr><td>D</td></tr></tbody>"
+    "</table>"_fs);
+  static_assert(html7.sv() == "<table><caption>T<thead><tr><th>H<tbody><tr><td>D</table>");
+  REQUIRE(html7.sv() == "<table><caption>T<thead><tr><th>H<tbody><tr><td>D</table>");
 }
 
 TEST_CASE("sql_uppercase_keywords") {

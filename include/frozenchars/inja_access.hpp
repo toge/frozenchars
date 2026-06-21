@@ -8,12 +8,7 @@
 #include <type_traits>
 #include <utility>
 
-#if __has_include(<glaze/glaze.hpp>)
-#include <glaze/glaze.hpp>
-#define FROZENCHARS_HAS_GLAZE 1
-#else
-#define FROZENCHARS_HAS_GLAZE 0
-#endif
+#include "detail/glaze_detect.hpp"
 
 #if FROZENCHARS_HAS_GLAZE
 

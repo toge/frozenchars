@@ -4,6 +4,10 @@ find_package(ctre REQUIRED CONFIG)
 file(GLOB test_src test_*.cpp)
 list(FILTER test_src EXCLUDE REGEX "test_split_(direct|logic|tester|v_debug)\\.cpp$")
 
+if(NOT ENABLE_INJA)
+  list(FILTER test_src EXCLUDE REGEX "test_(template_vm|template_functions|type_functions|environment_constants|specialized_arrays|inja_access|inja_types)\\.cpp$")
+endif()
+
 add_executable(all_test ${test_src})
 
 target_link_libraries(all_test PRIVATE
@@ -21,14 +25,16 @@ target_link_libraries(example_smoke PRIVATE frozenchars::frozenchars)
 target_compile_features(example_smoke PUBLIC cxx_std_23)
 add_test(NAME example_smoke COMMAND example_smoke)
 
-add_executable(example_render_with_output_buffer ../example_render_with_output_buffer.cpp)
-target_link_libraries(example_render_with_output_buffer PRIVATE frozenchars::frozenchars)
-target_compile_features(example_render_with_output_buffer PUBLIC cxx_std_23)
-add_test(NAME example_render_with_output_buffer COMMAND example_render_with_output_buffer)
+if(ENABLE_INJA)
+  add_executable(example_render_with_output_buffer ../example_render_with_output_buffer.cpp)
+  target_link_libraries(example_render_with_output_buffer PRIVATE frozenchars::frozenchars)
+  target_compile_features(example_render_with_output_buffer PUBLIC cxx_std_23)
+  add_test(NAME example_render_with_output_buffer COMMAND example_render_with_output_buffer)
 
-add_executable(bench_inja_runtime benchmark_inja_runtime.cpp)
-target_link_libraries(bench_inja_runtime PRIVATE frozenchars::frozenchars)
-target_compile_features(bench_inja_runtime PUBLIC cxx_std_23)
+  add_executable(bench_inja_runtime benchmark_inja_runtime.cpp)
+  target_link_libraries(bench_inja_runtime PRIVATE frozenchars::frozenchars)
+  target_compile_features(bench_inja_runtime PUBLIC cxx_std_23)
+endif()
 
 add_executable(bench_frozen_map bench_frozen_map.cpp)
 target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars)

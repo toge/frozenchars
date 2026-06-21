@@ -741,21 +741,24 @@ template <FrozenString Delim, size_t N>
 [[nodiscard]] auto consteval partition(FrozenString<N> const& str) noexcept {
   auto const pos = detail::find_impl(str, Delim);
   if (pos == std::string_view::npos) {
-    return std::tuple{str, FrozenString<1>{}, FrozenString<1>{}};
+    // 戻り値型を match パスと一致させるため、同サイズの空の FrozenString を返す
+    return std::tuple{str, decltype(Delim){}, FrozenString<N>{}};
   }
 
+  // before_len/after_len を NTTP として使わないよう入力バッファサイズ N を利用する。
+  // FrozenString<N> は十分な容量を持ち、length フィールドが実際の長さを管理する。
   auto const before_len  = pos;
   auto const after_start = pos + Delim.length;
   auto const after_len   = str.length - after_start;
 
-  auto before = FrozenString<before_len + 1>{};
+  auto before = FrozenString<N>{};
   for (auto i = 0uz; i < before_len; ++i) {
     before.buffer[i] = str.buffer[i];
   }
   before.buffer[before_len] = '\0';
   before.length             = before_len;
 
-  auto after = FrozenString<after_len + 1>{};
+  auto after = FrozenString<N>{};
   for (auto i = 0uz; i < after_len; ++i) {
     after.buffer[i] = str.buffer[after_start + i];
   }
@@ -1077,7 +1080,7 @@ namespace detail {
         || (len == 8 && name[0] == 'r' && name[1] == 'e' && name[2] == 'a' && name[3] == 'd' && name[4] == 'o' && name[5] == 'n' && name[6] == 'l' && name[7] == 'y')
         || (len == 8 && name[0] == 'r' && name[1] == 'e' && name[2] == 'q' && name[3] == 'u' && name[4] == 'i' && name[5] == 'r' && name[6] == 'e' && name[7] == 'd')
         || (len == 9 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'f' && name[5] == 'o' && name[6] == 'c' && name[7] == 'u' && name[8] == 's')
-        || (len == 9 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'p' && name[5] == 'l' && name[6] == 'a' && name[7] == 'y' && name[8] == '\0')
+        || (len == 8 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'p' && name[5] == 'l' && name[6] == 'a' && name[7] == 'y')
         || (len == 8 && name[0] == 'c' && name[1] == 'o' && name[2] == 'n' && name[3] == 't' && name[4] == 'r' && name[5] == 'o' && name[6] == 'l' && name[7] == 's')
         || (len == 4 && name[0] == 'l' && name[1] == 'o' && name[2] == 'o' && name[3] == 'p')
         || (len == 5 && name[0] == 'm' && name[1] == 'u' && name[2] == 't' && name[3] == 'e' && name[4] == 'd')
@@ -1093,9 +1096,8 @@ namespace detail {
         || (len == 6 && name[0] == 'n' && name[1] == 'o' && name[2] == 'w' && name[3] == 'r' && name[4] == 'a' && name[5] == 'p')
         || (len == 6 && name[0] == 's' && name[1] == 'c' && name[2] == 'o' && name[3] == 'p' && name[4] == 'e' && name[5] == 'd')
         || (len == 8 && name[0] == 's' && name[1] == 'e' && name[2] == 'a' && name[3] == 'm' && name[4] == 'l' && name[5] == 'e' && name[6] == 's' && name[7] == 's')
-        || (len == 6 && name[0] == 'i' && name[1] == 's' && name[2] == 'm' && name[3] == 'a' && name[4] == 'p' && name[5] == '\0')
-        || (len == 8 && name[0] == 'i' && name[1] == 't' && name[2] == 'e' && name[3] == 'm' && name[4] == 's' && name[5] == 'c' && name[6] == 'o' && name[7] == 'p')
-        || (len == 9 && name[0] == 'a' && name[1] == 'u' && name[2] == 't' && name[3] == 'o' && name[4] == 'p' && name[5] == 'l' && name[6] == 'a' && name[7] == 'y' && name[8] == '\0');
+        || (len == 5 && name[0] == 'i' && name[1] == 's' && name[2] == 'm' && name[3] == 'a' && name[4] == 'p')
+        || (len == 9 && name[0] == 'i' && name[1] == 't' && name[2] == 'e' && name[3] == 'm' && name[4] == 's' && name[5] == 'c' && name[6] == 'o' && name[7] == 'p' && name[8] == 'e');
   }
 
   /**
@@ -1160,13 +1162,13 @@ namespace detail {
         || (tag_len == 2 && tag[0] == 't' && tag[1] == 'r')
         || (tag_len == 2 && tag[0] == 't' && tag[1] == 'd')
         || (tag_len == 2 && tag[0] == 't' && tag[1] == 'h')
-        || (tag_len == 6 && tag[0] == 't' && tag[1] == 'h' && tag[2] == 'e' && tag[3] == 'a' && tag[4] == 'd' && tag[5] == '\0')
-        || (tag_len == 6 && tag[0] == 't' && tag[1] == 'b' && tag[2] == 'o' && tag[3] == 'd' && tag[4] == 'y' && tag[5] == '\0')
+        || (tag_len == 5 && tag[0] == 't' && tag[1] == 'h' && tag[2] == 'e' && tag[3] == 'a' && tag[4] == 'd')
+        || (tag_len == 5 && tag[0] == 't' && tag[1] == 'b' && tag[2] == 'o' && tag[3] == 'd' && tag[4] == 'y')
         || (tag_len == 5 && tag[0] == 't' && tag[1] == 'f' && tag[2] == 'o' && tag[3] == 'o' && tag[4] == 't')
         || (tag_len == 6 && tag[0] == 'o' && tag[1] == 'p' && tag[2] == 't' && tag[3] == 'i' && tag[4] == 'o' && tag[5] == 'n')
         || (tag_len == 7 && tag[0] == 'o' && tag[1] == 'p' && tag[2] == 't' && tag[3] == 'g' && tag[4] == 'r' && tag[5] == 'o' && tag[6] == 'u')
         || (tag_len == 8 && tag[0] == 'c' && tag[1] == 'o' && tag[2] == 'l' && tag[3] == 'g' && tag[4] == 'r' && tag[5] == 'o' && tag[6] == 'u' && tag[7] == 'p')
-        || (tag_len == 8 && tag[0] == 'c' && tag[1] == 'a' && tag[2] == 'p' && tag[3] == 't' && tag[4] == 'i' && tag[5] == 'o' && tag[6] == 'n' && tag[7] == '\0');
+        || (tag_len == 7 && tag[0] == 'c' && tag[1] == 'a' && tag[2] == 'p' && tag[3] == 't' && tag[4] == 'i' && tag[5] == 'o' && tag[6] == 'n');
   }
 
   /**

@@ -43,7 +43,6 @@ target_compile_features(frozenchars INTERFACE cxx_std_23)
 if(ENABLE_INJA)
     find_package(glaze CONFIG REQUIRED)
     target_link_libraries(frozenchars INTERFACE glaze::glaze)
-    target_compile_definitions(frozenchars INTERFACE FROZENCHARS_ENABLE_INJA=1)
 endif()
 
 target_include_directories(frozenchars
@@ -59,9 +58,12 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
+# ENABLE_INJA=OFF の場合は inja 系ヘッダを除外してインストール
 install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    PATTERN "inja" EXCLUDE
+    PATTERN "inja_*.hpp" EXCLUDE
 )
 
 if(ENABLE_INJA)

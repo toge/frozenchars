@@ -80,10 +80,97 @@ struct FrozenString {
   }
 
   /**
+   * @brief 文字列が空か判定する
+   */
+  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+    return length == 0;
+  }
+
+  /**
+   * @brief 先頭要素を返す (length > 0 を事前条件とする)
+   */
+  [[nodiscard]] constexpr auto front() const noexcept -> char {
+    return buffer[0];
+  }
+
+  /**
+   * @brief 末尾要素を返す (length > 0 を事前条件とする)
+   */
+  [[nodiscard]] constexpr auto back() const noexcept -> char {
+    return buffer[length - 1];
+  }
+
+  /**
+   * @brief 指定インデックスの文字を返す (境界チェック無し)
+   * @param i インデックス
+   */
+  [[nodiscard]] constexpr auto operator[](size_t i) const noexcept -> char {
+    return buffer[i];
+  }
+
+  /**
+   * @brief 先頭イテレータを返す
+   */
+  [[nodiscard]] constexpr auto begin() const noexcept -> char const* {
+    return buffer.data();
+  }
+
+  /**
+   * @brief 末尾イテレータを返す
+   */
+  [[nodiscard]] constexpr auto end() const noexcept -> char const* {
+    return buffer.data() + length;
+  }
+
+  /**
+   * @brief 先頭 const イテレータを返す
+   */
+  [[nodiscard]] constexpr auto cbegin() const noexcept -> char const* {
+    return begin();
+  }
+
+  /**
+   * @brief 末尾 const イテレータを返す
+   */
+  [[nodiscard]] constexpr auto cend() const noexcept -> char const* {
+    return end();
+  }
+
+  /**
    * @brief 互換性のための string_view 変換
    */
   [[nodiscard]] constexpr operator std::string_view() const noexcept {
     return sv();
+  }
+
+  /**
+   * @brief 同一サイズの FrozenString との比較演算子 (hidden friends)
+   *
+   * buffer 全体と length を比較。未使用バッファ領域は常にゼロ初期化されるため
+   * 内容比較と等価でありかつ NTTP 構造等価性・構造順序と完全に一致する。
+   */
+  [[nodiscard]] friend constexpr auto operator==(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
+    return lhs.buffer == rhs.buffer && lhs.length == rhs.length;
+  }
+
+  [[nodiscard]] friend constexpr auto operator!=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
+    return !(lhs == rhs);
+  }
+
+  [[nodiscard]] friend constexpr auto operator<(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
+    return lhs.buffer < rhs.buffer || (lhs.buffer == rhs.buffer && lhs.length < rhs.length);
+  }
+
+  [[nodiscard]] friend constexpr auto operator<=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
+    return !(rhs < lhs);
+  }
+
+  [[nodiscard]] friend constexpr auto operator>(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
+    return rhs < lhs;
+  }
+
+  [[nodiscard]] friend constexpr auto operator>=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
+    return !(lhs < rhs);
   }
 };
 

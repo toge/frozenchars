@@ -1,8 +1,9 @@
 #pragma once
 
 #include "map.hpp"
+#include "detail/glaze_detect.hpp"
 
-#if defined(__has_include) && __has_include(<glaze/json.hpp>)
+#if FROZENCHARS_HAS_GLAZE
 #include <glaze/json.hpp>
 
 #include <map>

@@ -24,7 +24,7 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 `example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
 
 ```bash
-g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I. example.cpp && ./a.out
+g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example.cpp && ./a.out
 ```
 
 ## `repeat`（繰り返し）
@@ -539,7 +539,7 @@ auto constexpr len5 = utf8_length<"Hello"_fs>();           // 5
 
 ## `make_querystring`（クエリ文字列生成）
 
-キーと値のペアからURLクエリ文字列を生成します。`FrozenString` と文字列リテラルの両方を受け取ります。l
+キーと値のペアからURLクエリ文字列を生成します。`FrozenString` と文字列リテラルの両方を受け取ります。
 std::tuple, std::pair, std::array などのタプルライクな型も受け取ります（要素数2である必要があります）。
 値はURLエンコードされます。
 
@@ -914,7 +914,6 @@ auto s = std::format(classic, frozenchars::to_sv<"{}"_fs>(), 1234);
 - 宣言順の値をそのまま書きたい場合は `frozen_map{...}`
 - キー集合を明示したい場合は `make_frozen_map(...)`
 - キーと値の両方をコンパイル時に書き切りたい場合は `make_frozen_map_kv(...)`
-- 同じコンパイル時APIを短く書きたい場合は `make_kv_map(...)`
 
 #### 宣言順の値を braced-init-list で書く
 

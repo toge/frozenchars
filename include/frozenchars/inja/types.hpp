@@ -19,12 +19,7 @@
 #include <inplace_vector>
 #endif
 
-#if defined(__has_include) && __has_include(<glaze/glaze.hpp>)
-#include <glaze/glaze.hpp>
-#define FROZENCHARS_HAS_GLAZE 1
-#else
-#define FROZENCHARS_HAS_GLAZE 0
-#endif
+#include "../detail/glaze_detect.hpp"
 
 #include "../inja_function.hpp"
 #include "../inja_value.hpp"

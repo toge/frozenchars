@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 
 #include "string.hpp"
 
@@ -25,3 +26,20 @@ template <FrozenString FS>
 }
 
 } // namespace frozenchars::literals
+
+namespace std {
+
+/**
+ * @brief FrozenString の std::hash 特殊化
+ *
+ * std::unordered_map 等の連想コンテナのキーとして使用可能にする。
+ * literals.hpp を include することで利用可能になる。
+ */
+template <std::size_t N>
+struct hash<frozenchars::FrozenString<N>> {
+  [[nodiscard]] auto operator()(frozenchars::FrozenString<N> const& s) const noexcept -> std::size_t {
+    return hash<std::string_view>{}(s.sv());
+  }
+};
+
+} // namespace std

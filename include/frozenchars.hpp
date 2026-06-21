@@ -21,7 +21,8 @@
 #include "frozenchars/regex_comment.hpp"
 #include "frozenchars/map.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
-#if defined(__has_include) && __has_include(<glaze/glaze.hpp>)
+#include "frozenchars/detail/glaze_detect.hpp"
+#if FROZENCHARS_HAS_GLAZE
 #include "frozenchars/inja_value.hpp"
 #include "frozenchars/inja_function.hpp"
 #include "frozenchars/inja_engine.hpp"
