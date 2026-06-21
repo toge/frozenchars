@@ -38,8 +38,7 @@ template <FrozenString Input>
 template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto crush_compress() {
-  constexpr auto compressed = compress<Input>();
-  return crush<compressed>();
+  return crush<compress<Input>()>();
 }
 
 } // namespace frozenchars::json
