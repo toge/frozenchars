@@ -3,7 +3,6 @@ project(frozenchars LANGUAGES CXX)
 
 set(FROZENCHARS_VERSION "0.1.0")
 
-option(ENABLE_INJA "Enable inja template engine support (requires glaze)" ON)
 option(BUILD_TEST "Enable tests" ON)
 
 ## add warning
@@ -45,11 +44,9 @@ add_library(frozenchars INTERFACE)
 add_library(frozenchars::frozenchars ALIAS frozenchars)
 target_compile_features(frozenchars INTERFACE cxx_std_23)
 
-if(ENABLE_INJA)
-    find_package(glaze CONFIG REQUIRED)
+find_package(glaze CONFIG QUIET)
+if(glaze_FOUND)
     target_link_libraries(frozenchars INTERFACE glaze::glaze)
-else()
-    target_compile_definitions(frozenchars INTERFACE FROZENCHARS_HAS_GLAZE=0)
 endif()
 
 target_include_directories(frozenchars
@@ -65,26 +62,10 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
-# ENABLE_INJA=OFF の場合は inja 系ヘッダを除外してインストール
 install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    PATTERN "inja" EXCLUDE
-    PATTERN "inja_*.hpp" EXCLUDE
-)
-
-if(ENABLE_INJA)
-    install(FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_engine.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_function.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja_value.hpp
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
-    )
-    install(DIRECTORY
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars/inja
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/frozenchars
-    )
-endif()
+  )
 
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/frozencharsConfigVersion.cmake"

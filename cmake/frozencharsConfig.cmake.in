@@ -2,10 +2,6 @@
 
 include(CMakeFindDependencyMacro)
 
-if(@ENABLE_INJA@)
-  find_dependency(glaze CONFIG)
-endif()
-
 include("${CMAKE_CURRENT_LIST_DIR}/frozencharsTargets.cmake")
 
 check_required_components(frozenchars)

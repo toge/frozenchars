@@ -22,12 +22,6 @@
 #define HAS_GLAZE 0
 #endif
 
-#if FROZENCHARS_HAS_GLAZE
-#define HAS_INJA 1
-#else
-#define HAS_INJA 0
-#endif
-
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
@@ -181,26 +175,6 @@ void use_case_6_inja_schema() {
   std::cout << "  contains_all (user+url): " << has_core << '\n';
   std::cout << "  contains_all (all 3):    " << has_all << '\n';
 
-#if HAS_INJA
-  // 実際の inja レンダリング
-  constexpr auto tmpl = frozenchars::FrozenString{
-    "Hi {{ user_name }}, click {{ verify_url }} by {{ expires_at }}."
-  };
-
-  // スキーマを走査して inja のコンテキストを組み立てる
-  // (std::string への変換はランタイムの通常コンストラクタでOK)
-  auto ctx = frozenchars::inja::inja_object{};
-  ctx.reserve(kEmailVars.size());
-  // keys_in_declaration_order() returns the non-sorted key span (declaration order)
-  for (auto const& k : kEmailVars.keys_in_declaration_order()) {
-    ctx.emplace(std::string{k}, frozenchars::inja::inja_value{std::string{kEmailVars[k]}});
-  }
-  auto const rendered = frozenchars::inja::render<tmpl>(
-    frozenchars::inja::inja_value{std::move(ctx)});
-  std::cout << "  rendered: " << rendered << '\n';
-#else
-  std::cout << "  (inja render skipped: FROZENCHARS_ENABLE_INJA not set)\n";
-#endif
 }
 
 // 7. 拡張子 -> ハンドラ (関数ポインタディスパッチ)

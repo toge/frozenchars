@@ -7,7 +7,6 @@
 - ヘッダオンリー C++ ライブラリ。`FrozenString<N>`（`N=終端 '\0' を含むバッファ長`）が核。`consteval` 主体だが、ランタイムでも動くものは `constexpr`。
 - 公開ターゲットは `frozenchars::frozenchars`（CMake `INTERFACE`）。利用時は `#include "frozenchars.hpp"` 1行。
 - 現在は `cxx_std_23` 固定（`CMakeLists.txt:41`）。C++26 フォールバックは未実装（将来追加予定）。
-- `ENABLE_INJA=OFF` にすれば glaze 不要でビルドでき、inja 系ヘッダはインストールされない（`CMakeLists.txt:62-78` にて `PATTERN "inja*" EXCLUDE` で制御）。
 - CI は `.github/workflows/ci.yml` に存在（Fedora 44/43/41、GCC 16/15/14）。
 - README は 1000行超の和文ドキュメント（`README.md`、現時点で 1300 行超）。
 
@@ -21,7 +20,6 @@
   g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example.cpp && ./a.out
   ```
 - テストフレームワーク: Catch2 v3。全テストが `all_test` 1個の実行ファイルにまとまる（`-r junit` で CTest 実行）。
-- `bench_inja_runtime` はベンチマークで CTest 未登録（手動実行用）。`ENABLE_INJA=ON` 時のみビルド。
 - `test_split_(direct|logic|tester|v_debug).cpp` の4ファイルは `all_test` から除外。手動デバッグ用。
 - `compile_commands.json` は `build/compile_commands.json` に出力。
 - `partition` の戻り値型は `std::tuple<FrozenString<N>, FrozenString<K>, FrozenString<N>>`（入力サイズ N 固定）。GCC 16 の NTTP + ユーザー定義比較演算子に関する制約のため、`before_len/after_len` を NTTP として使わない設計。`test_string_ops.cpp` では C++26 の `constexpr auto [...]` を使わず C++23 互換の `auto const [...]` + 直接 `static_assert` を使用。
@@ -30,8 +28,6 @@
 
 - `static_assert` のエラーメッセージを変更したら `test/compile_fail/` の `EXPECTED_TEXT` を必ず更新（`run_compile_fail.cmake` が部分一致で検証）。
 - コンパイル時マップの新たな `static_assert` を追加したら、`compile_fail/` にも失敗ケースを追加するルール。
-- `ENABLE_INJA=OFF` でも壊れないこと。inja コードは `#ifdef FROZENCHARS_HAS_GLAZE` でガード（`detail/glaze_detect.hpp` を経由する）。
-- `ENABLE_INJA=OFF` 時、test/CMakeLists.txt の `list(FILTER ... EXCLUDE)` で inja 系 7 ファイルが自動除外される。
 
 ## コーディング規約
 
@@ -52,9 +48,8 @@
 
 - README: `README.md`（和文、機能網羅）
 - アンブレラヘッダ: `include/frozenchars.hpp`
-- 最小サンプル: `example.cpp`、`example_split.cpp`、`example_render_with_output_buffer.cpp`（inja 使用）、`example_frozen_map_use_cases.cpp`、`example_parse_to_tuple_use_cases.cpp`
+- 最小サンプル: `example.cpp`、`example_split.cpp`、`example_frozen_map_use_cases.cpp`、`example_parse_to_tuple_use_cases.cpp`
 - コンパイル時マップ: `include/frozenchars/map.hpp`、`test/test_frozen_map.cpp`
-- テンプレート VM: `include/frozenchars/inja_engine.hpp` → `inja/engine_impl.hpp`
 - 失敗系テスト機構: `test/compile_fail/run_compile_fail.cmake`
 - 命名・スタイル: `.clang-format`、`.clang-tidy`、`.editorconfig`
 - glaze 検出マクロ: `include/frozenchars/detail/glaze_detect.hpp`（`FROZENCHARS_HAS_GLAZE` を定義）
