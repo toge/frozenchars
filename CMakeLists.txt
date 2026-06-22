@@ -22,7 +22,7 @@ if (MSVC)
     else()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
     endif()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /constexpr:steps=10000000")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /constexpr:steps10000000")
 endif()
 
 ## optimization
