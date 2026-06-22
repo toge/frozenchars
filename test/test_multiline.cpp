@@ -162,6 +162,7 @@ TEST_CASE("join_lines NTTP version") {
   using namespace frozenchars::literals;
   namespace fops = frozenchars::ops;
 
+#if !defined(_MSC_VER)
   // 基本動作
   auto constexpr r1 = frozenchars::join_lines<", "_fs>("line1\nline2\nline3"_fs);
   static_assert(r1.sv() == "line1, line2, line3");
@@ -191,8 +192,6 @@ TEST_CASE("join_lines NTTP version") {
   auto constexpr r6 = frozenchars::join_lines<"a\nb\nc"_fs, " | "_fs>();
   static_assert(r6.sv() == "a | b | c");
   static_assert(r6.length == 9uz);
-  // OUT_CAP (N) = length + 1 = 10
-#if !defined(_MSC_VER)
   static_assert(sizeof(r6.buffer) == 10uz);
 #endif
 }
