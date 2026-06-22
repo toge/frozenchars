@@ -62,13 +62,54 @@ jobs:
       - name: Test
         run: ctest --test-dir build -V
 
+  windows-msvc:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check compiler version
+        run: cl
+        shell: cmd
+
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\vcpkg
+            build\vcpkg_installed
+          key: ${{ runner.os }}-msvc-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-msvc-vcpkg-
+
+      - name: Setup vcpkg
+        run: |
+          if not exist C:\vcpkg (
+            git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+            call C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          )
+        shell: cmd
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -V -C Release
+
   linux-clang:
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        fedora_version: ["44", "43", "41"]
+        # clang 22 : Fedora 44
+        # clang 21 : Fedora 43
+        # clang 20 : Fedora 42
+        # clang 19 : Fedora 41
+        fedora_version: ["44", "43", "42", "41"]
 
     container: fedora:${{ matrix.fedora_version }}
 
