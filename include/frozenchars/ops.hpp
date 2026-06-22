@@ -203,7 +203,11 @@ template <FrozenString Sep>
 struct join_lines_nttp_adaptor : pipe_adaptor_base {
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+#if defined(_MSC_VER)
     return frozenchars::join_lines(str, Sep);
+#else
+    return frozenchars::join_lines<Sep>(str);
+#endif
   }
 };
 

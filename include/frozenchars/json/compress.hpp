@@ -55,7 +55,7 @@ template <FrozenString Input>
   output_u16.push_back(u'_');
   auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
 
-  constexpr auto N = Input.length * 4 + 4;
+  constexpr auto N = Input.length * 64 + 32;
   auto res = FrozenString<N>{};
   for (size_t i = 0; i < output_u8.size() && i < N - 1; ++i) {
     res.buffer[i] = output_u8[i];

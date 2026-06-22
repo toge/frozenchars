@@ -403,7 +403,34 @@ template <size_t N>
 template <auto Sep, size_t N>
   requires detail::is_frozen_string_v<decltype(Sep)>
 [[nodiscard]] auto consteval join_lines(FrozenString<N> const& str) noexcept {
+#if defined(_MSC_VER)
   return join_lines(str, Sep);
+#else
+  constexpr auto OUT_CAP = N + (N * Sep.length) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto first_line = true;
+
+  while (i < str.length) {
+    if (!first_line) {
+      for (auto const c : Sep.sv()) {
+        res.buffer[offset++] = c;
+      }
+    }
+    while (i < str.length && str.buffer[i] != '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+    if (i < str.length && str.buffer[i] == '\n') {
+      ++i;
+    }
+    first_line = false;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+#endif
 }
 
 /**
@@ -416,7 +443,11 @@ template <auto Sep, size_t N>
 template <auto Str, auto Sep>
   requires (detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(Sep)>)
 [[nodiscard]] auto consteval join_lines() noexcept {
+#if defined(_MSC_VER)
   return join_lines(Str, Sep);
+#else
+  return shrink_to_fit<join_lines<Sep>(Str)>();
+#endif
 }
 
 /**
@@ -430,7 +461,11 @@ template <auto Str, auto Sep>
 template <auto Sep, size_t N>
   requires detail::is_frozen_string_v<decltype(Sep)>
 [[nodiscard]] auto consteval join_lines(char const (&str)[N]) noexcept {
+#if defined(_MSC_VER)
   return join_lines(FrozenString{str}, Sep);
+#else
+  return join_lines<Sep>(FrozenString{str});
+#endif
 }
 
 /**
