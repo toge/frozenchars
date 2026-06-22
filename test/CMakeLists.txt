@@ -91,6 +91,7 @@ assert_frozen_map_compile_fail(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
 assert_frozen_map_compile_fail(
