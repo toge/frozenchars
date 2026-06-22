@@ -35,11 +35,18 @@ template <FrozenString Input>
   return res;
 }
 
+namespace detail {
+  template <FrozenString Input>
+  struct crush_compress_helper {
+    static constexpr auto compressed = compress<Input>();
+    static constexpr auto result = crush<compressed>();
+  };
+}
+
 template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto crush_compress() {
-  constexpr auto compressed = compress<Input>();
-  return crush<compressed>();
+  return detail::crush_compress_helper<Input>::result;
 }
 
 } // namespace frozenchars::json
