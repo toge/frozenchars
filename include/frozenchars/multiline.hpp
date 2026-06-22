@@ -400,8 +400,7 @@ template <size_t N>
  * @param str 対象文字列
  * @return auto 結合文字列
  */
-template <auto Sep, size_t N>
-  requires detail::is_frozen_string_v<decltype(Sep)>
+template <FrozenString Sep, size_t N>
 [[nodiscard]] auto consteval join_lines(FrozenString<N> const& str) noexcept {
 #if defined(_MSC_VER)
   return join_lines(str, Sep);
@@ -440,8 +439,7 @@ template <auto Sep, size_t N>
  * @tparam Sep セパレータ文字列（FrozenString NTTP）
  * @return auto 結合文字列
  */
-template <auto Str, auto Sep>
-  requires (detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(Sep)>)
+template <FrozenString Str, FrozenString Sep>
 [[nodiscard]] auto consteval join_lines() noexcept {
 #if defined(_MSC_VER)
   return join_lines(Str, Sep);
@@ -458,8 +456,7 @@ template <auto Str, auto Sep>
  * @param str 対象文字列リテラル
  * @return auto 結合文字列
  */
-template <auto Sep, size_t N>
-  requires detail::is_frozen_string_v<decltype(Sep)>
+template <FrozenString Sep, size_t N>
 [[nodiscard]] auto consteval join_lines(char const (&str)[N]) noexcept {
 #if defined(_MSC_VER)
   return join_lines(FrozenString{str}, Sep);

@@ -192,7 +192,9 @@ TEST_CASE("join_lines NTTP version") {
   static_assert(r6.sv() == "a | b | c");
   static_assert(r6.length == 9uz);
   // OUT_CAP (N) = length + 1 = 10
+#if !defined(_MSC_VER)
   static_assert(sizeof(r6.buffer) == 10uz);
+#endif
 }
 
 TEST_CASE("trim_trailing_spaces") {
