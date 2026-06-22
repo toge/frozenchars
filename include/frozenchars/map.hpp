@@ -467,7 +467,7 @@ private:
     std::array<index_t, k_max_key_len_ + 1> table{};
     table.fill(static_cast<index_t>(-1));
     std::size_t idx = 0;
-    (([&]{ table[Keys.length] = static_cast<index_t>(idx++); }()), ...);
+    ((table[Keys.length] = static_cast<index_t>(idx++)), ...);
     return table;
   }();
   /// 辞書順にソートされたキー文字列のビュー配列
