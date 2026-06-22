@@ -639,9 +639,10 @@ template <typename T, FrozenString... Keys, typename... Entries>
            (std::convertible_to<decltype(detail::pair_like_get<1>(std::declval<Entries>())), T> && ...))
 constexpr auto make_frozen_map(Entries&&... entries) -> frozen_map<T, Keys...> {
   static_assert(sizeof...(Keys) == sizeof...(Entries), "make_frozen_map requires exactly one entry per key");
-  return frozen_map<T, Keys...>{std::array<frozen_map_entry<T>, sizeof...(Keys)>{
+  auto arr = std::array<frozen_map_entry<T>, sizeof...(Keys)>{
     frozen_map_entry<T>{detail::pair_like_get<0>(std::forward<Entries>(entries)), detail::pair_like_get<1>(std::forward<Entries>(entries))}...
-  }};
+  };
+  return frozen_map<T, Keys...>{std::move(arr)};
 }
 
 template <typename T, FrozenString... Keys>
