@@ -98,7 +98,7 @@ namespace frozenchars::detail {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
 
-  if (!std::isfinite(value)) {
+  if (value != value || value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max()) {
     return std::pair{buffer, i};
   }
 

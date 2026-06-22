@@ -405,8 +405,8 @@ namespace detail {
  * @return auto 生成した文字列
  */
 template <FrozenString From, FrozenString To, size_t N>
-[[nodiscard]] consteval auto replace(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, N + To.size() + 1)> {
-  constexpr auto NEW_SIZE = std::max(N, N + To.size() + 1);
+[[nodiscard]] consteval auto replace(FrozenString<N> const& str) noexcept -> FrozenString<N + To.size() + 1> {
+  constexpr auto NEW_SIZE = N + To.size() + 1;
   auto           res      = FrozenString<NEW_SIZE>{};
 
   auto const pos = detail::find_impl(str, From);
