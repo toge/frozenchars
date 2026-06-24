@@ -846,6 +846,27 @@ TEST_CASE("minify helpers") {
     "</table>"_fs);
   static_assert(html7.sv() == "<table><caption>T<thead><tr><th>H<tbody><tr><td>D</table>");
   REQUIRE(html7.sv() == "<table><caption>T<thead><tr><th>H<tbody><tr><td>D</table>");
+
+  // remove_quotes=false: 属性値のクォートを保持
+  auto constexpr html_no_quote_removal = minify_html(
+    "<div class=\"x\" id='y'>text</div>"_fs, false);
+  static_assert(html_no_quote_removal.sv() == "<div class=\"x\" id='y'>text</div>");
+  REQUIRE(html_no_quote_removal.sv() == "<div class=\"x\" id='y'>text</div>");
+
+  // remove_end_tags=false: 省略可能な終了タグを保持
+  auto constexpr html_no_end_tag_removal = minify_html(
+    "<table><caption>T</caption>"
+    "<thead><tr><th>H</th></tr></thead>"
+    "<tbody><tr><td>D</td></tr></tbody>"
+    "</table>"_fs, true, false);
+  static_assert(html_no_end_tag_removal.sv() == "<table><caption>T</caption><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>");
+  REQUIRE(html_no_end_tag_removal.sv() == "<table><caption>T</caption><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>");
+
+  // 両方 false
+  auto constexpr html_no_both = minify_html(
+    "<div class=\"x\"></div>"_fs, false, false);
+  static_assert(html_no_both.sv() == "<div class=\"x\"></div>");
+  REQUIRE(html_no_both.sv() == "<div class=\"x\"></div>");
 }
 
 TEST_CASE("sql_uppercase_keywords") {

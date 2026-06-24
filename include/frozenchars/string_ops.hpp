@@ -1307,10 +1307,12 @@ namespace detail {
    *
    * @tparam N 文字列長（終端文字を含む）
    * @param str 入力文字列
+   * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
+   * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
    * @return auto 圧縮後の文字列
    */
   template <size_t N>
-  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str) noexcept {
+  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str, bool remove_quotes = true, bool remove_end_tags = true) noexcept {
     auto res           = FrozenString<N>{};
     auto offset        = 0uz;
     auto i             = 0uz;
@@ -1380,7 +1382,7 @@ namespace detail {
           if (scan < str.length) {
             ++scan;
           }
-          if (is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
+          if (remove_end_tags && is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
             i = scan;
             continue;
           }
@@ -1508,7 +1510,7 @@ namespace detail {
 
                 // 通常の属性: 値のクォート除去を試みる
                 // 属性値が安全ならクォートなしで出力
-                auto can_unquote = val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
+                auto can_unquote = remove_quotes && val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
                 if (can_unquote) {
                   // 属性名
                   for (auto k = attr_start; k < attr_start + attr_len; ++k) {
@@ -1949,11 +1951,13 @@ namespace detail {
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
+ * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
+ * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str) noexcept {
-  return detail::minify_markup(str);
+[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str, bool remove_quotes = true, bool remove_end_tags = true) noexcept {
+  return detail::minify_markup(str, remove_quotes, remove_end_tags);
 }
 
 /**
@@ -1961,11 +1965,13 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列リテラル
+ * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
+ * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_html(char const (&str)[N]) noexcept {
-  return minify_html(FrozenString{str});
+[[nodiscard]] auto consteval minify_html(char const (&str)[N], bool remove_quotes = true, bool remove_end_tags = true) noexcept {
+  return minify_html(FrozenString{str}, remove_quotes, remove_end_tags);
 }
 
 /**
@@ -1973,11 +1979,13 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
+ * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
+ * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str) noexcept {
-  return detail::minify_markup(str);
+[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, bool remove_quotes = true, bool remove_end_tags = true) noexcept {
+  return detail::minify_markup(str, remove_quotes, remove_end_tags);
 }
 
 /**
@@ -1985,11 +1993,13 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列リテラル
+ * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
+ * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(char const (&str)[N]) noexcept {
-  return minify_xml(FrozenString{str});
+[[nodiscard]] auto consteval minify_xml(char const (&str)[N], bool remove_quotes = true, bool remove_end_tags = true) noexcept {
+  return minify_xml(FrozenString{str}, remove_quotes, remove_end_tags);
 }
 
 /**
