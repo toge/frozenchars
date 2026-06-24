@@ -10,6 +10,10 @@
 
 namespace frozenchars::json {
 
+[[nodiscard]] constexpr auto validate_json(std::string_view input) noexcept -> bool {
+  return detail::validate_json(input);
+}
+
 namespace detail {
   template <FrozenString Input>
   [[nodiscard]] consteval auto compressed_size() -> size_t {
