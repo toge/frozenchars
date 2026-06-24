@@ -98,7 +98,7 @@ struct CompressMemory {
 };
 
 [[nodiscard]] constexpr auto get_or_add_value(CompressMemory& mem, [[maybe_unused]] json_value const& val, std::string const& serialized) -> std::string {
-  for (int i = 0; i < static_cast<int>(mem.values.size()); ++i) {
+  for (size_t i = 0; i < mem.values.size(); ++i) {
     if (mem.value_cache[i] == serialized) {
       return to_base62(static_cast<uint64_t>(i));
     }
