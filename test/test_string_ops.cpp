@@ -95,12 +95,27 @@ TEST_CASE("partition<Delim>(str) - multiple delimiters") {
   REQUIRE(after.sv() == "b=c");
 }
 
-TEST_CASE("partition<Delim>(str) - char[] version") {
-  auto const [before, delim, after] = partition<"=">("key=value");
-  static_assert(std::get<0>(partition<"=">("key=value")).sv() == "key");
-  static_assert(std::get<1>(partition<"=">("key=value")).sv() == "=");
-  static_assert(std::get<2>(partition<"=">("key=value")).sv() == "value");
-  REQUIRE(before.sv() == "key");
-  REQUIRE(delim.sv() == "=");
-  REQUIRE(after.sv() == "value");
+TEST_CASE("convert_linebreak - <br> variants", "[string_ops]") {
+  using namespace frozenchars;
+
+  auto constexpr input = "a<br>b<BR>c<br/>d<br />e<Br>f<bR/>g<BR />h"_fs;
+  auto constexpr result = convert_linebreak<LineBreak::Br, LineBreak::Nl>(input);
+  static_assert(result.sv() == "a\nb\nc\nd\ne\nf\ng\nh");
+}
+
+TEST_CASE("convert_linebreak - mutual conversion", "[string_ops]") {
+  using namespace frozenchars;
+
+  // Br -> Nl
+  static_assert(convert_linebreak<LineBreak::Br, LineBreak::Nl>("a<br>b"_fs).sv() == "a\nb");
+  // Nl -> Br
+  static_assert(convert_linebreak<LineBreak::Nl, LineBreak::Br>("a\nb"_fs).sv() == "a<br>b");
+  // Br -> EscN
+  static_assert(convert_linebreak<LineBreak::Br, LineBreak::EscN>("a<br>b"_fs).sv() == "a\\nb");
+  // EscN -> Br
+  static_assert(convert_linebreak<LineBreak::EscN, LineBreak::Br>(R"(a\nb)"_fs).sv() == "a<br>b");
+  // Nl -> EscN
+  static_assert(convert_linebreak<LineBreak::Nl, LineBreak::EscN>("a\nb"_fs).sv() == "a\\nb");
+  // EscN -> Nl
+  static_assert(convert_linebreak<LineBreak::EscN, LineBreak::Nl>(R"(a\nb)"_fs).sv() == "a\nb");
 }

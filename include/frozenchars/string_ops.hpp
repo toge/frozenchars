@@ -9,9 +9,86 @@
 #include <string_view>
 
 namespace frozenchars {
+ 
+/**
+ * @brief 行区切り文字の種類
+ */
+enum class LineBreak {
+  Br,       ///< <br> HTML タグ（全バリエーション）
+  EscN,     ///< \n リテラル（バックスラッシュ+n）
+  Nl,       ///< 実改行（LF, 0x0A）
+};
 
 /**
+ * @brief <br> タグのバリエーションにマッチするか判定し、一致長を返す
+ * 
+ * マッチ対象: <br>, <BR>, <br/>, <br />, <Br/> 等（大文字小文字不問、空白・スラッシュ任意）
+ */
+template <size_t N>
+[[nodiscard]] consteval auto match_br_tag(FrozenString<N> const& str, size_t pos) noexcept -> size_t {
+  if (pos >= str.length || str.buffer[pos] != '<') return 0;
+  auto i = pos + 1;
+  if (i >= str.length) return 0;
+  auto c = str.buffer[i];
+  if (c != 'b' && c != 'B') return 0;
+  ++i;
+  if (i >= str.length) return 0;
+  c = str.buffer[i];
+  if (c != 'r' && c != 'R') return 0;
+  ++i;
+  while (i < str.length && (str.buffer[i] == ' ' || str.buffer[i] == '\t')) ++i;
+  if (i < str.length && str.buffer[i] == '/') ++i;
+  if (i >= str.length || str.buffer[i] != '>') return 0;
+  ++i;
+  return i - pos;
+}
+
+/**
+ * @brief <br> バリエーションを特定の文字列に置換する
+ */
+template <FrozenString To, size_t N>
+[[nodiscard]] consteval auto br_to_target(FrozenString<N> const& str) noexcept {
+  constexpr auto MAX_SIZE = std::max(N * 4, 2048uz);
+  auto res = FrozenString<MAX_SIZE>{};
+  auto offset = 0uz;
+  auto pos = 0uz;
+  while (pos < str.length) {
+    auto const len = match_br_tag(str, pos);
+    if (len == 0) {
+      res.buffer[offset++] = str.buffer[pos++];
+    } else {
+      for (auto i = 0uz; i < To.length; ++i) res.buffer[offset++] = To.buffer[i];
+      pos += len;
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 行区切り表現を相互変換する
+ */
+template <LineBreak From, LineBreak To, size_t N>
+[[nodiscard]] consteval auto convert_linebreak(FrozenString<N> const& str) noexcept {
+  if constexpr (From == To) return str;
+  
+  if constexpr (From == LineBreak::Br) {
+    if constexpr (To == LineBreak::Nl) return br_to_target<"\n">(str);
+    if constexpr (To == LineBreak::EscN) return br_to_target<"\\n">(str);
+  } else if constexpr (From == LineBreak::Nl) {
+    if constexpr (To == LineBreak::Br) return replace_all<"\n", "<br>">(str);
+    if constexpr (To == LineBreak::EscN) return replace_all<"\n", "\\n">(str);
+  } else if constexpr (From == LineBreak::EscN) {
+    if constexpr (To == LineBreak::Br) return replace_all<"\\n", "<br>">(str);
+    if constexpr (To == LineBreak::Nl) return replace_all<"\\n", "\n">(str);
+  }
+}
+ 
+/**
  * @brief FrozenString の先頭から最初の終端文字までを含む最小サイズへ縮小する
+
+
  *
  * @tparam Str 処理対象の FrozenString 値
  * @return auto 縮小後の FrozenString

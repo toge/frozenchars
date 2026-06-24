@@ -1,5 +1,6 @@
 #pragma once
 
+#include "char_utils.hpp"
 #include <cstddef>
 #include <string_view>
 

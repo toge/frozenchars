@@ -460,6 +460,40 @@ auto constexpr v = "<test>"_fs | fops::html_encode | fops::html_decode;
 static_assert(v.sv() == "<test>");
 ```
 
+## `linebreak`（改行表現の相互変換）
+
+HTML の `<br>` タグ、リテラル表記の `\n`、実際の改行コード (LF) の3つを相互変換します。
+
+- `linebreak<From, To>(...)` : 指定したフォーマット間で変換します
+- `br_to_nl`, `nl_to_br` などの便利エイリアスも提供しています
+- `FrozenString` と文字列リテラルの両方を受け取ります
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// <br> → 実改行
+auto constexpr n = br_to_nl("line1<br>line2<br>line3"_fs);
+// "line1\nline2\nline3"
+
+// 実改行 → <br>
+auto constexpr h = nl_to_br("line1\nline2\nline3"_fs);
+// "line1<br>line2<br>line3"
+
+// リテラル \n → 実改行
+auto constexpr u = esc_n_to_nl(R"(hello\nworld)"_fs);
+// "hello\nworld"
+```
+
+```cpp
+// パイプ演算子
+namespace fops = frozenchars::ops;
+auto constexpr v = "a<br>b"_fs | fops::br_to_nl | fops::nl_to_br;
+static_assert(v.sv() == "a<br>b");
+```
+
+
 ## `word_wrap`（ワードラップ）
 
 文字列を指定された幅で折り返します。スペース区切りで単語を認識し、指定幅を超える前に改行を挿入します。

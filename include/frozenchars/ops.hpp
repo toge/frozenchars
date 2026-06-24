@@ -691,6 +691,32 @@ template <FrozenString Delim>
 inline constexpr partition_adaptor<Delim> partition{};
 
 /**
+ * @brief 行区切り表現を相互変換するアダプタ
+ */
+template <frozenchars::LineBreak From, frozenchars::LineBreak To>
+struct linebreak_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::convert_linebreak<From, To>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::convert_linebreak<From, To>(FrozenString{str});
+  }
+};
+
+template <frozenchars::LineBreak From, frozenchars::LineBreak To>
+inline constexpr linebreak_adaptor<From, To> linebreak{};
+
+// 便利エイリアス
+inline constexpr auto br_to_nl     = linebreak<frozenchars::LineBreak::Br, frozenchars::LineBreak::Nl>;
+inline constexpr auto nl_to_br     = linebreak<frozenchars::LineBreak::Nl, frozenchars::LineBreak::Br>;
+inline constexpr auto br_to_esc_n  = linebreak<frozenchars::LineBreak::Br, frozenchars::LineBreak::EscN>;
+inline constexpr auto esc_n_to_br  = linebreak<frozenchars::LineBreak::EscN, frozenchars::LineBreak::Br>;
+inline constexpr auto nl_to_esc_n  = linebreak<frozenchars::LineBreak::Nl, frozenchars::LineBreak::EscN>;
+inline constexpr auto esc_n_to_nl  = linebreak<frozenchars::LineBreak::EscN, frozenchars::LineBreak::Nl>;
+
+/**
  * @brief 数値型に対してアダプタを適用するパイプ演算子
  */
 template <Integral T, PipeAdaptor Adaptor>
