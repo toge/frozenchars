@@ -885,7 +885,7 @@ template <size_t Width, char Fill = ' ', typename T>
 
 template <FrozenString Delim, size_t ElemN, size_t Count>
 [[nodiscard]] auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
-  constexpr auto NEW_SIZE = (ElemN * Count) + (Delim.size() * Count) + 1;
+  constexpr auto NEW_SIZE = (ElemN * Count) + (Delim.size() * (Count > 0 ? Count - 1 : 0)) + 1;
   auto           res      = FrozenString<NEW_SIZE>{};
   auto           offset   = 0uz;
   for (auto i = 0uz; i < Count; ++i) {
