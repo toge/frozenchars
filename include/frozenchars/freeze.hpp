@@ -35,22 +35,22 @@ template <size_t N>
 /*-------------------------------------------------------------------------------*\
  * 各種C文字列ポインタ
 \*/
-[[nodiscard]] auto consteval freeze(char const* arg) noexcept {
+[[nodiscard]] auto constexpr freeze(char const* arg) noexcept {
   return detail::freeze_from_ptr(arg);
 }
-[[nodiscard]] auto consteval freeze(char* arg) noexcept {
+[[nodiscard]] auto constexpr freeze(char* arg) noexcept {
   return freeze(static_cast<char const*>(arg));
 }
-[[nodiscard]] auto consteval freeze(signed char const* arg) noexcept {
+[[nodiscard]] auto constexpr freeze(signed char const* arg) noexcept {
   return detail::freeze_from_ptr(arg);
 }
-[[nodiscard]] auto consteval freeze(signed char* arg) noexcept {
+[[nodiscard]] auto constexpr freeze(signed char* arg) noexcept {
   return freeze(static_cast<signed char const*>(arg));
 }
-[[nodiscard]] auto consteval freeze(unsigned char const* arg) noexcept {
+[[nodiscard]] auto constexpr freeze(unsigned char const* arg) noexcept {
   return detail::freeze_from_ptr(arg);
 }
-[[nodiscard]] auto consteval freeze(unsigned char* arg) noexcept {
+[[nodiscard]] auto constexpr freeze(unsigned char* arg) noexcept {
   return freeze(static_cast<unsigned char const*>(arg));
 }
 
@@ -58,35 +58,35 @@ template <size_t N>
  * 各種char型のspan
 \*/
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<char const, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<char const, Extent> arg) noexcept {
   return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<char, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<char, Extent> arg) noexcept {
   return freeze(std::span<char const, Extent>{arg});
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<signed char const, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<signed char const, Extent> arg) noexcept {
   return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<signed char, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<signed char, Extent> arg) noexcept {
   return freeze(std::span<signed char const, Extent>{arg});
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<unsigned char const, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<unsigned char const, Extent> arg) noexcept {
   return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<unsigned char, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<unsigned char, Extent> arg) noexcept {
   return freeze(std::span<unsigned char const, Extent>{arg});
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<std::byte const, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<std::byte const, Extent> arg) noexcept {
   return detail::freeze_from_span(arg);
 }
 template <size_t Extent>
-[[nodiscard]] auto consteval freeze(std::span<std::byte, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::span<std::byte, Extent> arg) noexcept {
   return freeze(std::span<std::byte const, Extent>{arg});
 }
 
@@ -94,19 +94,19 @@ template <size_t Extent>
  * 各種char型のarray
 \*/
 template <size_t N>
-[[nodiscard]] auto consteval freeze(std::array<char, N> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::array<char, N> const& arg) noexcept {
   return freeze(std::span<char const, N>{arg});
 }
 template <size_t N>
-[[nodiscard]] auto consteval freeze(std::array<signed char, N> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::array<signed char, N> const& arg) noexcept {
   return freeze(std::span<signed char const, N>{arg});
 }
 template <size_t N>
-[[nodiscard]] auto consteval freeze(std::array<unsigned char, N> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::array<unsigned char, N> const& arg) noexcept {
   return freeze(std::span<unsigned char const, N>{arg});
 }
 template <size_t N>
-[[nodiscard]] auto consteval freeze(std::array<std::byte, N> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::array<std::byte, N> const& arg) noexcept {
   return freeze(std::span<std::byte const, N>{arg});
 }
 
@@ -114,19 +114,19 @@ template <size_t N>
  * 各種char型のvector
 \*/
 template <typename Alloc>
-[[nodiscard]] auto consteval freeze(std::vector<char, Alloc> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::vector<char, Alloc> const& arg) noexcept {
   return freeze(std::span<char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-[[nodiscard]] auto consteval freeze(std::vector<signed char, Alloc> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::vector<signed char, Alloc> const& arg) noexcept {
   return freeze(std::span<signed char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-[[nodiscard]] auto consteval freeze(std::vector<unsigned char, Alloc> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::vector<unsigned char, Alloc> const& arg) noexcept {
   return freeze(std::span<unsigned char const>{arg.data(), arg.size()});
 }
 template <typename Alloc>
-[[nodiscard]] auto consteval freeze(std::vector<std::byte, Alloc> const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(std::vector<std::byte, Alloc> const& arg) noexcept {
   return freeze(std::span<std::byte const>{arg.data(), arg.size()});
 }
 
@@ -233,7 +233,7 @@ template <typename T>
             && !FloatingPoint<std::remove_cvref_t<T>>
             && !std::same_as<std::remove_cvref_t<T>, Hex>
             && !std::same_as<std::remove_cvref_t<T>, Precision>)
-[[nodiscard]] auto consteval freeze(T const& arg) noexcept {
+[[nodiscard]] auto constexpr freeze(T const& arg) noexcept {
   auto const s = std::string_view{arg};
   return detail::freeze_from_sv(s);
 }

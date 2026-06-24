@@ -18,7 +18,7 @@ namespace frozenchars::detail {
  * @return auto 変換された 0..255 の値
  */
 template <typename T>
-[[nodiscard]] auto consteval to_u8(T const v) noexcept {
+[[nodiscard]] auto constexpr to_u8(T const v) noexcept {
   if constexpr (std::same_as<std::remove_cv_t<T>, std::byte>) {
     return std::to_integer<unsigned char>(v);
   } else {
@@ -36,7 +36,7 @@ template <typename T>
  * @return auto 変換文字列
  */
 template <typename Elem>
-[[nodiscard]] auto consteval freeze_from_ptr(Elem const* arg) noexcept {
+[[nodiscard]] auto constexpr freeze_from_ptr(Elem const* arg) noexcept {
   auto res = FrozenString<257>{};
   if (arg == nullptr) {
     res.buffer[0] = '\0';
@@ -68,7 +68,7 @@ template <typename Elem>
  * @return auto 変換文字列
  */
 template <typename Elem, size_t Extent>
-[[nodiscard]] auto consteval freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
+[[nodiscard]] auto constexpr freeze_from_span(std::span<Elem const, Extent> arg) noexcept {
   auto res = FrozenString<257>{};
   auto const max_len = std::min(arg.size(), res.buffer.size() - 1);
   auto len = 0uz;
@@ -92,7 +92,7 @@ template <typename Elem, size_t Extent>
  * @param s 変換する string_view
  * @return auto 変換文字列
  */
-[[nodiscard]] auto consteval freeze_from_sv(std::string_view s) noexcept {
+[[nodiscard]] auto constexpr freeze_from_sv(std::string_view s) noexcept {
   auto res = FrozenString<257>{};
   auto const len = std::min(s.size(), res.buffer.size() - 1);
   for (auto i = 0uz; i < len; ++i) {
