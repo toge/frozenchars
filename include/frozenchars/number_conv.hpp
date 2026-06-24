@@ -119,26 +119,39 @@ template <typename T, size_t N>
       }
     }
   } else if constexpr (std::floating_point<T>) {
-    // Note: std::from_chars for floating-point is not constexpr in C++23,
-    // so we use manual parsing here.
+    if (!std::is_constant_evaluated()) {
+      T res = 0;
+      auto const [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), res);
+      if (ec == std::errc::invalid_argument) {
+        throw std::invalid_argument("invalid float");
+      }
+      if (ec == std::errc::result_out_of_range) {
+        throw std::out_of_range("float overflow");
+      }
+      if (ptr != sv.data() + sv.size()) {
+        throw std::invalid_argument("invalid float");
+      }
+      return res;
+    }
     T res = 0;
     size_t i = start;
     bool has_digits = false;
     while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-      res = res * 10 + (sv[i] - '0');
+      res = res * 10 + static_cast<T>(sv[i] - '0');
       ++i;
       has_digits = true;
     }
     if (i < sv.size() && sv[i] == '.') {
       ++i;
-      T frac = 0.1;
+      T frac = 1;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-        res += (sv[i] - '0') * frac;
-        frac /= 10.0;
+        frac /= 10;
+        res += static_cast<T>(sv[i] - '0') * frac;
         ++i;
         has_digits = true;
       }
     }
+    int exp = 0;
     if (i < sv.size() && (sv[i] == 'e' || sv[i] == 'E')) {
       ++i;
       bool eneg = false;
@@ -147,7 +160,6 @@ template <typename T, size_t N>
       } else if (i < sv.size() && sv[i] == '+') {
         ++i;
       }
-      int exp = 0;
       bool has_exp_digits = false;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
         exp = exp * 10 + static_cast<int>(sv[i] - '0');
@@ -157,24 +169,29 @@ template <typename T, size_t N>
       if (!has_exp_digits) {
         throw std::invalid_argument("invalid exponent");
       }
-      if (eneg) {
-        for (int j = 0; j < exp; ++j) {
-          res /= 10.0;
-          if (res == 0) break;
-        }
-      } else {
-        for (int j = 0; j < exp; ++j) {
-          res *= 10.0;
-          if (res > std::numeric_limits<T>::max() || res < -std::numeric_limits<T>::max()) {
-            throw std::out_of_range("float overflow");
-          }
-        }
-      }
+      if (eneg) exp = -exp;
     }
     if (!has_digits || i < sv.size()) {
       throw std::invalid_argument("invalid float");
     }
     T final_res = neg ? -res : res;
+    if (exp != 0) {
+      auto constexpr pow10 = [](int n) -> T {
+        T result = 1;
+        T base = 10;
+        while (n > 0) {
+          if (n & 1) result *= base;
+          base *= base;
+          n >>= 1;
+        }
+        return result;
+      };
+      if (exp > 0) {
+        final_res *= pow10(exp);
+      } else {
+        final_res /= pow10(-exp);
+      }
+    }
     if (final_res == std::numeric_limits<T>::infinity() || final_res == -std::numeric_limits<T>::infinity()) {
       throw std::out_of_range("float overflow");
     }
