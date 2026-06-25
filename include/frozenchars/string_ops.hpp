@@ -7,9 +7,10 @@
 #include <cstddef>
 #include <limits>
 #include <string_view>
+#include <utility>
 
 namespace frozenchars {
- 
+
 /**
  * @brief 行区切り文字の種類
  */
@@ -22,49 +23,49 @@ enum class LineBreak {
 /**
  * @brief HTML/XML minify オプション（ビットフィールド）
  */
-enum class minify_markup_option : uint8_t {
+enum class minify_markup_opt : uint8_t {
   none            = 0,
   remove_quotes   = 1 << 0, ///< 属性値のクォートを除去する
   remove_end_tags = 1 << 1, ///< 省略可能な終了タグを除去する
 };
 
-inline constexpr auto operator|(minify_markup_option a, minify_markup_option b) noexcept -> minify_markup_option {
-  return static_cast<minify_markup_option>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+inline constexpr auto operator|(minify_markup_opt a, minify_markup_opt b) noexcept {
+  return static_cast<minify_markup_opt>(std::to_underlying(a) | std::to_underlying(b));
 }
 
-inline constexpr auto operator&(minify_markup_option a, minify_markup_option b) noexcept -> minify_markup_option {
-  return static_cast<minify_markup_option>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+inline constexpr auto operator&(minify_markup_opt a, minify_markup_opt b) noexcept {
+  return static_cast<minify_markup_opt>(std::to_underlying(a) & std::to_underlying(b));
 }
 
-inline constexpr auto has_flag(minify_markup_option value, minify_markup_option flag) noexcept -> bool {
+inline constexpr auto has_flag(minify_markup_opt value, minify_markup_opt flag) noexcept {
   return (value & flag) == flag;
 }
 
 /**
  * @brief SQL minify オプション（ビットフィールド）
  */
-enum class minify_sql_option : uint8_t {
+enum class minify_sql_opt : uint8_t {
   none           = 0,
   shorten_types  = 1 << 0, ///< 型キーワードを短縮する
   remove_as      = 1 << 1, ///< AS キーワードを除去する
   simplify_join  = 1 << 2, ///< INNER JOIN を JOIN に簡略化する
 };
 
-inline constexpr auto operator|(minify_sql_option a, minify_sql_option b) noexcept -> minify_sql_option {
-  return static_cast<minify_sql_option>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+inline constexpr auto operator|(minify_sql_opt a, minify_sql_opt b) noexcept {
+  return static_cast<minify_sql_opt>(std::to_underlying(a) | std::to_underlying(b));
 }
 
-inline constexpr auto operator&(minify_sql_option a, minify_sql_option b) noexcept -> minify_sql_option {
-  return static_cast<minify_sql_option>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+inline constexpr auto operator&(minify_sql_opt a, minify_sql_opt b) noexcept {
+  return static_cast<minify_sql_opt>(std::to_underlying(a) & std::to_underlying(b));
 }
 
-inline constexpr auto has_flag(minify_sql_option value, minify_sql_option flag) noexcept -> bool {
+inline constexpr auto has_flag(minify_sql_opt value, minify_sql_opt flag) noexcept -> bool {
   return (value & flag) == flag;
 }
 
 /**
  * @brief <br> タグのバリエーションにマッチするか判定し、一致長を返す
- * 
+ *
  * マッチ対象: <br>, <BR>, <br/>, <br />, <Br/> 等（大文字小文字不問、空白・スラッシュ任意）
  */
 template <size_t N>
@@ -115,7 +116,7 @@ template <FrozenString To, size_t N>
 template <LineBreak From, LineBreak To, size_t N>
 [[nodiscard]] consteval auto convert_linebreak(FrozenString<N> const& str) noexcept {
   if constexpr (From == To) return str;
-  
+
   if constexpr (From == LineBreak::Br) {
     if constexpr (To == LineBreak::Nl) return br_to_target<"\n">(str);
     if constexpr (To == LineBreak::EscN) return br_to_target<"\\n">(str);
@@ -127,7 +128,7 @@ template <LineBreak From, LineBreak To, size_t N>
     if constexpr (To == LineBreak::Nl) return replace_all<"\\n", "\n">(str);
   }
 }
- 
+
 /**
  * @brief FrozenString の先頭から最初の終端文字までを含む最小サイズへ縮小する
 
@@ -1378,7 +1379,7 @@ namespace detail {
    * @return auto 圧縮後の文字列
    */
   template <size_t N>
-  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str, minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str, minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
     auto res           = FrozenString<N>{};
     auto offset        = 0uz;
     auto i             = 0uz;
@@ -1453,7 +1454,7 @@ namespace detail {
             i = scan;
             continue;
           }
-          if (has_flag(options, minify_markup_option::remove_end_tags) && is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
+          if (has_flag(options, minify_markup_opt::remove_end_tags) && is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
             i = scan;
             continue;
           }
@@ -1590,7 +1591,7 @@ namespace detail {
 
                 // 通常の属性: 値のクォート除去を試みる
                 // 属性値が安全ならクォートなしで出力
-                auto can_unquote = has_flag(options, minify_markup_option::remove_quotes) && val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
+                auto can_unquote = has_flag(options, minify_markup_opt::remove_quotes) && val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
                 if (can_unquote) {
                   // 属性名
                   for (auto k = attr_start; k < attr_start + attr_len; ++k) {
@@ -2035,7 +2036,7 @@ namespace detail {
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str, minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str, minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
   return detail::minify_markup(str, options);
 }
 
@@ -2048,7 +2049,7 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_html(char const (&str)[N], minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+[[nodiscard]] auto consteval minify_html(char const (&str)[N], minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
   return minify_html(FrozenString{str}, options);
 }
 
@@ -2061,7 +2062,7 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
   return detail::minify_markup(str, options);
 }
 
@@ -2074,7 +2075,7 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(char const (&str)[N], minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+[[nodiscard]] auto consteval minify_xml(char const (&str)[N], minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
   return minify_xml(FrozenString{str}, options);
 }
 
@@ -2281,7 +2282,7 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str, minify_sql_option options = minify_sql_option::shorten_types) noexcept {
+[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str, minify_sql_opt options = minify_sql_opt::shorten_types) noexcept {
   auto res           = FrozenString<N>{};
   auto offset        = 0uz;
   auto i             = 0uz;
@@ -2382,7 +2383,7 @@ template <size_t N>
     }
 
     // AS キーワードの除去 / INNER JOIN の簡略化
-    if ((has_flag(options, minify_sql_option::remove_as) || has_flag(options, minify_sql_option::simplify_join)) && detail::is_sql_id_start(c)) {
+    if ((has_flag(options, minify_sql_opt::remove_as) || has_flag(options, minify_sql_opt::simplify_join)) && detail::is_sql_id_start(c)) {
       auto const word_start = i;
       while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
         ++i;
@@ -2407,7 +2408,7 @@ template <size_t N>
       }
 
       // INNER JOIN の検出
-      if (has_flag(options, minify_sql_option::simplify_join) && word_len == 5) {
+      if (has_flag(options, minify_sql_opt::simplify_join) && word_len == 5) {
         auto upper_buf = std::array<char, 5>{};
         for (auto j = 0uz; j < 5; ++j) {
           auto const ch = str.buffer[word_start + j];
@@ -2447,7 +2448,7 @@ template <size_t N>
     }
 
     // 型キーワードの短縮
-    if (has_flag(options, minify_sql_option::shorten_types) && detail::is_sql_id_start(c)) {
+    if (has_flag(options, minify_sql_opt::shorten_types) && detail::is_sql_id_start(c)) {
       auto const word_start = i;
       while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
         ++i;
@@ -2533,7 +2534,7 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_sql(char const (&str)[N], minify_sql_option options = minify_sql_option::shorten_types) noexcept {
+[[nodiscard]] auto consteval minify_sql(char const (&str)[N], minify_sql_opt options = minify_sql_opt::shorten_types) noexcept {
   return minify_sql(FrozenString{str}, options);
 }
 

@@ -366,13 +366,20 @@ struct word_wrap_adaptor : pipe_adaptor_base {
  * @brief HTML minify をパイプ演算子で適用するアダプタ
  */
 struct minify_html_adaptor : pipe_adaptor_base {
+  minify_markup_opt options;
+  constexpr minify_html_adaptor(
+    minify_markup_opt opts = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+  ) noexcept : options(opts) {}
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::minify_html(str);
+    return frozenchars::minify_html(str, options);
   }
   template <size_t N>
   [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
-    return frozenchars::minify_html(FrozenString{str});
+    return frozenchars::minify_html(FrozenString{str}, options);
+  }
+  [[nodiscard]] consteval auto operator()(minify_markup_opt opts) const noexcept {
+    return minify_html_adaptor{opts};
   }
 };
 
@@ -380,13 +387,20 @@ struct minify_html_adaptor : pipe_adaptor_base {
  * @brief XML minify をパイプ演算子で適用するアダプタ
  */
 struct minify_xml_adaptor : pipe_adaptor_base {
+  minify_markup_opt options;
+  constexpr minify_xml_adaptor(
+    minify_markup_opt opts = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+  ) noexcept : options(opts) {}
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::minify_xml(str);
+    return frozenchars::minify_xml(str, options);
   }
   template <size_t N>
   [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
-    return frozenchars::minify_xml(FrozenString{str});
+    return frozenchars::minify_xml(FrozenString{str}, options);
+  }
+  [[nodiscard]] consteval auto operator()(minify_markup_opt opts) const noexcept {
+    return minify_xml_adaptor{opts};
   }
 };
 
@@ -422,13 +436,20 @@ struct minify_yaml_adaptor : pipe_adaptor_base {
  * @brief SQL minify をパイプ演算子で適用するアダプタ
  */
 struct minify_sql_adaptor : pipe_adaptor_base {
+  minify_sql_opt options;
+  constexpr minify_sql_adaptor(
+    minify_sql_opt opts = minify_sql_opt::shorten_types
+  ) noexcept : options(opts) {}
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
-    return frozenchars::minify_sql(str);
+    return frozenchars::minify_sql(str, options);
   }
   template <size_t N>
   [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
-    return frozenchars::minify_sql(FrozenString{str});
+    return frozenchars::minify_sql(FrozenString{str}, options);
+  }
+  [[nodiscard]] consteval auto operator()(minify_sql_opt opts) const noexcept {
+    return minify_sql_adaptor{opts};
   }
 };
 

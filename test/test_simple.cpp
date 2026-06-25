@@ -796,7 +796,7 @@ TEST_CASE("minify helpers") {
   REQUIRE(sql_type.sv() == "SELECT INT,BOOL FROM tbl WHERE col::text='x'");
 
   auto constexpr sql_no_shorten = minify_sql(
-    "SELECT INTEGER FROM tbl"_fs, minify_sql_option::none);
+    "SELECT INTEGER FROM tbl"_fs, minify_sql_opt::none);
   static_assert(sql_no_shorten.sv() == "SELECT INTEGER FROM tbl");
   REQUIRE(sql_no_shorten.sv() == "SELECT INTEGER FROM tbl");
 
@@ -813,14 +813,14 @@ TEST_CASE("minify helpers") {
   // AS キーワード除去
   auto constexpr sql_remove_as = minify_sql(
     "SELECT col AS alias FROM tbl"_fs,
-    minify_sql_option::shorten_types | minify_sql_option::remove_as);
+    minify_sql_opt::shorten_types | minify_sql_opt::remove_as);
   static_assert(sql_remove_as.sv() == "SELECT col alias FROM tbl");
   REQUIRE(sql_remove_as.sv() == "SELECT col alias FROM tbl");
 
   // INNER JOIN 簡略化
   auto constexpr sql_simplify_join = minify_sql(
     "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id"_fs,
-    minify_sql_option::shorten_types | minify_sql_option::simplify_join);
+    minify_sql_opt::shorten_types | minify_sql_opt::simplify_join);
   static_assert(sql_simplify_join.sv() == "SELECT * FROM t1 JOIN t2 ON t1.id=t2.id");
   REQUIRE(sql_simplify_join.sv() == "SELECT * FROM t1 JOIN t2 ON t1.id=t2.id");
 
@@ -863,7 +863,7 @@ TEST_CASE("minify helpers") {
 
   // remove_quotes を無効にした場合: 属性値のクォートを保持
   auto constexpr html_no_quote_removal = minify_html(
-    "<div class=\"x\" id='y'>text</div>"_fs, minify_markup_option::remove_end_tags);
+    "<div class=\"x\" id='y'>text</div>"_fs, minify_markup_opt::remove_end_tags);
   static_assert(html_no_quote_removal.sv() == "<div class=\"x\" id='y'>text</div>");
   REQUIRE(html_no_quote_removal.sv() == "<div class=\"x\" id='y'>text</div>");
 
@@ -872,13 +872,13 @@ TEST_CASE("minify helpers") {
     "<table><caption>T</caption>"
     "<thead><tr><th>H</th></tr></thead>"
     "<tbody><tr><td>D</td></tr></tbody>"
-    "</table>"_fs, minify_markup_option::remove_quotes);
+    "</table>"_fs, minify_markup_opt::remove_quotes);
   static_assert(html_no_end_tag_removal.sv() == "<table><caption>T</caption><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>");
   REQUIRE(html_no_end_tag_removal.sv() == "<table><caption>T</caption><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>");
 
   // 両方無効
   auto constexpr html_no_both = minify_html(
-    "<div class=\"x\"></div>"_fs, minify_markup_option::none);
+    "<div class=\"x\"></div>"_fs, minify_markup_opt::none);
   static_assert(html_no_both.sv() == "<div class=\"x\"></div>");
   REQUIRE(html_no_both.sv() == "<div class=\"x\"></div>");
 
