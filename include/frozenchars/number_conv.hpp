@@ -119,20 +119,6 @@ template <typename T, size_t N>
       }
     }
   } else if constexpr (std::floating_point<T>) {
-    if (!std::is_constant_evaluated()) {
-      T res = 0;
-      auto const [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), res);
-      if (ec == std::errc::invalid_argument) {
-        throw std::invalid_argument("invalid float");
-      }
-      if (ec == std::errc::result_out_of_range) {
-        throw std::out_of_range("float overflow");
-      }
-      if (ptr != sv.data() + sv.size()) {
-        throw std::invalid_argument("invalid float");
-      }
-      return res;
-    }
     T res = 0;
     size_t i = start;
     bool has_digits = false;
