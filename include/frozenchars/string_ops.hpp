@@ -1183,7 +1183,7 @@ namespace detail {
    * @return auto 記号なら true
    */
   auto constexpr is_sql_punct(char c) noexcept {
-    return c == ',' || c == ';' || c == '(' || c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' || c == ':' || c == '|' || c == '@' || c == '#';
+    return c == ',' || c == ';' || c == '(' || c == '=' || c == '+' || c == '-' || c == '/' || c == '<' || c == '>' || c == ':' || c == '|' || c == '@' || c == '#';
   }
 
   /**
@@ -2381,8 +2381,8 @@ template <size_t N>
       pending_space = false;
     }
 
-    // AS キーワードの除去
-    if (has_flag(options, minify_sql_option::remove_as) && detail::is_sql_id_start(c)) {
+    // AS キーワードの除去 / INNER JOIN の簡略化
+    if ((has_flag(options, minify_sql_option::remove_as) || has_flag(options, minify_sql_option::simplify_join)) && detail::is_sql_id_start(c)) {
       auto const word_start = i;
       while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
         ++i;
@@ -2400,6 +2400,7 @@ template <size_t N>
             ++peek;
           }
           if (peek < str.length && detail::is_sql_id_start(str.buffer[peek])) {
+            i = peek;
             continue;
           }
         }
@@ -2431,7 +2432,7 @@ template <size_t N>
             if (join_match && peek + 4 < str.length && !detail::is_sql_id_char(str.buffer[peek + 4])) {
               // INNER をスキップして次の文字から処理
               i = peek;
-              pending_space = true;
+              pending_space = false;
               continue;
             }
           }
