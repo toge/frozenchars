@@ -124,7 +124,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
   try {
     size_t p = 0;
-    parse_value(s, p);
+    (void)parse_value(s, p);
     skip_ws(s, p);
     return p == s.size();
   } catch (...) {
