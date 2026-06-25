@@ -20,6 +20,49 @@ enum class LineBreak {
 };
 
 /**
+ * @brief HTML/XML minify オプション（ビットフィールド）
+ */
+enum class minify_markup_option : uint8_t {
+  none            = 0,
+  remove_quotes   = 1 << 0, ///< 属性値のクォートを除去する
+  remove_end_tags = 1 << 1, ///< 省略可能な終了タグを除去する
+};
+
+inline constexpr auto operator|(minify_markup_option a, minify_markup_option b) noexcept -> minify_markup_option {
+  return static_cast<minify_markup_option>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+inline constexpr auto operator&(minify_markup_option a, minify_markup_option b) noexcept -> minify_markup_option {
+  return static_cast<minify_markup_option>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+
+inline constexpr auto has_flag(minify_markup_option value, minify_markup_option flag) noexcept -> bool {
+  return (value & flag) == flag;
+}
+
+/**
+ * @brief SQL minify オプション（ビットフィールド）
+ */
+enum class minify_sql_option : uint8_t {
+  none           = 0,
+  shorten_types  = 1 << 0, ///< 型キーワードを短縮する
+  remove_as      = 1 << 1, ///< AS キーワードを除去する
+  simplify_join  = 1 << 2, ///< INNER JOIN を JOIN に簡略化する
+};
+
+inline constexpr auto operator|(minify_sql_option a, minify_sql_option b) noexcept -> minify_sql_option {
+  return static_cast<minify_sql_option>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+inline constexpr auto operator&(minify_sql_option a, minify_sql_option b) noexcept -> minify_sql_option {
+  return static_cast<minify_sql_option>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+
+inline constexpr auto has_flag(minify_sql_option value, minify_sql_option flag) noexcept -> bool {
+  return (value & flag) == flag;
+}
+
+/**
  * @brief <br> タグのバリエーションにマッチするか判定し、一致長を返す
  * 
  * マッチ対象: <br>, <BR>, <br/>, <br />, <Br/> 等（大文字小文字不問、空白・スラッシュ任意）
@@ -1269,6 +1312,30 @@ namespace detail {
   }
 
   /**
+   * @brief void 要素タグか判定する（閉じタグが不要な HTML5 void 要素）
+   *
+   * @param tag タグ名の先頭ポインタ
+   * @param tag_len タグ名の長さ
+   * @return auto void 要素なら true
+   */
+  auto constexpr is_void_element(char const* tag, size_t tag_len) noexcept {
+    return (tag_len == 4 && tag[0] == 'a' && tag[1] == 'r' && tag[2] == 'e' && tag[3] == 'a')
+        || (tag_len == 4 && tag[0] == 'b' && tag[1] == 'a' && tag[2] == 's' && tag[3] == 'e')
+        || (tag_len == 2 && tag[0] == 'b' && tag[1] == 'r')
+        || (tag_len == 3 && tag[0] == 'c' && tag[1] == 'o' && tag[2] == 'l')
+        || (tag_len == 5 && tag[0] == 'e' && tag[1] == 'm' && tag[2] == 'b' && tag[3] == 'e' && tag[4] == 'd')
+        || (tag_len == 2 && tag[0] == 'h' && tag[1] == 'r')
+        || (tag_len == 3 && tag[0] == 'i' && tag[1] == 'm' && tag[2] == 'g')
+        || (tag_len == 5 && tag[0] == 'i' && tag[1] == 'n' && tag[2] == 'p' && tag[3] == 'u' && tag[4] == 't')
+        || (tag_len == 4 && tag[0] == 'l' && tag[1] == 'i' && tag[2] == 'n' && tag[3] == 'k')
+        || (tag_len == 4 && tag[0] == 'm' && tag[1] == 'e' && tag[2] == 't' && tag[3] == 'a')
+        || (tag_len == 5 && tag[0] == 'p' && tag[1] == 'a' && tag[2] == 'r' && tag[3] == 'a' && tag[4] == 'm')
+        || (tag_len == 6 && tag[0] == 's' && tag[1] == 'o' && tag[2] == 'u' && tag[3] == 'r' && tag[4] == 'c' && tag[5] == 'e')
+        || (tag_len == 5 && tag[0] == 't' && tag[1] == 'r' && tag[2] == 'a' && tag[3] == 'c' && tag[4] == 'k')
+        || (tag_len == 3 && tag[0] == 'w' && tag[1] == 'b' && tag[2] == 'r');
+  }
+
+  /**
    * @brief タグ名が一致するか判定する（大文字小文字不区別）
    *
    * @param tag タグ名の先頭ポインタ
@@ -1307,12 +1374,11 @@ namespace detail {
    *
    * @tparam N 文字列長（終端文字を含む）
    * @param str 入力文字列
-   * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
-   * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
+   * @param options minify オプション（ビットフィールド）
    * @return auto 圧縮後の文字列
    */
   template <size_t N>
-  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str, bool remove_quotes = true, bool remove_end_tags = true) noexcept {
+  [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str, minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
     auto res           = FrozenString<N>{};
     auto offset        = 0uz;
     auto i             = 0uz;
@@ -1382,7 +1448,12 @@ namespace detail {
           if (scan < str.length) {
             ++scan;
           }
-          if (remove_end_tags && is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
+          // void 要素の閉じタグは常にスキップ
+          if (is_void_element(str.buffer.data() + tag_start, tag_end - tag_start)) {
+            i = scan;
+            continue;
+          }
+          if (has_flag(options, minify_markup_option::remove_end_tags) && is_optional_end_tag(str.buffer.data() + tag_start, tag_end - tag_start)) {
             i = scan;
             continue;
           }
@@ -1489,6 +1560,15 @@ namespace detail {
                   continue;
                 }
 
+                // 空の属性値を除去: <div class=""> → <div class>
+                if (val_content_len == 0 && val_quote != '\0') {
+                  for (auto k = attr_start; k < attr_start + attr_len; ++k) {
+                    res.buffer[offset++] = str.buffer[k];
+                  }
+                  pos = val_end;
+                  continue;
+                }
+
                 // 布爾属性チェック: value が属性名と同一なら value を省略
                 if (val_content_len == attr_len) {
                   auto is_same = true;
@@ -1510,7 +1590,7 @@ namespace detail {
 
                 // 通常の属性: 値のクォート除去を試みる
                 // 属性値が安全ならクォートなしで出力
-                auto can_unquote = remove_quotes && val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
+                auto can_unquote = has_flag(options, minify_markup_option::remove_quotes) && val_quote != '\0' && can_remove_attribute_quotes(str.buffer.data() + val_content_start, val_content_len);
                 if (can_unquote) {
                   // 属性名
                   for (auto k = attr_start; k < attr_start + attr_len; ++k) {
@@ -1951,13 +2031,12 @@ namespace detail {
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
- * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
- * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
+ * @param options minify オプション（ビットフィールド）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str, bool remove_quotes = true, bool remove_end_tags = true) noexcept {
-  return detail::minify_markup(str, remove_quotes, remove_end_tags);
+[[nodiscard]] auto consteval minify_html(FrozenString<N> const& str, minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+  return detail::minify_markup(str, options);
 }
 
 /**
@@ -1965,13 +2044,12 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列リテラル
- * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
- * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
+ * @param options minify オプション（ビットフィールド）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_html(char const (&str)[N], bool remove_quotes = true, bool remove_end_tags = true) noexcept {
-  return minify_html(FrozenString{str}, remove_quotes, remove_end_tags);
+[[nodiscard]] auto consteval minify_html(char const (&str)[N], minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+  return minify_html(FrozenString{str}, options);
 }
 
 /**
@@ -1979,13 +2057,12 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
- * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
- * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
+ * @param options minify オプション（ビットフィールド）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, bool remove_quotes = true, bool remove_end_tags = true) noexcept {
-  return detail::minify_markup(str, remove_quotes, remove_end_tags);
+[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+  return detail::minify_markup(str, options);
 }
 
 /**
@@ -1993,13 +2070,12 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列リテラル
- * @param remove_quotes 属性値のクォートを除去するか（デフォルト true）
- * @param remove_end_tags 省略可能な終了タグを除去するか（デフォルト true）
+ * @param options minify オプション（ビットフィールド）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(char const (&str)[N], bool remove_quotes = true, bool remove_end_tags = true) noexcept {
-  return minify_xml(FrozenString{str}, remove_quotes, remove_end_tags);
+[[nodiscard]] auto consteval minify_xml(char const (&str)[N], minify_markup_option options = minify_markup_option::remove_quotes | minify_markup_option::remove_end_tags) noexcept {
+  return minify_xml(FrozenString{str}, options);
 }
 
 /**
@@ -2197,15 +2273,15 @@ template <size_t N>
  * @brief SQL 文字列を minify する
  *
  * 文字列リテラル・識別子引用を保持しつつ、コメントと不要空白を削除します。
- * shorten_types が true の場合、型キーワードも短縮します（INTEGER→INT 等）。
+ * shorten_types フラグを指定した場合、型キーワードも短縮します（INTEGER→INT 等）。
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
- * @param shorten_types 型キーワード短縮を有効にするか（既定 true）
+ * @param options minify オプション（ビットフィールド）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str, bool shorten_types = true) noexcept {
+[[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str, minify_sql_option options = minify_sql_option::shorten_types) noexcept {
   auto res           = FrozenString<N>{};
   auto offset        = 0uz;
   auto i             = 0uz;
@@ -2305,8 +2381,72 @@ template <size_t N>
       pending_space = false;
     }
 
+    // AS キーワードの除去
+    if (has_flag(options, minify_sql_option::remove_as) && detail::is_sql_id_start(c)) {
+      auto const word_start = i;
+      while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
+        ++i;
+      }
+      auto const word_len = i - word_start;
+
+      // AS キーワードを検出
+      if (word_len == 2) {
+        auto upper0 = (str.buffer[word_start] >= 'a' && str.buffer[word_start] <= 'z') ? static_cast<char>(str.buffer[word_start] - ('a' - 'A')) : str.buffer[word_start];
+        auto upper1 = (str.buffer[word_start + 1] >= 'a' && str.buffer[word_start + 1] <= 'z') ? static_cast<char>(str.buffer[word_start + 1] - ('a' - 'A')) : str.buffer[word_start + 1];
+        if (upper0 == 'A' && upper1 == 'S') {
+          // 次が識別子なら AS は省略可能
+          auto peek = i;
+          while (peek < str.length && detail::is_any_whitespace(str.buffer[peek])) {
+            ++peek;
+          }
+          if (peek < str.length && detail::is_sql_id_start(str.buffer[peek])) {
+            continue;
+          }
+        }
+      }
+
+      // INNER JOIN の検出
+      if (has_flag(options, minify_sql_option::simplify_join) && word_len == 5) {
+        auto upper_buf = std::array<char, 5>{};
+        for (auto j = 0uz; j < 5; ++j) {
+          auto const ch = str.buffer[word_start + j];
+          upper_buf[j]  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+        }
+        if (upper_buf[0] == 'I' && upper_buf[1] == 'N' && upper_buf[2] == 'N' && upper_buf[3] == 'E' && upper_buf[4] == 'R') {
+          // 次が JOIN なら INNER をスキップ
+          auto peek = i;
+          while (peek < str.length && detail::is_any_whitespace(str.buffer[peek])) {
+            ++peek;
+          }
+          if (peek + 4 <= str.length) {
+            auto join_match = true;
+            for (auto j = 0uz; j < 4; ++j) {
+              auto const ch = str.buffer[peek + j];
+              auto upper_ch = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+              if (upper_ch != "JOIN"[j]) {
+                join_match = false;
+                break;
+              }
+            }
+            if (join_match && peek + 4 < str.length && !detail::is_sql_id_char(str.buffer[peek + 4])) {
+              // INNER をスキップして次の文字から処理
+              i = peek;
+              pending_space = true;
+              continue;
+            }
+          }
+        }
+      }
+
+      // 通常の識別子: そのまま出力
+      for (auto j = 0uz; j < word_len; ++j) {
+        res.buffer[offset++] = str.buffer[word_start + j];
+      }
+      continue;
+    }
+
     // 型キーワードの短縮
-    if (shorten_types && detail::is_sql_id_start(c)) {
+    if (has_flag(options, minify_sql_option::shorten_types) && detail::is_sql_id_start(c)) {
       auto const word_start = i;
       while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
         ++i;
@@ -2388,12 +2528,12 @@ template <size_t N>
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列リテラル
- * @param shorten_types 型キーワード短縮を有効にするか（既定 true）
+ * @param options minify オプション（ビットフィールド）
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_sql(char const (&str)[N], bool shorten_types = true) noexcept {
-  return minify_sql(FrozenString{str}, shorten_types);
+[[nodiscard]] auto consteval minify_sql(char const (&str)[N], minify_sql_option options = minify_sql_option::shorten_types) noexcept {
+  return minify_sql(FrozenString{str}, options);
 }
 
 /**

@@ -796,7 +796,7 @@ TEST_CASE("minify helpers") {
   REQUIRE(sql_type.sv() == "SELECT INT,BOOL FROM tbl WHERE col::text='x'");
 
   auto constexpr sql_no_shorten = minify_sql(
-    "SELECT INTEGER FROM tbl"_fs, false);
+    "SELECT INTEGER FROM tbl"_fs, minify_sql_option::none);
   static_assert(sql_no_shorten.sv() == "SELECT INTEGER FROM tbl");
   REQUIRE(sql_no_shorten.sv() == "SELECT INTEGER FROM tbl");
 
@@ -809,6 +809,20 @@ TEST_CASE("minify helpers") {
     "a  ||  b  ->  'key'  @>  '{1}'"_fs);
   static_assert(sql_operators.sv() == "a||b->'key'@>'{1}'");
   REQUIRE(sql_operators.sv() == "a||b->'key'@>'{1}'");
+
+  // AS キーワード除去
+  auto constexpr sql_remove_as = minify_sql(
+    "SELECT col AS alias FROM tbl"_fs,
+    minify_sql_option::shorten_types | minify_sql_option::remove_as);
+  static_assert(sql_remove_as.sv() == "SELECT col alias FROM tbl");
+  REQUIRE(sql_remove_as.sv() == "SELECT col alias FROM tbl");
+
+  // INNER JOIN 簡略化
+  auto constexpr sql_simplify_join = minify_sql(
+    "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id"_fs,
+    minify_sql_option::shorten_types | minify_sql_option::simplify_join);
+  static_assert(sql_simplify_join.sv() == "SELECT * FROM t1 JOIN t2 ON t1.id=t2.id");
+  REQUIRE(sql_simplify_join.sv() == "SELECT * FROM t1 JOIN t2 ON t1.id=t2.id");
 
   auto constexpr html2 = minify_html(
     "<div>  hello  </div>\n"
@@ -847,26 +861,38 @@ TEST_CASE("minify helpers") {
   static_assert(html7.sv() == "<table><caption>T<thead><tr><th>H<tbody><tr><td>D</table>");
   REQUIRE(html7.sv() == "<table><caption>T<thead><tr><th>H<tbody><tr><td>D</table>");
 
-  // remove_quotes=false: 属性値のクォートを保持
+  // remove_quotes を無効にした場合: 属性値のクォートを保持
   auto constexpr html_no_quote_removal = minify_html(
-    "<div class=\"x\" id='y'>text</div>"_fs, false);
+    "<div class=\"x\" id='y'>text</div>"_fs, minify_markup_option::remove_end_tags);
   static_assert(html_no_quote_removal.sv() == "<div class=\"x\" id='y'>text</div>");
   REQUIRE(html_no_quote_removal.sv() == "<div class=\"x\" id='y'>text</div>");
 
-  // remove_end_tags=false: 省略可能な終了タグを保持
+  // remove_end_tags を無効にした場合: 省略可能な終了タグを保持
   auto constexpr html_no_end_tag_removal = minify_html(
     "<table><caption>T</caption>"
     "<thead><tr><th>H</th></tr></thead>"
     "<tbody><tr><td>D</td></tr></tbody>"
-    "</table>"_fs, true, false);
+    "</table>"_fs, minify_markup_option::remove_quotes);
   static_assert(html_no_end_tag_removal.sv() == "<table><caption>T</caption><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>");
   REQUIRE(html_no_end_tag_removal.sv() == "<table><caption>T</caption><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>");
 
-  // 両方 false
+  // 両方無効
   auto constexpr html_no_both = minify_html(
-    "<div class=\"x\"></div>"_fs, false, false);
+    "<div class=\"x\"></div>"_fs, minify_markup_option::none);
   static_assert(html_no_both.sv() == "<div class=\"x\"></div>");
   REQUIRE(html_no_both.sv() == "<div class=\"x\"></div>");
+
+  // void 要素の閉じタグ除去: <br></br> → <br>
+  auto constexpr html_void = minify_html(
+    "<div><br></br><hr></hr></div>"_fs);
+  static_assert(html_void.sv() == "<div><br><hr></div>");
+  REQUIRE(html_void.sv() == "<div><br><hr></div>");
+
+  // 空属性値除去: <div class=""> → <div class>
+  auto constexpr html_empty_attr = minify_html(
+    "<div class=\"\" id=\"x\">text</div>"_fs);
+  static_assert(html_empty_attr.sv() == "<div class id=x>text</div>");
+  REQUIRE(html_empty_attr.sv() == "<div class id=x>text</div>");
 }
 
 TEST_CASE("sql_uppercase_keywords") {
