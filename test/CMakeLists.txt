@@ -88,6 +88,18 @@ assert_frozen_map_compile_fail(
 )
 
 assert_frozen_map_compile_fail(
+  NAME frozen_set_duplicate_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_set_duplicate_keys.cpp
+  EXPECTED_TEXT "frozen_set keys must be unique"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_set_empty_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_set_empty_keys.cpp
+  EXPECTED_TEXT "frozen_set requires at least one key"
+)
+
+assert_frozen_map_compile_fail(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
