@@ -111,6 +111,20 @@ struct FrozenString {
   /**
    * @brief 先頭イテレータを返す
    */
+  [[nodiscard]] constexpr auto begin() noexcept -> char* {
+    return buffer.data();
+  }
+
+  /**
+   * @brief 末尾イテレータを返す
+   */
+  [[nodiscard]] constexpr auto end() noexcept -> char* {
+    return buffer.data() + length;
+  }
+
+  /**
+   * @brief 先頭イテレータを返す
+   */
   [[nodiscard]] constexpr auto begin() const noexcept -> char const* {
     return buffer.data();
   }
@@ -158,7 +172,7 @@ struct FrozenString {
   }
 
   [[nodiscard]] friend constexpr auto operator<(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
-    return lhs.buffer < rhs.buffer || (lhs.buffer == rhs.buffer && lhs.length < rhs.length);
+    return lhs.sv() < rhs.sv();
   }
 
   [[nodiscard]] friend constexpr auto operator<=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {

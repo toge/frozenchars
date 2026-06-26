@@ -154,6 +154,7 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
       for (; i < n; ++i) crc = __crc32cb(crc, d[i]);
       return static_cast<std::uint64_t>(crc);
 #endif
+      // SSE4.2 / ARM CRC32 のどちらも使えない環境では if ブロックを抜けてソフトウェア実装へフォールバックする
     }
     return static_cast<std::uint64_t>(crc32c::hash_software(key, seed));
   }();
