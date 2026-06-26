@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <concepts>
 #include <cstdint>
 #include <functional>
@@ -222,6 +223,140 @@ template <std::size_t TableSize, FrozenString... Keys>
   throw "frozen_map seed search exhausted";
 }
 
+template <FrozenString... Keys>
+struct lookup_index {
+  static constexpr auto size() noexcept -> std::size_t { return sizeof...(Keys); }
+  using size_type = std::size_t;
+  using index_t = detail::index_type_t<size()>;
+
+  static constexpr std::array<std::string_view, size()> key_views_{
+    std::string_view{Keys.buffer.data(), Keys.length}...
+  };
+
+  static constexpr auto k_max_key_len_ = std::max({Keys.length...});
+
+  static constexpr auto valid_lengths_ = [] {
+    std::array<bool, k_max_key_len_ + 1> table{};
+    ((table[Keys.length] = true), ...);
+    return table;
+  }();
+
+  static constexpr auto all_lengths_unique_ = [] {
+    std::array<std::size_t, size()> lens{Keys.length...};
+    std::ranges::sort(lens);
+    return std::ranges::adjacent_find(lens) == lens.end();
+  }();
+
+  static constexpr auto length_to_index_ = [] {
+    std::array<index_t, k_max_key_len_ + 1> table{};
+    table.fill(static_cast<index_t>(-1));
+    std::size_t idx = 0;
+    ((table[Keys.length] = static_cast<index_t>(idx++)), ...);
+    return table;
+  }();
+
+  static constexpr std::array<std::string_view, size()> sorted_key_views_ = [] {
+    auto res = key_views_;
+    std::ranges::sort(res);
+    return res;
+  }();
+
+  static constexpr auto sorted_indices_ = [] {
+    std::array<index_t, size()> res{};
+    for (auto i = 0uz; i < size(); ++i)
+      res[i] = static_cast<index_t>(
+        std::ranges::find(key_views_, sorted_key_views_[i]) - key_views_.begin());
+    return res;
+  }();
+
+  static constexpr auto k_lookup_threshold = 64uz;
+  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
+  static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz;
+  static constexpr auto mask_ = table_size_ - 1;
+
+  static consteval auto make_lookup_metadata() {
+    if constexpr (use_lookup_table_) {
+      return detail::find_lookup_seed<table_size_, Keys...>();
+    } else {
+      return detail::lookup_seed_result<table_size_, size()>{0, {static_cast<index_t>(-1)}};
+    }
+  }
+  static constexpr auto metadata_ = make_lookup_metadata();
+  static constexpr auto k_seed = metadata_.seed;
+  static constexpr auto lookup_table_ = metadata_.table;
+
+  static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);
+
+  struct alignas(16) PaddedKey {
+    std::uint64_t data[2]{0, 0};
+    std::uint8_t len = 0;
+  };
+
+  static consteval auto make_padded_keys() {
+    std::array<PaddedKey, size()> res{};
+    std::size_t idx = 0;
+    ([&] {
+      res[idx].len = static_cast<std::uint8_t>(Keys.length);
+      for (std::size_t i = 0; i < Keys.length; ++i)
+        res[idx].data[i / 8] |=
+          (static_cast<std::uint64_t>(static_cast<unsigned char>(Keys.buffer[i])) << ((i % 8) * 8));
+      ++idx;
+    }(), ...);
+    return res;
+  }
+
+  static constexpr auto padded_keys_ = [] {
+    if constexpr (all_keys_short) {
+      return make_padded_keys();
+    } else {
+      return std::array<PaddedKey, size()>{};
+    }
+  }();
+
+  [[nodiscard]] static constexpr auto key_equals(std::string_view key, size_type index) noexcept -> bool {
+    if constexpr (all_keys_short) {
+      if (key.size() > 16) return false;
+      auto const& pk = padded_keys_[index];
+      if (key.size() != pk.len) return false;
+      std::uint64_t low = 0, high = 0;
+      auto const d = key.data();
+      auto const n = key.size();
+      for (std::size_t i = 0; i < n; ++i) {
+        if (i < 8) low |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << (i * 8));
+        else high |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << ((i - 8) * 8));
+      }
+      return (low == pk.data[0] && high == pk.data[1]);
+    }
+    return key_views_[index] == key;
+  }
+
+  static constexpr auto find_index_raw(std::string_view key) noexcept -> size_type {
+    auto const len = key.size();
+    if constexpr (all_lengths_unique_) {
+      if (len > k_max_key_len_) return size();
+      auto const index = length_to_index_[len];
+      if (index == static_cast<decltype(index)>(-1)) return size();
+      if (key_equals(key, static_cast<size_type>(index))) [[likely]]
+        return static_cast<size_type>(index);
+      return size();
+    }
+    if constexpr (use_lookup_table_) {
+      if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
+      auto const h = detail::hash_impl(key, k_seed);
+      auto const slot = static_cast<std::size_t>(h & mask_);
+      auto const index = lookup_table_[slot];
+      if (index == static_cast<decltype(index)>(-1)) return size();
+      if (key_equals(key, static_cast<size_type>(index))) [[likely]]
+        return static_cast<size_type>(index);
+      return size();
+    } else {
+      auto const it = std::ranges::lower_bound(sorted_key_views_, key);
+      if (it == sorted_key_views_.end() || *it != key) return size();
+      return static_cast<size_type>(sorted_indices_[it - sorted_key_views_.begin()]);
+    }
+  }
+};
+
 template <typename EntryLike>
 concept PairLikeEntry = requires {
   typename std::tuple_size<std::remove_cvref_t<EntryLike>>::type;
@@ -311,7 +446,7 @@ public:
 
     constexpr iterator_base() noexcept = default;
     constexpr iterator_base(Owner* owner, size_type index) noexcept : owner_{owner}, index_{index} {}
-    constexpr auto operator*() const noexcept -> reference { return reference{owner_->key_views_[index_], owner_->values_[index_]}; }
+    constexpr auto operator*() const noexcept -> reference { return reference{detail::lookup_index<Keys...>::key_views_[index_], owner_->values_[index_]}; }
     constexpr auto operator->() const noexcept -> pointer { return pointer{operator*()}; }
     constexpr auto operator++() noexcept -> iterator_base& { ++index_; return *this; }
     constexpr auto operator++(int) noexcept -> iterator_base { auto tmp = *this; ++index_; return tmp; }
@@ -354,25 +489,25 @@ public:
    * @brief 辞書順にソートされたキー配列を取得する
    */
   [[nodiscard]] static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
-    return sorted_key_views_;
+    return lookup_::sorted_key_views_;
   }
   /**
    * @brief 宣言順のキー配列を取得する
    */
   [[nodiscard]] static constexpr auto keys_in_declaration_order() noexcept
     -> std::span<std::string_view const, size()> {
-    return key_views_;
+    return lookup_::key_views_;
   }
   [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator {
-    auto const i = find_index_raw(key);
+    auto const i = lookup_::find_index_raw(key);
     return i != size() ? iterator{this, i} : end();
   }
   [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator {
-    auto const i = find_index_raw(key);
+    auto const i = lookup_::find_index_raw(key);
     return i != size() ? const_iterator{this, i} : end();
   }
   [[nodiscard]] constexpr auto count(std::string_view key) const noexcept -> size_type {
-    return find_index_raw(key) != size() ? 1uz : 0uz;
+    return lookup_::find_index_raw(key) != size() ? 1uz : 0uz;
   }
   constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
   constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
@@ -385,7 +520,7 @@ public:
   constexpr explicit frozen_map(std::initializer_list<T> values) requires std::constructible_from<T, T const&> : values_{copy_initializer_list(values)} {}
   constexpr explicit frozen_map(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
   [[nodiscard]] constexpr auto contains(std::string_view key) const noexcept -> bool {
-    return find_index_raw(key) != size();
+    return lookup_::find_index_raw(key) != size();
   }
   /**
    * @brief 複数のキーが全て存在するかを一括判定する (consteval)
@@ -396,13 +531,13 @@ public:
     return ((contains_impl<QueryKeys>()) && ... && true);
   }
   [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
-    auto const i = find_index_raw(key);
+    auto const i = lookup_::find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
     throw std::out_of_range(
       std::string{"frozen_map key not found: "} + std::string{key});
   }
   [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
-    auto const i = find_index_raw(key);
+    auto const i = lookup_::find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
     throw std::out_of_range(
       std::string{"frozen_map key not found: "} + std::string{key});
@@ -420,8 +555,7 @@ public:
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map&&, mapped_type>>
   [[nodiscard]] constexpr auto to() && -> Result { return to_result<Result>(std::move(*this)); }
 private:
-  /// キー文字列のビュー配列
-  static constexpr std::array<std::string_view, size()> key_views_{ std::string_view{Keys.buffer.data(), Keys.length}... };
+  using lookup_ = detail::lookup_index<Keys...>;
 
   /**
    * @brief 単一 NTTP キーがマップ内に存在するか (contains_all 内部用)
@@ -431,159 +565,9 @@ private:
     return ((Key.sv() == std::string_view{Keys.buffer.data(), Keys.length}) || ... || false);
   }
 
-  /// 全キーの最大長
-  static constexpr auto k_max_key_len_ = std::max({Keys.length...});
-
-  /**
-   * @brief 有効なキー長を示すビットセット（ブール配列）
-   * @details インデックス i が true であるとき、長さ i のキーが少なくとも1つ存在することを意味する。
-   *          サイズは k_max_key_len_ + 1。
-   */
-  static constexpr auto valid_lengths_ = [] {
-    std::array<bool, k_max_key_len_ + 1> table{};
-    ((table[Keys.length] = true), ...);
-    return table;
-  }();
-
-  /**
-   * @brief 全キーの長さが互いに異なるかどうかのフラグ
-   * @note true の場合、長さからインデックスを O(1) で引けるため、ハッシュ計算が不要となる。
-   */
-  static constexpr auto all_lengths_unique_ = [] {
-    std::array<std::size_t, size()> lens{ Keys.length... };
-    std::ranges::sort(lens);
-    return std::ranges::adjacent_find(lens) == lens.end();
-  }();
-
-  /**
-   * @brief キー長 → キー配列インデックスのルックアップテーブル
-   * @details all_lengths_unique_ == true の場合のみ有効。
-   *          インデックス i に対して、長さ i のキーが存在すればそのインデックスを、
-   *          存在しなければ static_cast<index_t>(-1) を格納する。
-   *          サイズは k_max_key_len_ + 1。
-   */
-  static constexpr auto length_to_index_ = [] {
-    using index_t = detail::index_type_t<size()>;
-    std::array<index_t, k_max_key_len_ + 1> table{};
-    table.fill(static_cast<index_t>(-1));
-    std::size_t idx = 0;
-    ((table[Keys.length] = static_cast<index_t>(idx++)), ...);
-    return table;
-  }();
-  /// 辞書順にソートされたキー文字列のビュー配列
-  static constexpr std::array<std::string_view, size()> sorted_key_views_ = [] {
-    auto res = key_views_;
-    std::ranges::sort(res);
-    return res;
-  }();
-  /// 高速ルックアップテーブルを使用するかどうかのしきい値。65キー以上はコンパイル時間を考慮し線形探索にフォールバック。
-  static constexpr auto k_lookup_threshold = 64uz;
-  /// ルックアップテーブルを使用するかどうかのフラグ
-  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
-  /// ルックアップテーブルのサイズ（2のべき乗）。使用しない場合は最小サイズ。
-  static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz;
-  /// スロット選択用のマスク
-  static constexpr auto mask_ = table_size_ - 1;
-
-  /**
-   * @brief ルックアップ用のメタデータを生成する。キー数が多い場合は探索をスキップする。
-   */
-  static consteval auto make_lookup_metadata() {
-    if constexpr (use_lookup_table_) {
-      return detail::find_lookup_seed<table_size_, Keys...>();
-    } else {
-      using index_t = detail::index_type_t<size()>;
-      return detail::lookup_seed_result<table_size_, size()>{ 0, { static_cast<index_t>(-1) } };
-    }
-  }
-  static constexpr auto metadata_ = make_lookup_metadata();
-  static constexpr auto k_seed = metadata_.seed;
-  static constexpr auto lookup_table_ = metadata_.table;
-
-  /// 全てのキーが16文字以下であるかどうかのフラグ
-  static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);
-  /// 短いキー比較の最適化用構造体
-  struct alignas(16) PaddedKey { std::uint64_t data[2]{0, 0}; std::uint8_t len = 0; };
-  /**
-   * @brief 短いキー比較を高速化するためのパディング済みキーデータを生成する
-   */
-  static consteval auto make_padded_keys() {
-    std::array<PaddedKey, size()> res{}; std::size_t idx = 0;
-    ([&]{ res[idx].len = static_cast<std::uint8_t>(Keys.length);
-        for (std::size_t i = 0; i < Keys.length; ++i) res[idx].data[i / 8] |= (static_cast<std::uint64_t>(static_cast<unsigned char>(Keys.buffer[i])) << ((i % 8) * 8));
-        idx++; }(), ...); return res;
-  }
-  static constexpr auto padded_keys_ = [] {
-    if constexpr (all_keys_short) {
-      return make_padded_keys();
-    } else {
-      return std::array<PaddedKey, size()>{};
-    }
-  }();
-
-  /**
-   * @brief 与えられたキーが指定インデックスのキーと一致するか判定する
-   * 短いキー最適化が有効な場合はパディング済みデータで比較を行う。
-   */
-  [[nodiscard]] static constexpr auto key_equals(std::string_view key, size_type index) noexcept -> bool {
-    if constexpr (all_keys_short) {
-      if (key.size() > 16) return false;
-      auto const& pk = padded_keys_[index];
-      if (key.size() != pk.len) return false;
-      std::uint64_t low = 0, high = 0;
-      auto const d = key.data(); auto const n = key.size();
-      for (std::size_t i = 0; i < n; ++i) {
-        if (i < 8) low |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << (i * 8));
-        else high |= (static_cast<std::uint64_t>(static_cast<unsigned char>(d[i])) << ((i - 8) * 8));
-      }
-      return (low == pk.data[0] && high == pk.data[1]);
-    }
-    return key_views_[index] == key;
-  }
-
-  /**
-   * @brief キーに対応するインデックスをセンチネル値で返す内部実装
-   * @param key 検索するキー
-   * @return 見つかった場合はそのインデックス（0 以上 size() 未満）、
-   *         見つからない場合は size()（センチネル値）
-   * @note この関数は std::optional を生成しないため、ホットパスでの使用に適している。
-   *       呼び出し元は戻り値 == size() を「見つからない」と解釈すること。
-   */
-  [[nodiscard]] static constexpr auto find_index_raw(std::string_view key) noexcept -> size_type {
-    if constexpr (use_lookup_table_) {
-      auto const len = key.size();
-
-      // ② ハッシュレスルックアップ（全キー長が一意の場合）
-      if constexpr (all_lengths_unique_) {
-        if (len > k_max_key_len_) return size();
-        auto const index = length_to_index_[len];
-        if (index == static_cast<decltype(index)>(-1)) return size();
-        if (key_equals(key, static_cast<size_type>(index))) [[likely]]
-          return static_cast<size_type>(index);
-        return size();
-      }
-
-      // ① 長さフィルタリング（ハッシュ計算より先に実行）
-      if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
-
-      auto const h = detail::hash_impl(key, k_seed);
-      auto const slot = static_cast<std::size_t>(h & mask_);
-      auto const index = lookup_table_[slot];
-      if (index == static_cast<decltype(index)>(-1)) return size();
-      if (key_equals(key, static_cast<size_type>(index))) [[likely]]
-        return static_cast<size_type>(index);
-      return size();
-    } else {
-      for (auto const i : std::views::iota(0uz, size())) {
-        if (key_equals(key, i)) return i;
-      }
-      return size();
-    }
-  }
-
   [[nodiscard]] static constexpr auto find_index_opt(std::string_view key) noexcept
       -> std::optional<size_type> {
-    auto const i = find_index_raw(key);
+    auto const i = lookup_::find_index_raw(key);
     return i != size() ? std::optional<size_type>{i} : std::nullopt;
   }
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
@@ -593,7 +577,7 @@ private:
   static constexpr auto reorder_entries(std::array<frozen_map_entry<T>, size()> entries) -> std::array<T, size()> {
     auto values = std::array<std::optional<T>, size()>{};
     for (auto& entry : entries) {
-      auto const index = find_index_raw(entry.key);
+      auto const index = lookup_::find_index_raw(entry.key);
       if (index == size()) {
         continue;
       }
@@ -612,14 +596,14 @@ private:
     }(std::make_index_sequence<size()>{});
   }
   template <typename Self> static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) { return detail::forward_like_dispatch<Self>(self.values_[index]); }
-  template <typename Result, typename Self, std::size_t... Index> static constexpr auto to_array_result(Self&& self, std::index_sequence<Index...>) -> Result { return Result{ typename Result::value_type{ key_views_[Index], forward_mapped<Self>(std::forward<Self>(self), Index) }... }; }
+  template <typename Result, typename Self, std::size_t... Index> static constexpr auto to_array_result(Self&& self, std::index_sequence<Index...>) -> Result { return Result{ typename Result::value_type{ lookup_::key_views_[Index], forward_mapped<Self>(std::forward<Self>(self), Index) }... }; }
   template <typename Result, typename Self> static constexpr auto to_associative_result(Self&& self) -> Result {
     Result result{};
     if constexpr (requires(Result& r) { r.reserve(size()); }) {
       result.reserve(size());
     }
     for (auto index = 0uz; index < size(); ++index) {
-      result.emplace(typename Result::key_type{key_views_[index]},
+      result.emplace(typename Result::key_type{lookup_::key_views_[index]},
                      typename Result::mapped_type{forward_mapped<Self>(std::forward<Self>(self), index)});
     }
     return result;
