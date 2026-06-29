@@ -1,5 +1,7 @@
 # frozenchars
 
+[![CI](https://github.com/anomalyco/frozenchars/actions/workflows/ci.yml/badge.svg)](https://github.com/anomalyco/frozenchars/actions/workflows/ci.yml)
+
 文字列連結・繰り返し・数値フォーマットをなるべくコンパイル時に行うための型とヘルパー関数を提供する、ヘッダオンリーの C++ ライブラリです。
 
 ## 特徴
@@ -9,6 +11,78 @@
 - 文字列操作をチェーンできるパイプ演算子も提供しています。
 - コンパイル時の文字列処理を前提にした応用機能もいくつか用意しています。
 - HTML エンティティ変換、ワードラップ、UTF-8 コードポイント数計算などの実用関数も提供しています。
+
+## 目次
+
+- [特徴](#特徴)
+- [クイックスタート](#クイックスタト)
+  - [最小コンパイル例（1コマンド）](#最小コンパイル例（1コマンド）)
+- [基本概念](#基本概念)
+  - [FrozenString<N>](#frozenstringn)
+  - [consteval（常にコンパイル時）](#consteval（常にコンパイル時）)
+  - [_fs リテラル](#_fs-リテラル)
+  - [パイプ演算子](#パイプ演算子)
+- [要件](#要件)
+- [サンプルコード](#サンプルコド)
+- [repeat（繰り返し）](#repeat（繰り返し）)
+- [right / center（幅寄せ）](#right-center（幅寄せ）)
+- [toupper / tolower（大文字・小文字変換）](#toupper-tolower（大文字・小文字変換）)
+- [trim / ltrim / rtrim（端の文字を削る）](#trim-ltrim-rtrim（端の文字を削る）)
+- [substr（部分文字列）](#substr（部分文字列）)
+- [contains（部分文字列の有無判定）](#contains（部分文字列の有無判定）)
+- [starts_with（接頭辞チェック）](#starts_with（接頭辞チェック）)
+- [ends_with（接尾辞チェック）](#ends_with（接尾辞チェック）)
+- [partition（区切り文字で3分割）](#partition（区切り文字で3分割）)
+- [shrink_to_fit（最初の終端位置に合わせて縮小）](#shrink_to_fit（最初の終端位置に合わせて縮小）)
+- [split（区切りで分割）](#split（区切りで分割）)
+- [split_numbers（区切りで数値列へ変換）](#split_numbers（区切りで数値列へ変換）)
+- [capitalize（先頭大文字化）](#capitalize（先頭大文字化）)
+- [to_snake_case（スネークケース変換）](#to_snake_case（スネクケス変換）)
+- [to_camel_case（キャメルケース変換）](#to_camel_case（キャメルケス変換）)
+- [to_pascal_case（パスカルケース変換）](#to_pascal_case（パスカルケス変換）)
+- [url_encode（URLエンコード）](#url_encode（urlエンコド）)
+- [url_decode（URLデコード）](#url_decode（urlデコド）)
+- [base64_encode（Base64エンコード）](#base64_encode（base64エンコド）)
+- [base64_decode（Base64デコード）](#base64_decode（base64デコド）)
+- [html_encode / html_decode（HTMLエンティティ変換）](#html_encode-html_decode（htmlエンティティ変換）)
+- [minify_html / minify_xml / minify_json / minify_yaml / minify_sql / minify_cypher（マークアップ / データ / クエリ 縮小）](#minify_html-minify_xml-minify_json-minify_yaml-minify_sql-minify_cypher（マクアップ-デタ-クエリ-縮小）)
+- [linebreak（改行表現の相互変換）](#linebreak（改行表現の相互変換）)
+- [word_wrap（ワードラップ）](#word_wrap（ワドラップ）)
+- [文字種判定述語（is_alpha / is_digit / ...）](#文字種判定述語（is_alpha-is_digit-）)
+- [utf8_length（UTF-8 コードポイント数）](#utf8_length（utf-8-コドポイント数）)
+- [make_querystring（クエリ文字列生成）](#make_querystring（クエリ文字列生成）)
+- [マルチライン文字列の処理](#マルチライン文字列の処理)
+- [パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)
+- [parse_hex_rgb / parse_hex_rgba（hex color → RGB/RGBAタプル）](#parse_hex_rgb-parse_hex_rgba（hex-color-→-rgbrgbaタプル）)
+- [freeze 対応型一覧](#freeze-対応型一覧)
+  - [早見表（入力型 → 生成される最大文字数）](#早見表（入力型-→-生成される最大文字数）)
+  - [サンプル入力 → 出力（ミニ表）](#サンプル入力-→-出力（ミニ表）)
+  - [変換ルール（文字列系）](#変換ルル（文字列系）)
+  - [非対応入力](#非対応入力)
+- [よくある落とし穴](#よくある落とし穴)
+- [FrozenStringの応用例](#frozenstringの応用例)
+  - [to_sv（std::format 連携）](#to_sv（stdformat-連携）)
+  - [frozen_map（固定キーの軽量マップ）](#frozen_map（固定キの軽量マップ）)
+    - [宣言順の値を braced-init-list で書く](#宣言順の値を-braced-init-list-で書く)
+    - [pair-like エントリから作る基本形](#pair-like-エントリから作る基本形)
+    - [to<Result>() で STL コンテナへ変換する](#toresult-で-stl-コンテナへ変換する)
+    - [コンパイル時のキー/値列から作る短縮形](#コンパイル時のキ値列から作る短縮形)
+    - [パフォーマンスと最適化](#パフォマンスと最適化)
+    - [get_value_or — デフォルト付き取得](#get_value_or-—-デフォルト付き取得)
+    - [contains_all — 複数キーの一括存在判定](#contains_all-—-複数キの一括存在判定)
+    - [keys_in_declaration_order — 宣言順キー配列](#keys_in_declaration_order-—-宣言順キ配列)
+    - [operator== / operator!= — 値ごとの等価比較](#operator-operator-—-値ごとの等価比較)
+  - [parse_to_tuple（型列文字列 → std::tuple<...>）](#parse_to_tuple（型列文字列-→-stdtuple）)
+    - [parse_to_variant（型列文字列 → std::variant<...>）](#parse_to_variant（型列文字列-→-stdvariant）)
+    - [型エイリアス](#型エイリアス)
+    - [ポインタ/参照型](#ポインタ参照型)
+- [よくある質問 (FAQ)](#よくある質問-faq)
+- [wildcard_match（ワイルドカードマッチング）](#wildcard_match（ワイルドカドマッチング）)
+- [frozen_set（コンパイル時集合）](#frozen_set（コンパイル時集合）)
+- [remove_comments / remove_comment_lines（コメント行除去）](#remove_comments-remove_comment_lines（コメント行除去）)
+- [テスト](#テスト)
+- [インストール / パッケージ生成](#インストル-パッケジ生成)
+- [ライセンス](#ライセンス)
 
 ## クイックスタート
 
@@ -26,6 +100,74 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 ```bash
 g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example.cpp && ./a.out
 ```
+
+> **凡例**: 以下の各節のコード例では、`#include "frozenchars.hpp"` と
+> `using namespace frozenchars;` `using namespace frozenchars::literals;` を
+> あらかじめ記述したものとします。
+
+## 基本概念
+
+### `FrozenString<N>`
+
+全機能の核となる型です。`std::array<char, N>` を内部バッファに持ち、
+末尾に `'\0'` を保証する固定長文字列です。
+テンプレートパラメータ `N` は **終端の '\0' を含めたバッファ長** です。
+
+- `"abc"_fs` の型は `FrozenString<4>`（`'a','b','c','\0'`）
+- 連結結果のサイズはコンパイル時に確定するため、動的メモリ確保が起きません
+
+### `consteval`（常にコンパイル時）
+
+このライブラリの操作関数のほとんどは C++23 の `consteval` で定義されています。
+`consteval` 関数は必ずコンパイル時に評価されるため、
+ランタイムでのオーバーヘッドがゼロであることが保証されます。
+実行時の文字列（`std::string` など）を引数に取ることはできません。
+
+### `_fs` リテラル
+
+文字列リテラルから `FrozenString` を生成するユーザ定義リテラルです。
+`frozenchars::literals` 名前空間で定義されています。
+
+```cpp
+auto constexpr hello = "Hello"_fs;  // FrozenString<6>
+// hello.sv() == "Hello"
+```
+
+`.sv()` メンバ関数で `std::string_view` を取り出せます。
+
+### パイプ演算子
+
+`frozenchars::ops` 名前空間の関数と `operator|` を使うと、
+文字列操作をチェーンして簡潔に書けます。
+
+```cpp
+using namespace frozenchars::ops;
+auto constexpr r = "  Hello, World!  "_fs
+    | trim()
+    | toupper()
+    | right<20>();
+// r.sv() == "       HELLO, WORLD!"
+```
+
+詳細は「[パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)」を参照してください。
+
+## 要件
+
+- C++23（`consteval`, NTTP, `std::to_chars` など）
+- 対応コンパイラ: GCC 14 / 15 / 16 以降
+- テスト環境: Fedora 41 / 43 / 44（CI で検証）
+- ヘッダオンリー — ビルド済みバイナリ不要
+
+## サンプルコード
+
+リポジトリには以下のサンプルファイルが用意されています。まずは `example.cpp` を動かしてみてください。
+
+| ファイル | 内容 | 実行コマンド |
+|---|---|---|
+| `example.cpp` | 連結・繰り返し・書式など基本操作 | `g++ -std=c++23 -I include example.cpp && ./a.out` |
+| `example_split.cpp` | 文字列分割の応用 | `g++ -std=c++23 -I include example_split.cpp && ./a.out` |
+| `example_frozen_map_use_cases.cpp` | コンパイル時マップの利用例 | `g++ -std=c++23 -I include example_frozen_map_use_cases.cpp && ./a.out` |
+| `example_parse_to_tuple_use_cases.cpp` | 型列パース→タプルの利用例 | `g++ -std=c++23 -I include example_parse_to_tuple_use_cases.cpp && ./a.out` |
 
 ## `repeat`（繰り返し）
 
@@ -458,6 +600,128 @@ static_assert(d2.sv() == "a<b");
 namespace fops = frozenchars::ops;
 auto constexpr v = "<test>"_fs | fops::html_encode | fops::html_decode;
 static_assert(v.sv() == "<test>");
+```
+
+## `minify_html` / `minify_xml` / `minify_json` / `minify_yaml` / `minify_sql` / `minify_cypher`（マークアップ / データ / クエリ 縮小）
+
+HTML / XML / JSON / YAML / SQL / Cypher の各ソースをコンパイル時に縮小（minify）します。
+すべて `consteval` で実行され、結果は `static_assert` でコンパイル時に検証できます。
+
+- `minify_html(str, options = ...)` / `minify_xml(...)` : HTML/XML のマークアップを縮小します
+  - `minify_markup_opt::remove_quotes` を立てると、`class="x"` のような属性値クォートが安全に取り除ける場合に削除されます
+  - `minify_markup_opt::remove_end_tags` を立てると、HTML の `</li>` / `</p>` / `</thead>` など省略可能な終了タグが削除されます
+  - オプションは `|` で複数指定できます。デフォルトでは両方が有効です
+- `minify_json(str)` : JSON の文字列リテラル外から空白と `//` / `/* */` コメントを削除します
+- `minify_yaml(str)` : YAML の値内・文字列リテラル内 `#` を残しつつ、行コメントとそれ以降の空白を削除します
+- `minify_sql(str, options = ...)` : SQL の `--` / `/* */` コメントと冗長な空白を削除します
+  - `minify_sql_opt::shorten_types` : `INTEGER` → `INT`、`BOOLEAN` → `BOOL` など型キーワードを短縮します（デフォルト ON）
+  - `minify_sql_opt::remove_as` : `SELECT a AS b` の `AS` を省略します
+  - `minify_sql_opt::simplify_join` : `INNER JOIN` を `JOIN` に簡略化します
+  - 文字列リテラル（`'...'` / `"..."`）・バッククォート識別子・ブラケット識別子（`[ ... ]`）は内容を保持します
+- `minify_cypher(input, output, output_size)` : Cypher クエリを実行時に固定バッファへ縮小します。書き込んだ長さを返します
+  - `minify(input)` : 文字列リテラルからコンパイル時に縮小し、`minified_query<N>` 型を返します
+  - 文字列リテラル（`'...'` / `"..."`）・バッククォート識別子（`` `...` ``）の内容はそのまま保持されます
+  - `--` 行コメントと `/* */` ブロックコメントを削除します
+  - 前後の空白や改行、連続する空白を 1 個に圧縮します。`MATCH (n)` のような `(` 直前、`)` 直後のスペースは削除します
+  - 末尾の `;` は削除します（後続ステートメントの区切りには新しい空白を挿入します）
+- `FrozenString` と文字列リテラルの両方を受け取ります。すべて `N` を含むバッファ長で動作します
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// HTML: クォート除去 + 省略可能終了タグ除去（デフォルト）
+auto constexpr html = minify_html(
+  "<div class = \"x\"  >\n"
+  "  <span>  hi  </span>\n"
+  "  <!-- ignore -->\n"
+  "</div>"_fs);
+static_assert(html.sv() == "<div class=x><span>hi</span></div>");
+
+// HTML: オプションを無効化（デフォルト動作を維持したいケース）
+auto constexpr html_keep = minify_html(
+  "<input value=\"x\">"_fs,
+  minify_markup_opt::none);
+static_assert(html_keep.sv() == "<input value=\"x\">");
+
+// XML
+auto constexpr xml = minify_xml(
+  "<root>\n"
+  "  <!-- comment -->\n"
+  "  <item id = \"1\" > value </item>\n"
+  "</root>"_fs);
+static_assert(xml.sv() == "<root><item id=1>value</item></root>");
+
+// JSON（文字列リテラル内・コメントは別扱い）
+auto constexpr minified_json = minify_json(
+  "{\n"
+  "  \"k\": \"a b\",\n"
+  "  \"n\": 1, // comment\n"
+  "  \"x\": true\n"
+  "}"_fs);
+static_assert(minified_json.sv() == "{\"k\":\"a b\",\"n\":1,\"x\":true}");
+
+// YAML（# が行コメント。文字列リテラル内 / 値内の # は残す）
+auto constexpr yaml = minify_yaml(
+  "key: value   # comment\n"
+  "list:\n"
+  "  - one  \n"
+  "  - \"two # keep\"   # drop\n"
+  "\n"_fs);
+static_assert(yaml.sv() == "key: value\nlist:\n  - one\n  - \"two # keep\"\n");
+
+// SQL: デフォルト（shorten_types）で型も短縮
+auto constexpr sql = minify_sql(
+  "SELECT  a,  b  -- comment\n"
+  "FROM  tbl\n"
+  "WHERE  c = 'x  y'  AND d = 1 ;"_fs);
+static_assert(sql.sv() == "SELECT a,b FROM tbl WHERE c='x  y' AND d=1;");
+
+auto constexpr sql_type = minify_sql(
+  "SELECT  INTEGER,  BOOLEAN  FROM  tbl\n"
+  "WHERE  col :: text = 'x'"_fs);
+static_assert(sql_type.sv() == "SELECT INT,BOOL FROM tbl WHERE col::text='x'");
+
+// SQL: AS 省略 + INNER JOIN 簡略化
+auto constexpr sql_join = minify_sql(
+  "SELECT a.id INNER JOIN users AS a ON a.id = b.id"_fs,
+  minify_sql_opt::remove_as | minify_sql_opt::simplify_join);
+static_assert(sql_join.sv() == "SELECT a.id JOIN users a ON a.id=b.id");
+```
+
+`has_flag(options, flag)` で各フラグの有無を判定できます。
+
+```cpp
+static_assert(has_flag(
+  minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags,
+  minify_markup_opt::remove_quotes));
+```
+
+なお、`minify_cypher` は `include/frozenchars/cypher_minifier.hpp` で提供されます（アンブレラ `frozenchars.hpp` には含まれないため個別にインクルードしてください）。
+
+```cpp
+#include "frozenchars/cypher_minifier.hpp"
+using namespace frozenchars;
+
+auto constexpr q = minify(
+  "MATCH (n) // comment\n"
+  "RETURN n;");
+static_assert(q == "MATCH(n)RETURN n");
+
+// 文字列リテラル内の // や /* */ は削除しない
+auto constexpr s = minify("RETURN '//not a comment'");
+static_assert(s == "RETURN'//not a comment'");
+
+// バッククォート識別子内の // は削除しない
+auto constexpr b = minify("MATCH (`my node`) RETURN `my node`");
+static_assert(b == "MATCH(`my node`)RETURN`my node`");
+
+// 実行時バッファ版
+char buf[64];
+auto const* input = "MATCH (n) RETURN n";
+auto const len = minify_cypher(input, buf, sizeof(buf));
+// len = 16, buf = "MATCH(n)RETURN n\0"
 ```
 
 ## `linebreak`（改行表現の相互変換）
@@ -1203,6 +1467,94 @@ static_assert(std::is_same_v<T, std::tuple<int*, std::string&, bool&&>>);
 - `void*`, `void&` は未対応（コンパイルエラー）
 
 
+## よくある質問 (FAQ)
+
+### Q. `consteval` ですが、実行時にも使えますか？
+
+**いいえ。** `consteval` 関数の引数はすべてコンパイル時定数である必要があります。
+実行時の文字列（`std::string`、`const char*` 変数など）は渡せません。
+どうしても実行時に使いたい値がある場合は、`#define` マクロや `constexpr` 変数で
+定数式として渡す必要があります。
+
+### Q. `FrozenString` の最大サイズは?
+
+`N` はコンパイル時に決まる正の整数であれば制限はありませんが、
+スタック上に確保されるため大きな値（数万文字以上）はスタックオーバーフローに注意してください。
+
+### Q. 実行時の文字列と相互変換できますか?
+
+- `FrozenString` → `std::string_view`: `.sv()` メソッド
+- `FrozenString` → `std::string`: `std::string(s.sv())`
+- `std::string` → `FrozenString`: できません（実行時サイズは NTTP にできないため）
+
+### Q. 他のコンパイル時文字列ライブラリとどう違いますか?
+
+`std::string` ベースの `constexpr` 文字列ライブラリと違い、
+`FrozenString` は `consteval` で動作し、動的メモリ確保がありません。
+また、パイプ演算子によるチェーン、`split_numbers`、`minify_*` などの
+応用ユーティリティが充実しています。
+
+## `wildcard_match`（ワイルドカードマッチング）
+
+`wildcard_match<Pattern>(text)` は、`Pattern` をワイルドカードパターンとして
+文字列 `text` がマッチするかをコンパイル時に判定します。
+
+- `*` = 任意の長さの文字列
+- `?` = 任意の 1 文字
+- `\` = エスケープ
+- `[abc]` = セット内の任意の 1 文字
+- `(ab|cd)` = 代替（いずれかにマッチ）
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(wildcard_match<"*.txt"_fs>("readme.txt"));
+static_assert(wildcard_match<"a?c"_fs>("abc"));
+static_assert(!wildcard_match<"a?c"_fs>("abcd"));
+```
+
+## `frozen_set`（コンパイル時集合）
+
+`frozen_set<Keys...>` は、キーの存在確認をコンパイル時に行える固定サイズの集合です。
+`std::set` のコンパイル時代替として使えます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+using set_t = frozen_set<"red"_fs, "green"_fs, "blue"_fs>;
+
+static_assert(set_t::contains("red"));
+static_assert(!set_t::contains("yellow"));
+static_assert(set_t::size() == 3);
+```
+
+## `remove_comments` / `remove_comment_lines`（コメント行除去）
+
+先頭が指定した文字列で始まる行を除去します（デフォルトは `#`）。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr r = remove_comments("a\n# comment\nb"_fs);
+// r.sv() == "a\nb"
+```
+
+パイプ演算子でも使用できます。
+
+```cpp
+using namespace frozenchars::ops;
+
+auto constexpr r2 = "#header\na=1\n#end"_fs | remove_comments();
+// r2.sv() == "a=1"
+```
+
+
 ## テスト
 
 このリポジトリでは以下でビルド・テストできます。
@@ -1212,14 +1564,33 @@ static_assert(std::is_same_v<T, std::tuple<int*, std::string&, bool&&>>);
 
 ## インストール / パッケージ生成
 
-`CMake` の `install`に対応しています。
+### ビルド済み環境に組み込む
 
+```cmake
+find_package(frozenchars CONFIG REQUIRED)
+target_link_libraries(myapp PRIVATE frozenchars::frozenchars)
 ```
+
+### インストール
+
+```bash
 cmake --install build --prefix ./install
 ```
 
-インストール先のディレクトリには `frozenchars.hpp` とその依存先のヘッダファイル、および `find_package(frozenchars CONFIG)` 用の CMake 設定が含まれます。
+インストール先には `frozenchars.hpp`、依存ヘッダ、および `find_package(frozenchars CONFIG)` 用の CMake 設定が配置されます。
+
+### vcpkg
+
+```bash
+vcpkg install frozenchars
+```
+
+> vcpkg レジストリに登録されているため、`vcpkg.json` の依存関係に追加することでも利用できます。
 
 ## ライセンス
 
 MIT License
+
+SPDX-License-Identifier: MIT
+
+Copyright (c) 2024-2025 anomalyco

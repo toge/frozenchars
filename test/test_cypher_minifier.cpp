@@ -8,7 +8,7 @@
 #include "frozenchars/cypher_minifier.hpp"
 
 using frozenchars::minify;
-using frozenchars::minifyCypher;
+using frozenchars::minify_cypher;
 
 // ─── コンパイル時検証（static_assert）────────────────────────────────────────
 
@@ -88,7 +88,7 @@ static_assert(minify("`foo // bar`") == "`foo // bar`");
 
 // ─── 実行時検証（Catch2）────────────────────────────────────────────────────
 
-TEST_CASE("minifyCypher - 基本的なスペース・括弧の除去", "[cypher_minifier]")
+TEST_CASE("minify_cypher - 基本的なスペース・括弧の除去", "[cypher_minifier]")
 {
   SECTION("MATCH/RETURN の基本形")
   {
@@ -109,7 +109,7 @@ TEST_CASE("minifyCypher - 基本的なスペース・括弧の除去", "[cypher_
   }
 }
 
-TEST_CASE("minifyCypher - コメント除去", "[cypher_minifier]")
+TEST_CASE("minify_cypher - コメント除去", "[cypher_minifier]")
 {
   SECTION("行コメント")
   {
@@ -142,7 +142,7 @@ TEST_CASE("minifyCypher - コメント除去", "[cypher_minifier]")
   }
 }
 
-TEST_CASE("minifyCypher - 文字列リテラル保存", "[cypher_minifier]")
+TEST_CASE("minify_cypher - 文字列リテラル保存", "[cypher_minifier]")
 {
   SECTION("文字列内の行コメント記号は除去しない")
   {
@@ -175,7 +175,7 @@ TEST_CASE("minifyCypher - 文字列リテラル保存", "[cypher_minifier]")
   }
 }
 
-TEST_CASE("minifyCypher - バッククォート識別子保存", "[cypher_minifier]")
+TEST_CASE("minify_cypher - バッククォート識別子保存", "[cypher_minifier]")
 {
   SECTION("空白を含む識別子")
   {
@@ -191,7 +191,7 @@ TEST_CASE("minifyCypher - バッククォート識別子保存", "[cypher_minifi
   }
 }
 
-TEST_CASE("minifyCypher - セミコロン処理", "[cypher_minifier]")
+TEST_CASE("minify_cypher - セミコロン処理", "[cypher_minifier]")
 {
   SECTION("末尾セミコロン除去")
   {
@@ -214,7 +214,7 @@ TEST_CASE("minifyCypher - セミコロン処理", "[cypher_minifier]")
   }
 }
 
-TEST_CASE("minifyCypher - エッジケース", "[cypher_minifier]")
+TEST_CASE("minify_cypher - エッジケース", "[cypher_minifier]")
 {
   SECTION("空文字列")
   {
@@ -241,20 +241,20 @@ TEST_CASE("minifyCypher - エッジケース", "[cypher_minifier]")
   }
 }
 
-TEST_CASE("minifyCypher - 実行時バッファ版", "[cypher_minifier]")
+TEST_CASE("minify_cypher - 実行時バッファ版", "[cypher_minifier]")
 {
   SECTION("通常の変換")
   {
     char const *input = "MATCH (n) RETURN n";
     std::array<char, 64> buf{};
-    auto const len = minifyCypher(input, buf.data(), buf.size());
+    auto const len = minify_cypher(input, buf.data(), buf.size());
     REQUIRE(std::string_view(buf.data(), len) == "MATCH(n)RETURN n");
   }
 
   SECTION("容量 0 は 0 を返す")
   {
     char const *input = "MATCH (n)";
-    auto const len = minifyCypher(input, nullptr, 0);
+    auto const len = minify_cypher(input, nullptr, 0);
     REQUIRE(len == 0);
   }
 
@@ -262,7 +262,7 @@ TEST_CASE("minifyCypher - 実行時バッファ版", "[cypher_minifier]")
   {
     char const *input = "MATCH (n)";
     char buf[1] = {'\xff'};
-    auto const len = minifyCypher(input, buf, 1);
+    auto const len = minify_cypher(input, buf, 1);
     REQUIRE(len == 0);
     REQUIRE(buf[0] == '\0');
   }

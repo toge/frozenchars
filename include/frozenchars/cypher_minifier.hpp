@@ -65,7 +65,7 @@ enum class minify_state : unsigned char {
 ///
 /// @note セミコロン除去ポリシー:
 ///       出力末尾の `;` を 1 つ除去する。複数文の中間セミコロンは保持する。
-constexpr std::size_t minifyCypher(const char *input, char *output,
+constexpr std::size_t minify_cypher(const char *input, char *output,
                                    std::size_t output_capacity) noexcept
 {
   if (output_capacity == 0) {
@@ -221,7 +221,7 @@ constexpr std::size_t minifyCypher(const char *input, char *output,
 
 // ─── テンプレートヘルパー ───────────────────────────────────────────────────
 
-/// @brief minifyCypher の結果を保持するコンテナ（static_assert 比較対応）
+/// @brief minify_cypher の結果を保持するコンテナ（static_assert 比較対応）
 ///
 /// @tparam N 最大バッファ長（入力文字列長と同一で十分）
 template <std::size_t N>
@@ -277,7 +277,7 @@ template <std::size_t N>
     -> minified_query<N>
 {
   minified_query<N> result{};
-  result.length = minifyCypher(input, result.data.data(), N);
+  result.length = minify_cypher(input, result.data.data(), N);
   return result;
 }
 
