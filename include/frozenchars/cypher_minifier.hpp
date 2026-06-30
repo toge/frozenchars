@@ -81,7 +81,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
   char last_out = '\0';       // 直前に出力した文字（スペース要否の判定用）
 
   // 出力バッファへ 1 文字書き込む（null 終端分を残す）
-  auto writeChar = [&](char c) noexcept {
+  auto write_char = [&](char c) noexcept {
     if (out_len < output_capacity - 1) {
       output[out_len++] = c;
       last_out = c;
@@ -110,21 +110,21 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
       } else {
         // 出力対象文字: 識別子同士の隣接ならスペースを挿入
         if (pending_space && isIdentChar(last_out) && isIdentChar(c)) {
-          writeChar(' ');
+          write_char(' ');
         }
         pending_space = false;
 
         if (c == '\'') {
-          writeChar(c);
+          write_char(c);
           state = minify_state::single_quote;
         } else if (c == '"') {
-          writeChar(c);
+          write_char(c);
           state = minify_state::double_quote;
         } else if (c == '`') {
-          writeChar(c);
+          write_char(c);
           state = minify_state::backtick;
         } else {
-          writeChar(c);
+          write_char(c);
         }
         ++i;
       }
@@ -133,12 +133,12 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
 
     case minify_state::single_quote: {
       // 文字列内は空白・コメント問わずすべてそのまま出力
-      writeChar(c);
+      write_char(c);
       if (c == '\\') {
         // エスケープシーケンス: 直後の 1 文字もそのまま出力
         ++i;
         if (input[i] != '\0') {
-          writeChar(input[i]);
+          write_char(input[i]);
           ++i;
         }
       } else if (c == '\'') {
@@ -151,11 +151,11 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
 
     case minify_state::double_quote: {
-      writeChar(c);
+      write_char(c);
       if (c == '\\') {
         ++i;
         if (input[i] != '\0') {
-          writeChar(input[i]);
+          write_char(input[i]);
           ++i;
         }
       } else if (c == '"') {
@@ -169,11 +169,11 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
 
     case minify_state::backtick: {
       // バッククォート識別子: 空白も含めすべて出力
-      writeChar(c);
+      write_char(c);
       if (c == '`') {
         if (next == '`') {
           // `` はエスケープされたバッククォート: 2 文字まとめて出力し継続
-          writeChar(next);
+          write_char(next);
           i += 2;
         } else {
           // 識別子終了
