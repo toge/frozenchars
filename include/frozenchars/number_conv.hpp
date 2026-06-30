@@ -2,6 +2,8 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <stdexcept>
 #include <string_view>
 #include <charconv>
@@ -119,24 +121,79 @@ template <typename T, size_t N>
       }
     }
   } else if constexpr (std::floating_point<T>) {
-    T res = 0;
-    size_t i = start;
+    // ランタイムパス: strtod/strtof でIEEE754準拠の正確な変換を行う。
+    // FrozenStringのバッファはnull終端が保証されているため直接ポインタを渡せる。
+    if (!std::is_constant_evaluated()) {
+      char* endp = nullptr;
+      T result;
+      if constexpr (std::same_as<T, float>) {
+        result = std::strtof(sv.data(), &endp);
+      } else {
+        result = static_cast<T>(std::strtod(sv.data(), &endp));
+      }
+      if (endp == nullptr || endp != sv.data() + sv.size()) {
+        throw std::invalid_argument("invalid float");
+      }
+      if (result == std::numeric_limits<T>::infinity() || result == -std::numeric_limits<T>::infinity()) {
+        throw std::out_of_range("float overflow");
+      }
+      return result;
+    }
+
+    // コンパイル時パス: uint64_t で整数部・小数部を蓄積して精度を向上させる。
+    // float/double への変換は最後に1回だけ行う。
+    auto constexpr pow10 = [](int n) -> T {
+      T result = 1;
+      T base   = 10;
+      while (n > 0) {
+        if (n & 1) {
+          result *= base;
+        }
+        base *= base;
+        n >>= 1;
+      }
+      return result;
+    };
+
+    size_t i        = start;
     bool has_digits = false;
+
+    // 整数部を uint64_t で蓄積（2^64 ≈ 1.8×10^19 まで厳密）
+    std::uint64_t int_part   = 0;
+    int           extra_exp  = 0; // uint64_t オーバーフロー時の桁数補正
     while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-      res = res * 10 + static_cast<T>(sv[i] - '0');
+      if (int_part <= (UINT64_MAX - 9) / 10) {
+        int_part = int_part * 10 + static_cast<std::uint64_t>(sv[i] - '0');
+      } else {
+        ++extra_exp;
+      }
       ++i;
       has_digits = true;
     }
+    T res = static_cast<T>(int_part);
+    if (extra_exp > 0) {
+      res *= pow10(extra_exp);
+    }
+
+    // 小数部を uint64_t で蓄積し、最後に1回の除算で精度を確保する
     if (i < sv.size() && sv[i] == '.') {
       ++i;
-      T frac = 1;
+      std::uint64_t frac_digits = 0;
+      int           frac_count  = 0;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-        frac /= 10;
-        res += static_cast<T>(sv[i] - '0') * frac;
+        if (frac_count < 18) {
+          frac_digits = frac_digits * 10 + static_cast<std::uint64_t>(sv[i] - '0');
+          ++frac_count;
+        }
+        // 18桁以降は丸め誤差が小さいため切り捨て
         ++i;
         has_digits = true;
       }
+      if (frac_count > 0) {
+        res += static_cast<T>(frac_digits) / pow10(frac_count);
+      }
     }
+
     int exp = 0;
     if (i < sv.size() && (sv[i] == 'e' || sv[i] == 'E')) {
       ++i;
@@ -155,23 +212,15 @@ template <typename T, size_t N>
       if (!has_exp_digits) {
         throw std::invalid_argument("invalid exponent");
       }
-      if (eneg) exp = -exp;
+      if (eneg) {
+        exp = -exp;
+      }
     }
     if (!has_digits || i < sv.size()) {
       throw std::invalid_argument("invalid float");
     }
     T final_res = neg ? -res : res;
     if (exp != 0) {
-      auto constexpr pow10 = [](int n) -> T {
-        T result = 1;
-        T base = 10;
-        while (n > 0) {
-          if (n & 1) result *= base;
-          base *= base;
-          n >>= 1;
-        }
-        return result;
-      };
       if (exp > 0) {
         final_res *= pow10(exp);
       } else {
