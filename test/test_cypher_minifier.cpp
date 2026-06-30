@@ -5,7 +5,7 @@
 
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars/cypher_minifier.hpp"
+#include "frozenchars/minify.hpp"
 
 using frozenchars::minify;
 using frozenchars::minify_cypher;

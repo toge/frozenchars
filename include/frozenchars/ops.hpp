@@ -11,6 +11,7 @@
 #include "split.hpp"
 #include "string.hpp"
 #include "string_ops.hpp"
+#include "minify.hpp"
 
 namespace frozenchars::ops {
 
