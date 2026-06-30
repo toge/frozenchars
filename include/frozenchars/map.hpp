@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstring>
 #include <concepts>
 #include <cstdint>
 #include <functional>
@@ -263,10 +262,16 @@ struct lookup_index {
   }();
 
   static constexpr auto sorted_indices_ = [] {
+    // インデックス付きソート: O(N log N) で sorted_key_views_ と対応する元インデックスを求める
     std::array<index_t, size()> res{};
-    for (auto i = 0uz; i < size(); ++i)
-      res[i] = static_cast<index_t>(
-        std::ranges::find(key_views_, sorted_key_views_[i]) - key_views_.begin());
+    std::array<std::size_t, size()> order{};
+    for (auto i = 0uz; i < size(); ++i) {
+      order[i] = i;
+    }
+    std::ranges::sort(order, [](auto a, auto b) { return key_views_[a] < key_views_[b]; });
+    for (auto i = 0uz; i < size(); ++i) {
+      res[i] = static_cast<index_t>(order[i]);
+    }
     return res;
   }();
 
@@ -288,13 +293,13 @@ struct lookup_index {
 
   static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);
 
-  struct alignas(16) PaddedKey {
+  struct alignas(16) padded_key {
     std::uint64_t data[2]{0, 0};
     std::uint8_t len = 0;
   };
 
   static consteval auto make_padded_keys() {
-    std::array<PaddedKey, size()> res{};
+    std::array<padded_key, size()> res{};
     std::size_t idx = 0;
     ([&] {
       res[idx].len = static_cast<std::uint8_t>(Keys.length);
@@ -310,7 +315,7 @@ struct lookup_index {
     if constexpr (all_keys_short) {
       return make_padded_keys();
     } else {
-      return std::array<PaddedKey, size()>{};
+      return std::array<padded_key, size()>{};
     }
   }();
 
