@@ -824,6 +824,34 @@ TEST_CASE("minify helpers") {
   static_assert(sql_simplify_join.sv() == "SELECT * FROM t1 JOIN t2 ON t1.id=t2.id");
   REQUIRE(sql_simplify_join.sv() == "SELECT * FROM t1 JOIN t2 ON t1.id=t2.id");
 
+  // Critical-1 回帰テスト: simplify_join 単独では AS を除去しない
+  auto constexpr sql_join_keeps_as = minify_sql(
+    "SELECT col AS alias FROM t1 INNER JOIN t2 ON t1.id = t2.id"_fs,
+    minify_sql_opt::simplify_join);
+  static_assert(sql_join_keeps_as.sv() == "SELECT col AS alias FROM t1 JOIN t2 ON t1.id=t2.id");
+  REQUIRE(sql_join_keeps_as.sv() == "SELECT col AS alias FROM t1 JOIN t2 ON t1.id=t2.id");
+
+  // Critical-1 回帰テスト: CAST の AS は除去しない（simplify_join 単独）
+  auto constexpr sql_cast_keeps_as = minify_sql(
+    "SELECT CAST(val AS INTEGER) FROM tbl INNER JOIN t2 ON tbl.id = t2.id"_fs,
+    minify_sql_opt::simplify_join);
+  static_assert(sql_cast_keeps_as.sv() == "SELECT CAST(val AS INTEGER) FROM tbl JOIN t2 ON tbl.id=t2.id");
+  REQUIRE(sql_cast_keeps_as.sv() == "SELECT CAST(val AS INTEGER) FROM tbl JOIN t2 ON tbl.id=t2.id");
+
+  // Critical-2 回帰テスト: shorten_types が simplify_join と組み合わせで有効に働く
+  auto constexpr sql_shorten_with_join = minify_sql(
+    "SELECT INTEGER, BOOLEAN FROM t1 INNER JOIN t2 ON t1.id = t2.id"_fs,
+    minify_sql_opt::shorten_types | minify_sql_opt::simplify_join);
+  static_assert(sql_shorten_with_join.sv() == "SELECT INT,BOOL FROM t1 JOIN t2 ON t1.id=t2.id");
+  REQUIRE(sql_shorten_with_join.sv() == "SELECT INT,BOOL FROM t1 JOIN t2 ON t1.id=t2.id");
+
+  // Critical-2 回帰テスト: shorten_types が remove_as と組み合わせで有効に働く
+  auto constexpr sql_shorten_with_remove_as = minify_sql(
+    "SELECT INTEGER AS i FROM tbl"_fs,
+    minify_sql_opt::shorten_types | minify_sql_opt::remove_as);
+  static_assert(sql_shorten_with_remove_as.sv() == "SELECT INT i FROM tbl");
+  REQUIRE(sql_shorten_with_remove_as.sv() == "SELECT INT i FROM tbl");
+
   auto constexpr html2 = minify_html(
     "<div>  hello  </div>\n"
     "<span>  world  </span>"_fs);

@@ -1449,7 +1449,8 @@ namespace detail {
           if (scan < str.length) {
             ++scan;
           }
-          // void 要素の閉じタグは常にスキップ
+          // void 要素（<br>, <img> 等）の閉じタグは HTML5 仕様上不正であるため、
+          // minify_markup_opt に関わらず常にスキップする。
           if (is_void_element(str.buffer.data() + tag_start, tag_end - tag_start)) {
             i = scan;
             continue;
@@ -2292,6 +2293,60 @@ template <size_t N>
   auto in_bracket    = false;
   auto pending_space = false;
 
+  /// @brief 型キーワードの短縮を試みる（shorten_types フラグが有効な場合のみ）
+  ///
+  /// word_start から word_len 文字分のトークンを大文字化し、型マッピングを検索する。
+  /// CHARACTER VARYING → VARCHAR の特殊処理も含む。
+  /// @return 短縮が適用されたか否か
+  auto try_shorten = [&](size_t word_start, size_t word_len) -> bool {
+    if (!has_flag(options, minify_sql_opt::shorten_types)) {
+      return false;
+    }
+    auto upper_buf = std::array<char, 256>{};
+    if (word_len > upper_buf.size()) {
+      return false;
+    }
+    for (auto j = 0uz; j < word_len; ++j) {
+      auto const ch = str.buffer[word_start + j];
+      upper_buf[j]  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+    }
+    auto const* mapping = detail::sql_find_type_shortening(upper_buf.data(), word_len);
+    if (mapping == nullptr) {
+      return false;
+    }
+    // CHARACTER VARYING → VARCHAR の特殊処理
+    if (word_len == 9 && upper_buf[0] == 'C') {
+      auto peek = i;
+      while (peek < str.length && detail::is_any_whitespace(str.buffer[peek])) {
+        ++peek;
+      }
+      if (peek + 7 <= str.length) {
+        auto varying_match = true;
+        for (auto j = 0uz; j < 7; ++j) {
+          auto const ch       = str.buffer[peek + j];
+          auto const upper_ch = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+          if (upper_ch != "VARYING"[j]) {
+            varying_match = false;
+            break;
+          }
+        }
+        if (varying_match && peek + 7 < str.length && !detail::is_sql_id_char(str.buffer[peek + 7])) {
+          constexpr char VARCHAR[] = "VARCHAR";
+          for (auto j = 0uz; j < 7; ++j) {
+            res.buffer[offset++] = VARCHAR[j];
+          }
+          i             = peek + 7;
+          pending_space = true;
+          return true;
+        }
+      }
+    }
+    for (auto j = 0uz; j < mapping->short_len; ++j) {
+      res.buffer[offset++] = mapping->short_form[j];
+    }
+    return true;
+  };
+
   while (i < str.length) {
     auto const c = str.buffer[i];
 
@@ -2390,8 +2445,8 @@ template <size_t N>
       }
       auto const word_len = i - word_start;
 
-      // AS キーワードを検出
-      if (word_len == 2) {
+      // AS キーワードを検出（remove_as フラグが設定されている場合のみ除去）
+      if (has_flag(options, minify_sql_opt::remove_as) && word_len == 2) {
         auto upper0 = (str.buffer[word_start] >= 'a' && str.buffer[word_start] <= 'z') ? static_cast<char>(str.buffer[word_start] - ('a' - 'A')) : str.buffer[word_start];
         auto upper1 = (str.buffer[word_start + 1] >= 'a' && str.buffer[word_start + 1] <= 'z') ? static_cast<char>(str.buffer[word_start + 1] - ('a' - 'A')) : str.buffer[word_start + 1];
         if (upper0 == 'A' && upper1 == 'S') {
@@ -2440,9 +2495,11 @@ template <size_t N>
         }
       }
 
-      // 通常の識別子: そのまま出力
-      for (auto j = 0uz; j < word_len; ++j) {
-        res.buffer[offset++] = str.buffer[word_start + j];
+      // 通常の識別子: shorten_types が有効なら短縮を試み、それ以外はそのまま出力
+      if (!try_shorten(word_start, word_len)) {
+        for (auto j = 0uz; j < word_len; ++j) {
+          res.buffer[offset++] = str.buffer[word_start + j];
+        }
       }
       continue;
     }
@@ -2455,50 +2512,10 @@ template <size_t N>
       }
       auto const word_len = i - word_start;
 
-      auto upper_buf = std::array<char, 256>{};
-      if (word_len <= upper_buf.size()) {
+      if (!try_shorten(word_start, word_len)) {
         for (auto j = 0uz; j < word_len; ++j) {
-          auto const ch = str.buffer[word_start + j];
-          upper_buf[j]  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+          res.buffer[offset++] = str.buffer[word_start + j];
         }
-
-        auto const* mapping = detail::sql_find_type_shortening(upper_buf.data(), word_len);
-        if (mapping != nullptr) {
-          if (word_len == 9 && upper_buf[0] == 'C') {
-            auto peek = i;
-            while (peek < str.length && detail::is_any_whitespace(str.buffer[peek])) {
-              ++peek;
-            }
-            if (peek + 7 <= str.length) {
-              auto varying_match = true;
-              for (auto j = 0uz; j < 7; ++j) {
-                auto const ch        = str.buffer[peek + j];
-                auto const upper_ch  = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
-                if (upper_ch != "VARYING"[j]) {
-                  varying_match = false;
-                  break;
-                }
-              }
-              if (varying_match && peek + 7 < str.length && !detail::is_sql_id_char(str.buffer[peek + 7])) {
-                constexpr char VARCHAR[] = "VARCHAR";
-                for (auto j = 0uz; j < 7; ++j) {
-                  res.buffer[offset++] = VARCHAR[j];
-                }
-                i = peek + 7;
-                pending_space = true;
-                continue;
-              }
-            }
-          }
-          for (auto j = 0uz; j < mapping->short_len; ++j) {
-            res.buffer[offset++] = mapping->short_form[j];
-          }
-          continue;
-        }
-      }
-
-      for (auto j = 0uz; j < word_len; ++j) {
-        res.buffer[offset++] = str.buffer[word_start + j];
       }
       continue;
     }
