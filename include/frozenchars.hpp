@@ -25,3 +25,4 @@
 #include "frozenchars/detail/glaze_detect.hpp"
 #include "frozenchars/json/compress.hpp"
 #include "frozenchars/json/crush.hpp"
+#include "frozenchars/cypher_minifier.hpp"
