@@ -29,7 +29,7 @@ add_executable(bench_frozen_set bench_frozen_set.cpp)
 target_link_libraries(bench_frozen_set PRIVATE frozenchars::frozenchars)
 target_compile_features(bench_frozen_set PUBLIC cxx_std_23)
 
-# wildcards benchmark dependency: fetched at configure time
+# wildcards ベンチマーク依存: 構成時に取得
 # (https://github.com/zemasoft/wildcards)
 include(FetchContent)
 cmake_policy(SET CMP0169 OLD)
@@ -40,14 +40,22 @@ FetchContent_Declare(
   GIT_SHALLOW    TRUE
 )
 FetchContent_Populate(wildcards)
-# Patch is_alt bug: return-type mismatch in cfg_HAS_CONSTEXPR14 +
-# !cfg_HAS_FULL_FEATURED_CONSTEXPR14 path (upstream has
-# `return throw_logic_error(p, ...)` returning PatternIterator from bool fn).
+# is_alt バグ修正: cfg_HAS_CONSTEXPR14 + !cfg_HAS_FULL_FEATURED_CONSTEXPR14 分岐での
+# 戻り値型不一致（`return throw_logic_error(p, ...)` が bool 関数から PatternIterator を返す）
 set(_wc_patched "${wildcards_SOURCE_DIR}/single_include/wildcards.hpp")
 file(READ "${_wc_patched}" _wc_content)
 string(REPLACE
   "break;\ncase is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nreturn throw_logic_error(\np, \"The program execution should never end up here throwing this exception\");\n#endif"
   "break;\ncase is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nthrow_logic_error(\np, \"The program execution should never end up here throwing this exception\");\nreturn false;\n#endif"
+  _wc_content "${_wc_content}")
+# C++23 非推奨リテラル演算子構文の修正: `operator"" _sv` → `operator""_sv`
+string(REPLACE
+  "operator\"\" _sv("
+  "operator\"\"_sv("
+  _wc_content "${_wc_content}")
+string(REPLACE
+  "operator\"\" _wc("
+  "operator\"\"_wc("
   _wc_content "${_wc_content}")
 file(WRITE "${_wc_patched}" "${_wc_content}")
 unset(_wc_patched)
@@ -128,7 +136,7 @@ assert_frozen_map_compile_fail(
   EXPECTED_TEXT "Unknown type name"
 )
 
-# example_split executable
+# example_split 実行可能ファイル
 add_executable(example_split ../example_split.cpp)
 target_compile_features(example_split PRIVATE cxx_std_23)
 target_link_libraries(example_split PRIVATE frozenchars::frozenchars)
