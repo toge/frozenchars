@@ -337,5 +337,100 @@ struct enumerator {
   }
 };
 
+/// @brief パース＋列挙＋finalize してメタデータだけ返す（static constexpr に格納可能）
+struct regex_metadata {
+  std::size_t max_length;
+  std::size_t count;
+};
+
+/// @brief 正規表現をパースして列挙し、メタデータのみを返す
+template <std::size_t MaxStrings>
+[[nodiscard]] consteval auto compute_metadata(std::string_view pattern, std::string_view dot_chars)
+  -> regex_metadata {
+  auto const tree = parser::parse(pattern);
+  auto result = enumerator<MaxStrings>::run(tree, dot_chars);
+  return {result.max_length, result.strings.size()};
+}
+
+/// @brief 正規表現をパースして列挙し、FrozenString 配列を返す（vector フリー）
+template <std::size_t MaxStrings, std::size_t N, std::size_t Count>
+[[nodiscard]] consteval auto compute_keys(std::string_view pattern, std::string_view dot_chars)
+  -> std::array<FrozenString<N>, Count> {
+  auto const tree = parser::parse(pattern);
+  auto result = enumerator<MaxStrings>::run(tree, dot_chars);
+  std::array<FrozenString<N>, Count> arr{};
+  for (auto i = 0uz; i < Count; ++i) {
+    auto const& s = result.strings[i];
+    for (auto j = 0uz; j < s.size(); ++j) arr[i].buffer[j] = s[j];
+    arr[i].buffer[s.size()] = '\0';
+    arr[i].length = s.size();
+  }
+  return arr;
+}
+
 } // namespace detail::fregex
+
+/// @brief デフォルトのドット文字集合（`.` がマッチする文字）
+static constexpr char default_dot_chars[] =
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+
+/// @brief 正規表現パターンからマッチしうる全文字列をコンパイル時に列挙する
+/// @tparam Pattern 正規表現パターン（FrozenString）
+/// @tparam MaxStrings 列挙上限（デフォルト 4096）
+/// @tparam DotChars ドットがマッチする文字集合
+template <FrozenString Pattern, std::size_t MaxStrings = 4096,
+          FrozenString DotChars = FrozenString<sizeof(default_dot_chars)>{default_dot_chars}>
+struct frozen_regex {
+  static constexpr auto meta_ =
+    detail::fregex::compute_metadata<MaxStrings>(Pattern.sv(), DotChars.sv());
+  static constexpr std::size_t max_length_v = meta_.max_length;
+  static constexpr std::size_t count_v = meta_.count;
+
+  static constexpr auto enumerated_keys_ =
+    detail::fregex::compute_keys<MaxStrings, max_length_v + 1, count_v>(
+      Pattern.sv(), DotChars.sv());
+
+  /// @brief ソート済み string_view 配列（contains / keys 用）
+  static constexpr auto key_views_ = [] {
+    std::array<std::string_view, count_v> arr{};
+    for (auto i = 0uz; i < count_v; ++i) arr[i] = enumerated_keys_[i].sv();
+    std::ranges::sort(arr);
+    return arr;
+  }();
+
+  /// @brief 指定文字列がパターンにマッチするかを二分探索で判定
+  [[nodiscard]] static constexpr auto contains(std::string_view s) noexcept -> bool {
+    return std::ranges::binary_search(key_views_, s);
+  }
+
+  /// @brief 列挙された全文字列を FrozenString 配列として取得
+  [[nodiscard]] static constexpr auto enumerate() noexcept
+    -> std::span<FrozenString<max_length_v + 1> const, count_v> {
+    return enumerated_keys_;
+  }
+
+  /// @brief ソート済み文字列ビューの配列を取得
+  [[nodiscard]] static constexpr auto keys() noexcept
+    -> std::span<std::string_view const, count_v> {
+    return key_views_;
+  }
+
+  /// @brief 列挙キーをキーとする frozen_map を生成
+  template <typename V, V... Values>
+  static consteval auto to_frozen_map() {
+    static_assert(sizeof...(Values) == count_v,
+                  "to_frozen_map requires exactly count_v values matching sorted key order");
+    return to_frozen_map_impl<V, Values...>(std::make_index_sequence<count_v>{});
+  }
+
+private:
+  template <typename V, V... Values, std::size_t... Is>
+  static consteval auto to_frozen_map_impl(std::index_sequence<Is...>)
+    -> frozen_map<V, enumerated_keys_[Is]...> {
+    return frozen_map<V, enumerated_keys_[Is]...>{
+      std::array<V, count_v>{ Values... }
+    };
+  }
+};
+
 } // namespace frozenchars
