@@ -1445,7 +1445,7 @@ namespace detail {
    * @param len 文字列長
    * @return auto マッピングがあればポインタ、なければ nullptr
    */
-  auto consteval sql_find_type_shortening(char const* word, size_t len) noexcept -> sql_type_mapping const* {
+  auto constexpr sql_find_type_shortening(char const* word, size_t len) noexcept -> sql_type_mapping const* {
     for (auto const& m : sql_type_shortenings) {
       if (len != m.long_len) {
         continue;
