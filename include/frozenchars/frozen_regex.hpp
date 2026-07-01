@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <ranges>
 #include <span>
 #include <string>
@@ -38,7 +39,8 @@ enum class node_kind : std::uint8_t {
 struct node {
   node_kind kind{node_kind::literal};
   char literal_char{'\0'};                       ///< kind == literal のみ使用
-  std::vector<char> char_set;                    ///< kind == dot / char_class のみ使用
+  std::vector<char> char_set;                    ///< char_class: 正クラスの場合のみ設定（否定は enumerator で解決）
+  bool negate_class{false};                      ///< char_class の否定フラグ
   std::vector<std::size_t> child_indices;        ///< kind == concat / alt / group のみ使用
 };
 
@@ -95,10 +97,10 @@ struct parser {
 
   /// @brief alt = concat ('|' concat)*
   consteval auto parse_alt() -> std::size_t {
-    auto first = parse_concat();
+    auto const first = parse_concat();
     if (eof() || peek() != '|') return first;
     // 選択ノードを構築
-    node alt_node{node_kind::alt, '\0', {}, {first}};
+    node alt_node{node_kind::alt, '\0', {}, false, {first}};
     while (!eof() && peek() == '|') {
       consume();  ///< '|' を消費
       alt_node.child_indices.push_back(parse_concat());
@@ -114,7 +116,7 @@ struct parser {
     }
     if (children.empty()) throw "frozen_regex: empty alternative";
     if (children.size() == 1) return children[0];
-    node concat_node{node_kind::concat, '\0', {}, std::move(children)};
+    node concat_node{node_kind::concat, '\0', {}, false, std::move(children)};
     return add_node(std::move(concat_node));
   }
 
@@ -136,7 +138,7 @@ struct parser {
     if (c == ')') throw "frozen_regex: unbalanced parenthesis";
     // 通常リテラル
     consume();
-    return add_node(node{node_kind::literal, c, {}, {}});
+    return add_node(node{node_kind::literal, c, {}, false, {}});
   }
 
   /// @brief '(' alt ')' をパース
@@ -146,16 +148,16 @@ struct parser {
     if (!eof() && peek() == '?') {
       throw "frozen_regex: lookahead/lookbehind not supported";
     }
-    auto inner = parse_alt();
+    auto const inner = parse_alt();
     if (eof() || peek() != ')') throw "frozen_regex: unbalanced parenthesis";
     consume();  ///< ')' を消費
-    return add_node(node{node_kind::group, '\0', {}, {inner}});
+    return add_node(node{node_kind::group, '\0', {}, false, {inner}});
   }
 
   /// @brief '[' ['^'] (item)+ ']'
   /// @details item = escape | range | single_char
   ///          range = char '-' char
-  ///          先頭・末尾の '-' は文法エラー（リテラルとして使うには \- とエスケープ）
+  ///          末尾の '-' は文法エラー（リテラルとして使うには \- とエスケープ）。先頭の '-' は通常文字として扱う（POSIX/PCRE 互換）
   consteval auto parse_char_class() -> std::size_t {
     consume();  ///< '[' を消費
     bool const negate = (!eof() && peek() == '^');
@@ -164,12 +166,8 @@ struct parser {
     while (!eof() && peek() != ']') {
       auto const c1 = parse_class_char();
       if (!eof() && peek() == '-') {
-        // 範囲演算子の可能性
-        consume();  ///< '-' を消費
-        if (eof() || peek() == ']') {
-          // 末尾の '-' は文法エラー
-          throw "frozen_regex: dangling '-' in character class";
-        }
+        consume();
+        if (eof() || peek() == ']') throw "frozen_regex: dangling '-' in character class";
         auto const c2 = parse_class_char();
         if (c1 > c2) throw "frozen_regex: invalid character range";
         for (auto ch = c1; ch <= c2; ++ch) chars.push_back(ch);
@@ -180,9 +178,7 @@ struct parser {
     if (eof()) throw "frozen_regex: unbalanced bracket";
     consume();  ///< ']' を消費
     if (chars.empty()) throw "frozen_regex: empty character class";
-    // 否定クラス: DotChars から chars を引いた差集合
-    if (negate) chars = complement_against_dotchars(chars);
-    node n{node_kind::char_class, '\0', std::move(chars), {}};
+    node n{node_kind::char_class, '\0', std::move(chars), negate, {}};
     return add_node(std::move(n));
   }
 
@@ -198,13 +194,13 @@ struct parser {
   /// @brief ドット '.' をパース（char_set は enumerator 側で DotChars から展開）
   consteval auto parse_dot() -> std::size_t {
     consume();  ///< '.' を消費
-    return add_node(node{node_kind::dot, '\0', {}, {}});
+    return add_node(node{node_kind::dot, '\0', {}, false, {}});
   }
 
   /// @brief エスケープ付き atom: \\ \. \[ \] \( \) \| \- \^
   consteval auto parse_escape_atom() -> std::size_t {
     auto const c = parse_escape();
-    return add_node(node{node_kind::literal, c, {}, {}});
+    return add_node(node{node_kind::literal, c, {}, false, {}});
   }
 
   /// @brief エスケープ1文字を消費して返す
@@ -221,12 +217,123 @@ struct parser {
     }
   }
 
-  /// @brief DotChars（外部から注入される予定、ここではダミー）
-  /// @details 実装は Task 3 で DotChars NTTP を受け取る形に統合
-  static consteval auto complement_against_dotchars(std::vector<char> const& exclude) -> std::vector<char> {
-    // Task 3 で DotChars を使って書き直す。Task 1 では空を返してテストを通す。
-    (void)exclude;
-    return {};
+  };
+
+/// @brief 列挙結果（中間表現、動的サイズ）
+struct enumerate_result {
+  std::vector<std::string> strings;
+  std::size_t max_length{0};
+};
+
+/// @brief AST を辿って全文字列を列挙
+/// @tparam MaxStrings 列挙上限（超過で consteval throw）
+template <std::size_t MaxStrings>
+struct enumerator {
+  ast const& tree;
+  std::string_view dot_chars;  ///< ドットがマッチする文字集合
+
+  /// @brief エントリポイント
+  static consteval auto run(ast const& t, std::string_view dot) -> enumerate_result {
+    enumerator e{t, dot};
+    auto strs = e.enumerate_node(t.root_index);
+    return finalize(std::move(strs));
+  }
+
+  /// @brief 指定ノードの列挙結果を返す
+  consteval auto enumerate_node(std::size_t idx) -> std::vector<std::string> {
+    auto const& n = tree.nodes[idx];
+    switch (n.kind) {
+      case node_kind::literal:
+        return {std::string{static_cast<char>(n.literal_char)}};
+      case node_kind::dot: {
+        std::vector<std::string> res;
+        res.reserve(dot_chars.size());
+        for (auto c : dot_chars) res.push_back(std::string{c});
+        return res;
+      }
+      case node_kind::char_class: {
+        std::vector<char> chars = n.char_set;
+        if (n.negate_class) chars = complement(chars);
+        std::vector<std::string> res;
+        res.reserve(chars.size());
+        for (auto c : chars) res.push_back(std::string{c});
+        return res;
+      }
+      case node_kind::group: {
+        return enumerate_node(n.child_indices[0]);
+      }
+      case node_kind::concat: {
+        std::vector<std::vector<std::string>> child_results;
+        child_results.reserve(n.child_indices.size());
+        for (auto ci : n.child_indices) child_results.push_back(enumerate_node(ci));
+        return cartesian_concat(std::move(child_results));
+      }
+      case node_kind::alt: {
+        std::vector<std::vector<std::string>> child_results;
+        child_results.reserve(n.child_indices.size());
+        for (auto ci : n.child_indices) child_results.push_back(enumerate_node(ci));
+        return merge_alt(std::move(child_results));
+      }
+    }
+    throw "frozen_regex: unreachable";
+  }
+
+  /// @brief CONCAT の直積: 単位元 "" から各子の文字列を順に結合
+  consteval auto cartesian_concat(std::vector<std::vector<std::string>> children)
+    -> std::vector<std::string> {
+    std::vector<std::string> acc{""};
+    for (auto& child : children) {
+      std::vector<std::string> next;
+      next.reserve(acc.size() * child.size());
+      for (auto const& prefix : acc) {
+        for (auto const& suffix : child) {
+          next.push_back(prefix + suffix);
+          check_overflow(next.size());
+        }
+      }
+      acc = std::move(next);
+    }
+    return acc;
+  }
+
+  /// @brief ALT の和集合（重複除去は finalize で実施）
+  consteval auto merge_alt(std::vector<std::vector<std::string>> children)
+    -> std::vector<std::string> {
+    std::vector<std::string> res;
+    for (auto& child : children) {
+      for (auto& s : child) {
+        res.push_back(std::move(s));
+        check_overflow(res.size());
+      }
+    }
+    return res;
+  }
+
+  /// @brief 列挙数が MaxStrings を超えたら throw
+  consteval auto check_overflow(std::size_t current) const -> void {
+    if (current > MaxStrings) throw "frozen_regex: enumeration exceeds MaxStrings";
+  }
+
+  /// @brief 否定クラスの差集合: dot_chars から exclude を引く
+  [[nodiscard]] consteval auto complement(std::vector<char> const& exclude) const
+    -> std::vector<char> {
+    std::vector<char> res;
+    for (auto c : dot_chars) {
+      if (std::find(exclude.begin(), exclude.end(), c) == exclude.end()) {
+        res.push_back(c);
+      }
+    }
+    return res;
+  }
+
+  /// @brief sort + dedup + max_length 計算
+  static consteval auto finalize(std::vector<std::string> strs) -> enumerate_result {
+    std::ranges::sort(strs);
+    strs.erase(std::unique(strs.begin(), strs.end()), strs.end());
+    if (strs.size() > MaxStrings) throw "frozen_regex: enumeration exceeds MaxStrings";
+    std::size_t maxlen = 0;
+    for (auto const& s : strs) maxlen = std::max(maxlen, s.size());
+    return enumerate_result{std::move(strs), maxlen};
   }
 };
 
