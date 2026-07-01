@@ -394,7 +394,6 @@ struct frozen_regex {
   static constexpr auto key_views_ = [] {
     std::array<std::string_view, count_v> arr{};
     for (auto i = 0uz; i < count_v; ++i) arr[i] = enumerated_keys_[i].sv();
-    std::ranges::sort(arr);
     return arr;
   }();
 
