@@ -136,6 +136,31 @@ assert_frozen_map_compile_fail(
   EXPECTED_TEXT "Unknown type name"
 )
 
+assert_frozen_map_compile_fail(
+  NAME frozen_regex_quantifier
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_quantifier.cpp
+  EXPECTED_TEXT "quantifiers not supported"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_regex_unbalanced_paren
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_unbalanced_paren.cpp
+  EXPECTED_TEXT "unbalanced parenthesis"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_regex_empty_pattern
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_empty_pattern.cpp
+  EXPECTED_TEXT "empty pattern"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_regex_max_strings_exceeded
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_max_strings_exceeded.cpp
+  EXPECTED_TEXT "exceeds MaxStrings"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
 # example_split 実行可能ファイル
 add_executable(example_split ../example_split.cpp)
 target_compile_features(example_split PRIVATE cxx_std_23)
