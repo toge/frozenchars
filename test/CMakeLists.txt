@@ -67,6 +67,10 @@ add_executable(bench_wildcard bench_wildcard.cpp)
 target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards)
 target_compile_features(bench_wildcard PUBLIC cxx_std_23)
 
+add_executable(bench_frozen_regex bench_frozen_regex.cpp)
+target_link_libraries(bench_frozen_regex PRIVATE frozenchars::frozenchars ctre::ctre)
+target_compile_features(bench_frozen_regex PUBLIC cxx_std_23)
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
 assert_frozen_map_compile_fail(
