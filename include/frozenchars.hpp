@@ -21,6 +21,8 @@
 #include "frozenchars/regex_comment.hpp"
 #include "frozenchars/map.hpp"
 #include "frozenchars/set.hpp"
+#include "frozenchars/trie_set.hpp"
+#include "frozenchars/trie_map.hpp"
 #include "frozenchars/frozen_regex.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
 #include "frozenchars/detail/glaze_detect.hpp"
