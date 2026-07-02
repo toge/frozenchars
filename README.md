@@ -70,12 +70,15 @@
     - [contains_all — 複数キーの一括存在判定](#contains_all-—-複数キの一括存在判定)
     - [keys_in_declaration_order — 宣言順キー配列](#keys_in_declaration_order-—-宣言順キ配列)
     - [operator== / operator!= — 値ごとの等価比較](#operator-operator-—-値ごとの等価比較)
+  - [frozen_trie_map（圧縮トライ マップ）](#frozen_trie_map（圧縮トライ-マップ）)
+  - [frozen_map / frozen_trie_map / STL コンテナの選び方](#frozen_map--frozen_trie_map--stl-コンテナの選び方)
   - [parse_to_tuple（型列文字列 → std::tuple<...>）](#parse_to_tuple（型列文字列-→-stdtuple）)
     - [parse_to_variant（型列文字列 → std::variant<...>）](#parse_to_variant（型列文字列-→-stdvariant）)
     - [型エイリアス](#型エイリアス)
     - [ポインタ/参照型](#ポインタ参照型)
 - [よくある質問 (FAQ)](#よくある質問-faq)
 - [wildcard_match（ワイルドカードマッチング）](#wildcard_match（ワイルドカドマッチング）)
+  - [frozen_regex / CTRE / wildcard_match / wildcards の選び方](#frozen_regex--ctre--wildcard_match--wildcards-の選び方)
 - [frozen_set（コンパイル時集合）](#frozen_set（コンパイル時集合）)
 - [remove_comments / remove_comment_lines（コメント行除去）](#remove_comments-remove_comment_lines（コメント行除去）)
 - [テスト](#テスト)
@@ -1370,6 +1373,85 @@ assert(a != make_frozen_map<int, "x"_fs, "y"_fs>(
 
 キー集合が異なる型同士では比較できません（コンパイルエラー）。
 
+### `frozen_trie_map`（圧縮トライ マップ）
+
+`frozen_trie_map` は、キー集合をコンパイル時に圧縮トライ（ラディックスツリー）として構築し、実行時に O(キー長) の検索を提供するマップです。
+
+`frozen_map` がハッシュベースであるのに対し、`frozen_trie_map` は共通接頭辞を圧縮するため、**接頭辞の似たキー群**で高い性能を発揮します。
+
+```cpp
+#include "frozenchars/trie_map.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto map = frozen_trie_map<int, "timeout"_fs, "timeout_ms"_fs, "timeout_us"_fs, "timeout_ns"_fs>{
+  std::array<int, 4>{1, 2, 3, 4}
+};
+
+assert(map["timeout"] == 1);
+assert(map["timeout_ms"] == 2);
+assert(map.contains("timeout_us"));
+```
+
+#### `frozen_trie_map` の特徴
+
+- **圧縮トライ**: 共通接頭辞を1ノードにまとめ、メモリ使用量を削減
+- **O(キー長) の検索**: キー数に関係なくキーの文字数だけで検索時間が決まる
+- **SIMD ラベル比較**: SSE2 / NEON でラベルの比較を高速化（16文字以上のラベル）
+- **子ノード LUT**: 子ノード数が8超のノードでルックアップテーブルを使用
+- **ランダムアクセスイテレータ**: `frozen_map` と同じく宣言順の走査が可能
+
+### `frozen_map` / `frozen_trie_map` / STL コンテナの選び方
+
+下記は **find（検索）のみ** のベンチマーク結果です。環境: GCC 16, x86-64, `-O2`。
+
+| パターン | frozen_map | frozen_trie_map | std::map | std::unordered_map |
+|---|---:|---:|---:|---:|
+| P1: 短キー(3個) | 3.6 ns | **1.6 ns** | 10.5 ns | 12.0 ns |
+| P2: HTTPメソッド(5個) | 4.7 ns | **0.3 ns** | 14.6 ns | 9.8 ns |
+| P3: 共通接頭辞(4個) | 5.1 ns | **0.3 ns** | 10.7 ns | 11.8 ns |
+| P4: NATO字母(20個) | 3.8 ns | **0.3 ns** | 18.1 ns | 23.3 ns |
+| P5: 長キー(5個, 25-40文字) | **1.5 ns** | 8.7 ns | 14.1 ns | 4.6 ns |
+| P6: 同長キー(10個, 21文字) | **8.1 ns** | 9.3 ns | 18.0 ns | 11.4 ns |
+
+> **单位**: ns/iter（1回の検索にかかるナノ秒）。小さいほど高速。
+
+#### アーキテクチャ比較
+
+| 項目 | `frozen_map` | `frozen_trie_map` | `std::map` | `std::unordered_map` |
+|---|---|---|---|---|
+| 検索アルゴリズム | CRC32C ハッシュ + LUT | 圧縮トライ | 赤黒木 | ハッシュテーブル |
+| 時間計算量 | O(1) 摧定 | O(キー長) | O(log N) | O(1) 摧定 |
+| メモリレイアウト | 連続配列 | フラット配列（ノード+ラベル+子） | ポインタベース木 | バケット配列 |
+| コンパイル時構築 | ○ | ○ | × | × |
+| SIMD 最適化 | CRC32C, 128bit比較 | SSE2/NEON ラベル比較 | × | × |
+| キー数上限 | なし（64超は二分探索） | 127 | なし | なし |
+
+#### 用途推奨
+
+| 場面 | 推奨 | 理由 |
+|---|---|---|
+| キー数 ≤ 64、短いキー | `frozen_map` | CRC32C + LUT で O(1) 近傍の検索 |
+| 接頭辞の似たキー群（HTTPヘッダ、設定キー） | `frozen_trie_map` | 共通接頭辞圧縮でメモリ削減 + O(キー長) 検索 |
+| 長いキー（30文字以上） | `frozen_map` | ハッシュ計算が効率的 |
+| キー数 > 64 | `frozen_map` | 二分探索でも O(log N) で動作 |
+| ランタイムでキー追加が必要 | `std::unordered_map` | frozen 系は不変 |
+| 順序付き走査が必要 | `std::map` | frozen 系は宣言順 |
+
+#### ベンチマークの再現
+
+```bash
+# ビルド
+cmake --build build --target bench_map_comparison
+
+# 実行（デフォルト 500,000 イテレーション）
+./build/test/bench_map_comparison
+
+# イテレーション数を指定
+./build/test/bench_map_comparison 1000000
+```
+
 ### `parse_to_tuple`（型列文字列 → `std::tuple<...>`）
 
 `parse_to_tuple<Str>()` は、固定文字列で書いた型リストをパースし、
@@ -1511,6 +1593,52 @@ using namespace frozenchars::literals;
 static_assert(wildcard_match<"*.txt"_fs>("readme.txt"));
 static_assert(wildcard_match<"a?c"_fs>("abc"));
 static_assert(!wildcard_match<"a?c"_fs>("abcd"));
+```
+
+### `frozen_regex` / `CTRE` / `wildcard_match` / `wildcards` の選び方
+
+下記は **contains / match（マッチ判定）のみ** のベンチマーク結果です。環境: GCC 16, x86-64, `-O2`。
+
+| パターン | frozen_regex | CTRE | wildcard_match | wildcards (RT) |
+|---|---:|---:|---:|---:|
+| リテラル `'endpoint'` | **0.3 ns** | 1.6 ns | 0.9 ns | 17.3 ns |
+| 選択(4) `'GET\|POST\|PUT\|DELETE'` | **0.3 ns** | 1.6 ns | 23.5 ns | 15.2 ns |
+| 選択(8) `'GET\|...\|TRACE'` | **0.3 ns** | 1.6 ns | 104.9 ns | 12.6 ns |
+| パス(4) `'/api/v1/users\|...'` | **0.3 ns** | 1.7 ns | 67.3 ns | 32.4 ns |
+| 文字クラス `[abc]` | **0.3 ns** | 1.6 ns | 5.6 ns | 8.4 ns |
+| 文字クラス `[a-m]` | 0.6 ns | **1.6 ns** | 6.4 ns | 8.6 ns |
+
+> **单位**: ns/iter（1回のマッチにかかるナノ秒）。小さいほど高速。
+
+#### アーキテクチャ比較
+
+| 項目 | `frozen_regex` | CTRE | `wildcard_match` | `wildcards` |
+|---|---|---|---|---|
+| 評価タイミング | コンパイル時 | コンパイル時 | コンパイル時 | **実行時** |
+| マッチ手法 | 全文字列列挙 + トライ検索 | NFA シミュレーション | 再帰的バックトラッキング | 再帰的バックトラッキング |
+| 対応構文 | リテラル, 選択, 文字クラス, グループ, ドット | **正規表現フルスペック** | ワイルドカード (`*?[]()`) | ワイルドカード (`*?[]()`) |
+| 量指定子 (`+*?{n,m}`) | **非対応** | ○ | × | × |
+| キャプチャグループ | × | ○ | × | × |
+| `std::regex` との互換性 | 部分的 | ○ | × | × |
+| ヘッダのみ | ○ | ○ | ○ | × (FetchContent) |
+
+#### 用途推奨
+
+| 場面 | 推奨 | 理由 |
+|---|---|---|
+| 固定パターンの高速マッチ（HTTPメソッド、路経判定） | `frozen_regex` | 列挙 + トライで O(1) 近傍。選択肢が多くても高速 |
+| 正規表現フルスペックが必要（量指定子、キャプチャ） | CTRE | コンパイル時 NFA。`std::regex` より高速 |
+| ワイルドカード風パターン（ファイル名マッチ） | `wildcard_match` | `*?[]` のみなら十分高速。構文がシンプル |
+| パターンが実行時に決まる | `wildcards` | コンパイル時 NTTP が使えない唯一の選択肢 |
+
+#### ベンチマークの再現
+
+```bash
+# ビルド
+cmake --build build --target bench_pattern_comparison
+
+# 実行（デフォルト 500,000 イテレーション）
+./build/test/bench_pattern_comparison
 ```
 
 ## `frozen_set`（コンパイル時集合）

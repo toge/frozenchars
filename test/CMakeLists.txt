@@ -33,6 +33,14 @@ add_executable(bench_frozen_trie bench_frozen_trie.cpp)
 target_link_libraries(bench_frozen_trie PRIVATE frozenchars::frozenchars)
 target_compile_features(bench_frozen_trie PUBLIC cxx_std_23)
 
+add_executable(bench_map_comparison bench_map_comparison.cpp)
+target_link_libraries(bench_map_comparison PRIVATE frozenchars::frozenchars)
+target_compile_features(bench_map_comparison PUBLIC cxx_std_23)
+
+add_executable(bench_pattern_comparison bench_pattern_comparison.cpp)
+target_link_libraries(bench_pattern_comparison PRIVATE frozenchars::frozenchars wildcards ctre::ctre)
+target_compile_features(bench_pattern_comparison PUBLIC cxx_std_23)
+
 # wildcards ベンチマーク依存: 構成時に取得
 # (https://github.com/zemasoft/wildcards)
 include(FetchContent)
