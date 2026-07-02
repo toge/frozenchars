@@ -1,7 +1,5 @@
 # frozenchars
 
-[![CI](https://github.com/anomalyco/frozenchars/actions/workflows/ci.yml/badge.svg)](https://github.com/anomalyco/frozenchars/actions/workflows/ci.yml)
-
 文字列連結・繰り返し・数値フォーマットをなるべくコンパイル時に行うための型とヘルパー関数を提供する、ヘッダオンリーの C++ ライブラリです。
 
 ## 特徴
