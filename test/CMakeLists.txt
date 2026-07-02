@@ -144,18 +144,21 @@ assert_frozen_map_compile_fail(
   NAME frozen_regex_quantifier
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_quantifier.cpp
   EXPECTED_TEXT "quantifiers not supported"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
 assert_frozen_map_compile_fail(
   NAME frozen_regex_unbalanced_paren
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_unbalanced_paren.cpp
   EXPECTED_TEXT "unbalanced parenthesis"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
 assert_frozen_map_compile_fail(
   NAME frozen_regex_empty_pattern
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_empty_pattern.cpp
   EXPECTED_TEXT "empty pattern"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
 assert_frozen_map_compile_fail(

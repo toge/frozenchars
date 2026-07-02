@@ -21,6 +21,7 @@
 
 #include "frozenchars/string.hpp"
 #include "frozenchars/map.hpp"
+#include "frozenchars/set.hpp"
 
 namespace frozenchars {
 namespace detail::fregex {
@@ -422,12 +423,39 @@ struct frozen_regex {
     return to_frozen_map_impl<V, Values...>(std::make_index_sequence<count_v>{});
   }
 
+  /// @brief 列挙キーをキーとする frozen_set を生成
+  [[nodiscard]] static consteval auto to_frozen_set() {
+    return to_frozen_set_impl(std::make_index_sequence<count_v>{});
+  }
+
+  /// @brief 列挙キーをキー、ラムダの戻り値を値とする frozen_map を生成
+  /// @tparam MapFn 各キー string_view から値を計算する constexpr ラムダ（キャプチャ不可）
+  template <auto MapFn>
+  [[nodiscard]] static consteval auto regex_map() {
+    return regex_map_impl<MapFn>(std::make_index_sequence<count_v>{});
+  }
+
 private:
   template <typename V, V... Values, std::size_t... Is>
   static consteval auto to_frozen_map_impl(std::index_sequence<Is...>)
     -> frozen_map<V, enumerated_keys_[Is]...> {
     return frozen_map<V, enumerated_keys_[Is]...>{
       std::array<V, count_v>{ Values... }
+    };
+  }
+
+  template <std::size_t... Is>
+  static consteval auto to_frozen_set_impl(std::index_sequence<Is...>)
+    -> frozen_set<enumerated_keys_[Is]...> {
+    return {};
+  }
+
+  template <auto MapFn, std::size_t... Is>
+  static consteval auto regex_map_impl(std::index_sequence<Is...>)
+    -> frozen_map<decltype(MapFn(enumerated_keys_[0].sv())), enumerated_keys_[Is]...> {
+    using V = decltype(MapFn(enumerated_keys_[0].sv()));
+    return frozen_map<V, enumerated_keys_[Is]...>{
+      std::array<V, count_v>{ MapFn(enumerated_keys_[Is].sv())... }
     };
   }
 };

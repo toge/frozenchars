@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <string>
 #include <string_view>
 
@@ -194,4 +195,76 @@ TEST_CASE("frozen_regex single space", "[frozen_regex]") {
   REQUIRE(R::contains(" "));
   REQUIRE_FALSE(R::contains(""));
   REQUIRE_FALSE(R::contains("  "));
+}
+
+TEST_CASE("frozen_regex to_frozen_set alternation", "[frozen_regex][frozen_set]") {
+  constexpr auto set =
+    frozen_regex<"GET|POST|PUT|DELETE"_fs>::to_frozen_set();
+  static_assert(set.contains("GET"));
+  static_assert(set.contains("DELETE"));
+  static_assert(set.contains("POST"));
+  static_assert(set.contains("PUT"));
+  static_assert(!set.contains("PATCH"));
+  static_assert(set.size() == 4);
+}
+
+TEST_CASE("frozen_regex to_frozen_set char class", "[frozen_regex][frozen_set]") {
+  constexpr auto set = frozen_regex<"[abc]"_fs>::to_frozen_set();
+  static_assert(set.contains("a"));
+  static_assert(set.contains("b"));
+  static_assert(set.contains("c"));
+  static_assert(!set.contains("d"));
+  static_assert(set.size() == 3);
+}
+
+TEST_CASE("frozen_regex regex_map string length", "[frozen_regex][frozen_map]") {
+  constexpr auto map =
+    frozen_regex<"cat|dog|elephant|hi"_fs>::regex_map<[](std::string_view s) {
+      return s.size();
+    }>();
+  static_assert(map.at("cat") == 3);
+  static_assert(map.at("dog") == 3);
+  static_assert(map.at("elephant") == 8);
+  static_assert(map.at("hi") == 2);
+  REQUIRE(map.at("cat") == 3);
+  REQUIRE(map.at("hi") == 2);
+  REQUIRE(map.find("bird") == map.end());
+}
+
+TEST_CASE("frozen_regex regex_map parse int", "[frozen_regex][frozen_map]") {
+  constexpr auto map =
+    frozen_regex<"100|200|300|400"_fs>::regex_map<[](std::string_view s) {
+      int v{};
+      std::from_chars(s.data(), s.data() + s.size(), v);
+      return v;
+    }>();
+  static_assert(map.at("100") == 100);
+  static_assert(map.at("200") == 200);
+  static_assert(map.at("300") == 300);
+  static_assert(map.at("400") == 400);
+  REQUIRE(map.at("100") == 100);
+  REQUIRE(map.at("400") == 400);
+  REQUIRE(map.find("500") == map.end());
+}
+
+TEST_CASE("frozen_regex regex_map custom type", "[frozen_regex][frozen_map]") {
+  struct wrapper { int value; };
+  constexpr auto map =
+    frozen_regex<"a|b|c"_fs>::regex_map<[](std::string_view) {
+      return wrapper{42};
+    }>();
+  static_assert(map.at("a").value == 42);
+  static_assert(map.at("b").value == 42);
+  static_assert(map.at("c").value == 42);
+  REQUIRE(map.at("a").value == 42);
+}
+
+TEST_CASE("frozen_regex regex_map asserts count_v", "[frozen_regex][frozen_map]") {
+  // to_frozen_map with wrong value count should fail (compile-time test via pattern match)
+  using R = frozen_regex<"x|y"_fs>;
+  static_assert(R::count_v == 2);
+  // regex_map deduces count_v automatically from enumeration — no manual count needed
+  constexpr auto map = R::regex_map<[](std::string_view) { return 1; }>();
+  static_assert(map.at("x") == 1);
+  static_assert(map.at("y") == 1);
 }
