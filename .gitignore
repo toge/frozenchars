@@ -7,4 +7,5 @@ a.out
 *.a
 *.so
 docs/superpowers
-
+.opencode
+.commandcode

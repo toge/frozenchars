@@ -1285,4 +1285,33 @@ template <std::size_t N>
   return result;
 }
 
+/**
+ * @brief Cypher クエリ文字列を minify する
+ *
+ * 文字列リテラル保持、識別子引用保持、コメント除去、不要空白除去、末尾セミコロン除去。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval minify_cypher(FrozenString<N> const& str) noexcept {
+  auto res = FrozenString<N>{};
+  auto len = minify_cypher(str.buffer.data(), res.buffer.data(), N);
+  res.length = len;
+  return res;
+}
+
+/**
+ * @brief Cypher クエリ文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval minify_cypher(char const (&str)[N]) noexcept {
+  return minify_cypher(FrozenString{str});
+}
+
 } // namespace frozenchars

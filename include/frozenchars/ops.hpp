@@ -455,6 +455,20 @@ struct minify_sql_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief Cypher minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_cypher_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_cypher(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_cypher(FrozenString{str});
+  }
+};
+
+/**
  * @brief SQL 予約語を大文字化するパイプ演算子アダプタ
  */
 struct sql_uppercase_keywords_adaptor : pipe_adaptor_base {
@@ -501,6 +515,7 @@ inline constexpr minify_xml_adaptor                  minify_xml{};
 inline constexpr minify_json_adaptor                 minify_json{};
 inline constexpr minify_yaml_adaptor                 minify_yaml{};
 inline constexpr minify_sql_adaptor                  minify_sql{};
+inline constexpr minify_cypher_adaptor               minify_cypher{};
 inline constexpr sql_uppercase_keywords_adaptor      sql_uppercase_keywords{};
 inline constexpr remove_leading_spaces_adaptor<>     remove_leading_spaces{};
 inline constexpr remove_trailing_spaces_adaptor<>    remove_trailing_spaces{};
