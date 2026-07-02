@@ -4,9 +4,16 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <ranges>
 #include <span>
 #include <string_view>
+
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#elif defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
 
 #include "string.hpp"
 
@@ -281,10 +288,87 @@ public:
   static constexpr auto const& k_labels = k_storage.labels;
   static constexpr auto const& k_children = k_storage.children;
 
+  /// @brief 子ノード数 > 8 のノードがある場合に LUT を使用する
+  static constexpr bool k_use_child_lut = [] {
+    for (auto const& node : k_nodes) {
+      if (node.child_count > 8) return true;
+    }
+    return false;
+  }();
+
+  /// @brief 子ノード LUT: (node_idx * 256 + unsigned char) -> child_idx (0xFF = none)
+  static constexpr auto k_child_lut = [] {
+    if constexpr (k_use_child_lut) {
+      std::array<std::uint8_t, k_max_nodes * 256> lut{};
+      lut.fill(0xFF);
+      for (auto ni = 0uz; ni < k_max_nodes; ++ni) {
+        auto const& node = k_nodes[ni];
+        if (node.child_count == 0) continue;
+        for (auto ci = 0; ci < static_cast<int>(node.child_count); ++ci) {
+          auto const child_idx = k_children[static_cast<std::size_t>(
+            static_cast<std::uint8_t>(node.first_child + static_cast<std::uint8_t>(ci)))];
+          auto const first_char = k_labels[static_cast<std::size_t>(
+            k_nodes[static_cast<std::size_t>(child_idx)].label_offset)];
+          lut[ni * 256 + static_cast<unsigned char>(first_char)] =
+            static_cast<std::uint8_t>(child_idx);
+        }
+      }
+      return lut;
+    } else {
+      return std::array<std::uint8_t, 1>{0};
+    }
+  }();
+
+  /// @brief 高速ラベル比較（SIMD / バイト単位フォールバック）
+  [[nodiscard]] static constexpr auto
+  compare_label(std::string_view key, std::size_t pos,
+                std::uint16_t label_offset, std::uint8_t label_length) noexcept -> bool {
+#if defined(__SSE2__)
+    if (!std::is_constant_evaluated() && label_length >= 16) {
+      auto const* kp = key.data() + pos;
+      auto const* lp = k_labels.data() + label_offset;
+      auto i = 0;
+      for (; i + 16 <= static_cast<int>(label_length); i += 16) {
+        auto vk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kp + i));
+        auto vl = _mm_loadu_si128(reinterpret_cast<const __m128i*>(lp + i));
+        auto cmp = _mm_cmpeq_epi8(vk, vl);
+        if (_mm_movemask_epi8(cmp) != 0xFFFF) return false;
+      }
+      for (; i < static_cast<int>(label_length); ++i) {
+        if (kp[i] != lp[i]) return false;
+      }
+      return true;
+    }
+#elif defined(__ARM_NEON)
+    if (!std::is_constant_evaluated() && label_length >= 16) {
+      auto const* kp = key.data() + pos;
+      auto const* lp = k_labels.data() + label_offset;
+      auto i = 0;
+      for (; i + 16 <= static_cast<int>(label_length); i += 16) {
+        auto vk = vld1q_u8(reinterpret_cast<const uint8_t*>(kp + i));
+        auto vl = vld1q_u8(reinterpret_cast<const uint8_t*>(lp + i));
+        auto cmp = vceqq_u8(vk, vl);
+        if (vminvq_u8(cmp) != 0xFF) return false;
+      }
+      for (; i < static_cast<int>(label_length); ++i) {
+        if (kp[i] != lp[i]) return false;
+      }
+      return true;
+    }
+#endif
+    for (auto i = 0; i < static_cast<int>(label_length); ++i) {
+      if (key[pos + static_cast<std::size_t>(i)] !=
+          k_labels[static_cast<std::size_t>(label_offset) + static_cast<std::size_t>(i)]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**
    * @brief キーを検索する
    * @param key 検索キー
-   * @return 見つかったキーの値インデックス、見つからなければ npos
+   * @return 見つかったキーの値インデックス、見つからなければ NPOS
    */
   [[nodiscard]] static constexpr auto find(std::string_view key) noexcept -> std::size_t {
     auto pos = 0uz;
@@ -293,46 +377,51 @@ public:
     while (true) {
       auto const& node = k_nodes[static_cast<std::size_t>(node_idx)];
 
-      // ラベルをキーの該当部分と比較
+      // ラベルをキーの該当部分と比較（SIMD 最適化パス）
       auto const remaining = key.size() - pos;
       if (remaining < static_cast<std::size_t>(node.label_length)) {
         return NPOS;
       }
-      for (auto i = 0; i < static_cast<int>(node.label_length); ++i) {
-        if (key[pos + static_cast<std::size_t>(i)] !=
-            k_labels[static_cast<std::size_t>(node.label_offset) +
-                     static_cast<std::size_t>(i)]) {
-          return NPOS;
-        }
+      if (!compare_label(key, pos, node.label_offset, node.label_length)) {
+        return NPOS;
       }
       pos += static_cast<std::size_t>(node.label_length);
 
       if (pos == key.size()) {
-        if (node.value_index >= 0) {
-          return static_cast<std::size_t>(node.value_index);
-        }
-        return NPOS;
+        return node.value_index >= 0
+          ? static_cast<std::size_t>(node.value_index)
+          : NPOS;
       }
 
       if (node.child_count == 0) {
         return NPOS;
       }
 
-      // 次の文字で子ノードを探索（線形走査、child_count は小さい想定）
+      // 子ノード探索: LUT（子数 > 8）or 線形走査
       auto const next_char = key[pos];
-      auto const child_begin = k_children.data() + node.first_child;
-      auto const child_end = child_begin + node.child_count;
-      bool found = false;
-      for (auto it = child_begin; it != child_end; ++it) {
-        auto const& child = k_nodes[*it];
-        if (k_labels[child.label_offset] == next_char) {
-          node_idx = static_cast<int>(*it);
-          found = true;
-          break;
+      if constexpr (k_use_child_lut) {
+        auto const child_idx = k_child_lut[
+          static_cast<std::size_t>(node_idx) * 256 +
+          static_cast<unsigned char>(next_char)];
+        if (child_idx != 0xFF) {
+          node_idx = static_cast<int>(child_idx);
+          ++pos;
+          continue;
         }
-      }
-      if (!found) {
         return NPOS;
+      } else {
+        auto const child_begin = k_children.data() + node.first_child;
+        auto const child_end = child_begin + node.child_count;
+        bool found = false;
+        for (auto it = child_begin; it != child_end; ++it) {
+          auto const& child = k_nodes[*it];
+          if (k_labels[child.label_offset] == next_char) {
+            node_idx = static_cast<int>(*it);
+            found = true;
+            break;
+          }
+        }
+        if (!found) return NPOS;
       }
     }
   }
