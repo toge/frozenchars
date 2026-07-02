@@ -187,3 +187,8 @@ add_executable(example_parse_to_tuple_use_cases ../example_parse_to_tuple_use_ca
 target_compile_features(example_parse_to_tuple_use_cases PRIVATE cxx_std_23)
 target_link_libraries(example_parse_to_tuple_use_cases PRIVATE frozenchars::frozenchars)
 add_test(NAME example_parse_to_tuple_use_cases COMMAND example_parse_to_tuple_use_cases)
+
+add_executable(example_frozen_format ../example_frozen_format.cpp)
+target_compile_features(example_frozen_format PRIVATE cxx_std_23)
+target_link_libraries(example_frozen_format PRIVATE frozenchars::frozenchars)
+add_test(NAME example_frozen_format COMMAND example_frozen_format)

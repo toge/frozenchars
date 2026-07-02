@@ -24,6 +24,7 @@
 #include "frozenchars/trie_set.hpp"
 #include "frozenchars/trie_map.hpp"
 #include "frozenchars/frozen_regex.hpp"
+#include "frozenchars/frozen_format.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
 #include "frozenchars/detail/glaze_detect.hpp"
 #include "frozenchars/json/compress.hpp"
