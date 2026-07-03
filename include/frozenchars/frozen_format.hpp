@@ -297,7 +297,7 @@ consteval auto format_float_general(Buf& buf, size_t pos, double value, int prec
 }
 
 template <typename Buf>
-consteval auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode) noexcept -> size_t {
+constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode) noexcept -> size_t {
   if (is_negative) { buf[pos] = '-'; return 1; }
   if (sign_mode == '+') { buf[pos] = '+'; return 1; }
   if (sign_mode == ' ') { buf[pos] = ' '; return 1; }
