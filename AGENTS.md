@@ -17,7 +17,7 @@
 - vcpkg の実体パスは `~/vm/vcpkg`（`build.sh:30`）。`conanfile.py` は存在しない（conan 分岐は build.sh 内の死コード）。
 - 1ファイルだけ手元で動かす:
   ```bash
-  g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example.cpp && ./a.out
+  g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a.out
   ```
 - テストフレームワーク: Catch2 v3。全テストが `all_test` 1個の実行ファイルにまとまる（`-r junit` で CTest 実行）。
 - `test_split_(direct|logic|tester|v_debug).cpp` の4ファイルは `all_test` から除外。手動デバッグ用。
@@ -48,7 +48,7 @@
 
 - README: `README.md`（和文、機能網羅）
 - アンブレラヘッダ: `include/frozenchars.hpp`
-- 最小サンプル: `example.cpp`、`example_split.cpp`、`example_frozen_map_use_cases.cpp`、`example_parse_to_tuple_use_cases.cpp`
+- 最小サンプル: `example/example.cpp`、`example/example_split.cpp`、`example/example_frozen_map_use_cases.cpp`、`example/example_parse_to_tuple_use_cases.cpp`
 - コンパイル時マップ: `include/frozenchars/map.hpp`、`test/test_frozen_map.cpp`
 - 失敗系テスト機構: `test/compile_fail/run_compile_fail.cmake`
 - 命名・スタイル: `.clang-format`、`.clang-tidy`、`.editorconfig`

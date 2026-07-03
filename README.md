@@ -96,10 +96,10 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 
 ### 最小コンパイル例（1コマンド）
 
-`example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
+`example/example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
 
 ```bash
-g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example.cpp && ./a.out
+g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a.out
 ```
 
 > **凡例**: 以下の各節のコード例では、`#include "frozenchars.hpp"` と
@@ -161,14 +161,14 @@ auto constexpr r = "  Hello, World!  "_fs
 
 ## サンプルコード
 
-リポジトリには以下のサンプルファイルが用意されています。まずは `example.cpp` を動かしてみてください。
+リポジトリには以下のサンプルファイルが用意されています。まずは `example/example.cpp` を動かしてみてください。
 
 | ファイル | 内容 | 実行コマンド |
 |---|---|---|
-| `example.cpp` | 連結・繰り返し・書式など基本操作 | `g++ -std=c++23 -I include example.cpp && ./a.out` |
-| `example_split.cpp` | 文字列分割の応用 | `g++ -std=c++23 -I include example_split.cpp && ./a.out` |
-| `example_frozen_map_use_cases.cpp` | コンパイル時マップの利用例 | `g++ -std=c++23 -I include example_frozen_map_use_cases.cpp && ./a.out` |
-| `example_parse_to_tuple_use_cases.cpp` | 型列パース→タプルの利用例 | `g++ -std=c++23 -I include example_parse_to_tuple_use_cases.cpp && ./a.out` |
+| `example/example.cpp` | 連結・繰り返し・書式など基本操作 | `g++ -std=c++23 -I include example/example.cpp && ./a.out` |
+| `example/example_split.cpp` | 文字列分割の応用 | `g++ -std=c++23 -I include example/example_split.cpp && ./a.out` |
+| `example/example_frozen_map_use_cases.cpp` | コンパイル時マップの利用例 | `g++ -std=c++23 -I include example/example_frozen_map_use_cases.cpp && ./a.out` |
+| `example/example_parse_to_tuple_use_cases.cpp` | 型列パース→タプルの利用例 | `g++ -std=c++23 -I include example/example_parse_to_tuple_use_cases.cpp && ./a.out` |
 
 ## `repeat`（繰り返し）
 
