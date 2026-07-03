@@ -260,6 +260,18 @@ TEST_CASE("minify_cypher - エッジケース", "[minifier]")
     auto constexpr result = minify("RETURN   \n\n  n");
     REQUIRE(result == "RETURN n");
   }
+
+  SECTION("RETURN a.* の後ろはスペース保持")
+  {
+    auto constexpr result = minify("RETURN a.* ORDER BY a.id");
+    REQUIRE(result == "RETURN a.* ORDER BY a.id");
+  }
+
+  SECTION("RETURN a.* の後ろに改行がある場合もスペース保持")
+  {
+    auto constexpr result = minify("  RETURN\n    a.*\n  ORDER BY\n    a.id");
+    REQUIRE(result == "RETURN a.* ORDER BY a.id");
+  }
 }
 
 TEST_CASE("minify_cypher - 文字列と数値の混在 RETURN", "[minifier]")
