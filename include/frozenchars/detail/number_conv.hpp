@@ -16,7 +16,7 @@ namespace frozenchars::detail {
  * @param v 変換する整数
  * @return auto consteval 変換された文字列とその長さのペア
  */
-[[nodiscard]] auto consteval to_dec_chars(long long v) noexcept {
+[[nodiscard]] auto constexpr to_dec_chars(long long v) noexcept {
   auto buffer = std::array<char, 21>{};
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v);
   if (ec != std::errc{}) {
@@ -31,7 +31,7 @@ namespace frozenchars::detail {
  * @param value 変換する整数
  * @return auto 変換文字列とその長さのペア
  */
-[[nodiscard]] auto consteval to_hex_chars(long long value) noexcept {
+[[nodiscard]] auto constexpr to_hex_chars(long long value) noexcept {
   auto buffer = std::array<char, 17>{};
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(),
                                        static_cast<unsigned long long>(value), 16);
@@ -47,7 +47,7 @@ namespace frozenchars::detail {
  * @param value 変換する整数
  * @return auto 変換文字列とその長さのペア
  */
-[[nodiscard]] auto consteval to_bin_chars(long long value) noexcept {
+[[nodiscard]] auto constexpr to_bin_chars(long long value) noexcept {
   auto buffer = std::array<char, 65>{};
   auto v = static_cast<unsigned long long>(value);
   if (v == 0) {
@@ -70,7 +70,7 @@ namespace frozenchars::detail {
  * @param value 変換する整数
  * @return auto 変換された文字列とその長さのペア
  */
-[[nodiscard]] auto consteval to_oct_chars(long long value) noexcept {
+[[nodiscard]] auto constexpr to_oct_chars(long long value) noexcept {
   auto buffer = std::array<char, 23>{};
   auto v = static_cast<unsigned long long>(value);
   if (v == 0) {
@@ -94,7 +94,7 @@ namespace frozenchars::detail {
  * @param precision 小数点以下の桁数
  * @return auto 変換文字列とその長さのペア
  */
-[[nodiscard]] auto consteval to_float_chars(double value, int const precision) noexcept {
+[[nodiscard]] auto constexpr to_float_chars(double value, int const precision) noexcept {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
 
