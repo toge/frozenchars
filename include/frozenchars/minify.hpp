@@ -1088,6 +1088,12 @@ constexpr bool isIdentChar(char c) noexcept
          (c >= '0' && c <= '9') || c == '_';
 }
 
+/// @brief 文字列リテラル・リスト・関数呼び出しなどの終端文字かどうかを判定する
+constexpr bool isCloseChar(char c) noexcept
+{
+  return c == '\'' || c == '"' || c == '`' || c == ')' || c == ']' || c == '}';
+}
+
 /// @brief Cypher ミニファイ用の字句解析状態
 enum class minify_state : unsigned char {
   normal,        ///< 通常コード
@@ -1108,6 +1114,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     return 0;
   }
 
+  using detail::isCloseChar;
   using detail::isIdentChar;
   using detail::minify_state;
 
@@ -1140,8 +1147,13 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
         pending_space = true;
         ++i;
       } else {
-        if (pending_space && isIdentChar(last_out) && isIdentChar(c)) {
-          write_char(' ');
+        if (pending_space) {
+          bool const id_to_id    = isIdentChar(last_out) && isIdentChar(c);
+          bool const id_to_q     = isIdentChar(last_out) && (c == '\'' || c == '"' || c == '`');
+          bool const close_to_id = isCloseChar(last_out) && isIdentChar(c);
+          if (id_to_id || id_to_q || close_to_id) {
+            write_char(' ');
+          }
         }
         pending_space = false;
 

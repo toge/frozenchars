@@ -22,26 +22,26 @@ using namespace frozenchars::literals;
 namespace {
 
 // 1. 基本: 括弧・スペース除去、識別子間スペース保持
-static_assert(minify("MATCH (n) RETURN n") == "MATCH(n)RETURN n");
+static_assert(minify("MATCH (n) RETURN n") == "MATCH(n) RETURN n");
 
 // 2a. 行コメント除去
-static_assert(minify("MATCH (n) // comment\nRETURN n") == "MATCH(n)RETURN n");
+static_assert(minify("MATCH (n) // comment\nRETURN n") == "MATCH(n) RETURN n");
 
 // 2b. ブロックコメント除去
-static_assert(minify("MATCH /* block */ (n) RETURN n") == "MATCH(n)RETURN n");
+static_assert(minify("MATCH /* block */ (n) RETURN n") == "MATCH(n) RETURN n");
 
 // 2c. 複数行ブロックコメント除去
 static_assert(minify("MATCH /*\n  multi\n  line\n*/ (n) RETURN n") ==
-              "MATCH(n)RETURN n");
+              "MATCH(n) RETURN n");
 
 // 3. 文字列内のコメント記号は除去しない
-static_assert(minify("RETURN '//not a comment'") == "RETURN'//not a comment'");
+static_assert(minify("RETURN '//not a comment'") == "RETURN '//not a comment'");
 static_assert(minify("RETURN '/* also not */removed'") ==
-              "RETURN'/* also not */removed'");
+              "RETURN '/* also not */removed'");
 
 // 4. バッククォート識別子（空白・改行も含めてそのまま保存）
 static_assert(minify("MATCH (`my node`) RETURN `my node`") ==
-              "MATCH(`my node`)RETURN`my node`");
+              "MATCH(`my node`) RETURN `my node`");
 
 // 5. 識別子間スペース挿入の各ケース
 static_assert(minify("WHERE x = 1") == "WHERE x=1");
@@ -51,15 +51,15 @@ static_assert(minify("RETURN 1") == "RETURN 1");
 static_assert(minify("RETURN 1;") == "RETURN 1");
 
 // 7. エスケープシーケンス: \' はそのまま維持
-static_assert(minify("RETURN 'It\\'s fine'") == "RETURN'It\\'s fine'");
+static_assert(minify("RETURN 'It\\'s fine'") == "RETURN 'It\\'s fine'");
 
 // 8. 複数文: 中間セミコロンは保持、末尾には ; なし
 static_assert(minify("MATCH (n) RETURN n; MATCH (m) RETURN m") ==
-              "MATCH(n)RETURN n;MATCH(m)RETURN m");
+              "MATCH(n) RETURN n;MATCH(m) RETURN m");
 
 // 9. 複数文末尾セミコロン: 最後の1つのみ除去
 static_assert(minify("MATCH (n) RETURN n; MATCH (m) RETURN m;") ==
-              "MATCH(n)RETURN n;MATCH(m)RETURN m");
+              "MATCH(n) RETURN n;MATCH(m) RETURN m");
 
 // 10. 連続スペース・タブ・改行は1スペースに集約（識別子間のみ）
 static_assert(minify("MATCH   \t  (n)") == "MATCH(n)");
@@ -69,7 +69,7 @@ static_assert(minify("RETURN   \n\n  n") == "RETURN n");
 static_assert(minify("WHERE // eq\nn = 1") == "WHERE n=1");
 
 // 12. ダブルクォート文字列も保存
-static_assert(minify("RETURN \"hello world\"") == "RETURN\"hello world\"");
+static_assert(minify("RETURN \"hello world\"") == "RETURN \"hello world\"");
 
 // 13. 識別子同士が記号で区切られる場合はスペース不要
 static_assert(minify("n.name = m.name") == "n.name=m.name");
@@ -91,6 +91,18 @@ static_assert(minify("   \t\n  ") == "");
 // 18. バッククォート識別子内のコメント記号も保存
 static_assert(minify("`foo // bar`") == "`foo // bar`");
 
+// 19. 文字列と数値の混在 RETURN（識別子→文字列、文字列→識別子などのスペース保持）
+static_assert(minify("RETURN 'Hello' + ' ' + 'World' AS greeting, 42 AS answer, 3.14 AS pi") ==
+              "RETURN 'Hello'+' '+'World' AS greeting,42 AS answer,3.14 AS pi");
+
+// 20. 様々な型の式を RETURN で並べる（閉じ括弧→識別子のスペース保持）
+static_assert(minify(
+  "RETURN true AS bool_val, 42 AS int_val, 3.14159 AS float_val,"
+  " 'text' AS str_val, [1,2,3] AS list_val, date('2024-01-15') AS date_val") ==
+  "RETURN true AS bool_val,42 AS int_val,3.14159 AS float_val,"
+  "'text' AS str_val,[1,2,3] AS list_val,"
+  "date('2024-01-15') AS date_val");
+
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -102,7 +114,7 @@ TEST_CASE("minify_cypher - 基本的なスペース・括弧の除去", "[minifi
   SECTION("MATCH/RETURN の基本形")
   {
     auto constexpr result = minify("MATCH (n) RETURN n");
-    REQUIRE(result == "MATCH(n)RETURN n");
+    REQUIRE(result == "MATCH(n) RETURN n");
   }
 
   SECTION("WHERE 句のスペース保持とイコール前後の除去")
@@ -123,19 +135,19 @@ TEST_CASE("minify_cypher - コメント除去", "[minifier]")
   SECTION("行コメント")
   {
     auto constexpr result = minify("MATCH (n) // comment\nRETURN n");
-    REQUIRE(result == "MATCH(n)RETURN n");
+    REQUIRE(result == "MATCH(n) RETURN n");
   }
 
   SECTION("ブロックコメント")
   {
     auto constexpr result = minify("MATCH /* block */ (n) RETURN n");
-    REQUIRE(result == "MATCH(n)RETURN n");
+    REQUIRE(result == "MATCH(n) RETURN n");
   }
 
   SECTION("複数行ブロックコメント")
   {
     auto constexpr result = minify("MATCH /*\n  multi\n  line\n*/ (n) RETURN n");
-    REQUIRE(result == "MATCH(n)RETURN n");
+    REQUIRE(result == "MATCH(n) RETURN n");
   }
 
   SECTION("ブロックコメントが識別子間: スペース補完")
@@ -156,31 +168,31 @@ TEST_CASE("minify_cypher - 文字列リテラル保存", "[minifier]")
   SECTION("文字列内の行コメント記号は除去しない")
   {
     auto constexpr result = minify("RETURN '//not a comment'");
-    REQUIRE(result == "RETURN'//not a comment'");
+    REQUIRE(result == "RETURN '//not a comment'");
   }
 
   SECTION("文字列内のブロックコメント記号は除去しない")
   {
     auto constexpr result = minify("RETURN '/* also not */removed'");
-    REQUIRE(result == "RETURN'/* also not */removed'");
+    REQUIRE(result == "RETURN '/* also not */removed'");
   }
 
   SECTION("エスケープされたシングルクォート")
   {
     auto constexpr result = minify("RETURN 'It\\'s fine'");
-    REQUIRE(result == "RETURN'It\\'s fine'");
+    REQUIRE(result == "RETURN 'It\\'s fine'");
   }
 
   SECTION("ダブルクォート文字列")
   {
     auto constexpr result = minify("RETURN \"hello world\"");
-    REQUIRE(result == "RETURN\"hello world\"");
+    REQUIRE(result == "RETURN \"hello world\"");
   }
 
   SECTION("文字列内の空白・改行はそのまま保存")
   {
     auto constexpr result = minify("RETURN 'line1\nline2'");
-    REQUIRE(result == "RETURN'line1\nline2'");
+    REQUIRE(result == "RETURN 'line1\nline2'");
   }
 }
 
@@ -190,7 +202,7 @@ TEST_CASE("minify_cypher - バッククォート識別子保存", "[minifier]")
   {
     auto constexpr result =
         minify("MATCH (`my node`) RETURN `my node`");
-    REQUIRE(result == "MATCH(`my node`)RETURN`my node`");
+    REQUIRE(result == "MATCH(`my node`) RETURN `my node`");
   }
 
   SECTION("バッククォート識別子内のコメント記号は除去しない")
@@ -212,14 +224,14 @@ TEST_CASE("minify_cypher - セミコロン処理", "[minifier]")
   {
     auto constexpr result =
         minify("MATCH (n) RETURN n; MATCH (m) RETURN m");
-    REQUIRE(result == "MATCH(n)RETURN n;MATCH(m)RETURN m");
+    REQUIRE(result == "MATCH(n) RETURN n;MATCH(m) RETURN m");
   }
 
   SECTION("複数文: 末尾セミコロンのみ除去")
   {
     auto constexpr result =
         minify("MATCH (n) RETURN n; MATCH (m) RETURN m;");
-    REQUIRE(result == "MATCH(n)RETURN n;MATCH(m)RETURN m");
+    REQUIRE(result == "MATCH(n) RETURN n;MATCH(m) RETURN m");
   }
 }
 
@@ -250,6 +262,34 @@ TEST_CASE("minify_cypher - エッジケース", "[minifier]")
   }
 }
 
+TEST_CASE("minify_cypher - 文字列と数値の混在 RETURN", "[minifier]")
+{
+  SECTION("文字列の連結と数値")
+  {
+    // 複数の式を RETURN で並べる: 文字列連結 + 数値
+    auto constexpr result = minify(
+      "RETURN 'Hello' + ' ' + 'World' AS greeting\n"
+      ", 42 AS answer\n"
+      ", 3.14 AS pi");
+    REQUIRE(result == "RETURN 'Hello'+' '+'World' AS greeting,42 AS answer,3.14 AS pi");
+  }
+
+  SECTION("様々な型の式を RETURN で並べる")
+  {
+    auto constexpr result = minify(
+      "RETURN true AS bool_val\n"
+      ", 42 AS int_val\n"
+      ", 3.14159 AS float_val\n"
+      ", 'text' AS str_val\n"
+      ", [1,2,3] AS list_val\n"
+      ", date('2024-01-15') AS date_val");
+    REQUIRE(result ==
+            "RETURN true AS bool_val,42 AS int_val,3.14159 AS float_val,"
+            "'text' AS str_val,[1,2,3] AS list_val,"
+            "date('2024-01-15') AS date_val");
+  }
+}
+
 TEST_CASE("minify_cypher - 実行時バッファ版", "[minifier]")
 {
   SECTION("通常の変換")
@@ -257,7 +297,7 @@ TEST_CASE("minify_cypher - 実行時バッファ版", "[minifier]")
     char const *input = "MATCH (n) RETURN n";
     std::array<char, 64> buf{};
     auto const len = minify_cypher(input, buf.data(), buf.size());
-    REQUIRE(std::string_view(buf.data(), len) == "MATCH(n)RETURN n");
+    REQUIRE(std::string_view(buf.data(), len) == "MATCH(n) RETURN n");
   }
 
   SECTION("容量 0 は 0 を返す")
@@ -571,8 +611,8 @@ TEST_CASE("minify_cypher - ops パイプ演算子", "[minifier]")
   {
     auto constexpr result = "MATCH (n) // comment\nRETURN n"_fs
       | frozenchars::ops::minify_cypher;
-    static_assert(result.sv() == "MATCH(n)RETURN n");
-    REQUIRE(result.sv() == "MATCH(n)RETURN n");
+    static_assert(result.sv() == "MATCH(n) RETURN n");
+    REQUIRE(result.sv() == "MATCH(n) RETURN n");
   }
 
   SECTION("空文字列")
@@ -594,8 +634,8 @@ TEST_CASE("minify_cypher - ops パイプ演算子", "[minifier]")
     auto constexpr result = "  MATCH (n) RETURN n  "_fs
       | frozenchars::ops::trim
       | frozenchars::ops::minify_cypher;
-    static_assert(result.sv() == "MATCH(n)RETURN n");
-    REQUIRE(result.sv() == "MATCH(n)RETURN n");
+    static_assert(result.sv() == "MATCH(n) RETURN n");
+    REQUIRE(result.sv() == "MATCH(n) RETURN n");
   }
 }
 
