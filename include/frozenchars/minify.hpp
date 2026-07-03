@@ -79,7 +79,7 @@ namespace detail {
   }
 
   /**
-   * @brief 布爾属性名か判定する
+   * @brief boolean属性名か判定する
    */
   auto constexpr is_boolean_attribute(char const* name, size_t len) noexcept {
     // oxfmt-ignore
@@ -240,14 +240,16 @@ namespace detail {
    */
   template <size_t N>
   [[nodiscard]] auto consteval minify_markup(FrozenString<N> const& str, minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
+    // 出力バッファ位置・入力位置・クォート状態・空白遅延フラグの初期化
     auto res           = FrozenString<N>{};
     auto offset        = 0uz;
     auto i             = 0uz;
     auto in_quote      = '\0';
     auto pending_space = false;
 
+    // 入力全体を1文字ずつ走査し、コメント除去・空白正規化・属性最適化を施しながら出力バッファに詰める
     while (i < str.length) {
-      // HTML/XML コメントブロックをスキップする
+      // HTML/XML コメント <!-- ... --> をブロックごとスキップする
       if (in_quote == '\0' && i + 3 < str.length && str.buffer[i] == '<' && str.buffer[i + 1] == '!' && str.buffer[i + 2] == '-' && str.buffer[i + 3] == '-') {
         i += 4;
         while (i + 2 < str.length && !(str.buffer[i] == '-' && str.buffer[i + 1] == '-' && str.buffer[i + 2] == '>')) {
@@ -293,7 +295,7 @@ namespace detail {
         }
         pending_space = false;
 
-        // 閉じタグの省略: </tag> のうち省略可能なタグをスキップ
+        // 閉じタグ処理: void 要素の閉じタグは常に除去し、省略可能なら minify オプションに応じて除去する
         if (i + 1 < str.length && str.buffer[i + 1] == '/') {
           // タグ名を読み取る
           auto tag_start = i + 2;
@@ -327,18 +329,18 @@ namespace detail {
           continue;
         }
 
-        // 開いたタグ: 属性の最適化を行う
-        if (i + 1 < str.length && str.buffer[i + 1] != '/' && str.buffer[i + 1] != '!' && str.buffer[i + 1] != '?') {
-          // タグ名を読み取る
-          auto tag_start = i + 1;
-          auto tag_end   = tag_start;
-          while (tag_end < str.length && str.buffer[tag_end] != '>' && !is_markup_space(str.buffer[tag_end])) {
-            ++tag_end;
-          }
-          auto const tag_len = tag_end - tag_start;
+          // 開いたタグ: 属性の最適化を行う
+          if (i + 1 < str.length && str.buffer[i + 1] != '/' && str.buffer[i + 1] != '!' && str.buffer[i + 1] != '?') {
+            // タグ名を読み取る（'<' の直後から空白または '>' までがタグ名）
+            auto tag_start = i + 1;
+            auto tag_end   = tag_start;
+            while (tag_end < str.length && str.buffer[tag_end] != '>' && !is_markup_space(str.buffer[tag_end])) {
+              ++tag_end;
+            }
+            auto const tag_len = tag_end - tag_start;
 
-          // タグの閉じ '>' までスキャンして属性を処理する
-          auto pos = tag_end;
+            // タグの閉じ '>' までスキャンし、タグ名・属性を順次処理する
+            auto pos = tag_end;
           // '<' とタグ名を出力
           res.buffer[offset++] = '<';
           for (auto k = tag_start; k < tag_end; ++k) {
@@ -365,7 +367,7 @@ namespace detail {
               continue;
             }
 
-            // '/' (自己閉じ) ならそのまま出力
+            // '/' (自己閉じタグ) なら空白を挟んでそのまま出力する
             if (str.buffer[pos] == '/') {
               if (offset > 0 && res.buffer[offset - 1] != ' ' && res.buffer[offset - 1] != '<') {
                 res.buffer[offset++] = ' ';
@@ -375,9 +377,9 @@ namespace detail {
               continue;
             }
 
-            // 属性名の先頭: アルファベット, '_', ':'
+            // 属性名の先頭（アルファベット・'_'・':'）を検出したら、名前・'='・値の3つ組を解析する
             if ((str.buffer[pos] >= 'a' && str.buffer[pos] <= 'z') || (str.buffer[pos] >= 'A' && str.buffer[pos] <= 'Z') || str.buffer[pos] == '_' || str.buffer[pos] == ':') {
-              // 属性名を読み取る
+              // '=' または空白または '>' に達するまでが属性名
               auto attr_start = pos;
               while (pos < str.length && str.buffer[pos] != '=' && str.buffer[pos] != '>' && !is_markup_space(str.buffer[pos])) {
                 ++pos;
@@ -391,11 +393,12 @@ namespace detail {
               }
 
               if (eq_pos < str.length && str.buffer[eq_pos] == '=') {
-                // 属性値を読み取る
+                // '=' 以降の空白を飛ばして属性値の開始位置を特定する
                 auto val_start = eq_pos + 1;
                 while (val_start < str.length && is_markup_space(str.buffer[val_start])) {
                   ++val_start;
                 }
+                // クォート付き値（"..." または '...'）か裸の値かを判定し、値範囲を切り出す
                 auto val_quote = '\0';
                 auto val_end   = val_start;
                 if (val_start < str.length && (str.buffer[val_start] == '"' || str.buffer[val_start] == '\'')) {
@@ -412,6 +415,7 @@ namespace detail {
                     ++val_end;
                   }
                 }
+                // 引用符を除いた値本体の範囲と長さを計算する
                 auto const val_content_start = val_quote != '\0' ? val_start + 1 : val_start;
                 auto const val_content_end   = val_quote != '\0' ? val_end - 1 : val_end;
                 auto const val_content_len   = val_content_end - val_content_start;
@@ -506,6 +510,7 @@ namespace detail {
         continue;
       }
 
+      // テキスト中の '>' は直前に空白があれば削ってから出力する
       if (c == '>') {
         if (offset > 0 && res.buffer[offset - 1] == ' ') {
           --offset;
@@ -515,13 +520,14 @@ namespace detail {
         continue;
       }
 
+      // 空白文字は遅延フラグを立ててスキップ（実際の出力は次回の非空白文字で判断）
       if (is_markup_space(c)) {
         pending_space = true;
         ++i;
         continue;
       }
 
-      // 連続空白は1つに集約し、記号の前後には不要空白を入れない
+      // 遅延された空白を出力するか判定: 前後が記号やタグ境界でなければ1文字だけ出力する
       if (pending_space) {
         auto const prev              = offset == 0 ? '\0' : res.buffer[offset - 1];
         auto const should_emit_space = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/';
@@ -534,6 +540,7 @@ namespace detail {
       ++i;
     }
 
+    // 末尾の余分な空白を除去して終端し、圧縮結果を返す
     if (offset > 0 && res.buffer[offset - 1] == ' ') {
       --offset;
     }
@@ -622,7 +629,7 @@ template <size_t N>
 
   while (i < str.length) {
     auto const c = str.buffer[i];
-    // JSON 文字列内ではエスケープ状態を維持しつつそのままコピーする
+    // 文字列リテラル内部: エスケープ状態を管理しながらそのまま出力バッファにコピーする
     if (in_string) {
       res.buffer[offset++] = c;
       if (escaped) {
@@ -636,6 +643,7 @@ template <size_t N>
       continue;
     }
 
+    // 文字列リテラルの開始: 引用符を出力して文字列モードに移行する
     if (c == '"') {
       in_string            = true;
       res.buffer[offset++] = c;
@@ -643,7 +651,7 @@ template <size_t N>
       continue;
     }
 
-    // コメントと空白は文字列外でのみ削除する
+    // JSON トップレベルの行コメント // およびブロックコメント /* */ を除去する
     if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '/') {
       i += 2;
       while (i < str.length && str.buffer[i] != '\n') {
@@ -663,15 +671,18 @@ template <size_t N>
       continue;
     }
 
+    // トップレベルの空白文字はすべてスキップする
     if (detail::is_any_whitespace(c)) {
       ++i;
       continue;
     }
 
+    // コメント・空白以外のトークン（構造文字・数値・キーワード）はそのまま出力する
     res.buffer[offset++] = c;
     ++i;
   }
 
+  // 末尾に null 終端を設定し圧縮後の長さを確定する
   res.buffer[offset] = '\0';
   res.length         = offset;
   return res;
@@ -703,6 +714,7 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
+  // 出力バッファ・行先頭位置・最終非空白位置・クォート状態の初期化
   auto res            = FrozenString<N>{};
   auto offset         = 0uz;
   auto line_start     = 0uz;
@@ -711,9 +723,10 @@ template <size_t N>
   auto in_double      = false;
   auto escaped        = false;
 
+  // 1行ずつ処理: コメント削除・行末空白削除・空行圧縮を行いながら出力バッファに詰める
   for (auto i = 0uz; i < str.length; ++i) {
     auto const c = str.buffer[i];
-    // 非クォート領域の '#' 以降をコメントとして除去する
+    // 非クォート領域の '#' 以降を YAML コメントとして除去する
     if (!in_single && !in_double && c == '#') {
       while (i < str.length && str.buffer[i] != '\n') {
         ++i;
@@ -772,6 +785,7 @@ template <size_t N>
     }
   }
 
+  // 最終行の行末空白を除去してから終端する
   if (last_non_space == std::string_view::npos) {
     offset = line_start;
   } else {
@@ -810,6 +824,7 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_sql(FrozenString<N> const& str, minify_sql_opt options = minify_sql_opt::shorten_types) noexcept {
+  // 出力バッファ・入力位置・各種引用符モード・空白遅延フラグの初期化
   auto res           = FrozenString<N>{};
   auto offset        = 0uz;
   auto i             = 0uz;
@@ -869,10 +884,11 @@ template <size_t N>
     return true;
   };
 
+  // 入力を1文字ずつ走査し、引用符内部の保持・コメント除去・空白正規化・キーワード短縮を施す
   while (i < str.length) {
     auto const c = str.buffer[i];
 
-    // SQL 文字列・識別子引用の内部はそのまま保持する
+    // シングルクォート文字列: 内部はそのまま出力し、'' エスケープも処理する
     if (in_single) {
       res.buffer[offset++] = c;
       if (c == '\'') {
@@ -1026,7 +1042,7 @@ template <size_t N>
       continue;
     }
 
-    // 型キーワードの短縮
+    // shorten_types 専用パス: 空白スキップ直後の識別子を型キーワード短縮の対象とする
     if (has_flag(options, minify_sql_opt::shorten_types) && detail::is_sql_id_start(c)) {
       auto const word_start = i;
       while (i < str.length && detail::is_sql_id_char(str.buffer[i])) {
@@ -1056,6 +1072,7 @@ template <size_t N>
     ++i;
   }
 
+  // 末尾の余分な空白を除去して終端し、圧縮結果を返す
   if (offset > 0 && res.buffer[offset - 1] == ' ') {
     --offset;
   }
@@ -1118,11 +1135,13 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
   using detail::isIdentChar;
   using detail::minify_state;
 
+  // 字句解析状態・出力長・空白遅延フラグ・最終出力文字の初期化
   auto state = minify_state::normal;
   std::size_t out_len = 0;
   bool pending_space = false;
   char last_out = '\0';
 
+  // 出力ヘルパ: バッファ容量の範囲内で1文字書き込み、最終出力文字を記録する
   auto write_char = [&](char c) noexcept {
     if (out_len < output_capacity - 1) {
       output[out_len++] = c;
@@ -1130,12 +1149,14 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
   };
 
+  // 入力を1文字ずつ走査: 現在の状態に応じて引用符内の保持・コメント除去・空白正規化を行う
   for (std::size_t i = 0; input[i] != '\0';) {
     char const c = input[i];
     char const next = input[i + 1];
 
     switch (state) {
     case minify_state::normal: {
+      // 行コメント // またはブロックコメント /* */ の開始を検出する
       if (c == '/' && next == '/') {
         state = minify_state::line_comment;
         i += 2;
@@ -1144,9 +1165,11 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
         i += 2;
       } else if (c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
                  c == '\f') {
+        // 空白は遅延フラグを立ててスキップする
         pending_space = true;
         ++i;
       } else {
+        // 遅延された空白を出力するか判定: 識別子-識別子間など必要な場合のみ空白を挿入する
         if (pending_space) {
           bool const id_to_id    = isIdentChar(last_out) && isIdentChar(c);
           bool const id_to_q     = isIdentChar(last_out) && (c == '\'' || c == '"' || c == '`');
@@ -1157,6 +1180,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
         }
         pending_space = false;
 
+        // 引用符開始を検出したら対応する状態へ遷移し、通常文字はそのまま出力する
         if (c == '\'') {
           write_char(c);
           state = minify_state::single_quote;
@@ -1175,6 +1199,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
 
     case minify_state::single_quote: {
+      // シングルクォート文字列: エスケープシーケンスを処理しながら内容をそのまま出力する
       write_char(c);
       if (c == '\\') {
         ++i;
@@ -1192,6 +1217,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
 
     case minify_state::double_quote: {
+      // ダブルクォート文字列: エスケープシーケンスを処理しながら内容をそのまま出力する
       write_char(c);
       if (c == '\\') {
         ++i;
@@ -1209,6 +1235,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
 
     case minify_state::backtick: {
+      // バッククォート識別子: `` エスケープを処理しながら内容をそのまま出力する
       write_char(c);
       if (c == '`') {
         if (next == '`') {
@@ -1225,6 +1252,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
 
     case minify_state::line_comment: {
+      // 行コメント: 行末まで読み飛ばし、改行で通常状態に戻る
       if (c == '\n' || c == '\r') {
         state = minify_state::normal;
         pending_space = true;
@@ -1234,6 +1262,7 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
 
     case minify_state::block_comment: {
+      // ブロックコメント: */ まで読み飛ばし、終了後に通常状態に戻る
       if (c == '*' && next == '/') {
         state = minify_state::normal;
         pending_space = true;
@@ -1246,19 +1275,23 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
     }
   }
 
+  // 末尾の余分なセミコロンを除去する（Cypher クエリの末尾セミコロンは省略可能）
   if (out_len > 0 && output[out_len - 1] == ';') {
     --out_len;
   }
 
+  // 終端文字を設定して圧縮後の長さを返す
   output[out_len] = '\0';
   return out_len;
 }
 
+/// @brief Cypher ミニファイ結果を格納する実行時コンテナ（配列 + 長さ）
 template <std::size_t N>
 struct minified_query {
   std::array<char, N> data{};
   std::size_t length{0};
 
+  /// @brief 文字列リテラルとの等値比較
   template <std::size_t M>
   constexpr bool operator==(char const (&str)[M]) const noexcept
   {
@@ -1288,6 +1321,7 @@ struct minified_query {
   }
 };
 
+/// @brief 実行時用 Cypher minify: コンパイル時固定長配列に結果を格納する
 template <std::size_t N>
 [[nodiscard]] constexpr auto minify(char const (&input)[N]) noexcept
     -> minified_query<N>
@@ -1300,7 +1334,7 @@ template <std::size_t N>
 /**
  * @brief Cypher クエリ文字列を minify する
  *
- * 文字列リテラル保持、識別子引用保持、コメント除去、不要空白除去、末尾セミコロン除去。
+ * 内部でバッファベースの minify_cypher を呼び出し、結果を FrozenString に詰めて返す。
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
