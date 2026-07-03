@@ -168,7 +168,7 @@ consteval void validate_format(char const* data, size_t len) {
  * @brief 浮動小数点数を固定小数点形式でバッファに書き込む
  */
 template <typename Buf>
-consteval auto format_float_fixed(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
   auto written = 0uz;
   if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
 
@@ -195,7 +195,7 @@ consteval auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
  * @brief 浮動小数点数を科学計数法でバッファに書き込む
  */
 template <typename Buf>
-consteval auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
   auto written = 0uz;
   if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
 
@@ -247,7 +247,7 @@ consteval auto format_float_scientific(Buf& buf, size_t pos, double value, int p
  * @brief 浮動小数点数を汎用形式でバッファに書き込む
  */
 template <typename Buf>
-consteval auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+constexpr auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
   if (precision < 0) precision = 6;
 
   char fixed_buf[128]{};
