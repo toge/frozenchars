@@ -26,7 +26,7 @@ namespace detail {
  * @details フラット配列に格納されるコンパクトなノード表現。
  *          最大256ノード、65535バイトラベル、256子、127値まで対応。
  */
-struct alignas(8) trie_flat_node {
+struct trie_flat_node {
   std::uint16_t label_offset;  ///< k_labels へのオフセット
   std::uint8_t  label_length;  ///< このノードのラベル長（ルートは0）
   std::uint8_t  first_child;   ///< k_children へのオフセット

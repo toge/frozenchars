@@ -305,7 +305,7 @@ consteval auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode
 }
 
 template <typename Buf, typename T>
-consteval auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec) noexcept -> size_t {
+constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec) noexcept -> size_t {
   auto start = pos;
 
   if constexpr (std::same_as<std::remove_cvref_t<T>, bool>) {

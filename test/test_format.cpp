@@ -94,7 +94,14 @@ TEST_CASE("FrozenString ostream insertion respects logical length and formatting
 #ifdef __cpp_lib_print
 TEST_CASE("FrozenString works with std::print FILE output", "[format]") {
   auto constexpr prefix = "MyApp"_fs;
+#if defined(_MSC_VER)
+#  pragma warning(push)
+#  pragma warning(disable : 4996)
+#endif
   auto* fp = std::tmpfile();
+#if defined(_MSC_VER)
+#  pragma warning(pop)
+#endif
   REQUIRE(fp != nullptr);
 
   std::print(fp, "{:>12}", prefix);
