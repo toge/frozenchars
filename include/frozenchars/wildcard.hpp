@@ -1,6 +1,7 @@
 #pragma once
 
 #include "string.hpp"
+#include "frozen_regex.hpp"
 #include <cstddef>
 #include <optional>
 #include <string_view>
@@ -49,6 +50,80 @@ namespace detail {
     }
     return (depth == 0) ? i - 1 : PAT.size();
   }
+
+  /**
+   * @brief wildcard パターンを frozen_regex に委譲するためのヘルパ
+   *
+   * パターンに * や ? が含まれず、かつ frozen_regex で扱える構文のみで構成されている場合に
+   * can_delegate == true となる。その場合 regex_pattern は frozen_regex にそのまま渡せる
+   * 文字列（[! → [^ に変換済み）を保持する。
+   */
+  template <FrozenString PAT>
+  struct wildcard_to_regex_helper {
+    static constexpr bool can_delegate = []() consteval {
+      if (PAT.empty()) return false;
+      int paren_depth = 0;
+      for (auto i = 0uz; i < PAT.size(); ++i) {
+        auto const c = PAT.data()[i];
+        if (c == '*' || c == '?') return false;
+        if (c == '\\') {
+          if (i + 1 >= PAT.size()) return false;
+          auto const n = PAT.data()[i + 1];
+          switch (n) {
+            case '\\': case '.': case '[': case ']':
+            case '(': case ')': case '|': case '-': case '^':
+              ++i; break;
+            default: return false;
+          }
+          continue;
+        }
+        if (c == '[') {
+          auto close = find_matching_close_bracket<PAT>(i);
+          if (close >= PAT.size()) return false;
+          i = close;
+          continue;
+        }
+        if (c == '.') return false;
+        if (c == '(') ++paren_depth;
+        if (c == ')') {
+          if (paren_depth == 0) return false;
+          --paren_depth;
+        }
+        if (c == '|' && paren_depth == 0) return false;
+      }
+      return paren_depth == 0;
+    }();
+
+    static constexpr FrozenString<PAT.size() + 1> regex_pattern = []() consteval {
+      FrozenString<PAT.size() + 1> fs;
+      fs.length = PAT.size();
+      for (auto i = 0uz; i < PAT.size(); ++i) {
+        auto c = PAT.data()[i];
+        if (c == '\\') {
+          fs.buffer[i] = c;
+          if (i + 1 < PAT.size()) {
+            fs.buffer[i + 1] = PAT.data()[i + 1];
+            ++i;
+          }
+          continue;
+        }
+        // [! → [^ に変換（[ が \\ エスケープされていない場合のみ）
+        if (c == '!' && i > 0 && PAT.data()[i - 1] == '[') {
+          bool bracket_escaped = false;
+          if (i >= 2 && PAT.data()[i - 2] == '\\') {
+            auto count = 1uz;
+            for (auto j = i - 3; j < i && PAT.data()[j] == '\\'; --j) ++count;
+            bracket_escaped = (count % 2 == 1);
+          }
+          fs.buffer[i] = bracket_escaped ? '!' : '^';
+          continue;
+        }
+        fs.buffer[i] = c;
+      }
+      fs.buffer[PAT.size()] = '\0';
+      return fs;
+    }();
+  };
 
   /**
    * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
@@ -255,6 +330,12 @@ namespace detail {
  */
 template <FrozenString PAT>
 [[nodiscard]] constexpr bool wildcard_match(std::string_view text) noexcept {
+  // frozen_regex 委譲: * と ? を含まないパターンは frozen_regex で二分探索
+  if constexpr (detail::wildcard_to_regex_helper<PAT>::can_delegate) {
+    constexpr auto regex_pat = detail::wildcard_to_regex_helper<PAT>::regex_pattern;
+    return frozen_regex<regex_pat>::contains(text);
+  }
+
   // 単純パターン高速パス: リテラル + '?' のみ
   constexpr auto is_simple = []() consteval {
     // エスケープを含むパターンは単純パス非対象（simple_match は \\ 未対応）
@@ -363,7 +444,7 @@ template <size_t M>
  * @return auto マッチした場合 true
  */
 template <FrozenString PAT, size_t M>
-[[nodiscard]] bool wildcard_match(char const (&text)[M]) noexcept {
+[[nodiscard]] constexpr bool wildcard_match(char const (&text)[M]) noexcept {
   return wildcard_match<PAT>(std::string_view{text, M - 1});
 }
 
@@ -376,7 +457,7 @@ template <FrozenString PAT, size_t M>
  * @return auto マッチした場合 true
  */
 template <FrozenString PAT, size_t M>
-[[nodiscard]] bool wildcard_match(FrozenString<M> const& text) noexcept {
+[[nodiscard]] constexpr bool wildcard_match(FrozenString<M> const& text) noexcept {
   return wildcard_match<PAT>(text.sv());
 }
 
