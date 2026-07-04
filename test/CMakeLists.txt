@@ -177,4 +177,48 @@ assert_frozen_map_compile_fail(
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
+# ---- chrono compile-fail tests ----
+
+assert_frozen_map_compile_fail(
+  NAME chrono_parse_iso_date_bad_format
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_format.cpp
+  EXPECTED_TEXT "chrono: invalid ISO 8601 date format"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_frozen_map_compile_fail(
+  NAME chrono_parse_iso_date_bad_month
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_month.cpp
+  EXPECTED_TEXT "chrono: invalid month value"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_frozen_map_compile_fail(
+  NAME chrono_parse_iso_date_bad_day
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_day.cpp
+  EXPECTED_TEXT "chrono: invalid day value"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_frozen_map_compile_fail(
+  NAME chrono_parse_iso_datetime_bad_format
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_datetime_bad_format.cpp
+  EXPECTED_TEXT "chrono: invalid ISO 8601 datetime format"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_frozen_map_compile_fail(
+  NAME chrono_parse_date_macro_bad_format
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_date_macro_bad_format.cpp
+  EXPECTED_TEXT "chrono: invalid __DATE__ format"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_frozen_map_compile_fail(
+  NAME chrono_parse_tz_offset_bad_format
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_tz_offset_bad_format.cpp
+  EXPECTED_TEXT "chrono: invalid timezone offset format"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
 
