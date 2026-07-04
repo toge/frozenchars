@@ -90,4 +90,12 @@ template <PipeAdaptor Adaptor>
   return rhs(lhs);
 }
 
+/**
+ * @brief 文字列リテラルに対してアダプタを適用するパイプ演算子
+ */
+template <size_t N, PipeAdaptor Adaptor>
+[[nodiscard]] auto consteval operator|(char const (&lhs)[N], Adaptor const& rhs) noexcept(noexcept(rhs(FrozenString<N>{lhs}))) {
+  return rhs(FrozenString<N>{lhs});
+}
+
 } // namespace frozenchars
