@@ -4,15 +4,61 @@ find_package(ctre REQUIRED CONFIG)
 file(GLOB test_src test_*.cpp)
 list(FILTER test_src EXCLUDE REGEX "test_split_(direct|logic|tester|v_debug)\\.cpp$")
 
+if(EMSCRIPTEN)
+  # Emscripten: vcpkg がインストールした Catch2 静的ライブラリは
+  # -sNO_DISABLE_EXCEPTION_CATCHING なしでコンパイルされているため、
+  # Catch2 の例外翻訳関数 (translateActiveException / handleExceptionMatchExpr) が
+  # 正しく動作しない。ここでは Catch2 のソースをアマルガメーションファイル経由で
+  # 再コンパイルすることで、例外サポートを有効にする。
+  include(FetchContent)
+  FetchContent_Declare(
+    catch2_emscripten
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.15.1
+    GIT_SHALLOW TRUE
+    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/catch2_emscripten-src
+  )
+  # FetchContent_Populate を使う（MakeAvailable は add_subdirectory を呼ぶため、
+  # vcpkg の Catch2::Catch2 ターゲットと衝突する）
+  FetchContent_GetProperties(catch2_emscripten)
+  if(NOT catch2_emscripten_POPULATED)
+    FetchContent_Populate(catch2_emscripten)
+  endif()
+  add_library(catch2_emscripten_core STATIC
+    "${catch2_emscripten_SOURCE_DIR}/extras/catch_amalgamated.cpp"
+  )
+  target_include_directories(catch2_emscripten_core
+    BEFORE PUBLIC
+      "${catch2_emscripten_SOURCE_DIR}/extras"
+  )
+  target_compile_options(catch2_emscripten_core
+    PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING"
+  )
+  target_compile_features(catch2_emscripten_core PRIVATE cxx_std_17)
+  target_link_options(catch2_emscripten_core
+    INTERFACE "-sNO_DISABLE_EXCEPTION_CATCHING"
+  )
+
+  # Catch2::Catch2WithMain は Catch2::Catch2 に依存するため使えない。
+  # 代わりに em_catch2_main.cpp が main() を提供する。
+  list(APPEND test_src em_catch2_main.cpp)
+  set(_catch2_targets catch2_emscripten_core)
+else()
+  set(_catch2_targets Catch2::Catch2 Catch2::Catch2WithMain)
+endif()
+
 add_executable(all_test ${test_src})
 
 target_link_libraries(all_test PRIVATE
   frozenchars::frozenchars
-  Catch2::Catch2
-  Catch2::Catch2WithMain
+  ${_catch2_targets}
   ctre::ctre
 )
 target_compile_features(all_test PUBLIC cxx_std_23)
+
+if(EMSCRIPTEN)
+  target_compile_options(all_test PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING")
+endif()
 
 add_test(NAME all_test COMMAND all_test -r junit)
 
