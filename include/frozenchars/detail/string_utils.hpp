@@ -100,4 +100,135 @@ template <bool TrimLeft, bool TrimRight, auto Pred = is_space_char, size_t N>
   return res;
 }
 
+/**
+ * @brief 文字列を末尾から前方へ検索し、最後の出現位置を返す
+ *
+ * @tparam N 対象文字列の長さ (終端 '\0' を含む)
+ * @tparam M 検索文字列の長さ (終端 '\0' を含む)
+ * @param str 対象文字列
+ * @param needle 検索する部分文字列
+ * @param pos 検索を開始する末尾側インデックス (指定位置以前の最も後ろを探す)
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <size_t N, size_t M>
+[[nodiscard]] auto consteval rfind_substring(FrozenString<N> const& str, FrozenString<M> const& needle, std::size_t pos = std::string_view::npos) noexcept -> std::size_t {
+  if (needle.length == 0) {
+    auto const start = (pos == std::string_view::npos || pos > str.length) ? str.length : pos;
+    return start;
+  }
+  if (needle.length > str.length) {
+    return std::string_view::npos;
+  }
+  auto const upper = (pos == std::string_view::npos || pos > str.length - needle.length) ? str.length - needle.length : pos;
+  for (auto i = upper + 1; i-- > 0;) {
+    bool match = true;
+    for (auto j = 0uz; j < needle.length; ++j) {
+      if (str.buffer[i + j] != needle.buffer[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return i;
+    }
+  }
+  return std::string_view::npos;
+}
+
+/**
+ * @brief 文字集合のいずれかの文字が最初に出現する位置を返す
+ *
+ * @tparam N 対象文字列の長さ (終端 '\0' を含む)
+ * @tparam M 文字集合の長さ (終端 '\0' を含む)
+ * @param str 対象文字列
+ * @param chars 検索する文字集合
+ * @param pos 検索開始位置
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <size_t N, size_t M>
+[[nodiscard]] auto consteval find_first_of_impl(FrozenString<N> const& str, FrozenString<M> const& chars, std::size_t pos = 0) noexcept -> std::size_t {
+  if (chars.length == 0) {
+    return std::string_view::npos;
+  }
+  for (auto i = pos; i < str.length; ++i) {
+    for (auto j = 0uz; j < chars.length; ++j) {
+      if (str.buffer[i] == chars.buffer[j]) {
+        return i;
+      }
+    }
+  }
+  return std::string_view::npos;
+}
+
+/**
+ * @brief 文字集合のいずれかの文字が最後に出現する位置を返す
+ *
+ * @tparam N 対象文字列の長さ (終端 '\0' を含む)
+ * @tparam M 文字集合の長さ (終端 '\0' を含む)
+ * @param str 対象文字列
+ * @param chars 検索する文字集合
+ * @param pos 検索を開始する末尾側インデックス
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <size_t N, size_t M>
+[[nodiscard]] auto consteval find_last_of_impl(FrozenString<N> const& str, FrozenString<M> const& chars, std::size_t pos = std::string_view::npos) noexcept -> std::size_t {
+  if (chars.length == 0) {
+    return std::string_view::npos;
+  }
+  auto const start = (pos == std::string_view::npos || pos >= str.length) ? str.length : pos + 1;
+  for (auto i = start; i-- > 0;) {
+    for (auto j = 0uz; j < chars.length; ++j) {
+      if (str.buffer[i] == chars.buffer[j]) {
+        return i;
+      }
+    }
+  }
+  return std::string_view::npos;
+}
+
+/**
+ * @brief 部分文字列の重なり無し出現回数を数える
+ *
+ * @tparam N 対象文字列の長さ (終端 '\0' を含む)
+ * @tparam M 検索文字列の長さ (終端 '\0' を含む)
+ * @param str 対象文字列
+ * @param needle 検索する部分文字列
+ * @return std::size_t 出現回数 (needle が空なら 0)
+ */
+template <size_t N, size_t M>
+[[nodiscard]] auto consteval count_substring_impl(FrozenString<N> const& str, FrozenString<M> const& needle) noexcept -> std::size_t {
+  if (needle.length == 0) {
+    return 0;
+  }
+  auto count = 0uz;
+  auto pos  = 0uz;
+  while (pos <= str.length) {
+    auto const found = find_substring(str, needle.sv(), pos);
+    if (found == std::string_view::npos) {
+      break;
+    }
+    ++count;
+    pos = found + needle.length;
+  }
+  return count;
+}
+
+/**
+ * @brief 文字列のバイト列を左右反転した FrozenString を生成する
+ *
+ * @tparam N 文字列の長さ (終端 '\0' を含む)
+ * @param str 対象文字列
+ * @return FrozenString<N> 反転された文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval reverse_impl(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  auto res = FrozenString<N>{};
+  for (auto i = 0uz; i < str.length; ++i) {
+    res.buffer[i] = str.buffer[str.length - 1 - i];
+  }
+  res.buffer[str.length] = '\0';
+  res.length = str.length;
+  return res;
+}
+
 } // namespace frozenchars::detail

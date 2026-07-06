@@ -1740,4 +1740,269 @@ template <size_t N>
   return word_wrap(FrozenString{str}, width);
 }
 
+/*===============================================================================*\
+ * 検索系: find / rfind / find_first_of / find_last_of / count_substring / reverse
+\*===============================================================================*/
+
+/**
+ * @brief 文字列内で部分文字列が最初に出現する位置を返す
+ *
+ * @tparam Sub 検索する部分文字列 (FrozenString NTTP)
+ * @tparam N 対象文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <FrozenString Sub, size_t N>
+[[nodiscard]] auto consteval find(FrozenString<N> const& str) noexcept -> std::size_t {
+  return detail::find_impl(str, Sub);
+}
+
+template <FrozenString Sub, size_t N>
+[[nodiscard]] auto consteval find(char const (&str)[N]) noexcept -> std::size_t {
+  return find<Sub>(FrozenString{str});
+}
+
+template <auto Sub>
+  requires detail::is_frozen_string_v<decltype(Sub)>
+[[nodiscard]] auto consteval find(auto const& str) noexcept -> std::size_t {
+  return find<Sub>(freeze(str));
+}
+
+/**
+ * @brief 文字列内で部分文字列が最後に出現する位置を返す
+ *
+ * @tparam Sub 検索する部分文字列 (FrozenString NTTP)
+ * @tparam N 対象文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <FrozenString Sub, size_t N>
+[[nodiscard]] auto consteval rfind(FrozenString<N> const& str) noexcept -> std::size_t {
+  return detail::rfind_substring(str, Sub);
+}
+
+template <FrozenString Sub, size_t N>
+[[nodiscard]] auto consteval rfind(char const (&str)[N]) noexcept -> std::size_t {
+  return rfind<Sub>(FrozenString{str});
+}
+
+template <auto Sub>
+  requires detail::is_frozen_string_v<decltype(Sub)>
+[[nodiscard]] auto consteval rfind(auto const& str) noexcept -> std::size_t {
+  return rfind<Sub>(freeze(str));
+}
+
+/**
+ * @brief 文字集合のいずれかの文字が最初に出現する位置を返す
+ *
+ * @tparam Chars 検索する文字集合 (FrozenString NTTP)
+ * @tparam N 対象文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <FrozenString Chars, size_t N>
+[[nodiscard]] auto consteval find_first_of(FrozenString<N> const& str) noexcept -> std::size_t {
+  return detail::find_first_of_impl(str, Chars);
+}
+
+template <FrozenString Chars, size_t N>
+[[nodiscard]] auto consteval find_first_of(char const (&str)[N]) noexcept -> std::size_t {
+  return find_first_of<Chars>(FrozenString{str});
+}
+
+template <auto Chars>
+  requires detail::is_frozen_string_v<decltype(Chars)>
+[[nodiscard]] auto consteval find_first_of(auto const& str) noexcept -> std::size_t {
+  return find_first_of<Chars>(freeze(str));
+}
+
+/**
+ * @brief 文字集合のいずれかの文字が最後に出現する位置を返す
+ *
+ * @tparam Chars 検索する文字集合 (FrozenString NTTP)
+ * @tparam N 対象文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return std::size_t 見つかった位置、見つからなければ std::string_view::npos
+ */
+template <FrozenString Chars, size_t N>
+[[nodiscard]] auto consteval find_last_of(FrozenString<N> const& str) noexcept -> std::size_t {
+  return detail::find_last_of_impl(str, Chars);
+}
+
+template <FrozenString Chars, size_t N>
+[[nodiscard]] auto consteval find_last_of(char const (&str)[N]) noexcept -> std::size_t {
+  return find_last_of<Chars>(FrozenString{str});
+}
+
+template <auto Chars>
+  requires detail::is_frozen_string_v<decltype(Chars)>
+[[nodiscard]] auto consteval find_last_of(auto const& str) noexcept -> std::size_t {
+  return find_last_of<Chars>(freeze(str));
+}
+
+/**
+ * @brief 部分文字列の重なり無し出現回数を返す
+ *
+ * @tparam Sub 検索する部分文字列 (FrozenString NTTP)
+ * @tparam N 対象文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return std::size_t 出現回数 (Sub が空なら 0)
+ */
+template <FrozenString Sub, size_t N>
+[[nodiscard]] auto consteval count_substring(FrozenString<N> const& str) noexcept -> std::size_t {
+  return detail::count_substring_impl(str, Sub);
+}
+
+template <FrozenString Sub, size_t N>
+[[nodiscard]] auto consteval count_substring(char const (&str)[N]) noexcept -> std::size_t {
+  return count_substring<Sub>(FrozenString{str});
+}
+
+template <auto Sub>
+  requires detail::is_frozen_string_v<decltype(Sub)>
+[[nodiscard]] auto consteval count_substring(auto const& str) noexcept -> std::size_t {
+  return count_substring<Sub>(freeze(str));
+}
+
+/**
+ * @brief 文字列を左右反転した FrozenString を生成する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return FrozenString<N> 反転した文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  return detail::reverse_impl(str);
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval reverse(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return reverse(FrozenString{str});
+}
+
+template <typename T>
+  requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+[[nodiscard]] auto consteval reverse(T const& v) noexcept {
+  return reverse(freeze(v));
+}
+
+/*===============================================================================*\
+ * 行単位整形: indent / dedent
+\*===============================================================================*/
+
+/**
+ * @brief 各行の先頭に指定文字を指定個数付与する
+ *
+ * 空行（'\n' のみから成る行、または末尾空行）にはインデントを付与しない。
+ *
+ * @tparam IndentWidth 1行あたりのインデント文字数
+ * @tparam IndentChar インデントに使う文字 (デフォルト: '\t')
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto インデント済み文字列
+ */
+template <size_t IndentWidth, char IndentChar = '\t', size_t N>
+[[nodiscard]] auto consteval indent(FrozenString<N> const& str) noexcept {
+  constexpr auto MAX_SIZE = std::max(N * (IndentWidth + 1) + 1, 2048uz);
+  auto res = FrozenString<MAX_SIZE>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  while (i < str.length) {
+    auto line_start = i;
+    while (i < str.length && str.buffer[i] != '\n') ++i;
+    auto line_end = i;
+    auto is_empty = (line_end == line_start);
+    if (!is_empty) {
+      for (auto k = 0uz; k < IndentWidth; ++k) {
+        res.buffer[offset++] = IndentChar;
+      }
+    }
+    for (auto j = line_start; j < line_end; ++j) {
+      res.buffer[offset++] = str.buffer[j];
+    }
+    if (i < str.length && str.buffer[i] == '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t IndentWidth, char IndentChar = '\t', size_t N>
+[[nodiscard]] auto consteval indent(char const (&str)[N]) noexcept {
+  return indent<IndentWidth, IndentChar>(FrozenString{str});
+}
+
+template <size_t IndentWidth, char IndentChar = '\t', typename T>
+  requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+[[nodiscard]] auto consteval indent(T const& v) noexcept {
+  return indent<IndentWidth, IndentChar>(freeze(v));
+}
+
+/**
+ * @brief 各行の先頭に共通する空白文字を最大限削除する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return FrozenString<N> 共通先頭空白を削除した文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval dedent(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  // pass 1: 全行の先頭空白最小値を求める
+  auto common = str.length;
+  auto i = 0uz;
+  while (i < str.length) {
+    auto ws = 0uz;
+    while (i < str.length && str.buffer[i] != '\n') {
+      auto const c = str.buffer[i];
+      if (c == ' ' || c == '\t') { ++ws; ++i; }
+      else break;
+    }
+    if (i < str.length && str.buffer[i] != '\n') {
+      if (ws < common) common = ws;
+    }
+    while (i < str.length && str.buffer[i] != '\n') ++i;
+    if (i < str.length && str.buffer[i] == '\n') ++i;
+  }
+  if (common > str.length) common = 0;
+
+  // pass 2: common 個の先頭空白を削除して出力
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  i = 0uz;
+  while (i < str.length) {
+    auto ws = 0uz;
+    auto const line_pos = i;
+    while (i < str.length && str.buffer[i] != '\n') {
+      auto const c = str.buffer[i];
+      if (c == ' ' || c == '\t') { ++ws; ++i; }
+      else break;
+    }
+    auto const skip = (ws < common) ? ws : common;
+    i = line_pos + skip;
+    while (i < str.length && str.buffer[i] != '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+    if (i < str.length && str.buffer[i] == '\n') {
+      res.buffer[offset++] = str.buffer[i++];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval dedent(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return dedent(FrozenString{str});
+}
+
+template <typename T>
+  requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
+[[nodiscard]] auto consteval dedent(T const& v) noexcept {
+  return dedent(freeze(v));
+}
+
 }  // namespace frozenchars

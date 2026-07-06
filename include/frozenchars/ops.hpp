@@ -753,6 +753,126 @@ inline constexpr auto esc_n_to_br  = linebreak<frozenchars::LineBreak::EscN, fro
 inline constexpr auto nl_to_esc_n  = linebreak<frozenchars::LineBreak::Nl, frozenchars::LineBreak::EscN>;
 inline constexpr auto esc_n_to_nl  = linebreak<frozenchars::LineBreak::EscN, frozenchars::LineBreak::Nl>;
 
+/*===============================================================================*\
+ * 検索系アダプタ: find / rfind / find_first_of / find_last_of / count_substring
+\*===============================================================================*/
+
+template <frozenchars::FrozenString Sub>
+struct find_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept -> std::size_t {
+    return frozenchars::find<Sub>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> std::size_t {
+    return frozenchars::find<Sub>(frozenchars::FrozenString{str});
+  }
+};
+
+template <frozenchars::FrozenString Sub>
+inline constexpr find_adaptor<Sub> find{};
+
+template <frozenchars::FrozenString Sub>
+struct rfind_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept -> std::size_t {
+    return frozenchars::rfind<Sub>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> std::size_t {
+    return frozenchars::rfind<Sub>(frozenchars::FrozenString{str});
+  }
+};
+
+template <frozenchars::FrozenString Sub>
+inline constexpr rfind_adaptor<Sub> rfind{};
+
+template <frozenchars::FrozenString Chars>
+struct find_first_of_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept -> std::size_t {
+    return frozenchars::find_first_of<Chars>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> std::size_t {
+    return frozenchars::find_first_of<Chars>(frozenchars::FrozenString{str});
+  }
+};
+
+template <frozenchars::FrozenString Chars>
+inline constexpr find_first_of_adaptor<Chars> find_first_of{};
+
+template <frozenchars::FrozenString Chars>
+struct find_last_of_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept -> std::size_t {
+    return frozenchars::find_last_of<Chars>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> std::size_t {
+    return frozenchars::find_last_of<Chars>(frozenchars::FrozenString{str});
+  }
+};
+
+template <frozenchars::FrozenString Chars>
+inline constexpr find_last_of_adaptor<Chars> find_last_of{};
+
+template <frozenchars::FrozenString Sub>
+struct count_substring_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept -> std::size_t {
+    return frozenchars::count_substring<Sub>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept -> std::size_t {
+    return frozenchars::count_substring<Sub>(frozenchars::FrozenString{str});
+  }
+};
+
+template <frozenchars::FrozenString Sub>
+inline constexpr count_substring_adaptor<Sub> count_substring{};
+
+struct reverse_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept {
+    return frozenchars::reverse(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::reverse(frozenchars::FrozenString{str});
+  }
+};
+
+inline constexpr reverse_adaptor reverse{};
+
+template <size_t IndentWidth, char IndentChar = '\t'>
+struct indent_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept {
+    return frozenchars::indent<IndentWidth, IndentChar>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::indent<IndentWidth, IndentChar>(frozenchars::FrozenString{str});
+  }
+};
+
+template <size_t IndentWidth, char IndentChar = '\t'>
+inline constexpr indent_adaptor<IndentWidth, IndentChar> indent{};
+
+struct dedent_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const noexcept {
+    return frozenchars::dedent(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::dedent(frozenchars::FrozenString{str});
+  }
+};
+
+inline constexpr dedent_adaptor dedent{};
+
 /**
  * @brief 数値型に対してアダプタを適用するパイプ演算子
  */

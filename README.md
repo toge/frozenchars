@@ -51,6 +51,7 @@
 - [make_querystring（クエリ文字列生成）](#make_querystring（クエリ文字列生成）)
 - [マルチライン文字列の処理](#マルチライン文字列の処理)
 - [パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)
+- [frozen_format（コンパイル時フォーマット）](#frozen_format（コンパイル時フォーマット）)
 - [parse_hex_rgb / parse_hex_rgba（hex color → RGB/RGBAタプル）](#parse_hex_rgb-parse_hex_rgba（hex-color-→-rgbrgbaタプル）)
 - [freeze 対応型一覧](#freeze-対応型一覧)
   - [早見表（入力型 → 生成される最大文字数）](#早見表（入力型-→-生成される最大文字数）)
@@ -81,6 +82,7 @@
   - [frozen_regex / CTRE / wildcard_match / wildcards の選び方](#frozen_regex--ctre--wildcard_match--wildcards-の選び方)
 - [frozen_set（コンパイル時集合）](#frozen_set（コンパイル時集合）)
 - [remove_comments / remove_comment_lines（コメント行除去）](#remove_comments-remove_comment_lines（コメント行除去）)
+- [chrono（日付・時刻のコンパイル時相互変換）](#chrono（日付時刻のコンパイル時相互変換）)
 - [テスト](#テスト)
 - [インストール / パッケージ生成](#インストル-パッケジ生成)
 - [ライセンス](#ライセンス)
@@ -149,6 +151,9 @@ auto constexpr r = "  Hello, World!  "_fs
     | right<20>();
 // r.sv() == "       HELLO, WORLD!"
 ```
+
+左辺は `FrozenString` だけでなく `const char[N]` 文字列リテラルも直接受け付けます
+（`_fs` リテラルは省略可能）。
 
 詳細は「[パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)」を参照してください。
 
@@ -318,6 +323,80 @@ using namespace frozenchars::literals;
 static_assert("hello"_fs | ops::ends_with<"llo">);
 static_assert(!("hello"_fs | ops::ends_with<"hel">));
 static_assert("abc"_fs | ops::ends_with<"">);  // 空サフィックスは常に true
+```
+
+## `find`（前方検索）
+
+`find<Sub>(str)` は文字列中で部分文字列が最初に出現する位置を返します。
+見つからない場合は `std::string_view::npos` を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(("hello world"_fs | ops::find<"world">) == 6);
+static_assert(("hello world"_fs | ops::find<"xyz">) == std::string_view::npos);
+static_assert(("abc"_fs | ops::find<"abc">) == 0);
+```
+
+## `rfind`（後方検索）
+
+`rfind<Sub>(str)` は文字列中で部分文字列が最後に出現する位置を返します。
+見つからない場合は `std::string_view::npos` を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(("hello world"_fs | ops::rfind<"o">) == 7);
+static_assert(("hello world"_fs | ops::rfind<"xyz">) == std::string_view::npos);
+static_assert(("abcabc"_fs | ops::rfind<"abc">) == 3);
+```
+
+## `find_first_of` / `find_last_of`（文字集合検索）
+
+`find_first_of<Chars>(str)` は文字集合に含まれる文字が最初に出現する位置を、
+`find_last_of<Chars>(str)` は最後に出現する位置を返します。
+見つからない場合は `std::string_view::npos` を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(("hello world"_fs | ops::find_first_of<"hw">) == 0);
+static_assert(("hello world"_fs | ops::find_first_of<"xyz">) == std::string_view::npos);
+static_assert(("hello world"_fs | ops::find_last_of<"ld">) == 10);
+```
+
+## `reverse`（文字列反転）
+
+`reverse(str)` は文字列を左右反転した新しい `FrozenString` を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(("abc"_fs | ops::reverse) == "cba"_fs);
+static_assert((""_fs | ops::reverse) == ""_fs);
+static_assert(("hello"_fs | ops::reverse) == "olleh"_fs);
+```
+
+## `count_substring`（部分文字列出現回数）
+
+`count_substring<Sub>(str)` は文字列中に部分文字列が重なりなしで出現する回数を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(("hello hello"_fs | ops::count_substring<"hello">) == 2);
+static_assert(("aaaa"_fs | ops::count_substring<"aa">) == 2);  // 重なりなし
+static_assert(("abc"_fs | ops::count_substring<"xyz">) == 0);
 ```
 
 ## `partition`（区切り文字で3分割）
@@ -786,6 +865,29 @@ auto constexpr w = "hello world foo"_fs | fops::word_wrap(8);
 // "hello\nworld\nfoo"
 ```
 
+## `indent` / `dedent`（行頭インデント追加・削除）
+
+`indent<Width, Char>(str)` は各行の先頭に指定文字を指定個数付与します。
+空行はインデントしません。デフォルトのインデント文字はタブ (`'\t'`) です。
+
+`dedent(str)` は全行の先頭に共通する空白文字を最大限削除します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// indent: 各行にタブ1つを付与
+static_assert(("a\nb"_fs | ops::indent<1>) == "\ta\n\tb"_fs);
+
+// indent: カスタム文字
+static_assert(("a\nb"_fs | ops::indent<1, ' '>) == " a\n b"_fs);
+
+// dedent: 共通先頭空白を削除
+static_assert(dedent("  hello\n  world"_fs).sv() == "hello\nworld");
+static_assert(dedent("  hello\n    indented"_fs).sv() == "hello\n  indented");
+```
+
 ## 文字種判定述語（`is_alpha` / `is_digit` / ...）
 
 ASCII 文字の分類を行う constexpr 関数です。パイプ演算子の `Pred` テンプレート引数などに利用できます。
@@ -852,6 +954,31 @@ static_assert(q.sv() == "?name=Alice%20%26%20Bob");
 
 auto constexpr q2 = make_querystring(std::tuple{"name", "Alice & Bob"});
 static_assert(q2.sv() == "?name=Alice%20%26%20Bob");
+```
+
+## `path::dirname` / `basename` / `extension` / `stem` / `join`（パス文字列操作）
+
+`frozenchars::path` 名前空間に、POSIX パス文字列を操作するコンパイル時関数を提供します。
+Windows のバックスラッシュ区切りには対応していません。
+
+- `dirname(path_str)` : 親ディレクトリ部分を返します（`/` が無ければ `.`）。
+- `basename(path_str)` : 末尾のファイル名部分を返します。
+- `extension(path_str)` : 拡張子（最後の `.` 以降）を返します。ドットファイルの先頭 `.` は無視されます。
+- `stem(path_str)` : 拡張子を除いたファイル名を返します。
+- `join(parts...)` : 複数のパス要素を `/` で結合します。絶対パスが渡されるとリセットされます。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+using namespace frozenchars::path;
+
+static_assert(dirname("/usr/bin/gcc"_fs).sv() == "/usr/bin");
+static_assert(basename("/usr/bin/gcc"_fs).sv() == "gcc");
+static_assert(extension("archive.tar.gz"_fs).sv() == ".gz");
+static_assert(stem("archive.tar.gz"_fs).sv() == "archive.tar");
+static_assert(join("usr"_fs, "local"_fs, "bin"_fs).sv() == "usr/local/bin");
+static_assert(join("/usr"_fs, "bin"_fs).sv() == "/usr/bin");
 ```
 
 ## マルチライン文字列の処理
@@ -921,6 +1048,69 @@ static_assert(value.sv() == "ABC");
 `frozenchars::ops::toupper` / `tolower` は、環境によっては C ライブラリの `::toupper` / `::tolower` と
 名前が衝突しうるため、README の例では `namespace fops = frozenchars::ops;` のようなエイリアス経由で
 アダプタを修飾して使う形を推奨します。
+
+### `_fs` リテラルなしのパイプ
+
+パイプ演算子の左辺は `FrozenString` だけでなく `const char[N]` 文字列リテラルも直接受け付けます。
+
+```cpp
+auto constexpr v = "  abcdef  " | fops::trim | fops::toupper | fops::substr(0, 3);
+// v.sv() == "ABC"
+```
+
+`_fs` リテラルを省略できるため、`#include "frozenchars.hpp"` だけで即座にパイプ処理を記述できます。
+
+
+## `frozen_format`（コンパイル時フォーマット）
+
+`frozen_format<"format string"_fs>(args...)` は `std::format` 互換の構文でコンパイル時に文字列を生成します。
+戻り値は `FrozenString<4096>`（固定最大バッファ、`.sv()` で実際の内容を取得）。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// 基本置換
+constexpr auto msg1 = frozen_format<"The answer is {}."_fs>(42);
+// msg1.sv() == "The answer is 42."
+
+// 16進数・ゼロ埋め
+constexpr auto msg2 = frozen_format<"Hex: {:08X}"_fs>(0xABCD);
+// msg2.sv() == "Hex: 0000ABCD"
+
+// 左寄せ / 右寄せ
+constexpr auto msg3 = frozen_format<"{:<10}|{:>10}"_fs>("left", "right");
+// msg3.sv() == "left      |     right"
+
+// 浮動小数点・精度指定
+constexpr auto msg4 = frozen_format<"Pi = {:.5f}"_fs>(3.1415926535);
+// msg4.sv() == "Pi = 3.14159"
+
+// 符号制御
+constexpr auto msg5 = frozen_format<"{:+} {:+}"_fs>(1, -1);
+// msg5.sv() == "+1 -1"
+```
+
+### 対応フォーマット指定
+
+| 指定 | 例 | 説明 |
+|------|-----|------|
+| `{}` | `frozen_format<"{}"_fs>(42)` | デフォルト形式 |
+| `{:d}` | 同上 | 10進整数 |
+| `{:x}` / `{:X}` | `frozen_format<"{:x}"_fs>(255)` → `ff` / `FF` | 16進小文字 / 大文字 |
+| `{:o}` | `frozen_format<"{:o}"_fs>(8)` → `10` | 8進数 |
+| `{:b}` / `{:B}` | `frozen_format<"{:b}"_fs>(3)` → `11` / `11` | 2進数 |
+| `{:f}` | `frozen_format<"{:.2f}"_fs>(3.14)` | 固定小数点 |
+| `{:e}` / `{:E}` | `frozen_format<"{:e}"_fs>(100.0)` → `1.000000e+02` | 科学計数法 |
+| `{:g}` / `{:G}` | 同上 / デフォルト | 自動選択（固定 or 科学） |
+| `{:+}` / `{: }` / `{:-}` | 符号制御 | 常時符号 / 空白 / 負のみ |
+| `{:<}` / `{:>}` / `{:^}` | `frozen_format<"{:<5}"_fs>(42)` → `42   ` | 左 / 右 / 中央寄せ |
+| `{:.5}` | `frozen_format<"{:.5}"_fs>("hello!")` → `hello` | 文字列切り詰め |
+| `{:08}` | `frozen_format<"{:08}"_fs>(42)` → `00000042` | ゼロ埋め（整数） |
+| `{{` / `}}` | `frozen_format<"{{}}"_fs>()` → `{}` | エスケープ |
+
+コンパイル時にフォーマット文字列の整合性も検証されます（フィールド数不一致・括弧不一致はコンパイルエラー）。
 
 
 ## `parse_hex_rgb` / `parse_hex_rgba`（hex color → RGB/RGBAタプル）
@@ -1685,6 +1875,88 @@ using namespace frozenchars::ops;
 auto constexpr r2 = "#header\na=1\n#end"_fs | remove_comments();
 // r2.sv() == "a=1"
 ```
+
+
+## `chrono`（日付・時刻のコンパイル時相互変換）
+
+`frozenchars/chrono.hpp` は ISO 8601 日付・時刻文字列と `std::chrono` 型の間のコンパイル時相互変換を提供します。
+`consteval`（NTTP）と `constexpr`（ランタイム）の両方のオーバーロードがあります。
+
+```cpp
+#include "frozenchars.hpp"
+#include "frozenchars/chrono.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+using namespace std::chrono;
+```
+
+### パース（文字列 → chrono 型）
+
+| 関数 | 入力例 | 戻り値 |
+|------|--------|--------|
+| `parse_iso_date<S>()` | `"2026-07-04"_fs` | `year_month_day` |
+| `parse_iso_datetime<S>()` | `"2026-07-04T14:30:00Z"_fs` | `sys_seconds` |
+| `parse_date_macro<S>()` | `"Jul  4 2026"_fs`（`__DATE__` 形式） | `year_month_day` |
+| `compilation_timestamp()` | 自動（`__DATE__` + `__TIME__`） | `sys_seconds` |
+
+```cpp
+// ISO 日付
+constexpr auto d1 = parse_iso_date<"2026-07-04"_fs>();
+// d1 == year{2026}/7/4
+
+// ISO 日時（UTC、タイムゾーンオフセット付きも可）
+constexpr auto dt1 = parse_iso_datetime<"2026-07-04T14:30:00Z"_fs>();
+constexpr auto dt2 = parse_iso_datetime<"2026-07-04T14:30:00+09:00"_fs>();
+// dt1 == sys_days{year{2026}/7/4} + hours{14} + minutes{30}
+// dt2 == dt1 - minutes{540} （UTC 換算）
+
+// __DATE__ マクロ形式
+constexpr auto d2 = parse_date_macro<"Jul  4 2026"_fs>();
+// d2 == year{2026}/7/4
+
+// コンパイルタイムスタンプ
+constexpr auto ts = compilation_timestamp();
+// ts >= 現在時刻（ビルド時）
+constexpr auto ts_jst = compilation_timestamp(minutes{540});
+// ts_jst == ts - minutes{540} （JST → UTC 補正）
+```
+
+ランタイムオーバーロードも同様に使えます（`static_assert` のかわりに条件分岐でエラーを検出）。
+
+```cpp
+constexpr auto dr = parse_iso_date("2026-07-04"_fs);
+// dr == year{2026}/7/4
+```
+
+### フォーマット（chrono 型 → 文字列）
+
+| 関数 | 入力例 | 出力 |
+|------|--------|------|
+| `format_iso_date(ymd)` | `year{2026}/7/4` | `"2026-07-04"_fs`（`FrozenString<11>`） |
+| `format_iso_datetime(tp)` | `sys_days{...}` + `hours{14}` | `"2026-07-04T14:30:00Z"_fs`（`FrozenString<21>`） |
+
+```cpp
+constexpr auto f1 = format_iso_date(year{2026}/7/4);
+// f1.sv() == "2026-07-04"
+
+constexpr auto f2 = format_iso_datetime(
+  sys_days{year{2026}/7/4} + hours{14} + minutes{30});
+// f2.sv() == "2026-07-04T14:30:00Z"
+```
+
+### ラウンドトリップ
+
+パース結果を再度フォーマットして元の文字列に戻せることをコンパイル時に検証できます。
+
+```cpp
+constexpr auto ymd = year{2026}/7/4;
+constexpr auto formatted = format_iso_date(ymd);
+constexpr auto parsed = parse_iso_date(formatted);
+static_assert(parsed == ymd);
+```
+
+> ⚠ `compilation_timestamp()` は `__DATE__` / `__TIME__` マクロに依存するため、日単位の精度です。
+> 秒精度のタイムスタンプが必要な場合は `parse_iso_datetime` で明示的に文字列を渡してください。
 
 
 ## テスト

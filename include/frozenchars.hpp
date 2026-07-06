@@ -31,3 +31,4 @@
 #include "frozenchars/json/compress.hpp"
 #include "frozenchars/json/crush.hpp"
 #include "frozenchars/minify.hpp"
+#include "frozenchars/path.hpp"
