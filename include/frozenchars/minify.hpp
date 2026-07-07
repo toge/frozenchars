@@ -1175,7 +1175,8 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
           bool const id_to_q     = isIdentChar(last_out) && (c == '\'' || c == '"' || c == '`');
           bool const close_to_id = isCloseChar(last_out) && isIdentChar(c);
           bool const wild_to_id  = last_out == '*' && isIdentChar(c);
-          if (id_to_id || id_to_q || close_to_id || wild_to_id) {
+          bool const id_to_wild  = isIdentChar(last_out) && c == '*';
+          if (id_to_id || id_to_q || close_to_id || wild_to_id || id_to_wild) {
             write_char(' ');
           }
         }

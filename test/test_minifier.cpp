@@ -272,6 +272,12 @@ TEST_CASE("minify_cypher - エッジケース", "[minifier]")
     auto constexpr result = minify("  RETURN\n    a.*\n  ORDER BY\n    a.id");
     REQUIRE(result == "RETURN a.* ORDER BY a.id");
   }
+
+  SECTION("RETURN * の識別子と * の間にスペース保持")
+  {
+    auto constexpr result = minify("CALL\n    show_tables()\n  RETURN\n    * ");
+    REQUIRE(result == "CALL show_tables() RETURN *");
+  }
 }
 
 TEST_CASE("minify_cypher - 文字列と数値の混在 RETURN", "[minifier]")
