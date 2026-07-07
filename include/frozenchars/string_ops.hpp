@@ -2,6 +2,7 @@
 
 #include "detail/string_utils.hpp"
 #include "freeze.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -15,9 +16,9 @@ namespace frozenchars {
  * @brief 行区切り文字の種類
  */
 enum class LineBreak {
-  Br,       ///< <br> HTML タグ（全バリエーション）
-  EscN,     ///< \n リテラル（バックスラッシュ+n）
-  Nl,       ///< 実改行（LF, 0x0A）
+  Br,    ///< <br> HTML タグ（全バリエーション）
+  EscN,  ///< \n リテラル（バックスラッシュ+n）
+  Nl,    ///< 実改行（LF, 0x0A）
 };
 
 /**
@@ -27,19 +28,27 @@ enum class LineBreak {
  */
 template <size_t N>
 [[nodiscard]] consteval auto match_br_tag(FrozenString<N> const& str, size_t pos) noexcept -> size_t {
-  if (pos >= str.length || str.buffer[pos] != '<') return 0;
+  if (pos >= str.length || str.buffer[pos] != '<')
+    return 0;
   auto i = pos + 1;
-  if (i >= str.length) return 0;
+  if (i >= str.length)
+    return 0;
   auto c = str.buffer[i];
-  if (c != 'b' && c != 'B') return 0;
+  if (c != 'b' && c != 'B')
+    return 0;
   ++i;
-  if (i >= str.length) return 0;
+  if (i >= str.length)
+    return 0;
   c = str.buffer[i];
-  if (c != 'r' && c != 'R') return 0;
+  if (c != 'r' && c != 'R')
+    return 0;
   ++i;
-  while (i < str.length && (str.buffer[i] == ' ' || str.buffer[i] == '\t')) ++i;
-  if (i < str.length && str.buffer[i] == '/') ++i;
-  if (i >= str.length || str.buffer[i] != '>') return 0;
+  while (i < str.length && (str.buffer[i] == ' ' || str.buffer[i] == '\t'))
+    ++i;
+  if (i < str.length && str.buffer[i] == '/')
+    ++i;
+  if (i >= str.length || str.buffer[i] != '>')
+    return 0;
   ++i;
   return i - pos;
 }
@@ -50,20 +59,21 @@ template <size_t N>
 template <FrozenString To, size_t N>
 [[nodiscard]] consteval auto br_to_target(FrozenString<N> const& str) noexcept {
   constexpr auto MAX_SIZE = std::max(N * 4, 2048uz);
-  auto res = FrozenString<MAX_SIZE>{};
-  auto offset = 0uz;
-  auto pos = 0uz;
+  auto           res      = FrozenString<MAX_SIZE>{};
+  auto           offset   = 0uz;
+  auto           pos      = 0uz;
   while (pos < str.length) {
     auto const len = match_br_tag(str, pos);
     if (len == 0) {
       res.buffer[offset++] = str.buffer[pos++];
     } else {
-      for (auto i = 0uz; i < To.length; ++i) res.buffer[offset++] = To.buffer[i];
+      for (auto i = 0uz; i < To.length; ++i)
+        res.buffer[offset++] = To.buffer[i];
       pos += len;
     }
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -72,17 +82,24 @@ template <FrozenString To, size_t N>
  */
 template <LineBreak From, LineBreak To, size_t N>
 [[nodiscard]] consteval auto convert_linebreak(FrozenString<N> const& str) noexcept {
-  if constexpr (From == To) return str;
+  if constexpr (From == To)
+    return str;
 
   if constexpr (From == LineBreak::Br) {
-    if constexpr (To == LineBreak::Nl) return br_to_target<"\n">(str);
-    if constexpr (To == LineBreak::EscN) return br_to_target<"\\n">(str);
+    if constexpr (To == LineBreak::Nl)
+      return br_to_target<"\n">(str);
+    if constexpr (To == LineBreak::EscN)
+      return br_to_target<"\\n">(str);
   } else if constexpr (From == LineBreak::Nl) {
-    if constexpr (To == LineBreak::Br) return replace_all<"\n", "<br>">(str);
-    if constexpr (To == LineBreak::EscN) return replace_all<"\n", "\\n">(str);
+    if constexpr (To == LineBreak::Br)
+      return replace_all<"\n", "<br>">(str);
+    if constexpr (To == LineBreak::EscN)
+      return replace_all<"\n", "\\n">(str);
   } else if constexpr (From == LineBreak::EscN) {
-    if constexpr (To == LineBreak::Br) return replace_all<"\\n", "<br>">(str);
-    if constexpr (To == LineBreak::Nl) return replace_all<"\\n", "\n">(str);
+    if constexpr (To == LineBreak::Br)
+      return replace_all<"\\n", "<br>">(str);
+    if constexpr (To == LineBreak::Nl)
+      return replace_all<"\\n", "\n">(str);
   }
 }
 
@@ -528,9 +545,15 @@ template <FrozenString From, FrozenString To, size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval substr(FrozenString<N> const& str, std::size_t pos, std::ptrdiff_t len) noexcept {
-  auto       res = FrozenString<N>{};
-  auto const requested_len =
-      len >= 0 ? static_cast<size_t>(len) : (len == std::numeric_limits<std::ptrdiff_t>::min() ? static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()) + 1uz : static_cast<size_t>(-len));
+  auto res = FrozenString<N>{};
+  auto requested_len = size_t{};
+  if (len >= 0) {
+    requested_len = static_cast<size_t>(len);
+  } else if (len == std::numeric_limits<std::ptrdiff_t>::min()) {
+    requested_len = static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()) + 1uz;
+  } else {
+    requested_len = static_cast<size_t>(-len);
+  }
   auto const anchor     = std::min(pos, str.length);
   auto       start      = anchor;
   auto       actual_len = 0uz;
@@ -720,15 +743,14 @@ template <FrozenString Prefix, size_t N>
 [[nodiscard]] auto consteval starts_with(FrozenString<N> const& str) noexcept -> bool {
   if constexpr (Prefix.length == 0) {
     return true;
-  } else {
-    if (str.length < Prefix.length)
-      return false;
-    for (auto i = 0uz; i < Prefix.length; ++i) {
-      if (str.buffer[i] != Prefix.buffer[i])
-        return false;
-    }
-    return true;
   }
+  if (str.length < Prefix.length)
+    return false;
+  for (auto i = 0uz; i < Prefix.length; ++i) {
+    if (str.buffer[i] != Prefix.buffer[i])
+      return false;
+  }
+  return true;
 }
 
 /**
@@ -1433,9 +1455,9 @@ namespace detail {
   };
 
   inline constexpr sql_type_mapping sql_type_shortenings[] = {
-      {"BOOLEAN",   7, "BOOL",  4},
-      {"CHARACTER", 9, "CHAR",  4},
-      {"INTEGER",   7, "INT",   3},
+      {"BOOLEAN", 7, "BOOL", 4},
+      {"CHARACTER", 9, "CHAR", 4},
+      {"INTEGER", 7, "INT", 3},
   };
 
   /**
@@ -1905,12 +1927,13 @@ template <typename T>
 template <size_t IndentWidth, char IndentChar = '\t', size_t N>
 [[nodiscard]] auto consteval indent(FrozenString<N> const& str) noexcept {
   constexpr auto MAX_SIZE = std::max(N * (IndentWidth + 1) + 1, 2048uz);
-  auto res = FrozenString<MAX_SIZE>{};
-  auto offset = 0uz;
-  auto i = 0uz;
+  auto           res      = FrozenString<MAX_SIZE>{};
+  auto           offset   = 0uz;
+  auto           i        = 0uz;
   while (i < str.length) {
     auto line_start = i;
-    while (i < str.length && str.buffer[i] != '\n') ++i;
+    while (i < str.length && str.buffer[i] != '\n')
+      ++i;
     auto line_end = i;
     auto is_empty = (line_end == line_start);
     if (!is_empty) {
@@ -1926,7 +1949,7 @@ template <size_t IndentWidth, char IndentChar = '\t', size_t N>
     }
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 
@@ -1952,36 +1975,46 @@ template <size_t N>
 [[nodiscard]] auto consteval dedent(FrozenString<N> const& str) noexcept -> FrozenString<N> {
   // pass 1: 全行の先頭空白最小値を求める
   auto common = str.length;
-  auto i = 0uz;
+  auto i      = 0uz;
   while (i < str.length) {
     auto ws = 0uz;
     while (i < str.length && str.buffer[i] != '\n') {
       auto const c = str.buffer[i];
-      if (c == ' ' || c == '\t') { ++ws; ++i; }
-      else break;
+      if (c == ' ' || c == '\t') {
+        ++ws;
+        ++i;
+      } else
+        break;
     }
     if (i < str.length && str.buffer[i] != '\n') {
-      if (ws < common) common = ws;
+      if (ws < common)
+        common = ws;
     }
-    while (i < str.length && str.buffer[i] != '\n') ++i;
-    if (i < str.length && str.buffer[i] == '\n') ++i;
+    while (i < str.length && str.buffer[i] != '\n')
+      ++i;
+    if (i < str.length && str.buffer[i] == '\n')
+      ++i;
   }
-  if (common > str.length) common = 0;
+  if (common > str.length)
+    common = 0;
 
   // pass 2: common 個の先頭空白を削除して出力
-  auto res = FrozenString<N>{};
+  auto res    = FrozenString<N>{};
   auto offset = 0uz;
-  i = 0uz;
+  i           = 0uz;
   while (i < str.length) {
-    auto ws = 0uz;
+    auto       ws       = 0uz;
     auto const line_pos = i;
     while (i < str.length && str.buffer[i] != '\n') {
       auto const c = str.buffer[i];
-      if (c == ' ' || c == '\t') { ++ws; ++i; }
-      else break;
+      if (c == ' ' || c == '\t') {
+        ++ws;
+        ++i;
+      } else
+        break;
     }
     auto const skip = (ws < common) ? ws : common;
-    i = line_pos + skip;
+    i               = line_pos + skip;
     while (i < str.length && str.buffer[i] != '\n') {
       res.buffer[offset++] = str.buffer[i++];
     }
@@ -1990,7 +2023,7 @@ template <size_t N>
     }
   }
   res.buffer[offset] = '\0';
-  res.length = offset;
+  res.length         = offset;
   return res;
 }
 

@@ -18,22 +18,16 @@ namespace frozenchars::path {
  */
 template <size_t N>
 [[nodiscard]] auto consteval dirname(FrozenString<N> const& path_str) noexcept -> FrozenString<(N < 2) ? 2 : N> {
-  constexpr auto M = (N < 2) ? 2 : N;
-  auto const slash_pos = detail::find_last_of_impl(path_str, FrozenString<2>{"/"});
+  auto const slash_pos = detail::find_last_of_impl(path_str, FrozenString{"/"});
+  // '/' が見つからない場合は "." を返す。
   if (slash_pos == std::string_view::npos) {
-    auto res = FrozenString<M>{};
-    res.buffer[0] = '.';
-    if constexpr (M > 1) { res.buffer[1] = '\0'; }
-    res.length = 1;
-    return res;
+    return FrozenString{"."};
   }
+  // '/'が先頭にしかない場合は '/' を返す
   if (slash_pos == 0) {
-    auto res = FrozenString<M>{};
-    res.buffer[0] = '/';
-    if constexpr (M > 1) { res.buffer[1] = '\0'; }
-    res.length = 1;
-    return res;
+    return FrozenString{"/"};
   }
+  constexpr auto M = (N < 2) ? 2 : N;
   auto res = FrozenString<M>{};
   for (auto i = 0uz; i < slash_pos; ++i) {
     res.buffer[i] = path_str.buffer[i];
@@ -59,16 +53,13 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval basename(FrozenString<N> const& path_str) noexcept -> FrozenString<N> {
-  auto const slash_pos = detail::rfind_substring(path_str, FrozenString<2>{"/"});
+  auto const slash_pos = detail::rfind_substring(path_str, FrozenString{"/"});
+  // '/' が見つからない場合は全体を返す
   if (slash_pos == std::string_view::npos) {
-    auto res = FrozenString<N>{};
-    for (auto i = 0uz; i < path_str.length; ++i) {
-      res.buffer[i] = path_str.buffer[i];
-    }
-    res.buffer[path_str.length] = '\0';
-    res.length = path_str.length;
-    return res;
+    return path_str;
   }
+
+  // 最後の '/' 以降の部分を返す。
   auto const start = slash_pos + 1;
   auto res = FrozenString<N>{};
   auto offset = 0uz;
@@ -99,16 +90,20 @@ template <size_t N>
 [[nodiscard]] auto consteval extension(FrozenString<N> const& path_str) noexcept -> FrozenString<N> {
   auto const name = basename(path_str);
   if (name.length == 0) return FrozenString<N>{};
-  // Find last dot after position 0 (skip leading dot for dotfiles)
+
+  // 最後の.の位置を探す
   auto dot_pos = std::string_view::npos;
   for (auto i = 1uz; i < name.length; ++i) {
     if (name.buffer[i] == '.') {
       dot_pos = i;
     }
   }
+
+  // .が先頭のみ、もしくは存在しない場合は拡張子無しとみなす
   if (dot_pos == std::string_view::npos) {
     return FrozenString<N>{};
   }
+
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   for (auto i = dot_pos; i < name.length; ++i) {

@@ -1,8 +1,9 @@
 #pragma once
 
+#include <cstddef>
+
 #include "string.hpp"
 #include "detail/string_utils.hpp"
-#include <cstddef>
 
 namespace frozenchars {
 

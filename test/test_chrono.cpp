@@ -18,10 +18,12 @@ TEST_CASE("parse_iso_date - NTTP") {
 
 TEST_CASE("parse_iso_date - runtime constexpr") {
   constexpr auto d1 = parse_iso_date("2026-07-04"_fs);
-  STATIC_CHECK(d1 == year{2026}/7/4);
+  STATIC_CHECK(d1.has_value());
+  STATIC_CHECK(*d1 == year{2026}/7/4);
 
   constexpr auto d2 = parse_iso_date("2001-09-11"_fs);
-  STATIC_CHECK(d2 == year{2001}/9/11);
+  STATIC_CHECK(d2.has_value());
+  STATIC_CHECK(*d2 == year{2001}/9/11);
 }
 
 // ========== Parse ISO Datetime ==========
@@ -48,7 +50,8 @@ TEST_CASE("parse_iso_datetime - timezone offset") {
 
 TEST_CASE("parse_iso_datetime - runtime constexpr") {
   constexpr auto dt = parse_iso_datetime("2024-01-15T09:05:01Z"_fs);
-  STATIC_CHECK(dt == sys_days{year{2024}/1/15} + hours{9} + minutes{5} + seconds{1});
+  STATIC_CHECK(dt.has_value());
+  STATIC_CHECK(*dt == sys_days{year{2024}/1/15} + hours{9} + minutes{5} + seconds{1});
 }
 
 // ========== Parse __DATE__ macro ==========
@@ -64,7 +67,8 @@ TEST_CASE("parse_date_macro - known formats") {
 
 TEST_CASE("parse_date_macro - runtime constexpr") {
   constexpr auto d = parse_date_macro("Jan 15 2024"_fs);
-  STATIC_CHECK(d == year{2024}/1/15);
+  STATIC_CHECK(d.has_value());
+  STATIC_CHECK(*d == year{2024}/1/15);
 }
 
 // ========== Compilation Timestamp ==========
@@ -113,7 +117,8 @@ TEST_CASE("roundtrip date") {
   constexpr auto ymd = year{2026}/7/4;
   constexpr auto formatted = format_iso_date(ymd);
   constexpr auto parsed = parse_iso_date(formatted);
-  STATIC_CHECK(parsed == ymd);
+  STATIC_CHECK(parsed.has_value());
+  STATIC_CHECK(*parsed == ymd);
 }
 
 TEST_CASE("roundtrip datetime") {
@@ -121,5 +126,6 @@ TEST_CASE("roundtrip datetime") {
   constexpr auto formatted = format_iso_datetime(tp);
   // formatted == "2026-07-04T14:30:05Z"
   constexpr auto parsed = parse_iso_datetime(formatted);
-  STATIC_CHECK(parsed == tp);
+  STATIC_CHECK(parsed.has_value());
+  STATIC_CHECK(*parsed == tp);
 }
