@@ -212,7 +212,13 @@ template <typename Alloc>
  */
 template <Integral T>
 [[nodiscard]] auto consteval freeze(T const& arg) noexcept {
-  auto const p = detail::to_dec_chars(static_cast<long long>(arg));
+  auto const p = [&] {
+    if constexpr (std::is_signed_v<T>) {
+      return detail::to_dec_chars(static_cast<long long>(arg));
+    } else {
+      return detail::to_dec_chars(static_cast<unsigned long long>(arg));
+    }
+  }();
   auto res = FrozenString<21>{};
   for (auto i = 0uz; i < p.second; ++i) {
     res.buffer[i] = p.first[i];

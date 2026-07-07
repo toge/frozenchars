@@ -353,29 +353,36 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
       for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
     }
   } else if constexpr (Integral<T>) {
-    long long v = static_cast<long long>(arg);
-    bool is_neg = v < 0;
+    bool is_neg;
+    unsigned long long uv;
+    if constexpr (std::is_signed_v<T>) {
+      auto const v = static_cast<long long>(arg);
+      is_neg = v < 0;
+      uv = static_cast<unsigned long long>(v < 0 ? -(v + 1) + 1 : v);
+    } else {
+      is_neg = false;
+      uv = static_cast<unsigned long long>(arg);
+    }
     auto type = spec.type;
     if (type == '\0') type = 'd';
 
     // Get raw number without sign (use unsigned conversion)
     std::array<char, 65> raw_data{};
     size_t raw_len = 0;
-    auto uv = static_cast<unsigned long long>(v < 0 ? -(v + 1) + 1 : v);
     if (type == 'x' || type == 'X') {
-      auto [d, l] = to_hex_chars(static_cast<long long>(uv));
+      auto [d, l] = to_hex_chars(uv);
       for (auto j = 0uz; j < l; ++j) raw_data[j] = d[j];
       raw_len = l;
     } else if (type == 'o') {
-      auto [d, l] = to_oct_chars(static_cast<long long>(uv));
+      auto [d, l] = to_oct_chars(uv);
       for (auto j = 0uz; j < l; ++j) raw_data[j] = d[j];
       raw_len = l;
     } else if (type == 'b' || type == 'B') {
-      auto [d, l] = to_bin_chars(static_cast<long long>(uv));
+      auto [d, l] = to_bin_chars(uv);
       for (auto j = 0uz; j < l; ++j) raw_data[j] = d[j];
       raw_len = l;
     } else {
-      auto [d, l] = to_dec_chars(static_cast<long long>(uv));
+      auto [d, l] = to_dec_chars(uv);
       for (auto j = 0uz; j < l; ++j) raw_data[j] = d[j];
       raw_len = l;
     }

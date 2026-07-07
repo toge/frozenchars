@@ -26,6 +26,18 @@ namespace frozenchars::detail {
 }
 
 /**
+ * @brief 10進数整数を文字列に変換する (unsigned)
+ */
+[[nodiscard]] auto constexpr to_dec_chars(unsigned long long v) noexcept {
+  auto buffer = std::array<char, 21>{};
+  auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v);
+  if (ec != std::errc{}) {
+    return std::pair{buffer, 0uz};
+  }
+  return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
+}
+
+/**
  * @brief 16進数整数を文字列に変換する
  *
  * @param value 変換する整数
@@ -35,6 +47,18 @@ namespace frozenchars::detail {
   auto buffer = std::array<char, 17>{};
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(),
                                        static_cast<unsigned long long>(value), 16);
+  if (ec != std::errc{}) {
+    return std::pair{buffer, 0uz};
+  }
+  return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
+}
+
+/**
+ * @brief 16進数整数を文字列に変換する (unsigned)
+ */
+[[nodiscard]] auto constexpr to_hex_chars(unsigned long long value) noexcept {
+  auto buffer = std::array<char, 17>{};
+  auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value, 16);
   if (ec != std::errc{}) {
     return std::pair{buffer, 0uz};
   }
@@ -65,6 +89,25 @@ namespace frozenchars::detail {
 }
 
 /**
+ * @brief 2進数整数を文字列に変換する (unsigned)
+ */
+[[nodiscard]] auto constexpr to_bin_chars(unsigned long long v) noexcept {
+  auto buffer = std::array<char, 65>{};
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  auto i = 0uz;
+  while (v > 0) {
+    buffer[i++] = '0' + static_cast<char>(v % 2); v /= 2;
+  }
+  for (auto const j : std::views::iota(0uz, i / 2)) {
+    std::swap(buffer[j], buffer[i - j - 1]);
+  }
+  return std::pair{buffer, i};
+}
+
+/**
  * @brief 8進数整数を文字列に変換する
  *
  * @param value 変換する整数
@@ -73,6 +116,25 @@ namespace frozenchars::detail {
 [[nodiscard]] auto constexpr to_oct_chars(long long value) noexcept {
   auto buffer = std::array<char, 23>{};
   auto v = static_cast<unsigned long long>(value);
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  auto i = 0uz;
+  while (v > 0) {
+    buffer[i++] = '0' + static_cast<char>(v % 8); v /= 8;
+  }
+  for (auto const j : std::views::iota(0uz, i / 2)) {
+    std::swap(buffer[j], buffer[i - j - 1]);
+  }
+  return std::pair{buffer, i};
+}
+
+/**
+ * @brief 8進数整数を文字列に変換する (unsigned)
+ */
+[[nodiscard]] auto constexpr to_oct_chars(unsigned long long v) noexcept {
+  auto buffer = std::array<char, 23>{};
   if (v == 0) {
     buffer[0] = '0';
     return std::pair{buffer, 1uz};
