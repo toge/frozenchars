@@ -4,9 +4,9 @@
 #include <string_view>
 
 #include "detail/compress_detail.hpp"
-#include "crush.hpp"
-#include "../string.hpp"
-#include "../literals.hpp"
+#include "frozenchars/json/crush.hpp"
+#include "frozenchars/string.hpp"
+#include "frozenchars/literals.hpp"
 
 namespace frozenchars::json {
 

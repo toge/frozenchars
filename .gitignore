@@ -6,6 +6,8 @@ a.out
 *.o
 *.a
 *.so
+*.gch
 docs/superpowers
 .opencode
 .commandcode
+.serena

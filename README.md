@@ -13,8 +13,9 @@
 ## 目次
 
 - [特徴](#特徴)
-- [クイックスタート](#クイックスタト)
-  - [最小コンパイル例（1コマンド）](#最小コンパイル例（1コマンド）)
+ - [クイックスタート](#クイックスタト)
+   - [最小コンパイル例（1コマンド）](#最小コンパイル例（1コマンド）)
+ - [モジュール別インクルード（推奨）](#モジュル別インクルド推奨)
 - [基本概念](#基本概念)
   - [FrozenString<N>](#frozenstringn)
   - [consteval（常にコンパイル時）](#consteval（常にコンパイル時）)
@@ -107,6 +108,68 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a
 > **凡例**: 以下の各節のコード例では、`#include "frozenchars.hpp"` と
 > `using namespace frozenchars;` `using namespace frozenchars::literals;` を
 > あらかじめ記述したものとします。
+
+## モジュール別インクルード（推奨）
+
+`frozenchars.hpp` は glaze / json を除く全機能をまとめた便利ヘッダですが、
+必要のない機能（正規表現・SIMD・コンテナ等）までコンパイル時に引き込むため、
+コンパイル負荷を抑えたい場合は**個別のモジュールヘッダ**を利用してください。
+
+モジュールヘッダは `include/frozenchars/mod/` にあり、いずれも `-I include` のもと
+`#include "frozenchars/mod/<名>.hpp"` で利用できます。各モジュールは自己完結しており、
+重複 include は `#pragma once` により安全です。
+
+| モジュール | 含まれる主な機能 |
+|---|---|
+| `frozenchars/mod/core.hpp` | `FrozenString` 型・`_fs` リテラル・`freeze`・数値変換・`std::formatter` |
+| `frozenchars/mod/algorithms.hpp` | `concat` 等の基本演算・`case_conv`・`split`・`multiline`・`path`・`minify`・`type_parser` |
+| `frozenchars/mod/encoding.hpp` | `url_encode`・`make_querystring` |
+| `frozenchars/mod/containers.hpp` | `frozen_map`・`frozen_set`・`trie_*` |
+| `frozenchars/mod/regex.hpp` | `frozen_regex`・`wildcard_match`・CTRE 連携 |
+| `frozenchars/mod/formatting.hpp` | `frozen_format` |
+| `frozenchars/mod/chrono.hpp` | 日付・時刻の相互変換 |
+| `frozenchars/mod/color.hpp` | ANSI カラー出力 |
+| `frozenchars/mod/ops.hpp` | `ops` 名前空間のパイプ演算子アダプタ |
+| `frozenchars/mod/all_basic.hpp` | 上記 9 個を集約（glaze / json を除く） |
+
+```cpp
+// 例: 文字列操作だけ使いたい場合
+#include "frozenchars/mod/algorithms.hpp"
+#include "frozenchars/mod/core.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr s = concat("a="_fs, 1);
+```
+
+### オプション統合（glaze / json）はオプトイン
+
+glaze 連携と JSON 圧縮はデフォルトでは読み込まれません。必要な場合は個別に
+インクルードしてください（該当ヘッダが依存ライブラリを引くため、使わない場合は
+コンパイルから除外されます）。
+
+```cpp
+#include "frozenchars/glaze_frozen_map.hpp"   // glaze 連携（FROZENCHARS_HAS_GLAZE ガード）
+#include "frozenchars/json/compress.hpp"      // JSON 圧縮
+#include "frozenchars/json/crush.hpp"         // JSON クラッシュ圧縮
+```
+
+### 傘ヘッダの非推奨化
+
+`#include "frozenchars.hpp"` は後方互換のため残されていますが非推奨です。
+インクルード時に次のメッセージが出力されます。
+
+```
+frozenchars.hpp is deprecated; prefer granular includes like frozenchars/mod/core.hpp
+```
+
+CI や無言ビルドでメッセージを抑制したい場合は、コンパイル時に
+`FROZENCHARS_USE_UMBRELLA` を定義してください。
+
+```bash
+g++ -std=c++23 -DFROZENCHARS_USE_UMBRELLA -I include main.cpp
+```
 
 ## 基本概念
 

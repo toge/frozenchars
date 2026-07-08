@@ -1,34 +1,16 @@
 #pragma once
 
-#include "frozenchars/concepts.hpp"
-#include "frozenchars/char_pred.hpp"
-#include "frozenchars/string.hpp"
-#include "frozenchars/freeze.hpp"
-#include "frozenchars/string_ops.hpp"
-#include "frozenchars/case_conv.hpp"
-#include "frozenchars/split.hpp"
-#include "frozenchars/multiline.hpp"
-#include "frozenchars/encoding.hpp"
-#include "frozenchars/color.hpp"
-#include "frozenchars/type_parser.hpp"
-#include "frozenchars/literals.hpp"
-#include "frozenchars/ops.hpp"
-#include "frozenchars/format.hpp"
-#include "frozenchars/url.hpp"
-#include "frozenchars/number_conv.hpp"
-#include "frozenchars/chrono.hpp"
-#include "frozenchars/wildcard.hpp"
-#include "frozenchars/ctre.hpp"
-#include "frozenchars/regex_comment.hpp"
-#include "frozenchars/map.hpp"
-#include "frozenchars/set.hpp"
-#include "frozenchars/trie_set.hpp"
-#include "frozenchars/trie_map.hpp"
-#include "frozenchars/frozen_regex.hpp"
-#include "frozenchars/frozen_format.hpp"
-#include "frozenchars/glaze_frozen_map.hpp"
-#include "frozenchars/detail/glaze_detect.hpp"
-#include "frozenchars/json/compress.hpp"
-#include "frozenchars/json/crush.hpp"
-#include "frozenchars/minify.hpp"
-#include "frozenchars/path.hpp"
+/**
+ * @file frozenchars.hpp
+ * @brief 便利(全部入り)ヘッダ。非推奨。
+ *
+ * コンパイル負荷削減のため、個別のモジュールヘッダ
+ * (frozenchars/mod/core.hpp 等) の利用を推奨する。
+ * 本ヘッダは glaze / json を除く全基本機能を集約する。
+ * 非推奨メッセージを抑制したい場合は FROZENCHARS_USE_UMBRELLA を定義する。
+ */
+#include "frozenchars/mod/all_basic.hpp"
+
+#ifndef FROZENCHARS_USE_UMBRELLA
+#pragma message("frozenchars.hpp is deprecated; prefer granular includes like frozenchars/mod/core.hpp")
+#endif

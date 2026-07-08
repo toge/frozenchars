@@ -5,8 +5,8 @@
 #include <string_view>
 
 #include "detail/crush_detail.hpp"
-#include "../string.hpp"
-#include "../literals.hpp"
+#include "frozenchars/string.hpp"
+#include "frozenchars/literals.hpp"
 
 namespace frozenchars::json {
 

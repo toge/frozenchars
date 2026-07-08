@@ -5,7 +5,7 @@
 #include <system_error>
 
 #include "frozenchars/string.hpp"
-#include "frozenchars/detail/chrono_impl.hpp"
+#include "detail/chrono_impl.hpp"
 
 namespace frozenchars {
 

@@ -4,7 +4,7 @@
 #include <concepts>
 #include <cstddef>
 
-#include "../string.hpp"
+#include "frozenchars/string.hpp"
 
 namespace frozenchars::detail {
 
