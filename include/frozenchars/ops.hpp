@@ -521,10 +521,6 @@ inline constexpr remove_leading_spaces_adaptor<>     remove_leading_spaces{};
 inline constexpr remove_trailing_spaces_adaptor<>    remove_trailing_spaces{};
 inline constexpr remove_regex_comment_adaptor        remove_regex_comment{};
 
-struct data_t {};
-
-inline constexpr data_t data{};
-
 // Predicate variants
 template <auto Pred>
 inline constexpr trim_adaptor<Pred> trim_if{};
@@ -593,26 +589,6 @@ inline constexpr join_adaptor<Delim> join{};
 template <size_t ElemN, size_t Count, FrozenString Delim>
 [[nodiscard]] consteval auto operator|(std::array<FrozenString<ElemN>, Count> const& lhs, join_adaptor<Delim> const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
-}
-
-template <size_t N>
-auto constexpr operator|(FrozenString<N>& lhs, data_t) noexcept {
-  return lhs.data();
-}
-
-template <size_t N>
-auto constexpr operator|(FrozenString<N> const& lhs, data_t) noexcept {
-  return lhs.data();
-}
-
-template <size_t N>
-auto constexpr operator|(FrozenString<N>&& lhs, data_t) noexcept {
-  return lhs.data();
-}
-
-template <size_t N>
-auto constexpr operator|(FrozenString<N> const&& lhs, data_t) noexcept {
-  return lhs.data();
 }
 
 template <size_t Width, char Fill = ' '>

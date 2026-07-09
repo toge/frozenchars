@@ -17,7 +17,7 @@ namespace ops {
  * CTREの固定文字列はコンパイル時に長さが決まっている必要がある。
  * FrozenStringのbufferサイズN-1と一致する必要があるため、一致しない場合は例外を投げる。
  */
-struct to_ctre_t : frozenchars::detail::pipe_adaptor_tag {
+struct to_ctre_t : frozenchars::pipe_adaptor_base {
   template <size_t N>
   [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const {
     if (str.length != N - 1) {

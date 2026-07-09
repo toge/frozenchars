@@ -19,26 +19,10 @@ struct FrozenString;
 struct pipe_adaptor_base {};
 
 /**
- * @brief パイプアダプタのコンセプト（内部用）
+ * @brief パイプアダプタのコンセプト
  */
 template <typename T>
-concept IsPipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_base>;
-
-/**
- * @brief パイプアダプタのコンセプト（診断メッセージ付き）
- */
-template <typename T>
-concept PipeAdaptor = IsPipeAdaptor<T>;
-
-namespace detail {
-
-/**
- * @brief 内部用のアダプタタグ
- * 後方互換性のために維持されています。
- */
-struct pipe_adaptor_tag : pipe_adaptor_base {};
-
-} // namespace detail
+concept PipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_base>;
 
 /**
  * @brief 合成されたアダプタ

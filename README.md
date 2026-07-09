@@ -97,6 +97,8 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 // msg.sv() == "answer=42, hex=0xff"
 ```
 
+> **注意**: `frozenchars.hpp` は非推奨です。コンパイル負荷削減のため、個別のモジュールヘッダ（`frozenchars/mod/core.hpp` 等）の利用を推奨します。詳しくは[モジュール別インクルード（推奨）](#モジュール別インクルード推奨)を参照してください。非推奨メッセージを抑制したい場合は `FROZENCHARS_USE_UMBRELLA` を定義してください。
+
 ### 最小コンパイル例（1コマンド）
 
 `example/example.cpp` を用意したら、次の1コマンドでビルド・実行できます。
@@ -114,6 +116,26 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a
 `frozenchars.hpp` は glaze / json を除く全機能をまとめた便利ヘッダですが、
 必要のない機能（正規表現・SIMD・コンテナ等）までコンパイル時に引き込むため、
 コンパイル負荷を抑えたい場合は**個別のモジュールヘッダ**を利用してください。
+
+### 移行ガイド
+
+既存コードで `frozenchars.hpp` を使用している場合、以下の手順でモジュール別インクルードに移行できます：
+
+1. **使用している機能を特定**: コード内で使用している関数・型を確認
+2. **対応するモジュールを選択**: 下記の表から必要なモジュールを選択
+3. **インクルードを置換**: `#include "frozenchars.hpp"` を必要なモジュールヘッダに置き換え
+4. **ビルド確認**: 必要なヘッダがすべて含まれているか確認
+
+**例: 文字列操作とコンテナのみを使用している場合**
+```cpp
+// 以前
+#include "frozenchars.hpp"
+
+// 移行後
+#include "frozenchars/mod/core.hpp"
+#include "frozenchars/mod/algorithms.hpp"
+#include "frozenchars/mod/containers.hpp"
+```
 
 モジュールヘッダは `include/frozenchars/mod/` にあり、いずれも `-I include` のもと
 `#include "frozenchars/mod/<名>.hpp"` で利用できます。各モジュールは自己完結しており、

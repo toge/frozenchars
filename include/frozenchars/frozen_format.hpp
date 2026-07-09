@@ -268,34 +268,6 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
   return src_len;
 }
 
-[[nodiscard]] consteval auto count_digits(unsigned long long v) noexcept -> size_t {
-  if (v == 0) return 1;
-  size_t n = 0;
-  while (v > 0) { ++n; v /= 10; }
-  return n;
-}
-
-[[nodiscard]] consteval auto count_hex_digits(unsigned long long v) noexcept -> size_t {
-  if (v == 0) return 1;
-  size_t n = 0;
-  while (v > 0) { ++n; v >>= 4; }
-  return n;
-}
-
-[[nodiscard]] consteval auto count_oct_digits(unsigned long long v) noexcept -> size_t {
-  if (v == 0) return 1;
-  size_t n = 0;
-  while (v > 0) { ++n; v >>= 3; }
-  return n;
-}
-
-[[nodiscard]] consteval auto count_bin_digits(unsigned long long v) noexcept -> size_t {
-  if (v == 0) return 1;
-  size_t n = 0;
-  while (v > 0) { ++n; v >>= 1; }
-  return n;
-}
-
 template <typename Buf>
 constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode) noexcept -> size_t {
   if (is_negative) { buf[pos] = '-'; return 1; }

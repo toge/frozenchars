@@ -14,21 +14,11 @@ namespace frozenchars::detail {
  * @brief 10進数整数を文字列に変換する
  *
  * @param v 変換する整数
- * @return auto consteval 変換された文字列とその長さのペア
+ * @return auto 変換された文字列とその長さのペア
  */
-[[nodiscard]] auto constexpr to_dec_chars(long long v) noexcept {
-  auto buffer = std::array<char, 21>{};
-  auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v);
-  if (ec != std::errc{}) {
-    return std::pair{buffer, 0uz};
-  }
-  return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
-}
-
-/**
- * @brief 10進数整数を文字列に変換する (unsigned)
- */
-[[nodiscard]] auto constexpr to_dec_chars(unsigned long long v) noexcept {
+template <typename T>
+  requires std::same_as<T, long long> || std::same_as<T, unsigned long long>
+[[nodiscard]] auto constexpr to_dec_chars(T v) noexcept {
   auto buffer = std::array<char, 21>{};
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v);
   if (ec != std::errc{}) {
@@ -43,19 +33,6 @@ namespace frozenchars::detail {
  * @param value 変換する整数
  * @return auto 変換文字列とその長さのペア
  */
-[[nodiscard]] auto constexpr to_hex_chars(long long value) noexcept {
-  auto buffer = std::array<char, 17>{};
-  auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(),
-                                       static_cast<unsigned long long>(value), 16);
-  if (ec != std::errc{}) {
-    return std::pair{buffer, 0uz};
-  }
-  return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
-}
-
-/**
- * @brief 16進数整数を文字列に変換する (unsigned)
- */
 [[nodiscard]] auto constexpr to_hex_chars(unsigned long long value) noexcept {
   auto buffer = std::array<char, 17>{};
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value, 16);
@@ -65,31 +42,15 @@ namespace frozenchars::detail {
   return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
 }
 
-/**
- * @brief 2進数整数を文字列に変換する
- *
- * @param value 変換する整数
- * @return auto 変換文字列とその長さのペア
- */
-[[nodiscard]] auto constexpr to_bin_chars(long long value) noexcept {
-  auto buffer = std::array<char, 65>{};
-  auto v = static_cast<unsigned long long>(value);
-  if (v == 0) {
-    buffer[0] = '0';
-    return std::pair{buffer, 1uz};
-  }
-  auto i = 0uz;
-  while (v > 0) {
-    buffer[i++] = '0' + static_cast<char>(v % 2); v /= 2;
-  }
-  for (auto const j : std::views::iota(0uz, i / 2)) {
-    std::swap(buffer[j], buffer[i - j - 1]);
-  }
-  return std::pair{buffer, i};
+[[nodiscard]] auto constexpr to_hex_chars(long long value) noexcept {
+  return to_hex_chars(static_cast<unsigned long long>(value));
 }
 
 /**
- * @brief 2進数整数を文字列に変換する (unsigned)
+ * @brief 2進数整数を文字列に変換する
+ *
+ * @param v 変換する整数
+ * @return auto 変換文字列とその長さのペア
  */
 [[nodiscard]] auto constexpr to_bin_chars(unsigned long long v) noexcept {
   auto buffer = std::array<char, 65>{};
@@ -107,31 +68,15 @@ namespace frozenchars::detail {
   return std::pair{buffer, i};
 }
 
-/**
- * @brief 8進数整数を文字列に変換する
- *
- * @param value 変換する整数
- * @return auto 変換された文字列とその長さのペア
- */
-[[nodiscard]] auto constexpr to_oct_chars(long long value) noexcept {
-  auto buffer = std::array<char, 23>{};
-  auto v = static_cast<unsigned long long>(value);
-  if (v == 0) {
-    buffer[0] = '0';
-    return std::pair{buffer, 1uz};
-  }
-  auto i = 0uz;
-  while (v > 0) {
-    buffer[i++] = '0' + static_cast<char>(v % 8); v /= 8;
-  }
-  for (auto const j : std::views::iota(0uz, i / 2)) {
-    std::swap(buffer[j], buffer[i - j - 1]);
-  }
-  return std::pair{buffer, i};
+[[nodiscard]] auto constexpr to_bin_chars(long long value) noexcept {
+  return to_bin_chars(static_cast<unsigned long long>(value));
 }
 
 /**
- * @brief 8進数整数を文字列に変換する (unsigned)
+ * @brief 8進数整数を文字列に変換する
+ *
+ * @param v 変換する整数
+ * @return auto 変換された文字列とその長さのペア
  */
 [[nodiscard]] auto constexpr to_oct_chars(unsigned long long v) noexcept {
   auto buffer = std::array<char, 23>{};
@@ -147,6 +92,10 @@ namespace frozenchars::detail {
     std::swap(buffer[j], buffer[i - j - 1]);
   }
   return std::pair{buffer, i};
+}
+
+[[nodiscard]] auto constexpr to_oct_chars(long long value) noexcept {
+  return to_oct_chars(static_cast<unsigned long long>(value));
 }
 
 /**
