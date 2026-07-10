@@ -57,6 +57,10 @@ static_assert(minify("RETURN 'It\\'s fine'") == "RETURN 'It\\'s fine'");
 static_assert(minify("MATCH (n) RETURN n; MATCH (m) RETURN m") ==
               "MATCH(n) RETURN n;MATCH(m) RETURN m");
 
+// 10. COPY (query) TO ... の識別子と ( の間のスペース保持
+static_assert(minify("COPY (MATCH (p:Person) RETURN p.id) TO '/tmp/out.csv' (HEADER=true)") ==
+              "COPY (MATCH(p:Person) RETURN p.id) TO '/tmp/out.csv' (HEADER=true)");
+
 // 9. 複数文末尾セミコロン: 最後の1つのみ除去
 static_assert(minify("MATCH (n) RETURN n; MATCH (m) RETURN m;") ==
               "MATCH(n) RETURN n;MATCH(m) RETURN m");
@@ -277,6 +281,21 @@ TEST_CASE("minify_cypher - エッジケース", "[minifier]")
   {
     auto constexpr result = minify("CALL\n    show_tables()\n  RETURN\n    * ");
     REQUIRE(result == "CALL show_tables() RETURN *");
+  }
+
+  SECTION("COPY (query) の識別子と ( の間にスペース保持")
+  {
+    auto constexpr result =
+        minify("COPY (MATCH (p:Person) RETURN p.id) TO 'x' (HEADER=true)");
+    REQUIRE(result ==
+            "COPY (MATCH(p:Person) RETURN p.id) TO 'x' (HEADER=true)");
+  }
+
+  SECTION("関数呼び出しの ( 直前にはスペースを入れない（圧縮率維持）")
+  {
+    auto constexpr result =
+        minify("RETURN array_cosine_similarity([1,2],[3,4])");
+    REQUIRE(result == "RETURN array_cosine_similarity([1,2],[3,4])");
   }
 }
 

@@ -1111,6 +1111,39 @@ constexpr bool isCloseChar(char c) noexcept
   return c == '\'' || c == '"' || c == '`' || c == ')' || c == ']' || c == '}';
 }
 
+/// @brief 識別子トークンが指定キーワードと一致するかを大文字小文字を無視して判定する
+constexpr bool cypher_token_eq(char const* tok, std::size_t len, char const* ref) noexcept
+{
+  std::size_t rlen = 0;
+  while (ref[rlen] != '\0') {
+    ++rlen;
+  }
+  if (len != rlen) {
+    return false;
+  }
+  for (std::size_t k = 0; k < len; ++k) {
+    char a = tok[k];
+    if (a >= 'a' && a <= 'z') {
+      a = static_cast<char>(a - ('a' - 'A'));
+    }
+    char b = ref[k];
+    if (b >= 'a' && b <= 'z') {
+      b = static_cast<char>(b - ('a' - 'A'));
+    }
+    if (a != b) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// @brief 直後の '(' の前に空白が必須な Cypher キーワードか判定する
+/// （文法 iC_CopyTO: COPY SP '(' が SP を必須とする）
+constexpr bool needs_space_before_paren(char const* tok, std::size_t len) noexcept
+{
+  return cypher_token_eq(tok, len, "COPY");
+}
+
 /// @brief Cypher ミニファイ用の字句解析状態
 enum class minify_state : unsigned char {
   normal,        ///< 通常コード
@@ -1134,12 +1167,17 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
   using detail::isCloseChar;
   using detail::isIdentChar;
   using detail::minify_state;
+  using detail::needs_space_before_paren;
 
   // 字句解析状態・出力長・空白遅延フラグ・最終出力文字の初期化
   auto state = minify_state::normal;
   std::size_t out_len = 0;
   bool pending_space = false;
   char last_out = '\0';
+
+  // 直前の識別子トークン（'(' の直前に空白が必須なキーワード判定用）
+  char last_id[16]{};
+  std::size_t last_id_len = 0;
 
   // 出力ヘルパ: バッファ容量の範囲内で1文字書き込み、最終出力文字を記録する
   auto write_char = [&](char c) noexcept {
@@ -1176,11 +1214,30 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
           bool const close_to_id = isCloseChar(last_out) && isIdentChar(c);
           bool const wild_to_id  = last_out == '*' && isIdentChar(c);
           bool const id_to_wild  = isIdentChar(last_out) && c == '*';
-          if (id_to_id || id_to_q || close_to_id || wild_to_id || id_to_wild) {
+          bool const id_to_paren = isIdentChar(last_out) && c == '(';
+          bool const close_to_paren = isCloseChar(last_out) && c == '(';
+          if (id_to_id || id_to_q || close_to_id || wild_to_id || id_to_wild || close_to_paren) {
+            write_char(' ');
+          } else if (id_to_paren && needs_space_before_paren(last_id, last_id_len)) {
+            // COPY 等、直後の '(' の前に空白が必須なキーワードのみ空白を残す
             write_char(' ');
           }
         }
         pending_space = false;
+
+        // 直前の識別子トークンを記録する（'(' の直前判定用）
+        if (isIdentChar(c)) {
+          if (isIdentChar(last_out)) {
+            if (last_id_len < sizeof(last_id)) {
+              last_id[last_id_len++] = c;
+            }
+          } else {
+            last_id[0] = c;
+            last_id_len = 1;
+          }
+        } else {
+          last_id_len = 0;
+        }
 
         // 引用符開始を検出したら対応する状態へ遷移し、通常文字はそのまま出力する
         if (c == '\'') {
