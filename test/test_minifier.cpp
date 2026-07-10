@@ -657,6 +657,46 @@ TEST_CASE("minify_cypher - ops パイプ演算子", "[minifier]")
   }
 }
 
+namespace {
+// minify 系の戻り値は size() が実長を返し、未使用バッファ領域がゼロであること
+// （NTTP 変換時に末尾 NULL が出力へ混入しないことを保証する regression チェック）
+template <std::size_t N>
+constexpr bool buffer_trailing_zero(frozenchars::FrozenString<N> const& s) {
+  for (std::size_t i = s.size(); i + 1 < N; ++i) {
+    if (s.buffer[i] != '\0') {
+      return false;
+    }
+  }
+  return true;
+}
+} // namespace
+
+TEST_CASE("minify ops - size() は実長を返しバッファ末尾はゼロ", "[minifier][regression]")
+{
+  // size() は入力容量ではなく minify 後の実コンテンツ長を返すこと
+  static_assert(("MATCH (n) RETURN n"_fs | frozenchars::ops::minify_cypher).size() == 17);
+  static_assert(("<div>  hi  </div>"_fs | frozenchars::ops::minify_html).size() == 13);
+  static_assert(("<root>  x  </root>"_fs | frozenchars::ops::minify_xml).size() == 14);
+  static_assert(("{ \"a\" : 1 }"_fs | frozenchars::ops::minify_json).size() == 7);
+  static_assert(("a: 1\nb: 2"_fs | frozenchars::ops::minify_yaml).size() == 9);
+  static_assert(("SELECT * FROM t"_fs | frozenchars::ops::minify_sql).size() == 15);
+
+  // size() が capacity より小さく、末尾以降のバッファがゼロであること
+  auto constexpr c = "MATCH (n) RETURN n"_fs | frozenchars::ops::minify_cypher;
+  static_assert(c.size() < c.buffer.size());
+  static_assert(buffer_trailing_zero(c));
+
+  auto constexpr h = "<div>  hi  </div>"_fs | frozenchars::ops::minify_html;
+  static_assert(buffer_trailing_zero(h));
+
+  auto constexpr j = "{ \"a\" : 1 }"_fs | frozenchars::ops::minify_json;
+  static_assert(buffer_trailing_zero(j));
+
+  REQUIRE(c.size() == 17);
+  REQUIRE(h.size() == 13);
+  REQUIRE(j.size() == 7);
+}
+
 TEST_CASE("minify_html - ops パイプ演算子", "[minifier]")
 {
   auto constexpr result = "<div>  hi  </div>"_fs
