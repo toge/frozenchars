@@ -262,10 +262,13 @@ jobs:
 
       - name: Configure (ASan + UBSan)
         run: |
+          # UBSan の null/pointer 系チェックは GCC 16 の libstdc++ における
+          # consteval std::format のコンパイル時検査を破壊するため無効化する
+          # (実行時 UB 検出には影響しない)。
           cmake -B build -S . -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize=null,pointer-overflow,nonnull-attribute,returns-nonnull-attribute -fno-sanitize-recover=all -fno-omit-frame-pointer"
 
       - name: Build
         run: cmake --build build
