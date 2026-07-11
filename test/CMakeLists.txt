@@ -62,6 +62,12 @@ endif()
 
 add_test(NAME all_test COMMAND all_test -r junit)
 
+# コアモジュール単独スモーク: glaze/json/regex/SIMD を引き込まずにビルド・実行できることを確認
+add_executable(smoke_mod_core smoke_mod_core.cpp)
+target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
+target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
+add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
+
 add_subdirectory(../example example_examples)
 
 add_executable(bench_frozen_map bench_frozen_map.cpp)
@@ -193,6 +199,28 @@ assert_frozen_map_compile_fail(
   NAME parse_to_tuple_void_pointer
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/parse_to_tuple_void_pointer.cpp
   EXPECTED_TEXT "Unknown type name"
+)
+
+# ---- frozen_format compile-fail tests ----
+
+assert_frozen_map_compile_fail(
+  NAME frozen_format_too_few_args
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_too_few_args.cpp
+  EXPECTED_TEXT "frozen_format: number of arguments does not match number of format fields"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_format_unmatched_brace
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_unmatched_brace.cpp
+  EXPECTED_TEXT "frozen_format: unmatched '{' in format string"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_format_unmatched_brace2
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_unmatched_brace2.cpp
+  EXPECTED_TEXT "frozen_format: unmatched '}' in format string"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
 assert_frozen_map_compile_fail(

@@ -2068,13 +2068,10 @@ cmake --install build --prefix ./install
 
 インストール先には `frozenchars.hpp`、依存ヘッダ、および `find_package(frozenchars CONFIG)` 用の CMake 設定が配置されます。
 
-### vcpkg
+### vcpkg（将来対応予定）
 
-```bash
-vcpkg install frozenchars
-```
-
-> vcpkg レジストリに登録されているため、`vcpkg.json` の依存関係に追加することでも利用できます。
+> 現時点で vcpkg の公式レジストリには未登録です。将来的にポートを提供する予定です。
+> それまでは上記の `cmake --install` によるインストール、またはサブディレクトリ／`FetchContent` での取り込みをご利用ください。
 
 ## ライセンス
 
@@ -2082,4 +2079,4 @@ MIT License
 
 SPDX-License-Identifier: MIT
 
-Copyright (c) 2024-2025 anomalyco
+Copyright (c) 2026 toge

@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
-project(frozenchars LANGUAGES CXX)
 
 set(FROZENCHARS_VERSION "0.1.0")
+
+project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
 option(BUILD_TEST "Enable tests" ON)
 
