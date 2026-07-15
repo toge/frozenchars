@@ -16,8 +16,13 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief frozen_map, frozen_trie_map, std::map, std::unordered_map の検索性能比較ベンチマーク。
+    @details 短キー・HTTP メソッド・共通接頭辞・NATO アルファベット・長キー・等長キーの
+    6パターンで計測する。*/
+
 namespace {
 
+/** @brief ベンチマーク結果を格納する構造体。*/
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -25,8 +30,15 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用シンク変数。*/
 volatile std::size_t g_sink = 0;
 
+/** @brief 任意の関数を複数回実行し実行時間を計測する。
+    @tparam Func 計測対象の関数型
+    @param name 結果表示ラベル
+    @param fn 計測対象関数
+    @param iterations 反復回数
+    @return 計測結果 */
 template <typename Func>
 auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
   for (std::uint64_t i = 0; i < 500; ++i) fn();
@@ -42,6 +54,9 @@ auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> benc
   };
 }
 
+/** @brief ベンチマーク結果をテーブル形式で標準出力に表示する。
+    @param label セクションラベル
+    @param results 表示する結果の配列 */
 auto print_results(std::string_view label, std::vector<bench_result> const& results) -> void {
   std::cout << "\n[" << label << "]\n\n";
   std::cout << std::left << std::setw(44) << "case"
@@ -67,7 +82,7 @@ int main(int argc, char** argv) {
     if (parsed > 0) iterations = static_cast<std::uint64_t>(parsed);
   }
 
-  // ---- Pattern 1: Short unique-first-char keys (3 keys) ----
+  // ---- パターン1: 短いキー（先頭文字が一意、3キー） ----
   constexpr auto p1_frozen = frozen_map<int, "a"_fs, "b"_fs, "c"_fs>{
     std::array<int, 3>{1, 2, 3}
   };
@@ -77,7 +92,7 @@ int main(int argc, char** argv) {
   auto const p1_stdmap = std::map<std::string_view, int>{{"a", 1}, {"b", 2}, {"c", 3}};
   auto const p1_stdunordered = std::unordered_map<std::string_view, int>{{"a", 1}, {"b", 2}, {"c", 3}};
 
-  // ---- Pattern 2: HTTP methods (5 keys, mixed lengths) ----
+  // ---- パターン2: HTTPメソッド（5キー、混在長） ----
   constexpr auto p2_frozen = frozen_map<int, "GET"_fs, "PUT"_fs, "POST"_fs, "DELETE"_fs, "HEAD"_fs>{
     std::array<int, 5>{1, 2, 3, 4, 5}
   };
@@ -91,7 +106,7 @@ int main(int argc, char** argv) {
     {"GET", 1}, {"PUT", 2}, {"POST", 3}, {"DELETE", 4}, {"HEAD", 5}
   };
 
-  // ---- Pattern 3: Common prefix (4 keys) ----
+  // ---- パターン3: 共通接頭辞（4キー） ----
   constexpr auto p3_frozen = frozen_map<int, "timeout"_fs, "timeout_ms"_fs, "timeout_us"_fs, "timeout_ns"_fs>{
     std::array<int, 4>{1, 2, 3, 4}
   };
@@ -105,7 +120,7 @@ int main(int argc, char** argv) {
     {"timeout", 1}, {"timeout_ms", 2}, {"timeout_us", 3}, {"timeout_ns", 4}
   };
 
-  // ---- Pattern 4: NATO alphabet (20 keys) ----
+  // ---- パターン4: NATOアルファベット（20キー） ----
   constexpr auto p4_frozen = frozen_map<int,
     "alpha"_fs, "bravo"_fs, "charlie"_fs, "delta"_fs, "echo"_fs,
     "foxtrot"_fs, "golf"_fs, "hotel"_fs, "india"_fs, "juliet"_fs,
@@ -133,7 +148,7 @@ int main(int argc, char** argv) {
     {"papa", 16}, {"quebec", 17}, {"romeo", 18}, {"sierra", 19}, {"tango", 20}
   };
 
-  // ---- Pattern 5: Long keys (>30 chars, 5 keys) ----
+  // ---- パターン5: 長いキー（30文字超、5キー） ----
   constexpr auto p5_frozen = frozen_map<int,
     "configuration_timeout_ms"_fs, "maximum_retry_count_param"_fs,
     "connection_pool_size_setting"_fs, "authentication_token_secret_key"_fs,
@@ -157,7 +172,7 @@ int main(int argc, char** argv) {
     {"response_body_encoding_format", 500}
   };
 
-  // ---- Pattern 6: Same-length keys (10 keys, 21 chars each) ----
+  // ---- パターン6: 等長キー（10キー、各21文字） ----
   constexpr auto p6_frozen = frozen_map<int,
     "configuration_key_one"_fs, "configuration_key_two"_fs,
     "configuration_key_thr"_fs, "configuration_key_fou"_fs,
@@ -189,7 +204,7 @@ int main(int argc, char** argv) {
     {"configuration_key_nin", 9}, {"configuration_key_ten", 10}
   };
 
-  // ---- Pattern 7: medium keys for round-robin ----
+  // ---- パターン7: round-robin用の中程度キー ----
   constexpr auto p7_frozen = frozen_map<int,
     "timeout"_fs, "retry"_fs, "backoff"_fs, "endpoint"_fs, "headers"_fs,
     "method"_fs, "path"_fs, "query"_fs, "body"_fs, "status"_fs>{

@@ -11,6 +11,12 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/**
+ * @brief frozen_trie_index / frozen_trie_set / frozen_trie_map のテスト。
+ *   トライ木による完全一致検索、共通プレフィックス、深い分岐、単一キー、
+ *   セットのメンバーシップ・イテレーション、マップの基本操作・イテレーションを検証する。
+ */
+
 TEST_CASE("frozen_trie_index finds exact keys", "[frozen_trie]") {
   using Idx = frozen_trie_index<"cat"_fs, "car"_fs, "dog"_fs, "door"_fs, "dove"_fs>;
 

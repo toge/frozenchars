@@ -1,7 +1,5 @@
 #pragma once
 
-#include <utility>
-
 #include "freeze.hpp"
 #include "encoding.hpp"
 
@@ -99,4 +97,4 @@ template<class ... Args>
   }, t));
 }
 
-}
+} // namespace frozenchars

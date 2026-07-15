@@ -15,6 +15,11 @@
 
 namespace frozenchars {
 
+/**
+ * @brief コンパイル時に固定されたキー集合を表すクラス
+ *
+ * @tparam Keys 集合に含まれるキー文字列（FrozenString の非型テンプレート引数）
+ */
 template <FrozenString... Keys>
 class frozen_set {
   static_assert(sizeof...(Keys) > 0, "frozen_set requires at least one key");

@@ -677,8 +677,12 @@ TEST_CASE("minify_cypher - ops パイプ演算子", "[minifier]")
 }
 
 namespace {
-// minify 系の戻り値は size() が実長を返し、未使用バッファ領域がゼロであること
-// （NTTP 変換時に末尾 NULL が出力へ混入しないことを保証する regression チェック）
+/** @brief minify 出力のバッファ末尾がゼロ埋めされていることを検証する。
+    @details size() が実コンテンツ長を返し、未使用領域がゼロであることを確認する。
+    NTTP 変換時に末尾 NULL が出力に混入しないことの回帰チェック。
+    @tparam N バッファサイズ
+    @param s 検証対象の FrozenString
+    @return 未使用領域がすべてゼロの場合 true */
 template <std::size_t N>
 constexpr bool buffer_trailing_zero(frozenchars::FrozenString<N> const& s) {
   for (std::size_t i = s.size(); i + 1 < N; ++i) {

@@ -1,6 +1,8 @@
 #include "catch2/catch_all.hpp"
 #include "frozenchars.hpp"
 
+/** @brief Base64 エンコード/デコードのテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 namespace fops = frozenchars::ops;

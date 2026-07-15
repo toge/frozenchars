@@ -1,9 +1,6 @@
 #include "catch2/catch_all.hpp"
 
-#include <algorithm>
-#include <array>
 #include <charconv>
-#include <string>
 #include <string_view>
 
 #include "frozenchars/literals.hpp"
@@ -12,6 +9,7 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief frozen_regex のコンパイル時正規表現エンジンの機能テスト。リテラルマッチ、連接、選択、文字クラス、グループ化、エスケープ、列挙、マップ変換を検証する。 */
 TEST_CASE("frozen_regex literal match", "[frozen_regex]") {
   using R = frozen_regex<"a"_fs>;
   static_assert(R::count_v == 1);
@@ -260,10 +258,10 @@ TEST_CASE("frozen_regex regex_map custom type", "[frozen_regex][frozen_map]") {
 }
 
 TEST_CASE("frozen_regex regex_map asserts count_v", "[frozen_regex][frozen_map]") {
-  // to_frozen_map with wrong value count should fail (compile-time test via pattern match)
+  // 間違った値の個数で to_frozen_map がコンパイルエラーになることの確認
   using R = frozen_regex<"x|y"_fs>;
   static_assert(R::count_v == 2);
-  // regex_map deduces count_v automatically from enumeration — no manual count needed
+  // regex_map は列挙から自動的に count_v を推論するため手動カウントは不要
   constexpr auto map = R::regex_map<[](std::string_view) { return 1; }>();
   static_assert(map.at("x") == 1);
   static_assert(map.at("y") == 1);

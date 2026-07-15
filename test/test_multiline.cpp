@@ -1,6 +1,8 @@
 #include "catch2/catch_all.hpp"
 #include "frozenchars.hpp"
 
+/** @brief 複数行文字列の整形・トリミング・コメント除去・結合処理のテスト */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

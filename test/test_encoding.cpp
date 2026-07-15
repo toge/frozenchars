@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief 16進数エンコード/デコード、HTML エンコード/デコード、UTF-8 長さ計算のテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

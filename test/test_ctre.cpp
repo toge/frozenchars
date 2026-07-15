@@ -9,6 +9,7 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief FrozenString から ctll::fixed_string への変換 (to_ctre) と CTRE 正規表現エンジンとの連携をテストする。 */
 // ---- コンパイル時検証: to_ctre パイプ ----
 // "hello"_fs は FrozenString<6>: length==5, N-1==5 → to_ctre パイプ適用可
 static constexpr auto ctre_pipe_hello = "hello"_fs | ops::to_ctre;

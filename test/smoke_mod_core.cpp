@@ -4,6 +4,10 @@
 
 #include <cassert>
 
+/** @brief コアモジュールのみでコンパイルが通ることの確認。
+    @details glaze / json / regex / SIMD を引き込まないことを検証する。
+    @note スタンドアロンスモークテスト。*/
+
 int main() {
   using namespace frozenchars::literals;
 

@@ -5,16 +5,19 @@
 
 using namespace frozenchars;
 
+/** @brief split 実装の直接テスト。手動デバッグ用スタンドアロンファイル。
+    @details `split_count_impl` によるコンパイル時トークン分割を検証する。*/
+
 int main() {
-    static constexpr auto fs = FrozenString<20>("apple,banana,cherry");
+  static constexpr auto fs = FrozenString<20>("apple,banana,cherry");
 
-    constexpr auto count = detail::split_count_impl<detail::is_char<','>>(fs);
+  constexpr auto count = detail::split_count_impl<detail::is_char<','>>(fs);
 
-    std::cout << "Count with is_char: " << count << "\n";
+  std::cout << "Count with is_char: " << count << "\n";
 
-    if (count == 3) {
-        std::cout << "SUCCESS\n";
-        return 0;
-    }
-    return 1;
+  if (count == 3) {
+    std::cout << "SUCCESS\n";
+    return 0;
+  }
+  return 1;
 }

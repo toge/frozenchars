@@ -3,7 +3,6 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
-#include <stdexcept>
 #include <algorithm>
 
 #include "string.hpp"
@@ -111,35 +110,37 @@ template <size_t Count, auto IsDelimiter = detail::is_any_whitespace, size_t N>
 }
 
 namespace detail {
-  /**
-   * @brief split の結果を型レベルで保持するためのヘルパー
-   */
-  template <auto Str, auto IsDelim>
-  struct split_result {
-    static constexpr auto token_count = detail::split_count_impl<IsDelim>(Str);
-    static constexpr auto max_len     = detail::max_token_len_impl<IsDelim>(Str);
 
-    static constexpr auto get_value() {
-        auto res = std::array<FrozenString<max_len + 1>, token_count>{};
-        for (auto& token : res) token.length = 0;
-        auto src = 0uz;
-        auto dst = 0uz;
-        while (src < Str.length && dst < token_count) {
-          while (src < Str.length && IsDelim(Str.buffer[src])) ++src;
-          if (src >= Str.length) break;
-          auto token_len = 0uz;
-          while (src < Str.length && !IsDelim(Str.buffer[src])) {
-            res[dst].buffer[token_len++] = Str.buffer[src++];
-          }
-          res[dst].buffer[token_len] = '\0';
-          res[dst].length = token_len;
-          ++dst;
+/**
+ * @brief split の結果を型レベルで保持するためのヘルパー
+ */
+template <auto Str, auto IsDelim>
+struct split_result {
+  static constexpr auto token_count = detail::split_count_impl<IsDelim>(Str);
+  static constexpr auto max_len     = detail::max_token_len_impl<IsDelim>(Str);
+
+  static constexpr auto get_value() {
+      auto res = std::array<FrozenString<max_len + 1>, token_count>{};
+      for (auto& token : res) token.length = 0;
+      auto src = 0uz;
+      auto dst = 0uz;
+      while (src < Str.length && dst < token_count) {
+        while (src < Str.length && IsDelim(Str.buffer[src])) ++src;
+        if (src >= Str.length) break;
+        auto token_len = 0uz;
+        while (src < Str.length && !IsDelim(Str.buffer[src])) {
+          res[dst].buffer[token_len++] = Str.buffer[src++];
         }
-        return res;
-    }
-    static constexpr auto value = get_value();
-  };
-}
+        res[dst].buffer[token_len] = '\0';
+        res[dst].length = token_len;
+        ++dst;
+      }
+      return res;
+  }
+  static constexpr auto value = get_value();
+};
+
+} // namespace detail
 
 /**
  * @brief 文字列をNTTPとして受け取り、正確なサイズの配列に分割する

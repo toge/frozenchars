@@ -13,8 +13,15 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/**
+ * @brief frozen_map のルックアップ性能ベンチマーク。
+ *   小（3 キー）・中（10）・大（20）・XL（50）・長キー（5）・同長キー（10）の各パターンで
+ *   find / at / contains / get のヒット・ミスを計測する。
+ */
+
 namespace {
 
+/** @brief ベンチマーク1件の計測結果を保持する構造体。名前・反復回数・経過時間・1反復あたりの時間を持つ。 */
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -22,8 +29,10 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用の揮発性シンク変数。ベンチマーク結果の書き込み先として使う。 */
 volatile std::size_t g_sink = 0;
 
+/** @brief 指定された関数を iterations 回実行し、経過時間を bench_result として返す。 */
 template <typename Func>
 auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
   for (std::uint64_t i = 0; i < 500; ++i) fn();
@@ -39,6 +48,7 @@ auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> benc
   };
 }
 
+/** @brief ベンチマーク結果の一覧を整形して標準出力に表示する。 */
 auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[frozen_map benchmark]\n\n";
   std::cout << std::left << std::setw(44) << "case"
@@ -64,19 +74,19 @@ int main(int argc, char** argv) {
     if (parsed > 0) iterations = static_cast<std::uint64_t>(parsed);
   }
 
-  // ---- Small map: 3 keys, all_lengths_unique ----
+  // ---- 小マップ: 3キー、全長ユニーク ----
   constexpr auto small_map = frozen_map<int, "aa"_fs, "bbbbbb"_fs, "cccccddddddddd"_fs>{
     std::array<int, 3>{10, 20, 30}
   };
 
-  // ---- Medium map: 10 keys, mixed lengths ----
+  // ---- 中マップ: 10キー、混在長 ----
   constexpr auto medium_map = frozen_map<int,
     "timeout"_fs, "retry"_fs, "backoff"_fs, "endpoint"_fs, "headers"_fs,
     "method"_fs, "path"_fs, "query"_fs, "body"_fs, "status"_fs>{
     std::array<int, 10>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
   };
 
-  // ---- Large map: 20 keys ----
+  // ---- 大マップ: 20キー ----
   constexpr auto large_map = frozen_map<int,
     "alpha"_fs, "bravo"_fs, "charlie"_fs, "delta"_fs, "echo"_fs,
     "foxtrot"_fs, "golf"_fs, "hotel"_fs, "india"_fs, "juliet"_fs,
@@ -85,7 +95,7 @@ int main(int argc, char** argv) {
     std::array<int, 20>{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}
   };
 
-  // ---- XL map: 50 keys (linear scan path) ----
+  // ---- XLマップ: 50キー ----
   constexpr auto xl_map = frozen_map<int,
     "k01"_fs, "k02"_fs, "k03"_fs, "k04"_fs, "k05"_fs,
     "k06"_fs, "k07"_fs, "k08"_fs, "k09"_fs, "k10"_fs,
@@ -126,7 +136,7 @@ int main(int argc, char** argv) {
   results.push_back(measure("xl(50) find hit last", [&]{ auto it = xl_map.find("k50"); g_sink += (it != xl_map.end()); }, iters));
   results.push_back(measure("xl(50) find miss", [&]{ auto it = xl_map.find("k99"); g_sink += (it != xl_map.end()); }, iters));
 
-  // Long key map (5 keys, 25-40 chars): exercises CRC 8-byte path
+  // 長キーマップ（5キー、25-40文字）: CRC 8バイトパスの動作確認
   constexpr auto longkey_map = frozen_map<int,
     "configuration_timeout_ms"_fs, "maximum_retry_count_param"_fs,
     "connection_pool_size_setting"_fs, "authentication_token_secret_key"_fs,
@@ -136,7 +146,7 @@ int main(int argc, char** argv) {
   results.push_back(measure("longkey(5) find hit", [&]{ auto it = longkey_map.find("authentication_token_secret_key"); g_sink += (it != longkey_map.end()); }, iters));
   results.push_back(measure("longkey(5) find miss", [&]{ auto it = longkey_map.find("nonexistent_key_that_is_long_enough"); g_sink += (it != longkey_map.end()); }, iters));
 
-  // Same-length long keys (10 keys, all 21 chars): forces hash path (all_lengths_unique_ = false)
+  // 同長キー（10キー、全21文字）: ハッシュパスを強制（all_lengths_unique_ = false）
   constexpr auto samelen_map = frozen_map<int,
     "configuration_key_one"_fs, "configuration_key_two"_fs,
     "configuration_key_thr"_fs, "configuration_key_fou"_fs,

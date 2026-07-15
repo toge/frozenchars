@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstddef>
-#include <limits>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -10,28 +9,33 @@
 
 #include "concepts.hpp"
 #include "detail/number_conv.hpp"
-#include "freeze.hpp"
-#include "literals.hpp"
 #include "string.hpp"
 
 namespace frozenchars::detail {
 
+/**
+ * @brief フォーマット指定子（{...} 内のオプション）を保持する構造体
+ */
 struct format_spec {
-  char fill = ' ';
-  char align = '\0';
-  char sign = '\0';
-  bool zero = false;
-  int width = 0;
-  int precision = -1;
-  char type = '\0';
+  char fill = ' ';         // 埋め文字（{fill}{align} の形で指定、デフォルトは空白）
+  char align = '\0';       // 配置 '<'（左）'#'（右）'^'（中央）、未指定は '\0'
+  char sign = '\0';        // 符号表示 '+'(常に) '-'(負のみ) ' '(負で空白) 、未指定は '\0'
+  bool zero = false;       // 数値の左側を '0' で埋めるか（width と共に使用）
+  int width = 0;           // フィールド最小幅（0 は指定なし）
+  int precision = -1;      // 浮動小数点/文字列の精度（-1 は指定なし）
+  char type = '\0';        // 変換型 'd'/'x'/'o'/'b'/'f'/'e'/'g' 等、未指定は '\0'
 };
 
 /**
  * @brief フォーマット指定子文字列を解析する
+ *
+ * @param data フォーマット文字列全体へのポインタ
+ * @param len フォーマット文字列の長さ（現在は未使用）
+ * @param start 解析開始位置（'{' の位置）
+ * @param end 解析終了位置（'}' の位置）
+ * @return format_spec 解析結果の指定子
  */
-[[nodiscard]] consteval auto parse_spec(char const* data, size_t /*len*/, size_t start, size_t end) noexcept
-  -> format_spec
-{
+[[nodiscard]] consteval auto parse_spec(char const* data, size_t /*len*/, size_t start, size_t end) noexcept -> format_spec {
   format_spec spec{};
   auto i = start;
   if (i < end && data[i] == '{') ++i;
@@ -70,7 +74,7 @@ struct format_spec {
       w = w * 10 + (data[i] - '0');
       ++i;
     }
-    if (w > 9999) w = 9999;
+    if (w > 9999) w = 9999;  // 幅の上限（巨大な幅によるバッファ確保の暴走を防ぐ）
     spec.width = w;
   }
 
@@ -81,7 +85,7 @@ struct format_spec {
       p = p * 10 + (data[i] - '0');
       ++i;
     }
-    if (p > 9999) p = 9999;
+    if (p > 9999) p = 9999;  // 精度の上限（同上）
     spec.precision = p;
   }
 
@@ -93,6 +97,13 @@ struct format_spec {
   return spec;
 }
 
+/**
+ * @brief フォーマット文字列中の置換フィールド数（{} の個数）を数える
+ *
+ * @param data フォーマット文字列
+ * @param len 文字列長
+ * @return size_t 置換対象のフィールド数（エスケープされた {{}} は除く）
+ */
 [[nodiscard]] consteval auto count_fields(char const* data, size_t len) noexcept -> size_t {
   auto count = 0uz;
   auto i = 0uz;
@@ -115,6 +126,13 @@ struct format_spec {
   return count;
 }
 
+/**
+ * @brief 出力されるリテラル文字数（置換フィールドを除く実文字数）を数える
+ *
+ * @param data フォーマット文字列
+ * @param len 文字列長
+ * @return size_t エスケープを展開したリテラル文字の個数
+ */
 [[nodiscard]] consteval auto count_literal_chars(char const* data, size_t len) noexcept -> size_t {
   auto count = 0uz;
   auto i = 0uz;
@@ -140,6 +158,14 @@ struct format_spec {
   return count;
 }
 
+/**
+ * @brief フォーマット文字列の { } の対応を検証する
+ *
+ * @param data フォーマット文字列
+ * @param len 文字列長
+ *
+ * @warning 対応が取れない '{' や '}'（エスケープでない）がある場合はコンパイル時に例外を投げる
+ */
 consteval void validate_format(char const* data, size_t len) {
   size_t i = 0;
   while (i < len) {
@@ -192,7 +218,7 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
 }
 
 /**
- * @brief 浮動小数点数を科学計数法でバッファに書き込む
+ * @brief 浮動小数点数を科学計数法(例:1.2e+03)でバッファに書き込む
  */
 template <typename Buf>
 constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
@@ -250,8 +276,8 @@ template <typename Buf>
 constexpr auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
   if (precision < 0) precision = 6;
 
-  char fixed_buf[128]{};
-  char sci_buf[128]{};
+  char fixed_buf[128]{};  // 固定小数点表現の作業バッファ（double の最大桁数に対して十分な余裕）
+  char sci_buf[128]{};    // 科学計数法表現の作業バッファ
   auto fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
   auto sci_len = format_float_scientific(sci_buf, 0, value, precision);
 
@@ -268,6 +294,15 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
   return src_len;
 }
 
+/**
+ * @brief フィールド先頭に符号文字を書き込む
+ *
+ * @param buf 出力バッファ
+ * @param pos 書き込み位置
+ * @param is_negative 値が負かどうか
+ * @param sign_mode 符号表示モード（'+' / ' ' / その他は負のみ）
+ * @return size_t 書き込んだバイト数（符号なしなら 0）
+ */
 template <typename Buf>
 constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode) noexcept -> size_t {
   if (is_negative) { buf[pos] = '-'; return 1; }
@@ -276,10 +311,20 @@ constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode
   return 0;
 }
 
+/**
+ * @brief 1 つの引数を指定子に従ってバッファへ書き込む
+ *
+ * @param buf 出力バッファ
+ * @param pos 書き込み開始位置
+ * @param arg フォーマットする引数
+ * @param spec フォーマット指定子
+ * @return size_t 書き込んだ文字数
+ */
 template <typename Buf, typename T>
 constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec) noexcept -> size_t {
   auto start = pos;
 
+  // 真偽値: "true"/"false" を文字列として配置・埋め文字処理する
   if constexpr (std::same_as<std::remove_cvref_t<T>, bool>) {
     std::string_view sv = arg ? "true" : "false";
     size_t sv_len = sv.size();
@@ -324,22 +369,24 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
       buf[pos] = arg; ++pos;
       for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
     }
+  // 整数: 符号判定・基数変換・符号/ゼロ埋め/配置を行う
   } else if constexpr (Integral<T>) {
     bool is_neg;
     unsigned long long uv;
     if constexpr (std::is_signed_v<T>) {
       auto const v = static_cast<long long>(arg);
       is_neg = v < 0;
+      // 負数を符号なしへ変換（INT_MIN でも正しく扱うため -(v+1)+1 とする）
       uv = static_cast<unsigned long long>(v < 0 ? -(v + 1) + 1 : v);
     } else {
       is_neg = false;
       uv = static_cast<unsigned long long>(arg);
     }
     auto type = spec.type;
-    if (type == '\0') type = 'd';
+    if (type == '\0') type = 'd';  // 型未指定は 10 進数
 
-    // Get raw number without sign (use unsigned conversion)
-    std::array<char, 65> raw_data{};
+    // 符号なしで生の数値文字列を生成（基数に応じて変換関数を切り替え）
+    std::array<char, 65> raw_data{};  // 64bit 整数の最大桁(64) + 余裕分
     size_t raw_len = 0;
     if (type == 'x' || type == 'X') {
       auto [d, l] = to_hex_chars(uv);
@@ -391,7 +438,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
         for (auto j = 0uz; j < raw_len; ++j) { buf[pos] = raw_data[j]; ++pos; }
         for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
       } else {
-        auto left = pad / 2;
+        auto left = pad / 2;   // 中央揃え: 左側の余白（端数は右に回す）
         auto right = pad - left;
         for (size_t p = 0; p < left; ++p) { buf[pos] = fill; ++pos; }
         pos += sign_size;
@@ -400,14 +447,15 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
       }
     }
 
+  // 浮動小数点: 型別（f/e/g）の表現生成と符号・配置処理
   } else if constexpr (FloatingPoint<T>) {
     double v = static_cast<double>(arg);
     auto type = spec.type;
-    if (type == '\0') type = 'g';
+    if (type == '\0') type = 'g';  // 型未指定は汎用形式
     int prec = spec.precision;
-    if (prec < 0) prec = 6;
+    if (prec < 0) prec = 6;  // 精度未指定は 6
 
-    char raw[128]{};
+    char raw[128]{};  // 変換結果の作業バッファ（十分な余裕を持たせる）
     size_t raw_len;
     if (type == 'f' || type == 'F') {
       raw_len = detail::format_float_fixed(raw, 0, v, prec);
@@ -471,10 +519,12 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     }
 
   } else {
+    // その他（文字列・ FrozenString 等）: sv() または string_view 変換で取得し配置する
     std::string_view sv;
     if constexpr (std::same_as<std::remove_cvref_t<T>, bool>) {
       sv = arg ? "true" : "false";
-    } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
+  // 文字: 1 文字を配置・埋め文字処理する
+  } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
       sv = std::string_view(&arg, 1);
     } else if constexpr (requires { arg.sv(); }) {
       sv = arg.sv();

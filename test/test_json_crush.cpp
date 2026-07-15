@@ -7,6 +7,9 @@
 
 using namespace frozenchars::literals;
 
+/** @brief JSON 圧縮 (crush) 関数のテスト。
+    @details トークン置換による JSON 構造の圧縮を検証する。*/
+
 TEST_CASE("crush simple object", "[json][crush]") {
   constexpr auto crushed = frozenchars::json::crush<R"({"a":"value"})"_fs>();
   auto const sv = crushed.sv();

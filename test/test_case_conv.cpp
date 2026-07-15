@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief ケース変換（キャピタライズ、スネークケース、キャメルケース、パスカルケース）のテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

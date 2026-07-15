@@ -2,6 +2,7 @@
 
 #include "concepts.hpp"
 #include "detail/pipe.hpp"
+
 #include <array>
 #include <cstddef>
 #include <ostream>
@@ -222,15 +223,17 @@ std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
 }
 
 namespace detail {
-  template <typename T>
-  struct is_frozen_string : std::false_type {};
 
-  template <std::size_t N>
-  struct is_frozen_string<FrozenString<N>> : std::true_type {};
+template <typename T>
+struct is_frozen_string : std::false_type {};
 
-  template <typename T>
-  inline constexpr bool is_frozen_string_v = is_frozen_string<std::remove_cvref_t<T>>::value;
-}
+template <std::size_t N>
+struct is_frozen_string<FrozenString<N>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_frozen_string_v = is_frozen_string<std::remove_cvref_t<T>>::value;
+
+} // namespace detail
 
 template <typename T>
 concept FrozenStringLike = detail::is_frozen_string_v<T>;

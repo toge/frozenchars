@@ -1,11 +1,13 @@
 #include "catch2/catch_all.hpp"
 #include "frozenchars.hpp"
 
+/** @brief compose によるパイプアダプタ合成のテスト */
+
 using namespace frozenchars;
 
 namespace {
 
-// ユーザー定義のアダプタ
+/** @brief ユーザー定義のパイプアダプタ */
 struct my_custom_adaptor : pipe_adaptor_base {
   template <size_t N>
   consteval auto operator()(FrozenString<N> const& str) const noexcept {
@@ -39,7 +41,6 @@ TEST_CASE("compose adaptor", "[pipe]") {
 
     auto constexpr stripped = input | normalize;
 
-    // expected: "hello world"
     STATIC_CHECK(stripped.sv() == "hello world");
   }
 

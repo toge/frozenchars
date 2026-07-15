@@ -2,6 +2,7 @@
 
 #include "string.hpp"
 #include "frozen_regex.hpp"
+
 #include <cstddef>
 #include <optional>
 #include <string_view>
@@ -10,318 +11,318 @@ namespace frozenchars {
 
 namespace detail {
 
-  /**
-   * @brief 再帰的マッチングの中間結果
-   */
-  struct match_result {
-    bool matched;
-    size_t pos;
-  };
+/**
+ * @brief 再帰的マッチングの中間結果
+ */
+struct match_result {
+  bool matched;
+  size_t pos;
+};
 
-  /**
-   * @brief '[' に対応する ']' の位置を探す
-   *
-   * @tparam PAT パターン文字列（FrozenString NTTP）
-   * @param pos '[' の位置
-   * @return size_t ']' の位置（見つからない場合は PAT.size()）
-   */
-  template <FrozenString PAT>
-  [[nodiscard]] constexpr size_t find_matching_close_bracket(size_t pos) noexcept {
-    auto i = pos + 1uz;
-    while (i < PAT.size() && PAT.data()[i] != ']') {
-      if (PAT.data()[i] == '\\') ++i;
-      ++i;
-    }
-    return i;
+/**
+ * @brief '[' に対応する ']' の位置を探す
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param pos '[' の位置
+ * @return size_t ']' の位置（見つからない場合は PAT.size()）
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr size_t find_matching_close_bracket(size_t pos) noexcept {
+  auto i = pos + 1uz;
+  while (i < PAT.size() && PAT.data()[i] != ']') {
+    if (PAT.data()[i] == '\\') ++i;
+    ++i;
   }
+  return i;
+}
 
-  /**
-   * @brief '(' に対応する ')' の位置を探す（ネスト対応）
-   */
-  template <FrozenString PAT>
-  [[nodiscard]] constexpr size_t find_matching_close_paren(size_t pos) noexcept {
-    auto i = pos + 1uz;
-    auto depth = 1;
-    while (i < PAT.size() && depth > 0) {
-      if (PAT.data()[i] == '\\') { i += 2; continue; }
-      if (PAT.data()[i] == '(') ++depth;
-      else if (PAT.data()[i] == ')') --depth;
-      ++i;
-    }
-    return (depth == 0) ? i - 1 : PAT.size();
+/**
+ * @brief '(' に対応する ')' の位置を探す（ネスト対応）
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr size_t find_matching_close_paren(size_t pos) noexcept {
+  auto i = pos + 1uz;
+  auto depth = 1;
+  while (i < PAT.size() && depth > 0) {
+    if (PAT.data()[i] == '\\') { i += 2; continue; }
+    if (PAT.data()[i] == '(') ++depth;
+    else if (PAT.data()[i] == ')') --depth;
+    ++i;
   }
+  return (depth == 0) ? i - 1 : PAT.size();
+}
 
-  /**
-   * @brief wildcard パターンを frozen_regex に委譲するためのヘルパ
-   *
-   * パターンに * や ? が含まれず、かつ frozen_regex で扱える構文のみで構成されている場合に
-   * can_delegate == true となる。その場合 regex_pattern は frozen_regex にそのまま渡せる
-   * 文字列（[! → [^ に変換済み）を保持する。
-   */
-  template <FrozenString PAT>
-  struct wildcard_to_regex_helper {
-    static constexpr bool can_delegate = []() consteval {
-      if (PAT.empty()) return false;
-      int paren_depth = 0;
-      for (auto i = 0uz; i < PAT.size(); ++i) {
-        auto const c = PAT.data()[i];
-        if (c == '*' || c == '?') return false;
-        if (c == '\\') {
-          if (i + 1 >= PAT.size()) return false;
-          auto const n = PAT.data()[i + 1];
-          switch (n) {
-            case '\\': case '.': case '[': case ']':
-            case '(': case ')': case '|': case '-': case '^':
-              ++i; break;
-            default: return false;
-          }
-          continue;
-        }
-        if (c == '[') {
-          auto close = find_matching_close_bracket<PAT>(i);
-          if (close >= PAT.size()) return false;
-          i = close;
-          continue;
-        }
-        if (c == '.') return false;
-        if (c == '(') ++paren_depth;
-        if (c == ')') {
-          if (paren_depth == 0) return false;
-          --paren_depth;
-        }
-        if (c == '|' && paren_depth == 0) return false;
-      }
-      return paren_depth == 0;
-    }();
-
-    static constexpr FrozenString<PAT.size() + 1> regex_pattern = []() consteval {
-      FrozenString<PAT.size() + 1> fs;
-      fs.length = PAT.size();
-      for (auto i = 0uz; i < PAT.size(); ++i) {
-        auto c = PAT.data()[i];
-        if (c == '\\') {
-          fs.buffer[i] = c;
-          if (i + 1 < PAT.size()) {
-            fs.buffer[i + 1] = PAT.data()[i + 1];
-            ++i;
-          }
-          continue;
-        }
-        // [! → [^ に変換（[ が \\ エスケープされていない場合のみ）
-        if (c == '!' && i > 0 && PAT.data()[i - 1] == '[') {
-          bool bracket_escaped = false;
-          if (i >= 2 && PAT.data()[i - 2] == '\\') {
-            auto count = 1uz;
-            for (auto j = i - 3; j < i && PAT.data()[j] == '\\'; --j) ++count;
-            bracket_escaped = (count % 2 == 1);
-          }
-          fs.buffer[i] = bracket_escaped ? '!' : '^';
-          continue;
-        }
-        fs.buffer[i] = c;
-      }
-      fs.buffer[PAT.size()] = '\0';
-      return fs;
-    }();
-  };
-
-  /**
-   * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
-   *
-   * 対応構文:
-   * - `*` : 任意の文字列（空文字列を含む）
-   * - `?` : 任意の1文字
-   * - `\\` : エスケープ（次の文字をリテラルとして扱う）
-   * - `[abc]` : セット内の任意の1文字
-   * - `[!abc]` : セット外の任意の1文字
-   * - `(ab|cd)` : alternatives（このうちいずれかにマッチ）
-   *
-   * @tparam PAT パターン文字列（FrozenString NTTP）
-   * @param text 対象テキスト
-   * @param ti テキスト内の現在位置
-   * @param pi パターン内の開始位置
-   * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
-   * @return match_result1
-   */
-  template <FrozenString PAT>
-  [[nodiscard]] constexpr match_result
-  wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial = false) noexcept {
-    while (pi < pi_end) {
-      auto c = PAT.data()[pi];
-
-      // Escape: match next char literally
+/**
+ * @brief wildcard パターンを frozen_regex に委譲するためのヘルパ
+ *
+ * パターンに * や ? が含まれず、かつ frozen_regex で扱える構文のみで構成されている場合に
+ * can_delegate == true となる。その場合 regex_pattern は frozen_regex にそのまま渡せる
+ * 文字列（[! → [^ に変換済み）を保持する。
+ */
+template <FrozenString PAT>
+struct wildcard_to_regex_helper {
+  static constexpr bool can_delegate = []() consteval {
+    if (PAT.empty()) return false;
+    int paren_depth = 0;
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      auto const c = PAT.data()[i];
+      if (c == '*' || c == '?') return false;
       if (c == '\\') {
-        if (pi + 1 >= pi_end) return {false, ti};
-        ++pi;
-        if (ti >= text.size() || text[ti] != PAT.data()[pi]) return {false, ti};
-        ++ti;
-        ++pi;
+        if (i + 1 >= PAT.size()) return false;
+        auto const n = PAT.data()[i + 1];
+        switch (n) {
+          case '\\': case '.': case '[': case ']':
+          case '(': case ')': case '|': case '-': case '^':
+            ++i; break;
+          default: return false;
+        }
         continue;
       }
+      if (c == '[') {
+        auto close = find_matching_close_bracket<PAT>(i);
+        if (close >= PAT.size()) return false;
+        i = close;
+        continue;
+      }
+      if (c == '.') return false;
+      if (c == '(') ++paren_depth;
+      if (c == ')') {
+        if (paren_depth == 0) return false;
+        --paren_depth;
+      }
+      if (c == '|' && paren_depth == 0) return false;
+    }
+    return paren_depth == 0;
+  }();
 
-      // Star: match any sequence (including empty)
-      if (c == '*') {
-        while (pi < pi_end && PAT.data()[pi] == '*') ++pi;
-
-        // Fast path: no remaining pattern after * — always matches.
-        if (pi == pi_end) {
-          if (partial) return {true, ti};
-          return {true, text.size()};
+  static constexpr FrozenString<PAT.size() + 1> regex_pattern = []() consteval {
+    FrozenString<PAT.size() + 1> fs;
+    fs.length = PAT.size();
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      auto c = PAT.data()[i];
+      if (c == '\\') {
+        fs.buffer[i] = c;
+        if (i + 1 < PAT.size()) {
+          fs.buffer[i + 1] = PAT.data()[i + 1];
+          ++i;
         }
-
-        // Fast path: if the remaining pattern starts with a literal chunk,
-        // use std::string_view::find() to skip non-matching text positions.
-        // libstdc++'s find() is SIMD-optimized, making this much faster than
-        // backtracking character by character through long strings.
-        auto lit_start = pi;
-        auto lit_end = pi;
-        while (lit_end < pi_end && PAT.data()[lit_end] != '*' && PAT.data()[lit_end] != '?' &&
-               PAT.data()[lit_end] != '[' && PAT.data()[lit_end] != '(' &&
-               PAT.data()[lit_end] != '\\') {
-          ++lit_end;
+        continue;
+      }
+      // [! → [^ に変換（[ が \\ エスケープされていない場合のみ）
+      if (c == '!' && i > 0 && PAT.data()[i - 1] == '[') {
+        bool bracket_escaped = false;
+        if (i >= 2 && PAT.data()[i - 2] == '\\') {
+          auto count = 1uz;
+          for (auto j = i - 3; j < i && PAT.data()[j] == '\\'; --j) ++count;
+          bracket_escaped = (count % 2 == 1);
         }
+        fs.buffer[i] = bracket_escaped ? '!' : '^';
+        continue;
+      }
+      fs.buffer[i] = c;
+    }
+    fs.buffer[PAT.size()] = '\0';
+    return fs;
+  }();
+};
 
-        if (lit_start < lit_end) {
-          auto lit_sv = std::string_view{PAT.data() + lit_start, lit_end - lit_start};
-          for (auto found = text.find(lit_sv, ti);
-               found != std::string_view::npos;
-               found = text.find(lit_sv, found + 1)) {
-            auto r = wildcard_match_impl<PAT>(text, found + lit_sv.size(), lit_end, pi_end, partial);
-            if (r.matched) return r;
-          }
-          return {false, ti};
-        }
+/**
+ * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
+ *
+ * 対応構文:
+ * - `*` : 任意の文字列（空文字列を含む）
+ * - `?` : 任意の1文字
+ * - `\\` : エスケープ（次の文字をリテラルとして扱う）
+ * - `[abc]` : セット内の任意の1文字
+ * - `[!abc]` : セット外の任意の1文字
+ * - `(ab|cd)` : alternatives（このうちいずれかにマッチ）
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @param ti テキスト内の現在位置
+ * @param pi パターン内の開始位置
+ * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
+ * @return match_result1
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr match_result
+wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial = false) noexcept {
+  while (pi < pi_end) {
+    auto c = PAT.data()[pi];
 
-        // Fallback: full backtracking for complex cases (? [ ( \ after *)
-        for (auto i = ti; i <= text.size(); ++i) {
-          auto r = wildcard_match_impl<PAT>(text, i, pi, pi_end, partial);
+    // Escape: match next char literally
+    if (c == '\\') {
+      if (pi + 1 >= pi_end) return {false, ti};
+      ++pi;
+      if (ti >= text.size() || text[ti] != PAT.data()[pi]) return {false, ti};
+      ++ti;
+      ++pi;
+      continue;
+    }
+
+    // Star: match any sequence (including empty)
+    if (c == '*') {
+      while (pi < pi_end && PAT.data()[pi] == '*') ++pi;
+
+      // Fast path: no remaining pattern after * — always matches.
+      if (pi == pi_end) {
+        if (partial) return {true, ti};
+        return {true, text.size()};
+      }
+
+      // Fast path: if the remaining pattern starts with a literal chunk,
+      // use std::string_view::find() to skip non-matching text positions.
+      // libstdc++'s find() is SIMD-optimized, making this much faster than
+      // backtracking character by character through long strings.
+      auto lit_start = pi;
+      auto lit_end = pi;
+      while (lit_end < pi_end && PAT.data()[lit_end] != '*' && PAT.data()[lit_end] != '?' &&
+              PAT.data()[lit_end] != '[' && PAT.data()[lit_end] != '(' &&
+              PAT.data()[lit_end] != '\\') {
+        ++lit_end;
+      }
+
+      if (lit_start < lit_end) {
+        auto lit_sv = std::string_view{PAT.data() + lit_start, lit_end - lit_start};
+        for (auto found = text.find(lit_sv, ti);
+              found != std::string_view::npos;
+              found = text.find(lit_sv, found + 1)) {
+          auto r = wildcard_match_impl<PAT>(text, found + lit_sv.size(), lit_end, pi_end, partial);
           if (r.matched) return r;
         }
         return {false, ti};
       }
 
-      // Question: match any single character
-      if (c == '?') {
-        if (ti >= text.size()) return {false, ti};
-        ++ti;
-        ++pi;
-        continue;
+      // Fallback: full backtracking for complex cases (? [ ( \ after *)
+      for (auto i = ti; i <= text.size(); ++i) {
+        auto r = wildcard_match_impl<PAT>(text, i, pi, pi_end, partial);
+        if (r.matched) return r;
       }
+      return {false, ti};
+    }
 
-      // Set: [abc], [!abc], [a-z], [-abc], [abc-], [a\\-z]
-      if (c == '[') {
-        auto close = find_matching_close_bracket<PAT>(pi);
-        if (close < PAT.size() && close < pi_end) {
-          auto negated = false;
-          auto si = pi + 1uz;
-          if (si < close && PAT.data()[si] == '!') {
-            negated = true;
-            ++si;
+    // Question: match any single character
+    if (c == '?') {
+      if (ti >= text.size()) return {false, ti};
+      ++ti;
+      ++pi;
+      continue;
+    }
+
+    // Set: [abc], [!abc], [a-z], [-abc], [abc-], [a\\-z]
+    if (c == '[') {
+      auto close = find_matching_close_bracket<PAT>(pi);
+      if (close < PAT.size() && close < pi_end) {
+        auto negated = false;
+        auto si = pi + 1uz;
+        if (si < close && PAT.data()[si] == '!') {
+          negated = true;
+          ++si;
+        }
+
+        if (ti >= text.size()) return {false, ti};
+        auto tc = text[ti];
+        auto in_set = false;
+
+        auto read_one = [&](size_t i) -> std::pair<char, size_t> {
+          if (PAT.data()[i] == '\\' && i + 1 < close) {
+            return {PAT.data()[i + 1], i + 2};
           }
+          return {PAT.data()[i], i + 1};
+        };
 
-          if (ti >= text.size()) return {false, ti};
-          auto tc = text[ti];
-          auto in_set = false;
+        for (auto i = si; i < close && !in_set; ) {
+          auto [lc, next_i] = read_one(i);
 
-          auto read_one = [&](size_t i) -> std::pair<char, size_t> {
-            if (PAT.data()[i] == '\\' && i + 1 < close) {
-              return {PAT.data()[i + 1], i + 2};
-            }
-            return {PAT.data()[i], i + 1};
+          auto is_range = [&]() -> bool {
+            if (PAT.data()[i] == '\\') return false;
+            if (lc != '-') return false;
+            if (i == si) return false;
+            if (next_i >= close) return false;
+            return true;
           };
 
-          for (auto i = si; i < close && !in_set; ) {
-            auto [lc, next_i] = read_one(i);
-
-            auto is_range = [&]() -> bool {
-              if (PAT.data()[i] == '\\') return false;
-              if (lc != '-') return false;
-              if (i == si) return false;
-              if (next_i >= close) return false;
-              return true;
-            };
-
-            if (next_i < close && PAT.data()[next_i] == '-' && !is_range()) {
-              auto dash_i = next_i;
-              if (PAT.data()[dash_i] != '\\' && dash_i + 1 < close) {
-                auto [rc, after_range] = read_one(dash_i + 1);
-                if (static_cast<unsigned char>(lc) <= static_cast<unsigned char>(tc) &&
-                    static_cast<unsigned char>(tc) <= static_cast<unsigned char>(rc)) {
-                  in_set = true;
-                }
-                i = after_range;
-                continue;
+          if (next_i < close && PAT.data()[next_i] == '-' && !is_range()) {
+            auto dash_i = next_i;
+            if (PAT.data()[dash_i] != '\\' && dash_i + 1 < close) {
+              auto [rc, after_range] = read_one(dash_i + 1);
+              if (static_cast<unsigned char>(lc) <= static_cast<unsigned char>(tc) &&
+                  static_cast<unsigned char>(tc) <= static_cast<unsigned char>(rc)) {
+                in_set = true;
               }
+              i = after_range;
+              continue;
             }
-
-            if (lc == tc) {
-              in_set = true;
-            }
-            i = next_i;
           }
 
-          if (negated) in_set = !in_set;
-          if (!in_set) return {false, ti};
-
-          ++ti;
-          pi = close + 1;
-          continue;
+          if (lc == tc) {
+            in_set = true;
+          }
+          i = next_i;
         }
-        // Not a valid set; fall through to literal match for '['
+
+        if (negated) in_set = !in_set;
+        if (!in_set) return {false, ti};
+
+        ++ti;
+        pi = close + 1;
+        continue;
       }
+      // Not a valid set; fall through to literal match for '['
+    }
 
-      // Alternative: (branch1|branch2|...)
-      if (c == '(') {
-        auto close = find_matching_close_paren<PAT>(pi);
-        if (close < PAT.size() && close < pi_end) {
-          auto after_alt = close + 1uz;
+    // Alternative: (branch1|branch2|...)
+    if (c == '(') {
+      auto close = find_matching_close_paren<PAT>(pi);
+      if (close < PAT.size() && close < pi_end) {
+        auto after_alt = close + 1uz;
 
-          auto branch_start = pi + 1uz;
-          auto depth = 0;
+        auto branch_start = pi + 1uz;
+        auto depth = 0;
 
-          for (auto i = branch_start; i < close; ++i) {
-            auto bc = PAT.data()[i];
-            if (bc == '\\') { ++i; continue; }
-            if (bc == '(') { ++depth; continue; }
-            if (bc == ')') { --depth; continue; }
-            if (bc == '|' && depth == 0) {
-              auto br = wildcard_match_impl<PAT>(text, ti, branch_start, i, true);
-              if (br.matched) {
-                if (after_alt >= pi_end) {
-                  if (partial || br.pos == text.size()) return br;
-                } else {
-                  auto rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
-                  if (rr.matched) return rr;
-                }
-              }
-              branch_start = i + 1uz;
-            }
-          }
-          // Last branch
-          {
-            auto br = wildcard_match_impl<PAT>(text, ti, branch_start, close, true);
+        for (auto i = branch_start; i < close; ++i) {
+          auto bc = PAT.data()[i];
+          if (bc == '\\') { ++i; continue; }
+          if (bc == '(') { ++depth; continue; }
+          if (bc == ')') { --depth; continue; }
+          if (bc == '|' && depth == 0) {
+            auto br = wildcard_match_impl<PAT>(text, ti, branch_start, i, true);
             if (br.matched) {
               if (after_alt >= pi_end) {
                 if (partial || br.pos == text.size()) return br;
               } else {
-                return wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+                auto rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+                if (rr.matched) return rr;
               }
             }
+            branch_start = i + 1uz;
           }
-          return {false, ti};
         }
-        // Not a valid alternative; fall through to literal match for '('
+        // Last branch
+        {
+          auto br = wildcard_match_impl<PAT>(text, ti, branch_start, close, true);
+          if (br.matched) {
+            if (after_alt >= pi_end) {
+              if (partial || br.pos == text.size()) return br;
+            } else {
+              return wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+            }
+          }
+        }
+        return {false, ti};
       }
-
-      // Literal character
-      if (ti >= text.size() || text[ti] != c) return {false, ti};
-      ++ti;
-      ++pi;
+      // Not a valid alternative; fall through to literal match for '('
     }
 
-    if (partial) return {true, ti};
-    return {ti == text.size(), ti};
+    // Literal character
+    if (ti >= text.size() || text[ti] != c) return {false, ti};
+    ++ti;
+    ++pi;
   }
+
+  if (partial) return {true, ti};
+  return {ti == text.size(), ti};
+}
 
 } // namespace detail
 
@@ -537,51 +538,51 @@ template <FrozenString PAT>
 
 namespace ops {
 
+/**
+ * @brief ワイルドカードマッチングのパイプ演算子アダプタ
+ *
+ * @tparam PAT ワイルドカードパターン（FrozenString NTTP）
+ *
+ * @details 以下の型をパイプ演算子で受け付ける:
+ *   - `FrozenString<N>`   : コンパイル時文字列
+ *   - `std::string_view`  : 実行時文字列（ビュー）
+ *   - `std::string const&`: 実行時文字列
+ *   - `char const (&)[N]` : 文字列リテラル（string_view に暗黙変換）
+ */
+template <FrozenString PAT>
+struct wildcard_adaptor : pipe_adaptor_base {
   /**
-   * @brief ワイルドカードマッチングのパイプ演算子アダプタ
+   * @brief FrozenString テキストに対してワイルドカードマッチングを実行する
    *
-   * @tparam PAT ワイルドカードパターン（FrozenString NTTP）
-   *
-   * @details 以下の型をパイプ演算子で受け付ける:
-   *   - `FrozenString<N>`   : コンパイル時文字列
-   *   - `std::string_view`  : 実行時文字列（ビュー）
-   *   - `std::string const&`: 実行時文字列
-   *   - `char const (&)[N]` : 文字列リテラル（string_view に暗黙変換）
+   * @tparam N テキストの長さ（終端文字を含む）
+   * @param text マッチング対象のテキスト
+   * @return bool マッチした場合 true
    */
-  template <FrozenString PAT>
-  struct wildcard_adaptor : pipe_adaptor_base {
-    /**
-     * @brief FrozenString テキストに対してワイルドカードマッチングを実行する
-     *
-     * @tparam N テキストの長さ（終端文字を含む）
-     * @param text マッチング対象のテキスト
-     * @return bool マッチした場合 true
-     */
-    template <size_t N>
-    [[nodiscard]] consteval bool operator()(FrozenString<N> const& text) const noexcept {
-      return frozenchars::wildcard_match<PAT>(text.sv());
-    }
+  template <size_t N>
+  [[nodiscard]] consteval bool operator()(FrozenString<N> const& text) const noexcept {
+    return frozenchars::wildcard_match<PAT>(text.sv());
+  }
 
-    /**
-     * @brief std::string_view テキストに対してワイルドカードマッチングを実行する
-     *
-     * @param text マッチング対象のテキスト
-     * @return bool マッチした場合 true
-     */
-    [[nodiscard]] constexpr bool operator()(std::string_view text) const noexcept {
-      return frozenchars::wildcard_match<PAT>(text);
-    }
+  /**
+   * @brief std::string_view テキストに対してワイルドカードマッチングを実行する
+   *
+   * @param text マッチング対象のテキスト
+   * @return bool マッチした場合 true
+   */
+  [[nodiscard]] constexpr bool operator()(std::string_view text) const noexcept {
+    return frozenchars::wildcard_match<PAT>(text);
+  }
 
-    /**
-     * @brief std::string テキストに対してワイルドカードマッチングを実行する
-     *
-     * @param text マッチング対象のテキスト
-     * @return bool マッチした場合 true
-     */
-    [[nodiscard]] constexpr bool operator()(std::string const& text) const noexcept {
-      return frozenchars::wildcard_match<PAT>(std::string_view{text});
-    }
-  };
+  /**
+   * @brief std::string テキストに対してワイルドカードマッチングを実行する
+   *
+   * @param text マッチング対象のテキスト
+   * @return bool マッチした場合 true
+   */
+  [[nodiscard]] constexpr bool operator()(std::string const& text) const noexcept {
+    return frozenchars::wildcard_match<PAT>(std::string_view{text});
+  }
+};
 
 } // namespace ops
 

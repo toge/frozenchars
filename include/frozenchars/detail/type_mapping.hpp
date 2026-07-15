@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <tuple>
 
 namespace frozenchars {
 template <size_t N> struct FrozenString;

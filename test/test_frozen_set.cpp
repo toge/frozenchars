@@ -12,6 +12,11 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 using namespace std::string_literals;
 
+/**
+ * @brief frozen_set の基本機能（contains / count / find / イテレータ / キー取得）のテスト。
+ *   単一キー・同長キー・長キー（>16 バイト）・65 キー以上の線形探索フォールバックを網羅する。
+ */
+
 TEST_CASE("frozen_set basic shape", "[frozen_set]") {
   static_assert(frozen_set<"timeout"_fs, "retry"_fs>::size() == 2);
   static_assert(!frozen_set<"timeout"_fs, "retry"_fs>::empty());

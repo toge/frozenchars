@@ -16,8 +16,13 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief frozen_regex, CTRE, wildcard_match (frozenchars), wildcards (runtime) の
+    パターンマッチング性能比較ベンチマーク。
+    @details リテラル・小規模選択・中規模選択・パス・文字集合の各ケースで実行時間を計測する。*/
+
 namespace {
 
+/** @brief ベンチマーク結果を格納する構造体。*/
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -25,8 +30,15 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用シンク変数。*/
 volatile std::size_t g_sink = 0;
 
+/** @brief 任意の関数を複数回実行し実行時間を計測する。
+    @tparam Func 計測対象の関数型
+    @param name 結果表示ラベル
+    @param fn 計測対象関数
+    @param iterations 反復回数
+    @return 計測結果 */
 template <typename Func>
 auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
   for (std::uint64_t i = 0; i < 500; ++i) fn();
@@ -42,6 +54,9 @@ auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> benc
   };
 }
 
+/** @brief ベンチマーク結果をテーブル形式で標準出力に表示する。
+    @param label セクションラベル
+    @param results 表示する結果の配列 */
 auto print_results(std::string_view label, std::vector<bench_result> const& results) -> void {
   std::cout << "\n[" << label << "]\n\n";
   std::cout << std::left << std::setw(48) << "case"

@@ -7,6 +7,9 @@
 
 using namespace frozenchars::literals;
 
+/** @brief JSON 圧縮 (compress) 関数のテスト。
+    @details 繰り返し値の辞書化による JSON 構造の圧縮を検証する。*/
+
 TEST_CASE("compress simple object", "[json][compress]") {
   constexpr auto compressed = frozenchars::json::compress<R"({"a":"value"})"_fs>();
   auto const sv = compressed.sv();

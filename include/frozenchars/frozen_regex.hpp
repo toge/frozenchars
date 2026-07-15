@@ -12,7 +12,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -246,44 +245,43 @@ struct enumerator {
   consteval auto enumerate_node(std::size_t idx) -> std::vector<std::string> {
     auto const& n = tree.nodes[idx];
     switch (n.kind) {
-      case node_kind::literal:
-        return {std::string{static_cast<char>(n.literal_char)}};
-      case node_kind::dot: {
-        std::vector<std::string> res;
-        res.reserve(dot_chars.size());
-        for (auto c : dot_chars) res.push_back(std::string{c});
-        return res;
-      }
-      case node_kind::char_class: {
-        std::vector<char> chars = n.char_set;
-        if (n.negate_class) chars = complement(chars);
-        std::vector<std::string> res;
-        res.reserve(chars.size());
-        for (auto c : chars) res.push_back(std::string{c});
-        return res;
-      }
-      case node_kind::group: {
-        return enumerate_node(n.child_indices[0]);
-      }
-      case node_kind::concat: {
-        std::vector<std::vector<std::string>> child_results;
-        child_results.reserve(n.child_indices.size());
-        for (auto ci : n.child_indices) child_results.push_back(enumerate_node(ci));
-        return cartesian_concat(std::move(child_results));
-      }
-      case node_kind::alt: {
-        std::vector<std::vector<std::string>> child_results;
-        child_results.reserve(n.child_indices.size());
-        for (auto ci : n.child_indices) child_results.push_back(enumerate_node(ci));
-        return merge_alt(std::move(child_results));
-      }
+    case node_kind::literal:
+      return {std::string{static_cast<char>(n.literal_char)}};
+    case node_kind::dot: {
+      std::vector<std::string> res;
+      res.reserve(dot_chars.size());
+      for (auto c : dot_chars) res.push_back(std::string{c});
+      return res;
+    }
+    case node_kind::char_class: {
+      std::vector<char> chars = n.char_set;
+      if (n.negate_class) chars = complement(chars);
+      std::vector<std::string> res;
+      res.reserve(chars.size());
+      for (auto c : chars) res.push_back(std::string{c});
+      return res;
+    }
+    case node_kind::group: {
+      return enumerate_node(n.child_indices[0]);
+    }
+    case node_kind::concat: {
+      std::vector<std::vector<std::string>> child_results;
+      child_results.reserve(n.child_indices.size());
+      for (auto ci : n.child_indices) child_results.push_back(enumerate_node(ci));
+      return cartesian_concat(std::move(child_results));
+    }
+    case node_kind::alt: {
+      std::vector<std::vector<std::string>> child_results;
+      child_results.reserve(n.child_indices.size());
+      for (auto ci : n.child_indices) child_results.push_back(enumerate_node(ci));
+      return merge_alt(std::move(child_results));
+    }
     }
     throw "frozen_regex: unreachable";
   }
 
   /// @brief CONCAT の直積: 単位元 "" から各子の文字列を順に結合
-  consteval auto cartesian_concat(std::vector<std::vector<std::string>> children)
-    -> std::vector<std::string> {
+  consteval auto cartesian_concat(std::vector<std::vector<std::string>> children) -> std::vector<std::string> {
     std::vector<std::string> acc{""};
     for (auto& child : children) {
       std::vector<std::string> next;
@@ -300,8 +298,7 @@ struct enumerator {
   }
 
   /// @brief ALT の和集合（重複除去は finalize で実施）
-  consteval auto merge_alt(std::vector<std::vector<std::string>> children)
-    -> std::vector<std::string> {
+  consteval auto merge_alt(std::vector<std::vector<std::string>> children) -> std::vector<std::string> {
     std::vector<std::string> res;
     for (auto& child : children) {
       for (auto& s : child) {
@@ -318,8 +315,7 @@ struct enumerator {
   }
 
   /// @brief 否定クラスの差集合: dot_chars から exclude を引く
-  [[nodiscard]] consteval auto complement(std::vector<char> const& exclude) const
-    -> std::vector<char> {
+  [[nodiscard]] consteval auto complement(std::vector<char> const& exclude) const -> std::vector<char> {
     std::vector<char> res;
     for (auto c : dot_chars) {
       if (std::find(exclude.begin(), exclude.end(), c) == exclude.end()) {
@@ -348,8 +344,7 @@ struct regex_metadata {
 
 /// @brief 正規表現をパースして列挙し、メタデータのみを返す
 template <std::size_t MaxStrings>
-[[nodiscard]] consteval auto compute_metadata(std::string_view pattern, std::string_view dot_chars)
-  -> regex_metadata {
+[[nodiscard]] consteval auto compute_metadata(std::string_view pattern, std::string_view dot_chars) -> regex_metadata {
   auto const tree = parser::parse(pattern);
   auto result = enumerator<MaxStrings>::run(tree, dot_chars);
   return {result.max_length, result.strings.size()};
@@ -357,8 +352,7 @@ template <std::size_t MaxStrings>
 
 /// @brief 正規表現をパースして列挙し、FrozenString 配列を返す（vector フリー）
 template <std::size_t MaxStrings, std::size_t N, std::size_t Count>
-[[nodiscard]] consteval auto compute_keys(std::string_view pattern, std::string_view dot_chars)
-  -> std::array<FrozenString<N>, Count> {
+[[nodiscard]] consteval auto compute_keys(std::string_view pattern, std::string_view dot_chars) -> std::array<FrozenString<N>, Count> {
   auto const tree = parser::parse(pattern);
   auto result = enumerator<MaxStrings>::run(tree, dot_chars);
   std::array<FrozenString<N>, Count> arr{};

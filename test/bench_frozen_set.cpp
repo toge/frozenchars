@@ -13,8 +13,15 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/**
+ * @brief frozen_set のルックアップ性能ベンチマーク。
+ *   小（3）・中（10）・大（20）・XL（50）・XXL（65/128）・長キー（5）・同長キー（10）の各パターンで
+ *   contains / find / count のヒット・ミスを計測する。
+ */
+
 namespace {
 
+/** @brief ベンチマーク1件の計測結果を保持する構造体。名前・反復回数・経過時間・1反復あたりの時間を持つ。 */
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -22,8 +29,10 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用の揮発性シンク変数。ベンチマーク結果の書き込み先として使う。 */
 volatile std::size_t g_sink = 0;
 
+/** @brief 指定された関数を iterations 回実行し、経過時間を bench_result として返す。 */
 template <typename Func>
 auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
   for (std::uint64_t i = 0; i < 500; ++i) fn();
@@ -39,6 +48,7 @@ auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> benc
   };
 }
 
+/** @brief ベンチマーク結果の一覧を整形して標準出力に表示する。 */
 auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[frozen_set benchmark]\n\n";
   std::cout << std::left << std::setw(44) << "case"
@@ -64,23 +74,23 @@ int main(int argc, char** argv) {
     if (parsed > 0) iterations = static_cast<std::uint64_t>(parsed);
   }
 
-  // ---- Small set: 3 keys, all_lengths_unique ----
+  // ---- 小セット: 3キー、全長ユニーク ----
   constexpr auto small_set = frozen_set<
     "aa"_fs, "bbbbbb"_fs, "cccccddddddddd"_fs>{};
 
-  // ---- Medium set: 10 keys, mixed lengths ----
+  // ---- 中セット: 10キー、混在長 ----
   constexpr auto medium_set = frozen_set<
     "timeout"_fs, "retry"_fs, "backoff"_fs, "endpoint"_fs, "headers"_fs,
     "method"_fs, "path"_fs, "query"_fs, "body"_fs, "status"_fs>{};
 
-  // ---- Large set: 20 keys ----
+  // ---- 大セット: 20キー ----
   constexpr auto large_set = frozen_set<
     "alpha"_fs, "bravo"_fs, "charlie"_fs, "delta"_fs, "echo"_fs,
     "foxtrot"_fs, "golf"_fs, "hotel"_fs, "india"_fs, "juliet"_fs,
     "kilo"_fs, "lima"_fs, "mike"_fs, "november"_fs, "oscar"_fs,
     "papa"_fs, "quebec"_fs, "romeo"_fs, "sierra"_fs, "tango"_fs>{};
 
-  // ---- XL set: 50 keys (lookup table path, ≤64) ----
+  // ---- XLセット: 50キー（ルックアップテーブルパス、≦64） ----
   constexpr auto xl_set = frozen_set<
     "k01"_fs, "k02"_fs, "k03"_fs, "k04"_fs, "k05"_fs,
     "k06"_fs, "k07"_fs, "k08"_fs, "k09"_fs, "k10"_fs,
@@ -93,7 +103,7 @@ int main(int argc, char** argv) {
     "k41"_fs, "k42"_fs, "k43"_fs, "k44"_fs, "k45"_fs,
     "k46"_fs, "k47"_fs, "k48"_fs, "k49"_fs, "k50"_fs>{};
 
-  // ---- XXL 65: linear/binary search path, same-length keys (all_lengths_unique_ = false) ----
+  // ---- XXL 65: 線形/二分探索パス、同長キー（all_lengths_unique_ = false） ----
   constexpr auto xxl65_set = frozen_set<
     "k00"_fs, "k01"_fs, "k02"_fs, "k03"_fs, "k04"_fs,
     "k05"_fs, "k06"_fs, "k07"_fs, "k08"_fs, "k09"_fs,
@@ -109,7 +119,7 @@ int main(int argc, char** argv) {
     "k55"_fs, "k56"_fs, "k57"_fs, "k58"_fs, "k59"_fs,
     "k60"_fs, "k61"_fs, "k62"_fs, "k63"_fs, "k64"_fs>{};
 
-  // ---- XXL 128: larger >64 set ----
+  // ---- XXL 128: 64超の大セット ----
   constexpr auto xxl128_set = frozen_set<
     "k000"_fs, "k001"_fs, "k002"_fs, "k003"_fs, "k004"_fs,
     "k005"_fs, "k006"_fs, "k007"_fs, "k008"_fs, "k009"_fs,
@@ -138,13 +148,13 @@ int main(int argc, char** argv) {
     "k120"_fs, "k121"_fs, "k122"_fs, "k123"_fs, "k124"_fs,
     "k125"_fs, "k126"_fs, "k127"_fs>{};
 
-  // ---- Long-key set (5 keys, >16 bytes): short-key opt off ----
+  // ---- 長キーセット（5キー、>16バイト）: 短キー最適化オフ ----
   constexpr auto longkey_set = frozen_set<
     "configuration_timeout_ms"_fs, "maximum_retry_count_param"_fs,
     "connection_pool_size_setting"_fs, "authentication_token_secret_key"_fs,
     "response_body_encoding_format"_fs>{};
 
-  // ---- Same-length set (10 keys, all 21 chars): forces hash path (all_lengths_unique_ = false) ----
+  // ---- 同長セット（10キー、全21文字）: ハッシュパス強制（all_lengths_unique_ = false） ----
   constexpr auto samelen_set = frozen_set<
     "configuration_key_one"_fs, "configuration_key_two"_fs,
     "configuration_key_thr"_fs, "configuration_key_fou"_fs,
@@ -174,13 +184,13 @@ int main(int argc, char** argv) {
   results.push_back(measure("large(20) contains miss",   [&]{ g_sink += large_set.contains("zulu"); }, iters));
   results.push_back(measure("large(20) find hit",        [&]{ auto it = large_set.find("golf"); g_sink += (it != large_set.end()); }, iters));
 
-  // XL (≤64 lookup table path)
+  // XL（≦64 ルックアップテーブルパス）
   results.push_back(measure("xl(50) contains hit first", [&]{ g_sink += xl_set.contains("k01"); }, iters));
   results.push_back(measure("xl(50) contains hit last",  [&]{ g_sink += xl_set.contains("k50"); }, iters));
   results.push_back(measure("xl(50) contains miss",      [&]{ g_sink += xl_set.contains("k99"); }, iters));
   results.push_back(measure("xl(50) find hit",           [&]{ auto it = xl_set.find("k25"); g_sink += (it != xl_set.end()); }, iters));
 
-  // XXL (>64 path: currently linear, will become binary search)
+  // XXL（>64パス: 現状線形、今後二分探索に）
   results.push_back(measure("xxl(65) contains hit first", [&]{ g_sink += xxl65_set.contains("k00"); }, iters));
   results.push_back(measure("xxl(65) contains hit last",  [&]{ g_sink += xxl65_set.contains("k64"); }, iters));
   results.push_back(measure("xxl(65) contains hit mid",   [&]{ g_sink += xxl65_set.contains("k32"); }, iters));
@@ -192,17 +202,17 @@ int main(int argc, char** argv) {
   results.push_back(measure("xxl(128) contains miss",      [&]{ g_sink += xxl128_set.contains("k999"); }, iters));
   results.push_back(measure("xxl(128) find hit",           [&]{ auto it = xxl128_set.find("k064"); g_sink += (it != xxl128_set.end()); }, iters));
 
-  // Long-key (>16 bytes): short-key opt off, CRC 8-byte path
+  // 長キー（>16バイト）: 短キー最適化オフ、CRC 8バイトパス
   results.push_back(measure("longkey(5) contains hit", [&]{ g_sink += longkey_set.contains("authentication_token_secret_key"); }, iters));
   results.push_back(measure("longkey(5) contains miss", [&]{ g_sink += longkey_set.contains("nonexistent_key_that_is_long_enough"); }, iters));
   results.push_back(measure("longkey(5) find hit",     [&]{ auto it = longkey_set.find("authentication_token_secret_key"); g_sink += (it != longkey_set.end()); }, iters));
 
-  // Same-length (forces hash path via detail::hash_impl)
+  // 同長（detail::hash_impl 経由でハッシュパス強制）
   results.push_back(measure("samelen(10) contains hit", [&]{ g_sink += samelen_set.contains("configuration_key_fiv"); }, iters));
   results.push_back(measure("samelen(10) contains miss", [&]{ g_sink += samelen_set.contains("configuration_key_xxx"); }, iters));
   results.push_back(measure("samelen(10) find hit",     [&]{ auto it = samelen_set.find("configuration_key_fiv"); g_sink += (it != samelen_set.end()); }, iters));
 
-  // Round-robin: cycle through medium set keys
+  // ラウンドロビン: 中セットキーを巡回
   {
     constexpr std::string_view keys[] = {"timeout","retry","backoff","endpoint","headers",
                                          "method","path","query","body","status"};

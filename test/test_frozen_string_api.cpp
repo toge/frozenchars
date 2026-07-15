@@ -5,6 +5,8 @@
 #include "frozenchars/string.hpp"
 #include "frozenchars/literals.hpp"
 
+/** @brief FrozenString 基本 API（empty, operator[], front/back, range-for, 比較, hash）のテスト */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

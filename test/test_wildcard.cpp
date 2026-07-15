@@ -7,6 +7,10 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief ワイルドカードパターンマッチングのテスト。
+    @details `*`, `?`, 文字集合, 代替パターン (alternatives) の各機能を検証する。
+    @see frozenchars/wildcard.hpp */
+
 TEST_CASE("wildcard: basic * matching") {
   REQUIRE(wildcard_match<"a*c">("abc"));
   REQUIRE(wildcard_match<"a*c">("axc"));
@@ -159,11 +163,11 @@ TEST_CASE("wildcard: alternatives with nested alternatives") {
 }
 
 TEST_CASE("wildcard: unbalanced alternatives") {
-  // Unbalanced '(' should be treated as literal '('
+  // 対応の取れていない '(' はリテラルとして扱われる
   REQUIRE(wildcard_match<"(ab">("(ab"));
   REQUIRE_FALSE(wildcard_match<"(ab">("ab"));
   
-  // Nested unbalanced '('
+  // 入れ子の対応の取れていない '('
   REQUIRE(wildcard_match<"((ab">("((ab"));
   REQUIRE_FALSE(wildcard_match<"((ab">("(ab"));
 }
@@ -253,7 +257,7 @@ TEST_CASE("wildcard_find_all: no matches") {
 }
 
 TEST_CASE("wildcard_find_all: non-overlapping") {
-  // "aa" in "aaaa" should find 2 non-overlapping matches
+  // "aaaa" 内の "aa" は重複なしで2つ見つかる
   auto count = 0;
   for ([[maybe_unused]] auto _ : wildcard_find_all<"aa">("aaaa")) ++count;
   REQUIRE(count == 2);

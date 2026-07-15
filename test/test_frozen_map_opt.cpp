@@ -6,23 +6,27 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/**
+ * @brief frozen_map の最適化パス（長さフィルタリング・ハッシュレスルックアップ・constexpr find_index_raw）の動作検証。
+ *   各最適化が正しく有効になり、ヒット／ミスともに期待通りの結果を返すことを確認する。
+ */
+
 TEST_CASE("frozen_map Optimization A: Length filtering", "[frozen_map][opt]") {
   using Map = frozen_map<int, "foo"_fs, "bar"_fs>;
   Map map{std::array{1, 2}};
 
-  // Length 3 is valid, but length 4 is not.
+  // 長さ3は有効だが、長さ4は登録されていない
   REQUIRE(map.contains("foo"));
   REQUIRE(map.contains("bar"));
-  REQUIRE_FALSE(map.contains("quxx")); // length 4, should early exit
-  REQUIRE_FALSE(map.contains("f"));    // length 1, should early exit
+  REQUIRE_FALSE(map.contains("quxx")); // 長さ4 → 早期終了
+  REQUIRE_FALSE(map.contains("f"));    // 長さ1 → 早期終了
 }
 
 TEST_CASE("frozen_map Optimization B: Hashless lookup", "[frozen_map][opt]") {
   SECTION("Unique lengths") {
     using Map = frozen_map<int, "a"_fs, "bb"_fs, "ccc"_fs>;
 
-    // Check all_lengths_unique_ internal flag via a helper or just behavior
-    // We can't access private members directly, but we can verify behavior.
+    // 内部フラグ all_lengths_unique_ を直接確認はできないが、挙動で検証する
     Map map{std::array{1, 2, 3}};
     REQUIRE(map.at("a") == 1);
     REQUIRE(map.at("bb") == 2);
@@ -52,8 +56,7 @@ TEST_CASE("frozen_map Optimization C: find_index_raw constexpr", "[frozen_map][o
 }
 
 TEST_CASE("frozen_map unique lengths detection", "[frozen_map][opt]") {
-  // We can't easily test private static members.
-  // But we can verify that O(1) path works by testing all keys.
+  // private 静的メンバは直接テストできないため、全キーで O(1) パスが動作することを確認する
   auto map = make_frozen_map<int, "a"_fs, "bb"_fs, "ccc"_fs>(
     std::pair{"a", 1},
     std::pair{"bb", 2},

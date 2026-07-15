@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief FrozenString の検索・変換・分割などの文字列操作関数のテスト */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
@@ -106,17 +108,17 @@ TEST_CASE("convert_linebreak - <br> variants", "[string_ops]") {
 TEST_CASE("convert_linebreak - mutual conversion", "[string_ops]") {
   using namespace frozenchars;
 
-  // Br -> Nl
+  // Br → Nl
   static_assert(convert_linebreak<LineBreak::Br, LineBreak::Nl>("a<br>b"_fs).sv() == "a\nb");
-  // Nl -> Br
+  // Nl → Br
   static_assert(convert_linebreak<LineBreak::Nl, LineBreak::Br>("a\nb"_fs).sv() == "a<br>b");
-  // Br -> EscN
+  // Br → EscN
   static_assert(convert_linebreak<LineBreak::Br, LineBreak::EscN>("a<br>b"_fs).sv() == "a\\nb");
-  // EscN -> Br
+  // EscN → Br
   static_assert(convert_linebreak<LineBreak::EscN, LineBreak::Br>(R"(a\nb)"_fs).sv() == "a<br>b");
-  // Nl -> EscN
+  // Nl → EscN
   static_assert(convert_linebreak<LineBreak::Nl, LineBreak::EscN>("a\nb"_fs).sv() == "a\\nb");
-  // EscN -> Nl
+  // EscN → Nl
   static_assert(convert_linebreak<LineBreak::EscN, LineBreak::Nl>(R"(a\nb)"_fs).sv() == "a\nb");
 }
 
@@ -158,7 +160,7 @@ TEST_CASE("find_last_of<Chars>(str)", "[string_ops]") {
 
 TEST_CASE("count_substring<Sub>(str)", "[string_ops]") {
   STATIC_CHECK(("hello hello"_fs | ops::count_substring<"hello">) == 2);
-  STATIC_CHECK(("aaaa"_fs | ops::count_substring<"aa">) == 2);  // non-overlapping
+  STATIC_CHECK(("aaaa"_fs | ops::count_substring<"aa">) == 2);  // 重複なし
   STATIC_CHECK(("abc"_fs | ops::count_substring<"xyz">) == 0);
   STATIC_CHECK((""_fs | ops::count_substring<"a">) == 0);
   STATIC_CHECK(("aaa"_fs | ops::count_substring<"aa">) == 1);
@@ -174,12 +176,12 @@ TEST_CASE("reverse(str)", "[string_ops]") {
 TEST_CASE("indent<Width>(str)", "[string_ops]") {
   STATIC_CHECK(("abc"_fs | ops::indent<1>).sv() == "\tabc"_fs);
   STATIC_CHECK((""_fs | ops::indent<1>).sv() == ""_fs);
-  // empty line is NOT indented
+  // 空行はインデントしない
   STATIC_CHECK(("\n"_fs | ops::indent<1>).sv() == "\n"_fs);
   STATIC_CHECK(("a\nb"_fs | ops::indent<1>).sv() == "\ta\n\tb"_fs);
   STATIC_CHECK(("a\n"_fs | ops::indent<1>).sv() == "\ta\n"_fs);
   STATIC_CHECK(("abc"_fs | ops::indent<2>).sv() == "\t\tabc"_fs);
-  // custom indent char
+  // カスタムインデント文字
   STATIC_CHECK(("a\nb"_fs | ops::indent<1, ' '>).sv() == " a\n b"_fs);
 }
 
@@ -190,6 +192,6 @@ TEST_CASE("dedent(str)", "[string_ops]") {
   STATIC_CHECK(dedent("  abc\n  def"_fs).sv() == "abc\ndef");
   STATIC_CHECK(dedent("  abc\n    def"_fs).sv() == "abc\n  def");
   STATIC_CHECK(dedent("    abc"_fs).sv() == "abc");
-  // mixed indent
+  // 混在インデント
   STATIC_CHECK(dedent("  abc\n  \t  def"_fs).sv() == "abc\n\t  def");
 }

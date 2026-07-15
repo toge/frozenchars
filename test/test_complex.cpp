@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief concat / repeat を使った複合文字列構築のテスト */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

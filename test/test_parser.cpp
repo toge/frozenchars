@@ -5,6 +5,9 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief 構文解析関数 (parse_to_tuple, parse_to_variant) のコンパイル時テスト。optional、ネスト tuple、void 穴、ポインタ/参照、空白処理、各種型エイリアスを検証する。 */
+
+/** @brief parse_to_tuple の結果型が期待通りかを検証するヘルパー変数テンプレート。 */
 template <auto Src, typename Expected>
 inline constexpr bool parse_to_tuple_is_v =
   std::is_same_v<typename decltype(frozenchars::parse_to_tuple<Src>())::type, Expected>;

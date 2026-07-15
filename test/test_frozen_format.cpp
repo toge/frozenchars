@@ -3,6 +3,8 @@
 #include <cstring>
 #include "frozenchars.hpp"
 
+/** @brief frozen_format によるコンパイル時書式整形のテスト */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

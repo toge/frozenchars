@@ -8,7 +8,6 @@
 #include <string_view>
 
 #include "detail/char_utils.hpp"
-#include "freeze.hpp"
 #include "string_ops.hpp"
 
 namespace frozenchars {

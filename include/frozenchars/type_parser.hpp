@@ -97,7 +97,7 @@ template <auto Token>
 }
 
 /**
- * @brief 固定文字列をパースして型のリスト（std::tuple）を生成する（内部実装）
+ * @brief 固定文字列をパースして型のリスト（std::tuple）を生成する
  *
  * @tparam EmptyMeansVoid 空文字列を std::tuple<void> として扱うかどうかのフラグ
  * @tparam Str 入力文字列（FrozenString）

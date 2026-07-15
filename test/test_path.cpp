@@ -6,6 +6,7 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 using namespace frozenchars::path;
 
+/** @brief パス操作関数 (dirname, basename, extension, stem, join) のコンパイル時テスト。 */
 TEST_CASE("path::dirname", "[path]") {
   REQUIRE(dirname(""_fs).sv() == ".");
   STATIC_CHECK(dirname("foo"_fs).sv() == ".");

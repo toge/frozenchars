@@ -2,7 +2,6 @@
 
 #include <array>
 #include <charconv>
-#include <cmath>
 #include <limits>
 #include <ranges>
 #include <utility>

@@ -4,27 +4,34 @@
 
 #include "frozenchars.hpp"
 
+/** @brief FrozenString の基本操作（リテラル、結合、トリム、分割、置換、パディング、ケース変換、URL/Base64 エンコード等）の結合テスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
 namespace {
 
+// カンマ判定述語
 constexpr bool is_comma(char c) noexcept {
   return c == ',';
 }
 
+// セミコロン判定述語
 constexpr bool is_semicolon(char c) noexcept {
   return c == ';';
 }
 
+/** @brief 名前空間スコープでの replace の動作確認用定数 */
 auto constexpr namespace_scope_replace =
   replace<"World", "C++">("Hello World"_fs);
 static_assert(namespace_scope_replace.sv() == "Hello C++");
 
+/** @brief 名前空間スコープでの replace_all の動作確認用定数 */
 auto constexpr namespace_scope_replace_all =
   replace_all<"aa", "a">("aaaa"_fs);
 static_assert(namespace_scope_replace_all.sv() == "aa");
 
+/** @brief トリム結果を NTTP 引数として replace に渡す連続処理のテスト */
 auto constexpr namespace_scope_from = ops::trim(" x "_fs);
 auto constexpr namespace_scope_to = ops::trim(" y "_fs);
 auto constexpr namespace_scope_replace_trimmed =
@@ -49,6 +56,7 @@ TEST_CASE("shrink_to_fit") {
   static_assert(plain.sv() == "hello");
   REQUIRE(plain.sv() == "hello");
 
+  // 途中にヌル文字を含む FrozenString を構築
   auto constexpr embedded = [] {
     auto s = FrozenString<8>{};
     s.buffer = {'a', 'b', '\0', 'c', 'd', '\0', 'x', 'x'};
@@ -61,6 +69,7 @@ TEST_CASE("shrink_to_fit") {
   static_assert(embedded_shrunk.sv() == "ab");
   REQUIRE(embedded_shrunk.sv() == "ab");
 
+  // ヌル終端がない FrozenString を構築
   auto constexpr no_null = [] {
     auto s = FrozenString<5>{};
     s.buffer = {'a', 'b', 'c', 'd', 'e'};
@@ -72,6 +81,7 @@ TEST_CASE("shrink_to_fit") {
   static_assert(no_null_shrunk.sv() == "abcd");
   REQUIRE(no_null_shrunk.sv() == "abcd");
 
+  // 末尾にヌル文字がある FrozenString を構築
   auto constexpr late_terminator = [] {
     auto s = FrozenString<6>{};
     s.buffer = {'a', 'b', 'c', 'd', '\0', 'x'};
@@ -156,17 +166,17 @@ TEST_CASE("substr") {
   static_assert(s3.sv() == "Hello");
   REQUIRE(s3.sv() == "Hello");
 
-  // Pos beyond length returns empty
+  // 位置が長さを超える場合は空文字列を返す
   auto constexpr s4 = substr("Hello"_fs, 20, 5);
   static_assert(s4.sv() == "");
   REQUIRE(s4.sv() == "");
 
-  // Len extends beyond end: truncate to available
+  // 長さが末尾を超える場合は利用可能な範囲で切り詰める
   auto constexpr s5 = substr("Hello"_fs, 3, 10);
   static_assert(s5.sv() == "lo");
   REQUIRE(s5.sv() == "lo");
 
-  // Negative Len extracts to the left of Pos
+  // 負の長さは Pos から左側を抽出する
   auto constexpr s6 = substr("Hello, World!"_fs, 5, -5);
   static_assert(s6.sv() == "Hello");
   REQUIRE(s6.sv() == "Hello");
@@ -522,7 +532,7 @@ TEST_CASE("parse_number basics") {
   static_assert(n3 == 789);
   REQUIRE(n3 == 789);
 
-  // Use WithinRel for float comparison
+  // float 比較には WithinRel を使用
   auto constexpr n4 = parse_number<float>("123.45"_fs);
   REQUIRE_THAT(n4, Catch::Matchers::WithinRel(123.45f));
 
@@ -586,7 +596,7 @@ TEST_CASE("comment removal") {
   auto constexpr no_hash = remove_comments(input, "#");
   auto constexpr no_slash = remove_comments(no_hash, "//");
   auto constexpr no_range = remove_range_comments(no_slash, "/*", "*/");
-  auto constexpr cleaned = remove_comment_lines(no_range, "#"); // Already handled but for test
+  auto constexpr cleaned = remove_comment_lines(no_range, "#"); // 上書きで既に除去済みだがテスト用
 
   (void)cleaned;
 }

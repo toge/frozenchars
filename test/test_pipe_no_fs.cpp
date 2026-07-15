@@ -4,6 +4,9 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief FrozenString を経由しない raw 文字列リテラル向けパイプ演算子アダプタのテスト。
+    @details ステートレス・NTTP・ファクトリ・コンポーズド各アダプタの動作を検証する。*/
+
 TEST_CASE("pipe: raw string | stateless adaptor", "[pipe][no_fs]") {
   SECTION("toupper") {
     STATIC_CHECK(("hello" | ops::toupper).sv() == "HELLO");

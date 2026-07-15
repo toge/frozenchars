@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include <string_view>
 
 namespace frozenchars {
+
 template <size_t N> struct FrozenString;
 }
 

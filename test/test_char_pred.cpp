@@ -2,6 +2,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief 文字種判定述語（is_upper, is_lower, is_alpha 等）、HTML エンコード/デコード、word_wrap、UTF-8 長さ計算のテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
@@ -148,7 +150,7 @@ TEST_CASE("char_pred: is_space") {
 }
 
 TEST_CASE("char_pred: all categories cover ASCII without overlap for standard chars") {
-  // 'A' should be only alpha/alnum/upper/graph/print/xdigit
+  // 'A' は alpha/alnum/upper/graph/print/xdigit のみ
   REQUIRE(is_alpha('A'));
   REQUIRE(is_upper('A'));
   REQUIRE(!is_lower('A'));
@@ -162,7 +164,7 @@ TEST_CASE("char_pred: all categories cover ASCII without overlap for standard ch
   REQUIRE(!is_cntrl('A'));
   REQUIRE(!is_blank('A'));
 
-  // '_' should be only punct/graph/print
+  // '_' は punct/graph/print のみ
   REQUIRE(is_punct('_'));
   REQUIRE(is_graph('_'));
   REQUIRE(is_print('_'));
@@ -170,7 +172,7 @@ TEST_CASE("char_pred: all categories cover ASCII without overlap for standard ch
   REQUIRE(!is_space('_'));
   REQUIRE(!is_cntrl('_'));
 
-  // ' ' should be only space/blank/print
+  // ' ' は space/blank/print のみ
   REQUIRE(is_space(' '));
   REQUIRE(is_blank(' '));
   REQUIRE(is_print(' '));
@@ -387,23 +389,23 @@ TEST_CASE("utf8_length: empty string") {
 }
 
 TEST_CASE("utf8_length: multi-byte characters") {
-  // 2-byte: \xC3\xA9 = é
-  // 3-byte: \xE3\x81\x82 = あ
-  // 4-byte: \xF0\x9F\x90\xB1 = 🐱 (cat emoji UTF-8)
+  // 2バイト文字: \xC3\xA9 = é
+  // 3バイト文字: \xE3\x81\x82 = あ
+  // 4バイト文字: \xF0\x9F\x90\xB1 = 🐱 (絵文字)
   auto constexpr len = utf8_length("\xC3\xA9\xE3\x81\x82\xF0\x9F\x90\xB1"_fs);
   static_assert(len == 3);
   REQUIRE(len == 3);
 }
 
 TEST_CASE("utf8_length: mixed ASCII and multi-byte") {
-  // "Hello 世界" = H(1) e(1) l(1) l(1) o(1) space(1) 世(3) 界(3) = 8 codepoints
+  // "Hello 世界" = H(1) e(1) l(1) l(1) o(1) 空白(1) 世(3) 界(3) = 8 コードポイント
   auto constexpr len = utf8_length("Hello \xE4\xB8\x96\xE7\x95\x8C"_fs);
   static_assert(len == 8);
   REQUIRE(len == 8);
 }
 
 TEST_CASE("utf8_length: continuation bytes without leading byte") {
-  // stray continuation byte \x80 should count as 1 codepoint
+  // 単独の継続バイト \x80 は 1 コードポイントとして扱われる
   auto constexpr len = utf8_length("\x80"_fs);
   REQUIRE(len == 1);
 }

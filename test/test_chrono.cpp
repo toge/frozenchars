@@ -7,7 +7,8 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 using namespace std::chrono;
 
-// ========== Parse ISO Date ==========
+/** @brief ISO 日付/日時のパース・フォーマット、__DATE__ マクロのパース、コンパイルタイムスタンプのコンパイル時テスト。 */
+// ========== ISO 日付のパース ==========
 
 TEST_CASE("parse_iso_date - NTTP") {
   STATIC_CHECK(parse_iso_date<"2026-07-04"_fs>() == year{2026}/7/4);
@@ -26,7 +27,7 @@ TEST_CASE("parse_iso_date - runtime constexpr") {
   STATIC_CHECK(*d2 == year{2001}/9/11);
 }
 
-// ========== Parse ISO Datetime ==========
+// ========== ISO 日時のパース ==========
 
 TEST_CASE("parse_iso_datetime - UTC") {
   STATIC_CHECK(parse_iso_datetime<"2026-07-04T14:30:00Z"_fs>()
@@ -37,12 +38,12 @@ TEST_CASE("parse_iso_datetime - UTC") {
 }
 
 TEST_CASE("parse_iso_datetime - timezone offset") {
-  // +09:00 -> subtract 9h
+  // +09:00 → 9時間減算して UTC
   constexpr auto with_offset = parse_iso_datetime<"2026-07-04T14:30:00+09:00"_fs>();
   constexpr auto utc_ref = parse_iso_datetime<"2026-07-04T05:30:00Z"_fs>();
   STATIC_CHECK(with_offset == utc_ref);
 
-  // -05:00 -> add 5h
+  // -05:00 → 5時間加算して UTC
   constexpr auto neg_offset = parse_iso_datetime<"2026-07-04T10:00:00-05:00"_fs>();
   constexpr auto utc_ref2 = parse_iso_datetime<"2026-07-04T15:00:00Z"_fs>();
   STATIC_CHECK(neg_offset == utc_ref2);
@@ -54,12 +55,12 @@ TEST_CASE("parse_iso_datetime - runtime constexpr") {
   STATIC_CHECK(*dt == sys_days{year{2024}/1/15} + hours{9} + minutes{5} + seconds{1});
 }
 
-// ========== Parse __DATE__ macro ==========
+// ========== __DATE__ マクロのパース ==========
 
 TEST_CASE("parse_date_macro - known formats") {
-  // "Jul  4 2026" -- 2 spaces before single-digit day
+  // "Jul  4 2026" — 1桁日付の前に空白2つ
   STATIC_CHECK(parse_date_macro<"Jul  4 2026"_fs>() == year{2026}/7/4);
-  // "Sep 14 2026" -- 1 space before 2-digit day
+  // "Sep 14 2026" — 2桁日付の前に空白1つ
   STATIC_CHECK(parse_date_macro<"Sep 14 2026"_fs>() == year{2026}/9/14);
   // "Dec 31 2024"
   STATIC_CHECK(parse_date_macro<"Dec 31 2024"_fs>() == year{2024}/12/31);
@@ -71,20 +72,20 @@ TEST_CASE("parse_date_macro - runtime constexpr") {
   STATIC_CHECK(*d == year{2024}/1/15);
 }
 
-// ========== Compilation Timestamp ==========
+// ========== コンパイルタイムスタンプ ==========
 
 TEST_CASE("compilation_timestamp - is valid sys_seconds") {
   constexpr auto ts = compilation_timestamp();
-  // Must be a valid time_point (not at epoch)
+  // 有効な時刻点であること（エポックではない）
   STATIC_CHECK(ts > sys_seconds{});
   STATIC_CHECK(ts < sys_days{year{2100}/1/1});
 
-  // With offset: JST -> UTC
+  // オフセット指定: JST → UTC
   constexpr auto ts_jst = compilation_timestamp(minutes{540});
   STATIC_CHECK(ts_jst == ts - minutes{540});
 }
 
-// ========== Format ISO Date ==========
+// ========== ISO 日付のフォーマット ==========
 
 TEST_CASE("format_iso_date - basic") {
   STATIC_CHECK(format_iso_date(year{2026}/7/4) == "2026-07-04"_fs);
@@ -97,7 +98,7 @@ TEST_CASE("format_iso_date - runtime") {
   REQUIRE(format_iso_date(ymd) == "1999-12-31"_fs);
 }
 
-// ========== Format ISO Datetime ==========
+// ========== ISO 日時のフォーマット ==========
 
 TEST_CASE("format_iso_datetime - basic") {
   STATIC_CHECK(format_iso_datetime(sys_days{year{2026}/7/4} + hours{14} + minutes{30})
@@ -111,7 +112,7 @@ TEST_CASE("format_iso_datetime - runtime") {
   REQUIRE(format_iso_datetime(tp) == "2024-12-31T23:59:59Z"_fs);
 }
 
-// ========== Roundtrip ==========
+// ========== ラウンドトリップ ==========
 
 TEST_CASE("roundtrip date") {
   constexpr auto ymd = year{2026}/7/4;
@@ -124,7 +125,7 @@ TEST_CASE("roundtrip date") {
 TEST_CASE("roundtrip datetime") {
   constexpr auto tp = sys_days{year{2026}/7/4} + hours{14} + minutes{30} + seconds{5};
   constexpr auto formatted = format_iso_datetime(tp);
-  // formatted == "2026-07-04T14:30:05Z"
+  // formatted は "2026-07-04T14:30:05Z"
   constexpr auto parsed = parse_iso_datetime(formatted);
   STATIC_CHECK(parsed.has_value());
   STATIC_CHECK(*parsed == tp);

@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <ranges>
 #include <span>
 #include <string_view>
 
@@ -22,7 +21,7 @@ namespace frozenchars {
 namespace detail {
 
 /**
- * @brief 圧縮トライ（ラディックスツリー）の1ノード
+ * @brief 圧縮trie（ラディックスツリー）の1ノード
  * @details フラット配列に格納されるコンパクトなノード表現。
  *          最大256ノード、65535バイトラベル、256子、127値まで対応。
  */
@@ -35,7 +34,7 @@ struct trie_flat_node {
 };
 
 /**
- * @brief コンパイル時トライ構築結果のストレージ
+ * @brief コンパイル時trie構築結果のストレージ
  * @tparam NodeCount 最大ノード数
  * @tparam LabelSize ラベルバッファのサイズ
  * @tparam ChildCount 子インデックス配列のサイズ
@@ -70,7 +69,7 @@ template <FrozenString... Keys>
   }
 }
 
-/// @brief トライ構築用のキーと値のペア
+/// @brief trie構築用のキーと値のペア
 struct kv_pair {
   std::string_view key;
   int value_index;
@@ -98,10 +97,10 @@ struct kv_pair {
 } // namespace detail
 
 /**
- * @brief コンパイル時圧縮トライ（ラディックスツリー）索引
+ * @brief コンパイル時圧縮trie（ラディックスツリー）索引
  * @tparam Keys 索引化するキー群（FrozenString）
  *
- * FrozenString... からフラット配列ベースの圧縮トライを consteval で構築し、
+ * FrozenString... からフラット配列ベースの圧縮trieを consteval で構築し、
  * 実行時に O(length) のキー検索を提供する。
  * 内部ノードは prefix を 1 ノードにまとめることでメモリ使用量を削減する。
  */
@@ -150,7 +149,7 @@ private:
   using storage_type = detail::trie_storage<k_max_nodes, k_max_labels, k_max_children>;
 
   /**
-   * @brief トライを再帰的に構築する（consteval）
+   * @brief trieを再帰的に構築する（consteval）
    * @param keys 構築対象のキー群（共通接頭辞は除去済み）
    * @param storage 構築先ストレージ（参照書き換え）
    * @param next_node 次に割り当てるノードインデックス

@@ -18,6 +18,12 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/**
+ * @brief frozen_map の基本機能・イテレータ・初期化方法・ユーティリティのテスト。
+ *   glaze 連携、ルックアップ、イテレータモデル、各種初期化（宣言順・キー指定・make_frozen_map）、
+ *   ソート済みキー取得、get_value_or、contains_all、operator== を網羅する。
+ */
+
 #if FROZENCHARS_HAS_GLAZE
 #include <glaze/json.hpp>
 
@@ -143,6 +149,7 @@ static_assert(std::same_as<
 static_assert(std::same_as<
   decltype(std::declval<frozen_map<int, "timeout"_fs, "retry"_fs>::const_iterator const&>().operator->()),
   frozen_map<int, "timeout"_fs, "retry"_fs>::const_iterator::arrow_proxy>);
+/** @brief コンセプトチェック用の型エイリアス。size/find/at/get/contains/count の存在を requires で検証する。 */
 using IntPerfectMap = frozen_map<int, "timeout"_fs, "retry"_fs>;
 static_assert(requires { { IntPerfectMap::size() } -> std::same_as<IntPerfectMap::size_type>; });
 static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
@@ -206,6 +213,7 @@ TEST_CASE("frozen_map iterator operator-> preserves writable mapped access", "[f
 
 namespace {
 
+/** @brief デフォルト構築不可能な値型。frozen_map が非デフォルト構築可能型を正しく扱えるか検証する。 */
 struct NoDefault {
   explicit constexpr NoDefault(int initial_value) noexcept
   : value{initial_value} {
@@ -214,6 +222,7 @@ struct NoDefault {
   int value;
 };
 
+/** @brief ムーブオンリーな値型。frozen_map がムーブのみ可能な型を正しく格納・変換できるか検証する。 */
 struct MoveOnly {
   explicit MoveOnly(int initial_value) noexcept
   : value{initial_value} {
@@ -239,12 +248,14 @@ TEST_CASE("frozen_map moves values when converting rvalues", "[frozen_map]") {
   REQUIRE(moved.at("retry").value == 5);
 }
 
+/** @brief std::pair に代わる pair-like 型。tuple_size/tuple_element の特殊化と get フリー関数により構造化束縛に対応する。 */
 template <typename T>
 struct PairLikeEntry {
   std::string_view key;
   T value;
 };
 
+/** @brief PairLikeEntry の左辺値参照版 get。構造化束縛および make_frozen_map の pair-like 入力として機能する。 */
 template <std::size_t I, typename T>
 constexpr decltype(auto) get(PairLikeEntry<T>& entry) noexcept {
   static_assert(I < 2);
@@ -255,6 +266,7 @@ constexpr decltype(auto) get(PairLikeEntry<T>& entry) noexcept {
   }
 }
 
+/** @brief PairLikeEntry の const 左辺値参照版 get。const コンテキストでの構造化束縛に対応する。 */
 template <std::size_t I, typename T>
 constexpr decltype(auto) get(PairLikeEntry<T> const& entry) noexcept {
   static_assert(I < 2);
@@ -265,6 +277,7 @@ constexpr decltype(auto) get(PairLikeEntry<T> const& entry) noexcept {
   }
 }
 
+/** @brief PairLikeEntry の右辺値参照版 get。ムーブセマンティクスに対応する。 */
 template <std::size_t I, typename T>
 constexpr decltype(auto) get(PairLikeEntry<T>&& entry) noexcept {
   static_assert(I < 2);
@@ -277,6 +290,7 @@ constexpr decltype(auto) get(PairLikeEntry<T>&& entry) noexcept {
 
 } // namespace
 
+/** @brief PairLikeEntry を tuple-like 型として扱うための std::tuple_size / std::tuple_element の特殊化。 */
 namespace std {
 
 template <typename T>

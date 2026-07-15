@@ -5,6 +5,7 @@
 #include <string_view>
 
 namespace frozenchars {
+
 template <size_t N> struct FrozenString;
 }
 

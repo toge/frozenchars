@@ -1,20 +1,19 @@
 #pragma once
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <cstdint>
 #include <iterator>
-#include <ranges>
 #include <span>
 #include <string_view>
-#include <type_traits>
 
 #include "string.hpp"
 #include "trie_index.hpp"
 
 namespace frozenchars {
 
+/**
+ * @brief トライ木構造を利用したコンパイル時キーの集合
+ * @tparam Keys キー文字列の NTTP パック
+ */
 template <FrozenString... Keys>
 class frozen_trie_set {
   static_assert(sizeof...(Keys) > 0, "frozen_trie_set requires at least one key");
@@ -26,6 +25,9 @@ public:
   using size_type       = std::size_t;
   using difference_type = std::ptrdiff_t;
 
+  /**
+   * @brief frozen_trie_set のランダムアクセスイテレータ
+   */
   class iterator {
   public:
     using value_type        = std::string_view;
@@ -35,6 +37,9 @@ public:
     using iterator_category = std::random_access_iterator_tag;
 
     constexpr iterator() noexcept = default;
+    /**
+     * @param index キーインデックス
+     */
     constexpr explicit iterator(size_type index) noexcept : index_{index} {}
 
     constexpr auto operator*()  const noexcept -> reference { return frozen_trie_index<Keys...>::k_key_views_[index_]; }
@@ -59,7 +64,7 @@ public:
     friend constexpr auto operator<=>(iterator const& a, iterator const& b) noexcept { return a.index_ <=> b.index_; }
 
   private:
-    size_type index_{0};
+    size_type index_{0};  ///< 現在のキーインデックス
   };
 
   using const_iterator = iterator;
@@ -67,14 +72,26 @@ public:
   static constexpr auto size()  noexcept -> size_type { return sizeof...(Keys); }
   static constexpr auto empty() noexcept -> bool { return false; }
 
+  /**
+   * @brief キーの存在確認
+   * @param key 検索キー
+   */
   static constexpr auto contains(std::string_view key) noexcept -> bool {
     return lookup_::find(key) != size();
   }
 
+  /**
+   * @brief キーに対応する要素数を返す（0 or 1）
+   * @param key 検索キー
+   */
   static constexpr auto count(std::string_view key) noexcept -> size_type {
     return lookup_::find(key) != size() ? 1uz : 0uz;
   }
 
+  /**
+   * @brief キーに対応するイテレータを取得
+   * @param key 検索キー
+   */
   static constexpr auto find(std::string_view key) noexcept -> iterator {
     auto const i = lookup_::find(key);
     return i != size() ? iterator{i} : end();
@@ -85,12 +102,15 @@ public:
   static constexpr auto cbegin() noexcept -> iterator { return begin(); }
   static constexpr auto cend()   noexcept -> iterator { return end(); }
 
+  /**
+   * @brief 全キーのビューを取得
+   */
   static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
     return lookup_::k_key_views_;
   }
 
 private:
-  using lookup_ = frozen_trie_index<Keys...>;
+  using lookup_ = frozen_trie_index<Keys...>;  ///< キー検索に使うトライ木インデックス
 };
 
 } // namespace frozenchars

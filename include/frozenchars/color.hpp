@@ -5,7 +5,6 @@
 #include <string_view>
 #include <tuple>
 
-#include "string.hpp"
 #include "detail/char_utils.hpp"
 
 namespace frozenchars {

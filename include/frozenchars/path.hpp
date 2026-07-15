@@ -89,7 +89,9 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval extension(FrozenString<N> const& path_str) noexcept -> FrozenString<N> {
   auto const name = basename(path_str);
-  if (name.length == 0) return FrozenString<N>{};
+  if (name.length == 0) {
+    return FrozenString<N>{};
+  }
 
   // 最後の.の位置を探す
   auto dot_pos = std::string_view::npos;
@@ -132,7 +134,9 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval stem(FrozenString<N> const& path_str) noexcept -> FrozenString<N> {
   auto const name = basename(path_str);
-  if (name.length == 0) return FrozenString<N>{};
+  if (name.length == 0) {
+    return FrozenString<N>{};
+  }
   auto dot_pos = std::string_view::npos;
   for (auto i = 1uz; i < name.length; ++i) {
     if (name.buffer[i] == '.') {

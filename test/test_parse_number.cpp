@@ -4,6 +4,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief parse_number による整数・浮動小数点数のパースと境界値・エラーケースのテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

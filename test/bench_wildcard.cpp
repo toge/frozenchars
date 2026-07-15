@@ -13,8 +13,14 @@
 
 using namespace frozenchars;
 
+/** @brief frozenchars wildcard_match と wildcards ライブラリのパフォーマンス比較ベンチマーク。
+    @details `*`, `?`, 文字集合, 代替パターンの各ケースでコンパイル時 vs 実行時の実行時間を計測する。
+    @note 最初に全パターンの結果一致を検証してからベンチマークを実行する。*/
+
 namespace {
 
+/** @brief ベンチマーク結果を格納する構造体。
+    @details テスト名, 反復回数, 総経過時間 (ms), 1反復あたりの時間 (ns) を保持する。*/
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -22,12 +28,20 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用シンク変数。
+    @details volatile 宣言によりコンパイラのループ最適化を抑制する。*/
 volatile std::size_t g_sink = 0;
 
+/** @brief frozenchars の wildcard_match を実行し計測する。
+    @tparam PAT ワイルドカードパターン (NTTP)
+    @param text マッチ対象文字列
+    @param name 結果表示ラベル
+    @param iterations 反復回数
+    @return 計測結果 */
 template <FrozenString PAT>
 auto run_frozenchars(std::string_view text, std::string_view name,
                      std::uint64_t iterations) -> bench_result {
-  // warmup
+  // ウォームアップ
   for (auto i = std::uint64_t{0}; i < 500; ++i) {
     g_sink += static_cast<std::size_t>(wildcard_match<PAT>(text));
   }
@@ -50,9 +64,15 @@ auto run_frozenchars(std::string_view text, std::string_view name,
   };
 }
 
+/** @brief wildcards ライブラリのマッチ関数を実行し計測する。
+    @param text マッチ対象文字列
+    @param pattern ワイルドカードパターン文字列
+    @param name 結果表示ラベル
+    @param iterations 反復回数
+    @return 計測結果 */
 auto run_wildcards(std::string_view text, std::string_view pattern, std::string_view name,
                    std::uint64_t iterations) -> bench_result {
-  // warmup
+  // ウォームアップ
   for (auto i = std::uint64_t{0}; i < 500; ++i) {
     g_sink += static_cast<std::size_t>(wildcards::match(
       std::string{text}, std::string{pattern}
@@ -79,6 +99,8 @@ auto run_wildcards(std::string_view text, std::string_view pattern, std::string_
   };
 }
 
+/** @brief ベンチマーク結果をテーブル形式で標準出力に表示する。
+    @param results 表示する結果の配列 */
 auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[wildcard benchmark]\n";
   std::cout << "steady_clock.is_steady = " << std::chrono::steady_clock::is_steady << "\n\n";
@@ -106,6 +128,11 @@ auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[sink] " << g_sink << '\n';
 }
 
+/** @brief frozenchars の wildcard_match 結果を検証する。
+    @tparam PAT ワイルドカードパターン (NTTP)
+    @param text マッチ対象文字列
+    @param expected 期待される結果
+    @return 検証成功時に true */
 template <FrozenString PAT>
 [[nodiscard]] bool verify_frozen(std::string_view text, bool expected) {
   auto result = wildcard_match<PAT>(text);
@@ -118,6 +145,11 @@ template <FrozenString PAT>
   return true;
 }
 
+/** @brief wildcards ライブラリのマッチ結果を検証する。
+    @param text マッチ対象文字列
+    @param pattern ワイルドカードパターン文字列
+    @param expected 期待される結果
+    @return 検証成功時に true */
 [[nodiscard]] bool verify_wildcards(std::string_view text, std::string_view pattern, bool expected) {
   auto result = static_cast<bool>(wildcards::match(std::string{text}, std::string{pattern}));
   if (result != expected) {
@@ -139,10 +171,10 @@ int main(int argc, char** argv) {
     }
   }
 
-  // Test patterns and texts
+  // テストパターンとテキストの準備
   struct bench_case {
     std::string_view name;
-    std::string_view pattern_str;   // for wildcards
+    std::string_view pattern_str;   // wildcards ライブラリ用パターン
     std::string_view text;
     bool expected;
   };
@@ -170,7 +202,7 @@ int main(int argc, char** argv) {
   std::string file_cc = "main.cc";
   std::string file_xyz = "main.xyz";
 
-  // Verify correctness before benchmarking
+  // ベンチマーク前に正しさを検証
   bool all_ok = true;
 
   constexpr auto pat_a_star_b = FrozenString{"a*b"};
@@ -208,7 +240,7 @@ int main(int argc, char** argv) {
   all_ok &= verify_frozen<pat_empty>("", true);
   all_ok &= verify_frozen<pat_empty>("a", false);
 
-  // wildcards verification
+  // wildcards ライブラリの検証
   all_ok &= verify_wildcards(long_text, "a*b", true);
   all_ok &= verify_wildcards(long_no_match, "a*b", false);
   all_ok &= verify_wildcards("axb", "a?b", true);
@@ -241,11 +273,11 @@ int main(int argc, char** argv) {
 
   std::cout << "All verifications passed.\n";
 
-  // Run benchmarks
+  // ベンチマーク実行
   auto results = std::vector<bench_result>{};
   results.reserve(24);
 
-  // frozenchars cases
+  // frozenchars のケース
   results.push_back(run_frozenchars<pat_a_star_b>(long_text, "fc: a*b (100c, match)", iterations));
   results.push_back(run_frozenchars<pat_a_star_b>(long_no_match, "fc: a*b (100c, nomatch)", iterations));
   results.push_back(run_frozenchars<pat_a_star_b>(long_text_500, "fc: a*b (500c, match)", iterations));
@@ -265,7 +297,7 @@ int main(int argc, char** argv) {
   results.push_back(run_frozenchars<pat_empty>("", "fc: empty (match)", iterations));
   results.push_back(run_frozenchars<pat_empty>("a", "fc: empty (nomatch)", iterations));
 
-  // wildcards cases
+  // wildcards ライブラリのケース
   results.push_back(run_wildcards(long_text, "a*b", "wc: a*b (100c, match)", iterations));
   results.push_back(run_wildcards(long_no_match, "a*b", "wc: a*b (100c, nomatch)", iterations));
   results.push_back(run_wildcards(long_text_500, "a*b", "wc: a*b (500c, match)", iterations));

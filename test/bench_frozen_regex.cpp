@@ -14,8 +14,10 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief frozen_regex と CTRE の実行時パフォーマンス比較ベンチマーク。500K イテレーションで contains/matches を計測する。 */
 namespace {
 
+/** @brief ベンチマーク結果を格納する構造体。 */
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -23,8 +25,13 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用の volatile sink 変数。 */
 volatile std::size_t g_sink = 0;
 
+/** @brief 指定された関数を iterations 回実行し、実行時間を bench_result として返す。
+    @param name 計測ケースの名前
+    @param fn   計測対象の関数
+    @param iterations 繰り返し回数 */
 template <typename Func>
 auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
   for (std::uint64_t i = 0; i < 500; ++i) fn();
@@ -40,6 +47,7 @@ auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> benc
   };
 }
 
+/** @brief ベンチマーク結果の一覧を標準出力に表示する。 */
 auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[frozen_regex vs CTRE benchmark]\n\n";
   std::cout << std::left << std::setw(50) << "case"
@@ -56,6 +64,11 @@ auto print_results(std::vector<bench_result> const& results) -> void {
   std::cout << "\n[sink] " << g_sink << '\n';
 }
 
+/** @brief frozen_regex::contains の結果が期待通りかを検証する。不一致時は標準エラーに出力する。
+    @param RR       frozen_regex 型
+    @param text     検証対象の文字列
+    @param expected 期待される結果
+    @return 期待通りなら true */
 template <typename RR>
 [[nodiscard]] auto verify_fr(std::string_view text, bool expected) -> bool {
   auto const result = RR::contains(text);
@@ -67,6 +80,11 @@ template <typename RR>
   return true;
 }
 
+/** @brief ctre::match の結果が期待通りかを検証する。不一致時は標準エラーに出力する。
+    @param Pattern  CTRE パターン変数
+    @param text     検証対象の文字列
+    @param expected 期待される結果
+    @return 期待通りなら true */
 template <auto& Pattern>
 [[nodiscard]] auto verify_ctre(std::string_view text, bool expected) -> bool {
   auto const result = static_cast<bool>(ctre::match<Pattern>(text));

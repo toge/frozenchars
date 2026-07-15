@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <limits>
 #include <string_view>
-#include <utility>
 
 namespace frozenchars {
 
@@ -429,65 +428,89 @@ template <size_t N>
 }
 
 namespace detail {
-  template <size_t N, size_t M>
-  consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> const& needle, size_t pos = 0) noexcept {
-    if (needle.length == 0) {
-      return pos;
-    }
-    if (needle.length > haystack.length || pos > haystack.length - needle.length) {
-      return std::string_view::npos;
-    }
-    if (needle.length == 1) {  // Special case for char
-      for (auto i = pos; i < haystack.length; ++i) {
-        if (haystack.buffer[i] == needle.buffer[0]) {
-          return i;
-        }
-      }
-      return std::string_view::npos;
-    }
-    auto const needle_len = needle.length;
-    for (auto i = pos; i <= haystack.length - needle_len; ++i) {
-      bool match = true;
-      for (auto j = 0uz; j < needle_len; ++j) {
-        if (haystack.buffer[i + j] != needle.buffer[j]) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
+
+/**
+ * @brief 文字列 haystack 内で部分文字列 needle の最初の出現位置を検索する
+ * @tparam N haystack のバッファ長
+ * @tparam M needle のバッファ長
+ * @param haystack 検索対象の文字列
+ * @param needle 検索する部分文字列
+ * @param pos 検索開始位置（デフォルト 0）
+ * @return 見つかった位置、見つからなければ npos
+ */
+template <size_t N, size_t M>
+consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> const& needle, size_t pos = 0) noexcept {
+  if (needle.length == 0) {
+    return pos;
+  }
+  if (needle.length > haystack.length || pos > haystack.length - needle.length) {
+    return std::string_view::npos;
+  }
+  if (needle.length == 1) {  // Special case for char
+    for (auto i = pos; i < haystack.length; ++i) {
+      if (haystack.buffer[i] == needle.buffer[0]) {
         return i;
       }
     }
     return std::string_view::npos;
   }
-
-  template <auto Str, auto From>
-    requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
-  [[nodiscard]] consteval auto count_occurrences() noexcept -> std::size_t {
-    auto count = 0uz;
-    auto pos   = 0uz;
-    while (pos < Str.length) {
-      auto const found = find_impl(Str, From, pos);
-      if (found == std::string_view::npos)
+  auto const needle_len = needle.length;
+  for (auto i = pos; i <= haystack.length - needle_len; ++i) {
+    bool match = true;
+    for (auto j = 0uz; j < needle_len; ++j) {
+      if (haystack.buffer[i + j] != needle.buffer[j]) {
+        match = false;
         break;
-      ++count;
-      pos = found + From.length;
+      }
     }
-    return count;
+    if (match) {
+      return i;
+    }
   }
+  return std::string_view::npos;
+}
 
-  template <auto Str, auto From, auto To>
-    requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)> && is_frozen_string_v<decltype(To)>)
-  [[nodiscard]] consteval auto replace_all_exact_size() noexcept -> std::size_t {
-    constexpr auto occurrences = count_occurrences<Str, From>();
-    if constexpr (occurrences == 0) {
-      return Str.length + 1;
-    } else {
-      constexpr auto removed = occurrences * From.length;
-      constexpr auto added   = occurrences * To.length;
-      return Str.length - removed + added + 1;
-    }
+/**
+ * @brief 文字列 Str 内で From が重複なしで出現する回数を NTTP で計算する
+ * @tparam Str 検索対象の文字列
+ * @tparam From 検索する部分文字列
+ * @return 出現回数
+ */
+template <auto Str, auto From>
+  requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
+[[nodiscard]] consteval auto count_occurrences() noexcept -> std::size_t {
+  auto count = 0uz;
+  auto pos   = 0uz;
+  while (pos < Str.length) {
+    auto const found = find_impl(Str, From, pos);
+    if (found == std::string_view::npos)
+      break;
+    ++count;
+    pos = found + From.length;
   }
+  return count;
+}
+
+/**
+ * @brief Str 内の From をすべて To に置換した結果のバッファサイズ（終端 \0 含む）を NTTP で計算する
+ * @tparam Str 元の文字列
+ * @tparam From 置換前の部分文字列
+ * @tparam To 置換後の文字列
+ * @return 必要なバッファサイズ（置換後長 + 1）
+ */
+template <auto Str, auto From, auto To>
+  requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)> && is_frozen_string_v<decltype(To)>)
+[[nodiscard]] consteval auto replace_all_exact_size() noexcept -> std::size_t {
+  constexpr auto occurrences = count_occurrences<Str, From>();
+  if constexpr (occurrences == 0) {
+    return Str.length + 1;
+  } else {
+    constexpr auto removed = occurrences * From.length;
+    constexpr auto added   = occurrences * To.length;
+    return Str.length - removed + added + 1;
+  }
+}
+
 }  // namespace detail
 
 /**
@@ -894,18 +917,37 @@ template <auto Delim>
   return partition<Delim>(freeze(str));
 }
 
+/**
+ * @brief freeze可能な非整数値を左詰めする（freeze 後に pad_left に委譲）
+ * @tparam Width 目標幅
+ * @tparam Fill 埋め文字（デフォルト空白）
+ * @param v 埋める値
+ */
 template <size_t Width, char Fill = ' ', typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
+/**
+ * @brief freeze可能な非整数値を右詰めする（freeze 後に pad_right に委譲）
+ * @tparam Width 目標幅
+ * @tparam Fill 埋め文字（デフォルト空白）
+ * @param v 埋める値
+ */
 template <size_t Width, char Fill = ' ', typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
 }
 
+/**
+ * @brief FrozenString の配列を NTTP 区切り文字で結合する
+ * @tparam Delim 区切り文字列
+ * @tparam ElemN 各要素のバッファ長
+ * @tparam Count 要素数
+ * @param arr 結合する配列
+ */
 template <FrozenString Delim, size_t ElemN, size_t Count>
 [[nodiscard]] auto consteval join(std::array<FrozenString<ElemN>, Count> const& arr) noexcept {
   constexpr auto NEW_SIZE = (ElemN * Count) + (Delim.size() * (Count > 0 ? Count - 1 : 0)) + 1;
@@ -926,6 +968,12 @@ template <FrozenString Delim, size_t ElemN, size_t Count>
   return res;
 }
 
+/**
+ * @brief 可変長引数を freeze して NTTP 区切り文字で結合する
+ * @tparam Delim 区切り文字列
+ * @tparam Args 引数の型パック
+ * @param args 結合する値
+ */
 template <FrozenString Delim, typename... Args>
   requires(sizeof...(Args) > 0)
 [[nodiscard]] auto consteval join(Args const&... args) noexcept {
@@ -933,11 +981,23 @@ template <FrozenString Delim, typename... Args>
   return join<Delim>(arr);
 }
 
+/**
+ * @brief 整数値を文字列化して左詰めする（デフォルト埋め文字 '0'）
+ * @tparam Width 目標幅
+ * @tparam Fill 埋め文字（デフォルト '0'）
+ * @param v 数値
+ */
 template <size_t Width, char Fill = '0', Integral T>
 [[nodiscard]] auto consteval pad_left(T const& v) noexcept {
   return pad_left<Width, Fill>(freeze(v));
 }
 
+/**
+ * @brief 整数値を文字列化して右詰めする（デフォルト埋め文字 '0'）
+ * @tparam Width 目標幅
+ * @tparam Fill 埋め文字（デフォルト '0'）
+ * @param v 数値
+ */
 template <size_t Width, char Fill = '0', Integral T>
 [[nodiscard]] auto consteval pad_right(T const& v) noexcept {
   return pad_right<Width, Fill>(freeze(v));
@@ -1148,343 +1208,343 @@ template <size_t N>
 
 namespace detail {
 
-  /**
-   * @brief SQL 識別子の先頭文字か判定する
-   *
-   * @param c 判定対象文字
-   * @return auto 識別子先頭なら true
-   */
-  auto constexpr is_sql_id_start(char c) noexcept {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+/**
+ * @brief SQL 識別子の先頭文字か判定する
+ *
+ * @param c 判定対象文字
+ * @return auto 識別子先頭なら true
+ */
+auto constexpr is_sql_id_start(char c) noexcept {
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+/**
+ * @brief SQL 識別子の構成文字か判定する
+ *
+ * @param c 判定対象文字
+ * @return auto 識別子構成文字なら true
+ */
+auto constexpr is_sql_id_char(char c) noexcept {
+  return is_sql_id_start(c) || (c >= '0' && c <= '9');
+}
+
+/**
+ * @brief SQL 予約語リスト（大文字、昇順ソート済み）
+ */
+inline constexpr char const* sql_reserved_words[] = {
+    "ABS",
+    "ALL",
+    "ALLOCATE",
+    "ALTER",
+    "AND",
+    "ANY",
+    "ARE",
+    "ARRAY",
+    "AS",
+    "ASENSITIVE",
+    "ASYMMETRIC",
+    "AT",
+    "AUTHORIZATION",
+    "BEGIN",
+    "BETWEEN",
+    "BIGINT",
+    "BINARY",
+    "BLOB",
+    "BOOLEAN",
+    "BOTH",
+    "BY",
+    "CALL",
+    "CASCADE",
+    "CASCADED",
+    "CASE",
+    "CAST",
+    "CHAR",
+    "CHARACTER",
+    "CHECK",
+    "CLOB",
+    "CLOSE",
+    "COALESCE",
+    "COLLATE",
+    "COLUMN",
+    "COMMIT",
+    "CONNECT",
+    "CONSTRAINT",
+    "CONTAINS",
+    "CONTINUE",
+    "CORRESPONDING",
+    "CREATE",
+    "CROSS",
+    "CURRENT",
+    "CURRENT_DATE",
+    "CURRENT_DEFAULT_TRANSFORM_GROUP",
+    "CURRENT_PATH",
+    "CURRENT_ROLE",
+    "CURRENT_TIME",
+    "CURRENT_TIMESTAMP",
+    "CURRENT_TRANSFORM_GROUP_FOR_TYPE",
+    "CURRENT_USER",
+    "CURSOR",
+    "DATE",
+    "DATETIME",
+    "DEALLOCATE",
+    "DEC",
+    "DECIMAL",
+    "DECLARE",
+    "DEFAULT",
+    "DELETE",
+    "DEREF",
+    "DESC",
+    "DETERMINISTIC",
+    "DISCONNECT",
+    "DISTINCT",
+    "DOUBLE",
+    "DROP",
+    "DYNAMIC",
+    "EACH",
+    "ELSE",
+    "ELSEIF",
+    "END",
+    "ESCAPE",
+    "EXCEPT",
+    "EXCEPTION",
+    "EXEC",
+    "EXECUTE",
+    "EXISTS",
+    "EXTERNAL",
+    "EXTRACT",
+    "FALSE",
+    "FETCH",
+    "FLOAT",
+    "FOR",
+    "FOREIGN",
+    "FREE",
+    "FROM",
+    "FULL",
+    "FUNCTION",
+    "GET",
+    "GLOBAL",
+    "GRANT",
+    "GROUP",
+    "GROUPING",
+    "HANDLER",
+    "HAVING",
+    "HOLD",
+    "IDENTITY",
+    "IF",
+    "IMMEDIATE",
+    "IN",
+    "INDICATOR",
+    "INNER",
+    "INOUT",
+    "INPUT",
+    "INSENSITIVE",
+    "INSERT",
+    "INT",
+    "INTEGER",
+    "INTERSECT",
+    "INTO",
+    "IS",
+    "ITERATE",
+    "JOIN",
+    "KEY",
+    "LANGUAGE",
+    "LARGE",
+    "LATERAL",
+    "LEADING",
+    "LEAVE",
+    "LEFT",
+    "LIKE",
+    "LIMIT",
+    "LOCAL",
+    "LOCALTIME",
+    "LOCALTIMESTAMP",
+    "LOOP",
+    "MATCH",
+    "MEMBER",
+    "MERGE",
+    "METHOD",
+    "MINUS",
+    "MOD",
+    "MODIFIES",
+    "MODULE",
+    "MULTISET",
+    "NATIONAL",
+    "NATURAL",
+    "NCHAR",
+    "NCLOB",
+    "NEW",
+    "NO",
+    "NONE",
+    "NOT",
+    "NULL",
+    "NUMERIC",
+    "OF",
+    "OLD",
+    "ON",
+    "ONLY",
+    "OPEN",
+    "OR",
+    "ORDER",
+    "OUT",
+    "OUTER",
+    "OUTPUT",
+    "OVERLAPS",
+    "PARAMETER",
+    "PARTITION",
+    "PRECEDING",
+    "PRIMARY",
+    "PROCEDURE",
+    "RANGE",
+    "READS",
+    "REAL",
+    "RECURSIVE",
+    "REF",
+    "REFERENCES",
+    "REFERENCING",
+    "RELEASE",
+    "RESULT",
+    "RETURN",
+    "RETURNS",
+    "REVOKE",
+    "RIGHT",
+    "ROLLBACK",
+    "ROLLUP",
+    "ROW",
+    "ROWS",
+    "SAVEPOINT",
+    "SCROLL",
+    "SEARCH",
+    "SECOND",
+    "SELECT",
+    "SENSITIVE",
+    "SESSION_USER",
+    "SET",
+    "SHOW",
+    "SIMILAR",
+    "SMALLINT",
+    "SOME",
+    "SPECIFIC",
+    "SPECIFICTYPE",
+    "SQL",
+    "SQLCODE",
+    "SQLEXCEPTION",
+    "SQLSTATE",
+    "SQLWARNING",
+    "START",
+    "STATIC",
+    "SUBMULTISET",
+    "SUBSTRING",
+    "SYMMETRIC",
+    "TABLE",
+    "TEMPORARY",
+    "THEN",
+    "TIME",
+    "TIMESTAMP",
+    "TIMEZONE_HOUR",
+    "TIMEZONE_MINUTE",
+    "TO",
+    "TRAILING",
+    "TRANSACTION",
+    "TREAT",
+    "TRIGGER",
+    "TRIM",
+    "TRUE",
+    "UNDO",
+    "UNION",
+    "UNIQUE",
+    "UNKNOWN",
+    "UNNEST",
+    "UPDATE",
+    "UPPER",
+    "USER",
+    "USING",
+    "VALUE",
+    "VALUES",
+    "VARCHAR",
+    "VARYING",
+    "VIEW",
+    "WHEN",
+    "WHENEVER",
+    "WHERE",
+    "WHILE",
+    "WINDOW",
+    "WITH",
+    "WITHIN",
+    "WITHOUT",
+    "YEAR",
+};
+
+/**
+ * @brief SQL 予約語かどうかを二分探索で判定する
+ *
+ * @param word 判定対象の識別子（大文字）
+ * @param len 文字列長
+ * @return auto 予約語なら true
+ */
+auto consteval sql_is_reserved(char const* word, size_t len) noexcept {
+  auto constexpr count = sizeof(sql_reserved_words) / sizeof(sql_reserved_words[0]);
+  auto lo              = 0uz;
+  auto hi              = count;
+  while (lo < hi) {
+    auto const mid = lo + (hi - lo) / 2;
+    auto const r   = sql_reserved_words[mid];
+    auto       j   = 0uz;
+    while (j < len && r[j] != '\0' && word[j] == r[j]) {
+      ++j;
+    }
+    auto const cmp = (j < len && r[j] != '\0') ? (static_cast<unsigned char>(word[j]) - static_cast<unsigned char>(r[j])) : (j < len ? 1 : (r[j] != '\0' ? -1 : 0));
+    if (cmp == 0) {
+      return true;
+    } else if (cmp < 0) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
   }
+  return false;
+}
 
-  /**
-   * @brief SQL 識別子の構成文字か判定する
-   *
-   * @param c 判定対象文字
-   * @return auto 識別子構成文字なら true
-   */
-  auto constexpr is_sql_id_char(char c) noexcept {
-    return is_sql_id_start(c) || (c >= '0' && c <= '9');
-  }
+/**
+ * @brief SQL 型キーワード短縮マッピング
+ */
+struct sql_type_mapping {
+  char const* long_form;
+  size_t      long_len;
+  char const* short_form;
+  size_t      short_len;
+};
 
-  /**
-   * @brief SQL 予約語リスト（大文字、昇順ソート済み）
-   */
-  inline constexpr char const* sql_reserved_words[] = {
-      "ABS",
-      "ALL",
-      "ALLOCATE",
-      "ALTER",
-      "AND",
-      "ANY",
-      "ARE",
-      "ARRAY",
-      "AS",
-      "ASENSITIVE",
-      "ASYMMETRIC",
-      "AT",
-      "AUTHORIZATION",
-      "BEGIN",
-      "BETWEEN",
-      "BIGINT",
-      "BINARY",
-      "BLOB",
-      "BOOLEAN",
-      "BOTH",
-      "BY",
-      "CALL",
-      "CASCADE",
-      "CASCADED",
-      "CASE",
-      "CAST",
-      "CHAR",
-      "CHARACTER",
-      "CHECK",
-      "CLOB",
-      "CLOSE",
-      "COALESCE",
-      "COLLATE",
-      "COLUMN",
-      "COMMIT",
-      "CONNECT",
-      "CONSTRAINT",
-      "CONTAINS",
-      "CONTINUE",
-      "CORRESPONDING",
-      "CREATE",
-      "CROSS",
-      "CURRENT",
-      "CURRENT_DATE",
-      "CURRENT_DEFAULT_TRANSFORM_GROUP",
-      "CURRENT_PATH",
-      "CURRENT_ROLE",
-      "CURRENT_TIME",
-      "CURRENT_TIMESTAMP",
-      "CURRENT_TRANSFORM_GROUP_FOR_TYPE",
-      "CURRENT_USER",
-      "CURSOR",
-      "DATE",
-      "DATETIME",
-      "DEALLOCATE",
-      "DEC",
-      "DECIMAL",
-      "DECLARE",
-      "DEFAULT",
-      "DELETE",
-      "DEREF",
-      "DESC",
-      "DETERMINISTIC",
-      "DISCONNECT",
-      "DISTINCT",
-      "DOUBLE",
-      "DROP",
-      "DYNAMIC",
-      "EACH",
-      "ELSE",
-      "ELSEIF",
-      "END",
-      "ESCAPE",
-      "EXCEPT",
-      "EXCEPTION",
-      "EXEC",
-      "EXECUTE",
-      "EXISTS",
-      "EXTERNAL",
-      "EXTRACT",
-      "FALSE",
-      "FETCH",
-      "FLOAT",
-      "FOR",
-      "FOREIGN",
-      "FREE",
-      "FROM",
-      "FULL",
-      "FUNCTION",
-      "GET",
-      "GLOBAL",
-      "GRANT",
-      "GROUP",
-      "GROUPING",
-      "HANDLER",
-      "HAVING",
-      "HOLD",
-      "IDENTITY",
-      "IF",
-      "IMMEDIATE",
-      "IN",
-      "INDICATOR",
-      "INNER",
-      "INOUT",
-      "INPUT",
-      "INSENSITIVE",
-      "INSERT",
-      "INT",
-      "INTEGER",
-      "INTERSECT",
-      "INTO",
-      "IS",
-      "ITERATE",
-      "JOIN",
-      "KEY",
-      "LANGUAGE",
-      "LARGE",
-      "LATERAL",
-      "LEADING",
-      "LEAVE",
-      "LEFT",
-      "LIKE",
-      "LIMIT",
-      "LOCAL",
-      "LOCALTIME",
-      "LOCALTIMESTAMP",
-      "LOOP",
-      "MATCH",
-      "MEMBER",
-      "MERGE",
-      "METHOD",
-      "MINUS",
-      "MOD",
-      "MODIFIES",
-      "MODULE",
-      "MULTISET",
-      "NATIONAL",
-      "NATURAL",
-      "NCHAR",
-      "NCLOB",
-      "NEW",
-      "NO",
-      "NONE",
-      "NOT",
-      "NULL",
-      "NUMERIC",
-      "OF",
-      "OLD",
-      "ON",
-      "ONLY",
-      "OPEN",
-      "OR",
-      "ORDER",
-      "OUT",
-      "OUTER",
-      "OUTPUT",
-      "OVERLAPS",
-      "PARAMETER",
-      "PARTITION",
-      "PRECEDING",
-      "PRIMARY",
-      "PROCEDURE",
-      "RANGE",
-      "READS",
-      "REAL",
-      "RECURSIVE",
-      "REF",
-      "REFERENCES",
-      "REFERENCING",
-      "RELEASE",
-      "RESULT",
-      "RETURN",
-      "RETURNS",
-      "REVOKE",
-      "RIGHT",
-      "ROLLBACK",
-      "ROLLUP",
-      "ROW",
-      "ROWS",
-      "SAVEPOINT",
-      "SCROLL",
-      "SEARCH",
-      "SECOND",
-      "SELECT",
-      "SENSITIVE",
-      "SESSION_USER",
-      "SET",
-      "SHOW",
-      "SIMILAR",
-      "SMALLINT",
-      "SOME",
-      "SPECIFIC",
-      "SPECIFICTYPE",
-      "SQL",
-      "SQLCODE",
-      "SQLEXCEPTION",
-      "SQLSTATE",
-      "SQLWARNING",
-      "START",
-      "STATIC",
-      "SUBMULTISET",
-      "SUBSTRING",
-      "SYMMETRIC",
-      "TABLE",
-      "TEMPORARY",
-      "THEN",
-      "TIME",
-      "TIMESTAMP",
-      "TIMEZONE_HOUR",
-      "TIMEZONE_MINUTE",
-      "TO",
-      "TRAILING",
-      "TRANSACTION",
-      "TREAT",
-      "TRIGGER",
-      "TRIM",
-      "TRUE",
-      "UNDO",
-      "UNION",
-      "UNIQUE",
-      "UNKNOWN",
-      "UNNEST",
-      "UPDATE",
-      "UPPER",
-      "USER",
-      "USING",
-      "VALUE",
-      "VALUES",
-      "VARCHAR",
-      "VARYING",
-      "VIEW",
-      "WHEN",
-      "WHENEVER",
-      "WHERE",
-      "WHILE",
-      "WINDOW",
-      "WITH",
-      "WITHIN",
-      "WITHOUT",
-      "YEAR",
-  };
+inline constexpr sql_type_mapping sql_type_shortenings[] = {
+    {"BOOLEAN", 7, "BOOL", 4},
+    {"CHARACTER", 9, "CHAR", 4},
+    {"INTEGER", 7, "INT", 3},
+};
 
-  /**
-   * @brief SQL 予約語かどうかを二分探索で判定する
-   *
-   * @param word 判定対象の識別子（大文字）
-   * @param len 文字列長
-   * @return auto 予約語なら true
-   */
-  auto consteval sql_is_reserved(char const* word, size_t len) noexcept {
-    auto constexpr count = sizeof(sql_reserved_words) / sizeof(sql_reserved_words[0]);
-    auto lo              = 0uz;
-    auto hi              = count;
-    while (lo < hi) {
-      auto const mid = lo + (hi - lo) / 2;
-      auto const r   = sql_reserved_words[mid];
-      auto       j   = 0uz;
-      while (j < len && r[j] != '\0' && word[j] == r[j]) {
-        ++j;
-      }
-      auto const cmp = (j < len && r[j] != '\0') ? (static_cast<unsigned char>(word[j]) - static_cast<unsigned char>(r[j])) : (j < len ? 1 : (r[j] != '\0' ? -1 : 0));
-      if (cmp == 0) {
-        return true;
-      } else if (cmp < 0) {
-        hi = mid;
-      } else {
-        lo = mid + 1;
+/**
+ * @brief SQL 型キーワードの短縮マッピングを検索する
+ *
+ * @param word 大文字変換済みの識別子
+ * @param len 文字列長
+ * @return auto マッピングがあればポインタ、なければ nullptr
+ */
+auto constexpr sql_find_type_shortening(char const* word, size_t len) noexcept -> sql_type_mapping const* {
+  for (auto const& m : sql_type_shortenings) {
+    if (len != m.long_len) {
+      continue;
+    }
+    auto match = true;
+    for (auto j = 0uz; j < len; ++j) {
+      if (word[j] != m.long_form[j]) {
+        match = false;
+        break;
       }
     }
-    return false;
-  }
-
-  /**
-   * @brief SQL 型キーワード短縮マッピング
-   */
-  struct sql_type_mapping {
-    char const* long_form;
-    size_t      long_len;
-    char const* short_form;
-    size_t      short_len;
-  };
-
-  inline constexpr sql_type_mapping sql_type_shortenings[] = {
-      {"BOOLEAN", 7, "BOOL", 4},
-      {"CHARACTER", 9, "CHAR", 4},
-      {"INTEGER", 7, "INT", 3},
-  };
-
-  /**
-   * @brief SQL 型キーワードの短縮マッピングを検索する
-   *
-   * @param word 大文字変換済みの識別子
-   * @param len 文字列長
-   * @return auto マッピングがあればポインタ、なければ nullptr
-   */
-  auto constexpr sql_find_type_shortening(char const* word, size_t len) noexcept -> sql_type_mapping const* {
-    for (auto const& m : sql_type_shortenings) {
-      if (len != m.long_len) {
-        continue;
-      }
-      auto match = true;
-      for (auto j = 0uz; j < len; ++j) {
-        if (word[j] != m.long_form[j]) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
-        return &m;
-      }
+    if (match) {
+      return &m;
     }
-    return nullptr;
   }
+  return nullptr;
+}
 
 }  // namespace detail
 

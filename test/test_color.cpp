@@ -4,6 +4,8 @@
 
 #include "frozenchars/color.hpp"
 
+/** @brief 16進色コードのパース（RGB/RGBA）および色空間変換（BGR, BGRA, ABGR）のテスト。 */
+
 using namespace frozenchars;
 
 // NOTE: parse_hex_rgb / parse_hex_rgba は consteval のため、

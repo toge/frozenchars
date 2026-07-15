@@ -14,8 +14,15 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/**
+ * @brief frozen_map と frozen_trie_map のルックアップ性能比較ベンチマーク。
+ *   7 パターン（短キー・HTTP メソッド・共通プレフィックス・NATO 20 キー・長キー・同長キー・ラウンドロビン）で
+ *   両コンテナの find / contains を同一条件で計測する。
+ */
+
 namespace {
 
+/** @brief ベンチマーク1件の計測結果を保持する構造体。名前・反復回数・経過時間・1反復あたりの時間を持つ。 */
 struct bench_result {
   std::string_view name{};
   std::uint64_t iterations{};
@@ -23,8 +30,10 @@ struct bench_result {
   double ns_per_iter{};
 };
 
+/** @brief 最適化防止用の揮発性シンク変数。ベンチマーク結果の書き込み先として使う。 */
 volatile std::size_t g_sink = 0;
 
+/** @brief 指定された関数を iterations 回実行し、経過時間を bench_result として返す。 */
 template <typename Func>
 auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
   for (std::uint64_t i = 0; i < 500; ++i) fn();
@@ -40,6 +49,7 @@ auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> benc
   };
 }
 
+/** @brief ベンチマーク結果の一覧を整形して標準出力に表示する。 */
 auto print_results(std::string_view label, std::vector<bench_result> const& results) -> void {
   std::cout << "\n[" << label << "]\n\n";
   std::cout << std::left << std::setw(44) << "case"
@@ -65,7 +75,7 @@ int main(int argc, char** argv) {
     if (parsed > 0) iterations = static_cast<std::uint64_t>(parsed);
   }
 
-  // ---- Pattern 1: Short unique-first-char keys (3 keys) ----
+  // ---- パターン1: 短い先頭ユニークキー（3キー） ----
   constexpr auto p1_map = frozen_map<int, "a"_fs, "b"_fs, "c"_fs>{
     std::array<int, 3>{1, 2, 3}
   };
@@ -73,7 +83,7 @@ int main(int argc, char** argv) {
     std::array<int, 3>{1, 2, 3}
   };
 
-  // ---- Pattern 2: HTTP methods (5 keys, mixed lengths) ----
+  // ---- パターン2: HTTPメソッド（5キー、混在長） ----
   constexpr auto p2_map = frozen_map<int, "GET"_fs, "PUT"_fs, "POST"_fs, "DELETE"_fs, "HEAD"_fs>{
     std::array<int, 5>{1, 2, 3, 4, 5}
   };
@@ -81,7 +91,7 @@ int main(int argc, char** argv) {
     std::array<int, 5>{1, 2, 3, 4, 5}
   };
 
-  // ---- Pattern 3: Common prefix (4 keys) ----
+  // ---- パターン3: 共通プレフィックス（4キー） ----
   constexpr auto p3_map = frozen_map<int, "timeout"_fs, "timeout_ms"_fs, "timeout_us"_fs, "timeout_ns"_fs>{
     std::array<int, 4>{1, 2, 3, 4}
   };
@@ -89,7 +99,7 @@ int main(int argc, char** argv) {
     std::array<int, 4>{1, 2, 3, 4}
   };
 
-  // ---- Pattern 4: NATO alphabet (20 keys), same as bench_frozen_map large_map ----
+  // ---- パターン4: NATOアルファベット（20キー）、bench_frozen_map large_map と同じ ----
   constexpr auto p4_map = frozen_map<int,
     "alpha"_fs, "bravo"_fs, "charlie"_fs, "delta"_fs, "echo"_fs,
     "foxtrot"_fs, "golf"_fs, "hotel"_fs, "india"_fs, "juliet"_fs,
@@ -105,7 +115,7 @@ int main(int argc, char** argv) {
     std::array<int, 20>{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}
   };
 
-  // ---- Pattern 5: Long keys (>30 chars, 5 keys) ----
+  // ---- パターン5: 長キー（>30文字、5キー） ----
   constexpr auto p5_map = frozen_map<int,
     "configuration_timeout_ms"_fs, "maximum_retry_count_param"_fs,
     "connection_pool_size_setting"_fs, "authentication_token_secret_key"_fs,
@@ -119,7 +129,7 @@ int main(int argc, char** argv) {
     std::array<int, 5>{100, 200, 300, 400, 500}
   };
 
-  // ---- Pattern 6: Same-length keys (10 keys, 21 chars each) ----
+  // ---- パターン6: 同長キー（10キー、各21文字） ----
   constexpr auto p6_map = frozen_map<int,
     "configuration_key_one"_fs, "configuration_key_two"_fs,
     "configuration_key_thr"_fs, "configuration_key_fou"_fs,
@@ -137,7 +147,7 @@ int main(int argc, char** argv) {
     std::array<int, 10>{1,2,3,4,5,6,7,8,9,10}
   };
 
-  // ---- Pattern 7: medium keys for round-robin ----
+  // ---- パターン7: ラウンドロビン用中キー ----
   constexpr auto p7_map = frozen_map<int,
     "timeout"_fs, "retry"_fs, "backoff"_fs, "endpoint"_fs, "headers"_fs,
     "method"_fs, "path"_fs, "query"_fs, "body"_fs, "status"_fs>{
@@ -156,7 +166,7 @@ int main(int argc, char** argv) {
 
   auto iters = iterations;
 
-  // ---- frozen_map measurements ----
+  // ---- frozen_map 計測 ----
   map_results.push_back(measure("P1 short(3) find hit-sum", [&]{
     auto it = p1_map.find("a"); g_sink += (it != p1_map.end());
     it = p1_map.find("b"); g_sink += (it != p1_map.end());
@@ -217,7 +227,7 @@ int main(int argc, char** argv) {
 
   print_results("frozen_map benchmark", map_results);
 
-  // ---- frozen_trie_map measurements ----
+  // ---- frozen_trie_map 計測 ----
   trie_results.push_back(measure("P1 short(3) find hit-sum", [&]{
     auto it = p1_trie.find("a"); g_sink += (it != p1_trie.end());
     it = p1_trie.find("b"); g_sink += (it != p1_trie.end());

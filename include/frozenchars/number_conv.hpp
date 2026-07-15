@@ -3,9 +3,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <stdexcept>
-#include <string_view>
 #include <charconv>
 #include <system_error>
 #include <limits>
@@ -42,6 +40,7 @@ template <typename T, size_t N>
     throw std::invalid_argument("no digits");
   }
 
+  // 整数型の場合は std::from_chars を使用して変換する
   if constexpr (std::integral<T>) {
     if constexpr (std::unsigned_integral<T>) {
       if (neg) {
@@ -120,21 +119,20 @@ template <typename T, size_t N>
         return static_cast<T>(res);
       }
     }
+  // 実数型の場合はランタイムではstd::from_chars, コンパイル時は独自実装で変換する
   } else if constexpr (std::floating_point<T>) {
-    // ランタイムパス: strtod/strtof でIEEE754準拠の正確な変換を行う。
-    // FrozenStringのバッファはnull終端が保証されているため直接ポインタを渡せる。
+    // ランタイムパス: std::from_chars でロケール非依存かつIEEE754準拠の正確な変換を行う。
     if (!std::is_constant_evaluated()) {
-      char* endp = nullptr;
-      T result;
-      if constexpr (std::same_as<T, float>) {
-        result = std::strtof(sv.data(), &endp);
-      } else {
-        result = static_cast<T>(std::strtod(sv.data(), &endp));
-      }
-      if (endp == nullptr || endp != sv.data() + sv.size()) {
+      // from_chars は先頭 '+' を受理しないため1文字スキップする。'-' は from_chars が処理する。
+      // ponytail: general フォーマット固定。16進float "0x1.8p3" は解さないが依存箇所なし。
+      char const* first    = sv.data() + (sv[0] == '+' ? 1 : 0);
+      char const* last     = sv.data() + sv.size();
+      T           result{};
+      auto const [ptr, ec] = std::from_chars(first, last, result);
+      if (ec == std::errc::invalid_argument || ptr != last) {
         throw std::invalid_argument("invalid float");
       }
-      if (result == std::numeric_limits<T>::infinity() || result == -std::numeric_limits<T>::infinity()) {
+      if (ec == std::errc::result_out_of_range) {
         throw std::out_of_range("float overflow");
       }
       return result;

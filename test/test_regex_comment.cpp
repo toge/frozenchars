@@ -4,6 +4,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief 正規表現コメント除去（remove_regex_comment）のテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

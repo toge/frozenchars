@@ -19,6 +19,8 @@
 
 #include "frozenchars.hpp"
 
+/** @brief FrozenString と std::format / std::print / ostream との連携テスト */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 

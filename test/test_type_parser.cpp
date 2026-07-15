@@ -12,6 +12,7 @@
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+/** @brief 型名文字列から C++ 型へのコンパイル時マッピング (type_mapping_v) と、型リストのパース (parse_to_tuple_t / parse_to_variant_t) を検証する。 */
 TEST_CASE("type_parser: type_mapping_v basic types") {
   STATIC_CHECK(std::is_same_v<type_mapping_v<"int"_fs>, int>);
   STATIC_CHECK(std::is_same_v<type_mapping_v<"bool"_fs>, bool>);

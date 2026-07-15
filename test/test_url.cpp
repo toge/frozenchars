@@ -1,6 +1,8 @@
 #include "catch2/catch_all.hpp"
 #include "frozenchars.hpp"
 
+/** @brief URL エンコード/デコード、クエリ文字列生成のテスト。 */
+
 using namespace frozenchars;
 using namespace frozenchars::literals;
 namespace fops = frozenchars::ops;

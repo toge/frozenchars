@@ -122,7 +122,7 @@ struct to<JSON, frozenchars::frozen_map<T, Keys...>> {
   static auto op(frozenchars::frozen_map<T, Keys...> const& value,
                  is_context auto&& ctx,
                  auto&& b,
-                 auto& ix) -> void {
+                 auto& ix) {
     auto encoded = std::map<std::string, T>{};
     for (auto const& [key, mapped] : value) {
       encoded.emplace(std::string{key}, mapped);
