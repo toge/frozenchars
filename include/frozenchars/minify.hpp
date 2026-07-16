@@ -59,6 +59,28 @@ inline constexpr auto has_flag(minify_sql_opt value, minify_sql_opt flag) noexce
   return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
 }
 
+// ─── Lua/Luau minify オプション ─────────────────────────────────────────────
+
+/**
+ * @brief Lua/Luau minify オプション（ビットフィールド）
+ */
+enum class minify_lua_opt : uint8_t {
+  none = 0,
+  keep_directives = 1 << 0, ///< Luau 型ディレクティブ (--!strict 等) を保持する
+};
+
+inline constexpr auto operator|(minify_lua_opt a, minify_lua_opt b) noexcept {
+  return static_cast<minify_lua_opt>(std::to_underlying(a) | std::to_underlying(b));
+}
+
+inline constexpr auto operator&(minify_lua_opt a, minify_lua_opt b) noexcept {
+  return static_cast<minify_lua_opt>(std::to_underlying(a) & std::to_underlying(b));
+}
+
+inline constexpr auto has_flag(minify_lua_opt value, minify_lua_opt flag) noexcept -> bool {
+  return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
+}
+
 // ─── 内部補助関数 ───────────────────────────────────────────────────────────
 
 namespace detail {
@@ -1153,7 +1175,64 @@ enum class minify_state : unsigned char {
   block_comment, ///< ブロックコメント /* ～ */
 };
 
+/// @brief 位置 i の '[' から始まる長括弧 `[=*[` を検出する
+/// @param input 入力文字列
+/// @param i 調査開始位置（'[' を指すこと）
+/// @return 有効なら '=' の数（レベル）、無効なら -1
+constexpr int long_bracket_level(char const *input, std::size_t i) noexcept
+{
+  // input[i] は '[' を想定。i+1 から '=' が連続し、直後に '[' があれば長括弧開始。
+  std::size_t j = i + 1;
+  while (input[j] == '=') {
+    ++j;
+  }
+  if (input[j] != '[') {
+    return -1;
+  }
+  return static_cast<int>(j - (i + 1)); // レベル = '=' の数
+}
+
+/// @brief レベル level の長括弧閉じ `]=*]` の位置を検索する
+/// @param input 入力文字列
+/// @param from 検索開始位置
+/// @param level 期待レベル
+/// @return 閉じ位置（']' の添字）、見つからなければ npos
+constexpr std::size_t find_long_bracket_close(char const *input, std::size_t from, int level) noexcept
+{
+  for (std::size_t i = from; input[i] != '\0'; ++i) {
+    if (input[i] != ']') {
+      continue;
+    }
+    std::size_t j = i + 1;
+    int k = 0;
+    while (k < level && input[j] == '=') {
+      ++j;
+      ++k;
+    }
+    if (k == level && input[j] == ']') {
+      return i;
+    }
+  }
+  return static_cast<std::size_t>(-1);
+}
+
 } // namespace detail
+
+/// @brief Lua/Luau ミニファイ用の字句解析状態
+enum class minify_lua_state : unsigned char {
+  normal,        ///< 通常コード
+  single_quote,  ///< シングルクォート文字列 '...'
+  double_quote,  ///< ダブルクォート文字列 "..."
+  line_comment,  ///< 行コメント -- ～ 行末
+  long_comment,  ///< 長括弧コメント --[=*[ ... ]=*]
+  long_string,   ///< 長括弧文字列 [=*[ ... ]=*]（内容をそのまま保持）
+  directive_line, ///< Luau 型ディレクティブ --!...（keep_directives 時のみ）
+};
+
+/// @brief Lua/Luau ソースをミニファイする（コンパイル時・実行時共用）
+constexpr std::size_t minify_lua(const char *input, char *output,
+                                 std::size_t output_capacity,
+                                 minify_lua_opt options = minify_lua_opt::none) noexcept;
 
 /// @brief Cypher クエリをミニファイする（コンパイル時・実行時共用）
 constexpr std::size_t minify_cypher(const char *input, char *output,
@@ -1343,6 +1422,185 @@ constexpr std::size_t minify_cypher(const char *input, char *output,
   return out_len;
 }
 
+constexpr std::size_t minify_lua(const char *input, char *output,
+                                 std::size_t output_capacity,
+                                 minify_lua_opt options) noexcept
+{
+  if (output_capacity == 0) {
+    return 0;
+  }
+
+  using detail::find_long_bracket_close;
+  using detail::isCloseChar;
+  using detail::isIdentChar;
+  using detail::long_bracket_level;
+
+  auto state = minify_lua_state::normal;
+  std::size_t out_len = 0;
+  bool pending_space = false;
+  char last_out = '\0';
+
+  // ponytail: Lua 5.2+ の「--[[ で対応する ]] が無い場合は行コメント扱い」という
+  // Edge case は捨て、Luau セマンティクス（常に長括弧扱い、EOF まで close が無ければ
+  // EOF まで長コメント/文字列）に統一。
+  auto write_char = [&](char c) noexcept {
+    if (out_len < output_capacity - 1) {
+      output[out_len++] = c;
+      last_out = c;
+    }
+  };
+
+  for (std::size_t i = 0; input[i] != '\0';) {
+    char const c = input[i];
+    char const next = input[i + 1];
+
+    switch (state) {
+    case minify_lua_state::normal: {
+      if (c == '-' && next == '-') {
+        // 長括弧コメント --[=*[ ... ]=*] の開始を検出する
+        if (input[i + 2] == '[') {
+          int const level = long_bracket_level(input, i + 2);
+          if (level >= 0) {
+            std::size_t const close = find_long_bracket_close(input, i + 2, level);
+            if (close != static_cast<std::size_t>(-1)) {
+              i = close + static_cast<std::size_t>(level) + 2; // close の直後へ
+              state = minify_lua_state::normal;
+              pending_space = true;
+              break;
+            }
+          }
+        }
+        // Luau 型ディレクティブ --!strict 等を保持する（オプション時のみ）
+        if (has_flag(options, minify_lua_opt::keep_directives) && input[i + 2] == '!') {
+          write_char('-');
+          write_char('-');
+          state = minify_lua_state::directive_line;
+          i += 2;
+          break;
+        }
+        // それ以外は行コメント -- ～ 行末
+        state = minify_lua_state::line_comment;
+        i += 2;
+      } else if (c == '[') {
+        // 長括弧文字列 [=*[ ... ]=*] の開始を検出する（内容はそのまま保持）
+        int const level = long_bracket_level(input, i);
+        if (level >= 0) {
+          std::size_t const close = find_long_bracket_close(input, i, level);
+          if (close != static_cast<std::size_t>(-1)) {
+            for (std::size_t k = i; k <= close + static_cast<std::size_t>(level) + 1; ++k) {
+              write_char(input[k]); // 開き～閉じまで verbatim 出力
+            }
+            i = close + static_cast<std::size_t>(level) + 2;
+            state = minify_lua_state::normal;
+            break;
+          }
+        }
+        // 普通の '['（テーブル索引 t[1] 等）として通常文字を出力する
+        if (pending_space && isIdentChar(last_out)) {
+          write_char(' ');
+        }
+        pending_space = false;
+        write_char(c);
+        ++i;
+      } else if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
+        pending_space = true;
+        ++i;
+      } else {
+        // 遅延された空白を出力するか判定: 識別子-識別子間など必要な場合のみ空白を挿入する
+        if (pending_space) {
+          bool const id_to_id = isIdentChar(last_out) && isIdentChar(c);
+          bool const id_to_q  = isIdentChar(last_out) && (c == '\'' || c == '"');
+          bool const close_to_id = isCloseChar(last_out) && isIdentChar(c);
+          if (id_to_id || id_to_q || close_to_id) {
+            write_char(' ');
+          }
+        }
+        pending_space = false;
+
+        // 引用符開始を検出したら対応する状態へ遷移し、通常文字はそのまま出力する
+        if (c == '\'') {
+          write_char(c);
+          state = minify_lua_state::single_quote;
+        } else if (c == '"') {
+          write_char(c);
+          state = minify_lua_state::double_quote;
+        } else {
+          write_char(c);
+        }
+        ++i;
+      }
+      break;
+    }
+
+    case minify_lua_state::single_quote: {
+      write_char(c);
+      if (c == '\\') {
+        ++i;
+        if (input[i] != '\0') {
+          write_char(input[i]);
+          ++i;
+        }
+      } else if (c == '\'') {
+        state = minify_lua_state::normal;
+        ++i;
+      } else {
+        ++i;
+      }
+      break;
+    }
+
+    case minify_lua_state::double_quote: {
+      write_char(c);
+      if (c == '\\') {
+        ++i;
+        if (input[i] != '\0') {
+          write_char(input[i]);
+          ++i;
+        }
+      } else if (c == '"') {
+        state = minify_lua_state::normal;
+        ++i;
+      } else {
+        ++i;
+      }
+      break;
+    }
+
+    case minify_lua_state::line_comment: {
+      // 行コメント: 行末まで読み飛ばし、改行で通常状態に戻る
+      if (c == '\n' || c == '\r') {
+        state = minify_lua_state::normal;
+        pending_space = true;
+      }
+      ++i;
+      break;
+    }
+
+    case minify_lua_state::directive_line: {
+      // Luau 型ディレクティブ: --! から行末までをそのまま出力する
+      write_char(c);
+      if (c == '\n' || c == '\r') {
+        state = minify_lua_state::normal;
+        pending_space = true;
+      }
+      ++i;
+      break;
+    }
+
+    case minify_lua_state::long_comment:
+    case minify_lua_state::long_string: {
+      // 到達しない: 長括弧は normal 状態で一括スキップ/出力する
+      ++i;
+      break;
+    }
+    }
+  }
+
+  // 終端文字を設定して圧縮後の長さを返す（Lua では末尾 ';' は意味を持つため除去しない）
+  output[out_len] = '\0';
+  return out_len;
+}
+
 /// @brief Cypher ミニファイ結果を格納する実行時コンテナ（配列 + 長さ）
 template <std::size_t N>
 struct minified_query {
@@ -1416,6 +1674,39 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval minify_cypher(char const (&str)[N]) noexcept {
   return minify_cypher(FrozenString{str});
+}
+
+/**
+ * @brief Lua/Luau ソース文字列を minify する
+ *
+ * 内部でバッファベースの minify_lua を呼び出し、結果を FrozenString に詰めて返す。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @param options minify オプション（デフォルト: none）
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval minify_lua(FrozenString<N> const& str,
+                                        minify_lua_opt options = minify_lua_opt::none) noexcept {
+  auto res = FrozenString<N>{};
+  auto len = minify_lua(str.buffer.data(), res.buffer.data(), N, options);
+  res.length = len;
+  return res;
+}
+
+/**
+ * @brief Lua/Luau ソース文字列リテラルを minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @param options minify オプション（デフォルト: none）
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval minify_lua(char const (&str)[N],
+                                        minify_lua_opt options = minify_lua_opt::none) noexcept {
+  return minify_lua(FrozenString{str}, options);
 }
 
 } // namespace frozenchars

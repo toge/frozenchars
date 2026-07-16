@@ -587,6 +587,27 @@ struct minify_cypher_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief Lua/Luau minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_lua_adaptor : pipe_adaptor_base {
+  minify_lua_opt options;  ///< ミニファイオプション（デフォルト: none）
+  constexpr minify_lua_adaptor(
+    minify_lua_opt opts = minify_lua_opt::none
+  ) noexcept : options(opts) {}
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_lua(str, options);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_lua(FrozenString{str}, options);
+  }
+  [[nodiscard]] consteval auto operator()(minify_lua_opt opts) const noexcept {
+    return minify_lua_adaptor{opts};
+  }
+};
+
+/**
  * @brief SQL 予約語を大文字化するパイプ演算子アダプタ
  */
 struct sql_uppercase_keywords_adaptor : pipe_adaptor_base {
@@ -635,6 +656,7 @@ inline constexpr minify_json_adaptor                 minify_json{};             
 inline constexpr minify_yaml_adaptor                 minify_yaml{};             ///< YAML ミニファイ
 inline constexpr minify_sql_adaptor                  minify_sql{};              ///< SQL ミニファイ
 inline constexpr minify_cypher_adaptor               minify_cypher{};           ///< Cypher ミニファイ
+inline constexpr minify_lua_adaptor                   minify_lua{};             ///< Lua/Luau ミニファイ
 inline constexpr sql_uppercase_keywords_adaptor      sql_uppercase_keywords{};  ///< SQL 予約語を大文字化
 inline constexpr remove_leading_spaces_adaptor<>     remove_leading_spaces{};   ///< 各行先頭の空白を全除去
 inline constexpr remove_trailing_spaces_adaptor<>    remove_trailing_spaces{};  ///< 各行末尾の空白を全除去

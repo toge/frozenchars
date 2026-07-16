@@ -45,6 +45,7 @@
 - [base64_decode（Base64デコード）](#base64_decode（base64デコド）)
 - [html_encode / html_decode（HTMLエンティティ変換）](#html_encode-html_decode（htmlエンティティ変換）)
 - [minify_html / minify_xml / minify_json / minify_yaml / minify_sql / minify_cypher（マークアップ / データ / クエリ 縮小）](#minify_html-minify_xml-minify_json-minify_yaml-minify_sql-minify_cypher（マクアップ-デタ-クエリ-縮小）)
+- [minify_lua（Lua / Luau 縮小）](#minify_lua（lua--luau-縮小）)
 - [linebreak（改行表現の相互変換）](#linebreak（改行表現の相互変換）)
 - [word_wrap（ワードラップ）](#word_wrap（ワドラップ）)
 - [文字種判定述語（is_alpha / is_digit / ...）](#文字種判定述語（is_alpha-is_digit-）)
@@ -887,6 +888,42 @@ char buf[64];
 auto const* input = "MATCH (n) RETURN n";
 auto const len = minify_cypher(input, buf, sizeof(buf));
 // len = 16, buf = "MATCH(n)RETURN n\0"
+```
+
+## `minify_lua`（Lua / Luau 縮小）
+
+Lua / Luau のソースをコンパイル時に縮小します。コメント・空行・不要な空白を除去し、識別子間などトークン境界に必要な空白のみを残します。すべて `consteval` で実行され、`static_assert` で検証できます。
+
+- `minify_lua(str, options = minify_lua_opt::none)` : Lua/Luau ソースを縮小します
+  - `--` 行コメントと `--[[ ... ]]` / `--[==[ ... ]==]` 長括弧コメントを除去します
+  - `[[ ... ]]` / `[=[ ... ]=]` 長文字列は内容をそのまま保持します（`local s = [[ -- not a comment ]]` は壊れません）
+  - `'...'` / `"..."` 短文字列内の `--` や `[[` は誤って削除しません
+  - `minify_lua_opt::keep_directives` を立てると、Luau の型チェックディレクティブ `--!strict` / `--!nonstrict` / `--!nocheck` / `--!lua` を保持します（既定では通常の `--` コメントと同様に除去）
+
+> [!NOTE]
+> Lua 5.2+ の「`--[[` で対応する `]]` が無い場合は行コメント扱い」という細則は採用せず、Luau セマンティクス（常に長括弧コメント扱い、閉じが無ければ EOF まで）に統一しています。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+namespace fops = frozenchars::ops;
+
+// 行コメントと不要な空白を除去
+auto constexpr a = minify_lua("local x = 1  -- side\nlocal y = 2");
+static_assert(a.sv() == "local x=1 local y=2");
+
+// 長括弧コメントを除去（長文字列は保持）
+auto constexpr b = minify_lua("s = [[ -- keep ]]  -- drop");
+static_assert(b.sv() == "s=[[ -- keep ]]");
+
+// ディレクティブを保持
+auto constexpr c = minify_lua("--!strict\nlocal x = 1",
+                              minify_lua_opt::keep_directives);
+static_assert(c.sv() == "--!strict\nlocal x=1");
+
+// パイプ演算子
+auto constexpr d = "--!nonstrict\nlocal x"_fs | fops::minify_lua;
 ```
 
 ## `linebreak`（改行表現の相互変換）
