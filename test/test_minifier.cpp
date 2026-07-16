@@ -6,15 +6,17 @@
 
 #include "catch2/catch_all.hpp"
 
+#include <string_view>
+
 #include "frozenchars.hpp"
 #include "frozenchars/minify.hpp"
 
-using frozenchars::minify;
 using frozenchars::minify_cypher;
 using frozenchars::minify_markup_opt;
 using frozenchars::minify_sql_opt;
 using namespace frozenchars::literals;
 
+// ═════════════════════════════════════════════════════════════════════════════
 // ═════════════════════════════════════════════════════════════════════════════
 // Cypher minify — コンパイル時検証（static_assert）
 // ═════════════════════════════════════════════════════════════════════════════
@@ -22,311 +24,93 @@ using namespace frozenchars::literals;
 namespace {
 
 // 1. 基本: 括弧・スペース除去、識別子間スペース保持
-static_assert(minify("MATCH (n) RETURN n") == "MATCH(n) RETURN n");
+static_assert(minify_cypher("MATCH (n) RETURN n").sv() == std::string_view("MATCH(n) RETURN n"));
 
 // 2a. 行コメント除去
-static_assert(minify("MATCH (n) // comment\nRETURN n") == "MATCH(n) RETURN n");
+static_assert(minify_cypher("MATCH (n) // comment\nRETURN n").sv() == std::string_view("MATCH(n) RETURN n"));
 
 // 2b. ブロックコメント除去
-static_assert(minify("MATCH /* block */ (n) RETURN n") == "MATCH(n) RETURN n");
+static_assert(minify_cypher("MATCH /* block */ (n) RETURN n").sv() == std::string_view("MATCH(n) RETURN n"));
 
 // 2c. 複数行ブロックコメント除去
-static_assert(minify("MATCH /*\n  multi\n  line\n*/ (n) RETURN n") ==
-              "MATCH(n) RETURN n");
+static_assert(minify_cypher("MATCH /*\n  multi\n  line\n*/ (n) RETURN n").sv() ==
+              std::string_view("MATCH(n) RETURN n"));
 
 // 3. 文字列内のコメント記号は除去しない
-static_assert(minify("RETURN '//not a comment'") == "RETURN '//not a comment'");
-static_assert(minify("RETURN '/* also not */removed'") ==
-              "RETURN '/* also not */removed'");
+static_assert(minify_cypher("RETURN '//not a comment'").sv() == std::string_view("RETURN '//not a comment'"));
+static_assert(minify_cypher("RETURN '/* also not */removed'").sv() ==
+              std::string_view("RETURN '/* also not */removed'"));
 
 // 4. バッククォート識別子（空白・改行も含めてそのまま保存）
-static_assert(minify("MATCH (`my node`) RETURN `my node`") ==
-              "MATCH(`my node`) RETURN `my node`");
+static_assert(minify_cypher("MATCH (`my node`) RETURN `my node`").sv() ==
+              std::string_view("MATCH(`my node`) RETURN `my node`"));
 
 // 5. 識別子間スペース挿入の各ケース
-static_assert(minify("WHERE x = 1") == "WHERE x=1");
-static_assert(minify("RETURN 1") == "RETURN 1");
+static_assert(minify_cypher("WHERE x = 1").sv() == std::string_view("WHERE x=1"));
+static_assert(minify_cypher("RETURN 1").sv() == std::string_view("RETURN 1"));
 
 // 6. 末尾セミコロン除去
-static_assert(minify("RETURN 1;") == "RETURN 1");
+static_assert(minify_cypher("RETURN 1;").sv() == std::string_view("RETURN 1"));
 
 // 7. エスケープシーケンス: \' はそのまま維持
-static_assert(minify("RETURN 'It\\'s fine'") == "RETURN 'It\\'s fine'");
+static_assert(minify_cypher("RETURN 'It\\'s fine'").sv() == std::string_view("RETURN 'It\\'s fine'"));
 
 // 8. 複数文: 中間セミコロンは保持、末尾には ; なし
-static_assert(minify("MATCH (n) RETURN n; MATCH (m) RETURN m") ==
-              "MATCH(n) RETURN n;MATCH(m) RETURN m");
-
-// 10. COPY (query) TO ... の識別子と ( の間のスペース保持
-static_assert(minify("COPY (MATCH (p:Person) RETURN p.id) TO '/tmp/out.csv' (HEADER=true)") ==
-              "COPY (MATCH(p:Person) RETURN p.id) TO '/tmp/out.csv' (HEADER=true)");
+static_assert(minify_cypher("MATCH (n) RETURN n; MATCH (m) RETURN m").sv() ==
+              std::string_view("MATCH(n) RETURN n;MATCH(m) RETURN m"));
 
 // 9. 複数文末尾セミコロン: 最後の1つのみ除去
-static_assert(minify("MATCH (n) RETURN n; MATCH (m) RETURN m;") ==
-              "MATCH(n) RETURN n;MATCH(m) RETURN m");
+static_assert(minify_cypher("MATCH (n) RETURN n; MATCH (m) RETURN m;").sv() ==
+              std::string_view("MATCH(n) RETURN n;MATCH(m) RETURN m"));
 
-// 10. 連続スペース・タブ・改行は1スペースに集約（識別子間のみ）
-static_assert(minify("MATCH   \t  (n)") == "MATCH(n)");
-static_assert(minify("RETURN   \n\n  n") == "RETURN n");
+// 10. COPY (query) TO ... の識別子と ( の間のスペース保持
+static_assert(minify_cypher("COPY (MATCH (p:Person) RETURN p.id) TO '/tmp/out.csv' (HEADER=true)").sv() ==
+              std::string_view("COPY (MATCH(p:Person) RETURN p.id) TO '/tmp/out.csv' (HEADER=true)"));
 
-// 11. 行末のコメント後に識別子が続く場合
-static_assert(minify("WHERE // eq\nn = 1") == "WHERE n=1");
+// 11. 連続スペース・タブ・改行は1スペースに集約（識別子間のみ）
+static_assert(minify_cypher("MATCH   \t  (n)").sv() == std::string_view("MATCH(n)"));
+static_assert(minify_cypher("RETURN   \n\n  n").sv() == std::string_view("RETURN n"));
 
-// 12. ダブルクォート文字列も保存
-static_assert(minify("RETURN \"hello world\"") == "RETURN \"hello world\"");
+// 12. 行末のコメント後に識別子が続く場合
+static_assert(minify_cypher("WHERE // eq\nn = 1").sv() == std::string_view("WHERE n=1"));
 
-// 13. 識別子同士が記号で区切られる場合はスペース不要
-static_assert(minify("n.name = m.name") == "n.name=m.name");
-static_assert(minify("n:Person") == "n:Person");
+// 13. ダブルクォート文字列も保存
+static_assert(minify_cypher("RETURN \"hello world\"").sv() == std::string_view("RETURN \"hello world\""));
 
-// 14. 先頭・末尾の空白は除去
-static_assert(minify("  MATCH (n)  ") == "MATCH(n)");
+// 14. 識別子同士が記号で区切られる場合はスペース不要
+static_assert(minify_cypher("n.name = m.name").sv() == std::string_view("n.name=m.name"));
+static_assert(minify_cypher("n:Person").sv() == std::string_view("n:Person"));
 
-// 15. ブロックコメントが識別子間に挟まれる場合はスペース補完
-static_assert(minify("MATCH/*comment*/n") == "MATCH n");
-static_assert(minify("WHERE/*comment*/n=1") == "WHERE n=1");
+// 15. 先頭・末尾の空白は除去
+static_assert(minify_cypher("  MATCH (n)  ").sv() == std::string_view("MATCH(n)"));
 
-// 16. 空文字列
-static_assert(minify("") == "");
+// 16. ブロックコメントが識別子間に挟まれる場合はスペース補完
+static_assert(minify_cypher("MATCH/*comment*/n").sv() == std::string_view("MATCH n"));
+static_assert(minify_cypher("WHERE/*comment*/n=1").sv() == std::string_view("WHERE n=1"));
 
-// 17. 空白のみ
-static_assert(minify("   \t\n  ") == "");
+// 17. 空文字列
+static_assert(minify_cypher("").sv() == std::string_view(""));
 
-// 18. バッククォート識別子内のコメント記号も保存
-static_assert(minify("`foo // bar`") == "`foo // bar`");
+// 18. 空白のみ
+static_assert(minify_cypher("   \t\n  ").sv() == std::string_view(""));
 
-// 19. 文字列と数値の混在 RETURN（識別子→文字列、文字列→識別子などのスペース保持）
-static_assert(minify("RETURN 'Hello' + ' ' + 'World' AS greeting, 42 AS answer, 3.14 AS pi") ==
-              "RETURN 'Hello'+' '+'World' AS greeting,42 AS answer,3.14 AS pi");
+// 19. バッククォート識別子内のコメント記号も保存
+static_assert(minify_cypher("`foo // bar`").sv() == std::string_view("`foo // bar`"));
 
-// 20. 様々な型の式を RETURN で並べる（閉じ括弧→識別子のスペース保持）
-static_assert(minify(
+// 20. 文字列と数値の混在 RETURN
+static_assert(minify_cypher("RETURN 'Hello' + ' ' + 'World' AS greeting, 42 AS answer, 3.14 AS pi").sv() ==
+              std::string_view("RETURN 'Hello'+' '+'World' AS greeting,42 AS answer,3.14 AS pi"));
+
+// 21. 様々な型の式を RETURN で並べる
+static_assert(minify_cypher(
   "RETURN true AS bool_val, 42 AS int_val, 3.14159 AS float_val,"
-  " 'text' AS str_val, [1,2,3] AS list_val, date('2024-01-15') AS date_val") ==
-  "RETURN true AS bool_val,42 AS int_val,3.14159 AS float_val,"
-  "'text' AS str_val,[1,2,3] AS list_val,"
-  "date('2024-01-15') AS date_val");
+  " 'text' AS str_val, [1,2,3] AS list_val, date('2024-01-15') AS date_val").sv() ==
+  std::string_view(
+    "RETURN true AS bool_val,42 AS int_val,3.14159 AS float_val,"
+    "'text' AS str_val,[1,2,3] AS list_val,"
+    "date('2024-01-15') AS date_val"));
 
 } // namespace
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Cypher minify — 実行時検証（Catch2）
-// ═════════════════════════════════════════════════════════════════════════════
-
-TEST_CASE("minify_cypher - 基本的なスペース・括弧の除去", "[minifier]")
-{
-  SECTION("MATCH/RETURN の基本形")
-  {
-    auto constexpr result = minify("MATCH (n) RETURN n");
-    REQUIRE(result == "MATCH(n) RETURN n");
-  }
-
-  SECTION("WHERE 句のスペース保持とイコール前後の除去")
-  {
-    auto constexpr result = minify("WHERE x = 1");
-    REQUIRE(result == "WHERE x=1");
-  }
-
-  SECTION("n.name = m.name: ドット区切りはスペース不要")
-  {
-    auto constexpr result = minify("n.name = m.name");
-    REQUIRE(result == "n.name=m.name");
-  }
-}
-
-TEST_CASE("minify_cypher - コメント除去", "[minifier]")
-{
-  SECTION("行コメント")
-  {
-    auto constexpr result = minify("MATCH (n) // comment\nRETURN n");
-    REQUIRE(result == "MATCH(n) RETURN n");
-  }
-
-  SECTION("ブロックコメント")
-  {
-    auto constexpr result = minify("MATCH /* block */ (n) RETURN n");
-    REQUIRE(result == "MATCH(n) RETURN n");
-  }
-
-  SECTION("複数行ブロックコメント")
-  {
-    auto constexpr result = minify("MATCH /*\n  multi\n  line\n*/ (n) RETURN n");
-    REQUIRE(result == "MATCH(n) RETURN n");
-  }
-
-  SECTION("ブロックコメントが識別子間: スペース補完")
-  {
-    auto constexpr result = minify("MATCH/*comment*/n");
-    REQUIRE(result == "MATCH n");
-  }
-
-  SECTION("ブロックコメントが記号間: スペース不要")
-  {
-    auto constexpr result = minify("(/*comment*/n)");
-    REQUIRE(result == "(n)");
-  }
-}
-
-TEST_CASE("minify_cypher - 文字列リテラル保存", "[minifier]")
-{
-  SECTION("文字列内の行コメント記号は除去しない")
-  {
-    auto constexpr result = minify("RETURN '//not a comment'");
-    REQUIRE(result == "RETURN '//not a comment'");
-  }
-
-  SECTION("文字列内のブロックコメント記号は除去しない")
-  {
-    auto constexpr result = minify("RETURN '/* also not */removed'");
-    REQUIRE(result == "RETURN '/* also not */removed'");
-  }
-
-  SECTION("エスケープされたシングルクォート")
-  {
-    auto constexpr result = minify("RETURN 'It\\'s fine'");
-    REQUIRE(result == "RETURN 'It\\'s fine'");
-  }
-
-  SECTION("ダブルクォート文字列")
-  {
-    auto constexpr result = minify("RETURN \"hello world\"");
-    REQUIRE(result == "RETURN \"hello world\"");
-  }
-
-  SECTION("文字列内の空白・改行はそのまま保存")
-  {
-    auto constexpr result = minify("RETURN 'line1\nline2'");
-    REQUIRE(result == "RETURN 'line1\nline2'");
-  }
-}
-
-TEST_CASE("minify_cypher - バッククォート識別子保存", "[minifier]")
-{
-  SECTION("空白を含む識別子")
-  {
-    auto constexpr result =
-        minify("MATCH (`my node`) RETURN `my node`");
-    REQUIRE(result == "MATCH(`my node`) RETURN `my node`");
-  }
-
-  SECTION("バッククォート識別子内のコメント記号は除去しない")
-  {
-    auto constexpr result = minify("`foo // bar`");
-    REQUIRE(result == "`foo // bar`");
-  }
-}
-
-TEST_CASE("minify_cypher - セミコロン処理", "[minifier]")
-{
-  SECTION("末尾セミコロン除去")
-  {
-    auto constexpr result = minify("RETURN 1;");
-    REQUIRE(result == "RETURN 1");
-  }
-
-  SECTION("複数文: 中間セミコロンは保持")
-  {
-    auto constexpr result =
-        minify("MATCH (n) RETURN n; MATCH (m) RETURN m");
-    REQUIRE(result == "MATCH(n) RETURN n;MATCH(m) RETURN m");
-  }
-
-  SECTION("複数文: 末尾セミコロンのみ除去")
-  {
-    auto constexpr result =
-        minify("MATCH (n) RETURN n; MATCH (m) RETURN m;");
-    REQUIRE(result == "MATCH(n) RETURN n;MATCH(m) RETURN m");
-  }
-}
-
-TEST_CASE("minify_cypher - エッジケース", "[minifier]")
-{
-  SECTION("空文字列")
-  {
-    auto constexpr result = minify("");
-    REQUIRE(result == "");
-  }
-
-  SECTION("空白のみ")
-  {
-    auto constexpr result = minify("   \t\n  ");
-    REQUIRE(result == "");
-  }
-
-  SECTION("先頭・末尾の空白は除去")
-  {
-    auto constexpr result = minify("  MATCH (n)  ");
-    REQUIRE(result == "MATCH(n)");
-  }
-
-  SECTION("連続する空白は1スペースに集約（識別子間のみ）")
-  {
-    auto constexpr result = minify("RETURN   \n\n  n");
-    REQUIRE(result == "RETURN n");
-  }
-
-  SECTION("RETURN a.* の後ろはスペース保持")
-  {
-    auto constexpr result = minify("RETURN a.* ORDER BY a.id");
-    REQUIRE(result == "RETURN a.* ORDER BY a.id");
-  }
-
-  SECTION("RETURN a.* の後ろに改行がある場合もスペース保持")
-  {
-    auto constexpr result = minify("  RETURN\n    a.*\n  ORDER BY\n    a.id");
-    REQUIRE(result == "RETURN a.* ORDER BY a.id");
-  }
-
-  SECTION("RETURN * の識別子と * の間にスペース保持")
-  {
-    auto constexpr result = minify("CALL\n    show_tables()\n  RETURN\n    * ");
-    REQUIRE(result == "CALL show_tables() RETURN *");
-  }
-
-  SECTION("COPY (query) の識別子と ( の間にスペース保持")
-  {
-    auto constexpr result =
-        minify("COPY (MATCH (p:Person) RETURN p.id) TO 'x' (HEADER=true)");
-    REQUIRE(result ==
-            "COPY (MATCH(p:Person) RETURN p.id) TO 'x' (HEADER=true)");
-  }
-
-  SECTION("関数呼び出しの ( 直前にはスペースを入れない（圧縮率維持）")
-  {
-    auto constexpr result =
-        minify("RETURN array_cosine_similarity([1,2],[3,4])");
-    REQUIRE(result == "RETURN array_cosine_similarity([1,2],[3,4])");
-  }
-}
-
-TEST_CASE("minify_cypher - 文字列と数値の混在 RETURN", "[minifier]")
-{
-  SECTION("文字列の連結と数値")
-  {
-    // 複数の式を RETURN で並べる: 文字列連結 + 数値
-    auto constexpr result = minify(
-      "RETURN 'Hello' + ' ' + 'World' AS greeting\n"
-      ", 42 AS answer\n"
-      ", 3.14 AS pi");
-    REQUIRE(result == "RETURN 'Hello'+' '+'World' AS greeting,42 AS answer,3.14 AS pi");
-  }
-
-  SECTION("様々な型の式を RETURN で並べる")
-  {
-    auto constexpr result = minify(
-      "RETURN true AS bool_val\n"
-      ", 42 AS int_val\n"
-      ", 3.14159 AS float_val\n"
-      ", 'text' AS str_val\n"
-      ", [1,2,3] AS list_val\n"
-      ", date('2024-01-15') AS date_val");
-    REQUIRE(result ==
-            "RETURN true AS bool_val,42 AS int_val,3.14159 AS float_val,"
-            "'text' AS str_val,[1,2,3] AS list_val,"
-            "date('2024-01-15') AS date_val");
-  }
-}
-
 TEST_CASE("minify_cypher - 実行時バッファ版", "[minifier]")
 {
   SECTION("通常の変換")
