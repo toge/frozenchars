@@ -472,7 +472,7 @@ constexpr void emit_trimmed(char c, char* out, size_t& offset) noexcept {
 
 /// @brief 遅延空白を出力するか判定し、必要なら 1 文字出力する
 constexpr void flush_pending_space(char prev, char c, char* out, size_t& offset, bool& pending_space) noexcept {
-  auto const emit = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/';
+  auto const emit = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/' && c != '{' && c != '}';
   if (emit) {
     out[offset++] = ' ';
   }
