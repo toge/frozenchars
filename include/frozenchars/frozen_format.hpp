@@ -304,10 +304,12 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
  * @return size_t 書き込んだバイト数（符号なしなら 0）
  */
 template <typename Buf>
-constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode) noexcept -> size_t {
-  if (is_negative) { buf[pos] = '-'; return 1; }
-  if (sign_mode == '+') { buf[pos] = '+'; return 1; }
-  if (sign_mode == ' ') { buf[pos] = ' '; return 1; }
+constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode, size_t max_pos) noexcept -> size_t {
+  if (pos < max_pos) {
+    if (is_negative) { buf[pos] = '-'; return 1; }
+    if (sign_mode == '+') { buf[pos] = '+'; return 1; }
+    if (sign_mode == ' ') { buf[pos] = ' '; return 1; }
+  }
   return 0;
 }
 
@@ -321,7 +323,7 @@ constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode
  * @return size_t 書き込んだ文字数
  */
 template <typename Buf, typename T>
-constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec) noexcept -> size_t {
+constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec, size_t max_pos) noexcept -> size_t {
   auto start = pos;
 
   // 真偽値: "true"/"false" を文字列として配置・埋め文字処理する
@@ -335,17 +337,17 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if (align == '\0') align = '<';
 
     if (align == '>') {
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
-      for (size_t j = 0; j < sv_len; ++j) { buf[pos] = sv[j]; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      for (size_t j = 0; j < sv_len; ++j) { if (pos < max_pos) buf[pos] = sv[j]; ++pos; }
     } else if (align == '<') {
-      for (size_t j = 0; j < sv_len; ++j) { buf[pos] = sv[j]; ++pos; }
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
+      for (size_t j = 0; j < sv_len; ++j) { if (pos < max_pos) buf[pos] = sv[j]; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     } else {
       auto left = pad / 2;
       auto right = pad - left;
-      for (size_t p = 0; p < left; ++p) { buf[pos] = fill; ++pos; }
-      for (size_t j = 0; j < sv_len; ++j) { buf[pos] = sv[j]; ++pos; }
-      for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
+      for (size_t p = 0; p < left; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      for (size_t j = 0; j < sv_len; ++j) { if (pos < max_pos) buf[pos] = sv[j]; ++pos; }
+      for (size_t p = 0; p < right; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     }
   } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
     std::string_view sv(&arg, 1);
@@ -357,17 +359,17 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if (align == '\0') align = '<';
 
     if (align == '>') {
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
-      buf[pos] = arg; ++pos;
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      if (pos < max_pos) { buf[pos] = arg; } ++pos;
     } else if (align == '<') {
-      buf[pos] = arg; ++pos;
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
+      if (pos < max_pos) { buf[pos] = arg; } ++pos;
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     } else {
       auto left = pad / 2;
       auto right = pad - left;
-      for (size_t p = 0; p < left; ++p) { buf[pos] = fill; ++pos; }
-      buf[pos] = arg; ++pos;
-      for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
+      for (size_t p = 0; p < left; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      if (pos < max_pos) { buf[pos] = arg; } ++pos;
+      for (size_t p = 0; p < right; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     }
   // 整数: 符号判定・基数変換・符号/ゼロ埋め/配置を行う
   } else if constexpr (Integral<T>) {
@@ -413,14 +415,14 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
       }
     }
 
-    auto sign_size = write_sign(buf, pos, is_neg, spec.sign);
+    auto sign_size = write_sign(buf, pos, is_neg, spec.sign, max_pos);
 
     if (spec.zero) {
       pos += sign_size;
       auto content = sign_size + raw_len;
       auto pad = (spec.width > static_cast<int>(content)) ? spec.width - content : 0;
-      for (size_t p = 0; p < static_cast<size_t>(pad); ++p) { buf[pos] = '0'; ++pos; }
-      for (auto j = 0uz; j < raw_len; ++j) { buf[pos] = raw_data[j]; ++pos; }
+      for (size_t p = 0; p < static_cast<size_t>(pad); ++p) { if (pos < max_pos) buf[pos] = '0'; ++pos; }
+      for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
     } else {
       auto content = sign_size + raw_len;
       auto field = static_cast<size_t>(std::max(spec.width, static_cast<int>(content)));
@@ -430,20 +432,20 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
       if (align == '\0') align = '>';
 
       if (align == '>') {
-        for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
+        for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
         pos += sign_size;
-        for (auto j = 0uz; j < raw_len; ++j) { buf[pos] = raw_data[j]; ++pos; }
+        for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
       } else if (align == '<') {
         pos += sign_size;
-        for (auto j = 0uz; j < raw_len; ++j) { buf[pos] = raw_data[j]; ++pos; }
-        for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
+        for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
+        for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
       } else {
         auto left = pad / 2;   // 中央揃え: 左側の余白（端数は右に回す）
         auto right = pad - left;
-        for (size_t p = 0; p < left; ++p) { buf[pos] = fill; ++pos; }
+        for (size_t p = 0; p < left; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
         pos += sign_size;
-        for (auto j = 0uz; j < raw_len; ++j) { buf[pos] = raw_data[j]; ++pos; }
-        for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
+        for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
+        for (size_t p = 0; p < right; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
       }
     }
 
@@ -498,24 +500,24 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if (align == '\0') align = '>';
 
     if (spec.zero) {
-      if (sign_char != '\0') { buf[pos] = sign_char; ++pos; }
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = '0'; ++pos; }
-      for (auto j = content_start; j < raw_len; ++j) { buf[pos] = raw[j]; ++pos; }
+      if (sign_char != '\0' && pos < max_pos) { buf[pos] = sign_char; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = '0'; ++pos; }
+      for (auto j = content_start; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw[j]; ++pos; }
     } else if (align == '>') {
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
-      if (sign_char != '\0') { buf[pos] = sign_char; ++pos; }
-      for (auto j = content_start; j < raw_len; ++j) { buf[pos] = raw[j]; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      if (sign_char != '\0' && pos < max_pos) { buf[pos] = sign_char; ++pos; }
+      for (auto j = content_start; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw[j]; ++pos; }
     } else if (align == '<') {
-      if (sign_char != '\0') { buf[pos] = sign_char; ++pos; }
-      for (auto j = content_start; j < raw_len; ++j) { buf[pos] = raw[j]; ++pos; }
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
+      if (sign_char != '\0' && pos < max_pos) { buf[pos] = sign_char; ++pos; }
+      for (auto j = content_start; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw[j]; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     } else {
       auto left = pad / 2;
       auto right = pad - left;
-      for (size_t p = 0; p < left; ++p) { buf[pos] = fill; ++pos; }
-      if (sign_char != '\0') { buf[pos] = sign_char; ++pos; }
-      for (auto j = content_start; j < raw_len; ++j) { buf[pos] = raw[j]; ++pos; }
-      for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
+      for (size_t p = 0; p < left; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      if (sign_char != '\0' && pos < max_pos) { buf[pos] = sign_char; ++pos; }
+      for (auto j = content_start; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw[j]; ++pos; }
+      for (size_t p = 0; p < right; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     }
 
   } else {
@@ -523,8 +525,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     std::string_view sv;
     if constexpr (std::same_as<std::remove_cvref_t<T>, bool>) {
       sv = arg ? "true" : "false";
-  // 文字: 1 文字を配置・埋め文字処理する
-  } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
+    } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
       sv = std::string_view(&arg, 1);
     } else if constexpr (requires { arg.sv(); }) {
       sv = arg.sv();
@@ -545,17 +546,17 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if (align == '\0') align = '<';
 
     if (align == '>') {
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
-      for (size_t j = 0; j < sv_len; ++j) { buf[pos] = sv[j]; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      for (size_t j = 0; j < sv_len; ++j) { if (pos < max_pos) buf[pos] = sv[j]; ++pos; }
     } else if (align == '<') {
-      for (size_t j = 0; j < sv_len; ++j) { buf[pos] = sv[j]; ++pos; }
-      for (size_t p = 0; p < pad; ++p) { buf[pos] = fill; ++pos; }
+      for (size_t j = 0; j < sv_len; ++j) { if (pos < max_pos) buf[pos] = sv[j]; ++pos; }
+      for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     } else {
       auto left = pad / 2;
       auto right = pad - left;
-      for (size_t p = 0; p < left; ++p) { buf[pos] = fill; ++pos; }
-      for (size_t j = 0; j < sv_len; ++j) { buf[pos] = sv[j]; ++pos; }
-      for (size_t p = 0; p < right; ++p) { buf[pos] = fill; ++pos; }
+      for (size_t p = 0; p < left; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
+      for (size_t j = 0; j < sv_len; ++j) { if (pos < max_pos) buf[pos] = sv[j]; ++pos; }
+      for (size_t p = 0; p < right; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
     }
   }
 
@@ -569,15 +570,21 @@ namespace frozenchars {
 /**
  * @brief コンパイル時フォーマット関数。std::format 互換の構文で文字列を生成する。
  *
- * @details 戻り値は FrozenString<4096>（固定バッファ）。実際の内容は .sv() で取得。
+ * @details 戻り値は FrozenString<Capacity>。実際の内容は .sv() で取得。
+ * Capacity を省略した場合は 4096 となり、4096 文字を超える出力も明示的に Capacity を
+ * 指定すれば扱える（例: frozen_format<"big {}"_fs, 9000>(huge_string)）。
+ * 内部バッファは既存の 4096 固定を維持し、最後に Capacity へ切り詰めてコピーする。
+ *
  * 呼び出し例: frozen_format<"value={}"_fs>(42)
+ *            frozen_format<"big {}"_fs, 9000>(huge_string)
  *
  * @tparam Fmt フォーマット文字列（FrozenString NTTP）
+ * @tparam Capacity 出力バッファの最大サイズ（終端 '\0' を含む、デフォルト 4096）
  * @tparam Args 引数の型パラメータパック
  * @param args フォーマット引数
- * @return auto FrozenString<4096>（実際の長さは .length に格納）
+ * @return auto FrozenString<Capacity>（実際の長さは .length に格納）
  */
-template <FrozenString Fmt, typename... Args>
+template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
 [[nodiscard]] consteval auto frozen_format(Args const&... args) noexcept {
   constexpr size_t len = Fmt.size();
   detail::validate_format(Fmt.buffer.data(), len);
@@ -586,14 +593,16 @@ template <FrozenString Fmt, typename... Args>
     "frozen_format: number of arguments does not match number of format fields");
 
   auto tup = std::tie(args...);
-  auto result = FrozenString<4096>{};
+  // 内部バッファも Capacity 連動とし、format_field に Capacity - 1 を渡して境界内に収める
+  auto result = FrozenString<Capacity>{};
   size_t pos = 0;
   size_t field_idx = 0;
 
   for (size_t i = 0; i < len; ++i) {
     if (Fmt.buffer[i] == '{') {
       if (i + 1 < len && Fmt.buffer[i + 1] == '{') {
-        result.buffer[pos++] = '{';
+        if (pos < Capacity - 1) result.buffer[pos] = '{';
+        ++pos;
         ++i;
       } else {
         auto start = i;
@@ -602,26 +611,65 @@ template <FrozenString Fmt, typename... Args>
         auto spec = detail::parse_spec(Fmt.buffer.data(), len, start, i);
 
         [&]<size_t... Is>(std::index_sequence<Is...>) {
-          ((field_idx == Is ? (pos += detail::format_field(result.buffer, pos, std::get<Is>(tup), spec), 0) : 0), ...);
+          ((field_idx == Is ? (pos += detail::format_field(result.buffer, pos, std::get<Is>(tup), spec, Capacity - 1), 0) : 0), ...);
         }(std::make_index_sequence<sizeof...(Args)>{});
 
         ++field_idx;
       }
     } else if (Fmt.buffer[i] == '}') {
       if (i + 1 < len && Fmt.buffer[i + 1] == '}') {
-        result.buffer[pos++] = '}';
+        if (pos < Capacity - 1) result.buffer[pos] = '}';
+        ++pos;
         ++i;
       } else {
-        result.buffer[pos++] = '}';
+        if (pos < Capacity - 1) result.buffer[pos] = '}';
+        ++pos;
       }
     } else {
-      result.buffer[pos++] = Fmt.buffer[i];
+      if (pos < Capacity - 1) result.buffer[pos] = Fmt.buffer[i];
+      ++pos;
     }
   }
 
-  result.buffer[pos] = '\0';
-  result.length = pos;
+  result.buffer[pos < Capacity ? pos : Capacity - 1] = '\0';
+  result.length = pos < Capacity ? pos : Capacity - 1;
   return result;
 }
+
+/**
+ * @brief std::format 完全準拠のフォーマット関数。
+ *
+ * @details frozen_format と異なり、std::format / std::format_to_n をそのまま使用するため、
+ * std::format の全ての型・指定子（ロケール非依存）に対応する。戻り値は FrozenString<Capacity>。
+ * Capacity を省略した場合は 4096 となり、4096 文字を超える出力も明示的に Capacity を
+ * 指定すれば扱える（例: frozen_std_format<"big {}"_fs, 9000>(huge_string)）。
+ *
+ * 本関数は __cpp_lib_constexpr_format が定義されている環境（C++26 対応コンパイラで
+ * constexpr std::format が実装済み）でのみ提供される。
+ *
+ * 呼び出し例: frozen_std_format<"value={}"_fs>(42)
+ *            frozen_std_format<"big {}"_fs, 9000>(huge_string)
+ *
+ * @tparam Fmt フォーマット文字列（FrozenString NTTP）
+ * @tparam Capacity 出力バッファの最大サイズ（終端 '\0' を含む、デフォルト 4096）
+ * @tparam Args 引数の型パラメータパック
+ * @param args フォーマット引数
+ * @return FrozenString<Capacity> フォーマット済み文字列（.length に格納）
+ */
+#if defined(__cpp_lib_constexpr_format)
+#include <format>
+
+template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
+[[nodiscard]] consteval auto frozen_std_format(Args const&... args) {
+  constexpr std::string_view fmt = Fmt.sv();
+  constexpr auto size = std::formatted_size(fmt, args...);
+  static_assert(size < Capacity, "frozen_std_format: output exceeds Capacity");
+  auto result = FrozenString<Capacity>{};
+  auto const [ptr, count] = std::format_to_n(result.buffer.data(), Capacity - 1, fmt, args...);
+  result.length = static_cast<size_t>(count);
+  *ptr = '\0';
+  return result;
+}
+#endif
 
 } // namespace frozenchars
