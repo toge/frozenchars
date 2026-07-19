@@ -239,6 +239,31 @@ TEST_CASE("minify_html - 空属性値", "[minifier]")
   REQUIRE(html_empty_attr.sv() == "<div class id=x>text</div>");
 }
 
+TEST_CASE("minify_html - Mustache/injamm テンプレートタグ保護", "[minifier]")
+{
+  // 前後に空白（改行）を含むタグ: 内部に空白混入せずタグが完全に残る
+  auto constexpr tpl = minify_html(
+    "\n{{#items}}\n  <tr><td>{{id}}</td></tr>\n{{/items}}\n"_fs);
+  static_assert(tpl.sv() == "{{#items}}<tr><td>{{id}}{{/items}}");
+  REQUIRE(tpl.sv() == "{{#items}}<tr><td>{{id}}{{/items}}");
+
+  // 属性値内・テキスト内の {{}} が保持される
+  auto constexpr attr = minify_html(
+    "<span class=\"{{cat_color}}\">{{category}}</span>"_fs);
+  static_assert(attr.sv() == "<span class={{cat_color}}>{{category}}</span>");
+  REQUIRE(attr.sv() == "<span class={{cat_color}}>{{category}}</span>");
+
+  // 前後空白なしのタグは変化しない（回帰）
+  auto constexpr compact = minify_html("{{#a}}x{{/a}}"_fs);
+  static_assert(compact.sv() == "{{#a}}x{{/a}}");
+  REQUIRE(compact.sv() == "{{#a}}x{{/a}}");
+
+  // タグ内部の空白は透過コピーで保持される
+  auto constexpr spaced = minify_html("a {{ x }} b"_fs);
+  static_assert(spaced.sv() == "a{{ x }} b");
+  REQUIRE(spaced.sv() == "a{{ x }} b");
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // JSON minify
 // ═════════════════════════════════════════════════════════════════════════════

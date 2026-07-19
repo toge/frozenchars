@@ -472,7 +472,7 @@ constexpr void emit_trimmed(char c, char* out, size_t& offset) noexcept {
 
 /// @brief 遅延空白を出力するか判定し、必要なら 1 文字出力する
 constexpr void flush_pending_space(char prev, char c, char* out, size_t& offset, bool& pending_space) noexcept {
-  auto const emit = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/' && c != '{' && c != '}';
+  auto const emit = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/';
   if (emit) {
     out[offset++] = ' ';
   }
@@ -533,6 +533,36 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
         output[offset++] = c;
       }
       ++i;
+      continue;
+    }
+
+    // テンプレートタグ {{ ... }} は保護区間として透過コピーする（Mustache/injamm 対応）
+    if (c == '{' && i + 1 < len && input[i + 1] == '{') {
+      // {{ の直前に遅延空白や出力済み空白があれば捨てる
+      pending_space = false;
+      if (offset > 0 && output[offset - 1] == ' ') {
+        --offset;
+      }
+      // {{ から最初に現れる }} までをそのまま出力する
+      auto j = i;
+      if (offset + 1 < output_capacity) {
+        output[offset++] = '{';
+        output[offset++] = '{';
+      }
+      j += 2;
+      while (j + 1 < len && !(input[j] == '}' && input[j + 1] == '}')) {
+        if (offset < output_capacity) {
+          output[offset++] = input[j];
+        }
+        ++j;
+      }
+      if (j + 1 < len && offset + 1 < output_capacity) {
+        output[offset++] = '}';
+        output[offset++] = '}';
+        j += 2;
+      }
+      i             = j;
+      pending_space = false;
       continue;
     }
 
