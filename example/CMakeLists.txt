@@ -27,3 +27,8 @@ add_executable(example_minify_lua example_minify_lua.cpp)
 target_compile_features(example_minify_lua PRIVATE cxx_std_23)
 target_link_libraries(example_minify_lua PRIVATE frozenchars::frozenchars)
 add_test(NAME example_minify_lua COMMAND example_minify_lua)
+
+add_executable(example_minify_template_tag example_minify_template_tag.cpp)
+target_compile_features(example_minify_template_tag PRIVATE cxx_std_23)
+target_link_libraries(example_minify_template_tag PRIVATE frozenchars::frozenchars)
+add_test(NAME example_minify_template_tag COMMAND example_minify_template_tag)
