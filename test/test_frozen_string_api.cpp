@@ -42,9 +42,9 @@ TEST_CASE("FrozenString range-based for") {
   }
   REQUIRE(collected == "hello");
 
-  // cbegin/cend も同等
+  // begin/end の const 版も同等
   std::string collected2;
-  for (auto it = fs.cbegin(); it != fs.cend(); ++it) {
+  for (auto it = fs.begin(); it != fs.end(); ++it) {
     collected2 += *it;
   }
   REQUIRE(collected2 == "hello");

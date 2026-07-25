@@ -138,20 +138,6 @@ struct FrozenString {
   }
 
   /**
-   * @brief 先頭 const イテレータを返す
-   */
-  [[nodiscard]] constexpr auto cbegin() const noexcept -> char const* {
-    return begin();
-  }
-
-  /**
-   * @brief 末尾 const イテレータを返す
-   */
-  [[nodiscard]] constexpr auto cend() const noexcept -> char const* {
-    return end();
-  }
-
-  /**
    * @brief 互換性のための string_view 変換
    */
   [[nodiscard]] constexpr operator std::string_view() const noexcept {

@@ -1,7 +1,6 @@
 {
   "dependencies": [
     "catch2",
-    "ctre",
-    "simde"
+    "ctre"
   ]
 }

@@ -2,7 +2,6 @@ find_package(Catch2 REQUIRED CONFIG)
 find_package(ctre REQUIRED CONFIG)
 
 file(GLOB test_src test_*.cpp)
-list(FILTER test_src EXCLUDE REGEX "test_split_(direct|logic|tester|v_debug)\\.cpp$")
 
 if(EMSCRIPTEN)
   # Emscripten: vcpkg がインストールした Catch2 静的ライブラリは

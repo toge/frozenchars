@@ -4,6 +4,7 @@ build-*/
 vcpkg_installed/
 a.out
 *.o
+use_umbrella.o
 *.a
 *.so
 *.gch

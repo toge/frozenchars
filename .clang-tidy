@@ -1,6 +1,5 @@
 Checks: >
   -*,
-  boost-*,
   bugprone-*,
   bugprone-exception-escape,
   clang-diagnostic-*,
