@@ -26,11 +26,13 @@ TEST_CASE("parse_number handles integer boundaries", "[parse_number]") {
   auto constexpr int_max = "2147483647"_fs;
   auto constexpr int_min = "-2147483648"_fs;
   auto constexpr long_long_max = "9223372036854775807"_fs;
+  auto constexpr long_long_min = "-9223372036854775808"_fs;
   auto constexpr ulong_long_max = "18446744073709551615"_fs;
 
   REQUIRE(parse_number<int>(int_max) == std::numeric_limits<int>::max());
   REQUIRE(parse_number<int>(int_min) == std::numeric_limits<int>::min());
   REQUIRE(parse_number<long long>(long_long_max) == std::numeric_limits<long long>::max());
+  REQUIRE(parse_number<long long>(long_long_min) == std::numeric_limits<long long>::min());
   REQUIRE(parse_number<unsigned long long>(ulong_long_max)
           == std::numeric_limits<unsigned long long>::max());
 }

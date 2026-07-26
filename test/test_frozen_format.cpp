@@ -91,6 +91,14 @@ TEST_CASE("frozen_format alignment", "[frozen_format]") {
     auto r = frozen_format<"{:*<10}"_fs>(42);
     REQUIRE(strcmp(r.sv().data(), "42********") == 0);
   }
+  SECTION("right align keeps sign") {
+    auto r = frozen_format<"{:>10}"_fs>(-42);
+    REQUIRE(strcmp(r.sv().data(), "       -42") == 0);
+  }
+  SECTION("center align keeps sign") {
+    auto r = frozen_format<"{:^10}"_fs>(-42);
+    REQUIRE(strcmp(r.sv().data(), "   -42    ") == 0);
+  }
 }
 
 TEST_CASE("frozen_format sign", "[frozen_format]") {

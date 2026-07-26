@@ -96,7 +96,7 @@ template <typename T, size_t N>
       }
       return static_cast<T>(res);
     } else {
-      long long res = 0;
+      unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
         throw std::invalid_argument("invalid digit");
@@ -108,12 +108,16 @@ template <typename T, size_t N>
         throw std::invalid_argument("invalid digit");
       }
       if (neg) {
-        if (res < 0 || static_cast<unsigned long long>(res) > static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL) {
+        auto const max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
+        if (res > max_abs) {
           throw std::out_of_range("underflow");
         }
-        return static_cast<T>(-res);
+        if (res == max_abs) {
+          return std::numeric_limits<T>::min();
+        }
+        return static_cast<T>(-static_cast<long long>(res));
       } else {
-        if (res < 0 || res > std::numeric_limits<T>::max()) {
+        if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
           throw std::out_of_range("overflow");
         }
         return static_cast<T>(res);

@@ -415,9 +415,18 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
       }
     }
 
-    auto sign_size = write_sign(buf, pos, is_neg, spec.sign, max_pos);
+    char sign_char = '\0';
+    if (is_neg) {
+      sign_char = '-';
+    } else if (spec.sign == '+') {
+      sign_char = '+';
+    } else if (spec.sign == ' ') {
+      sign_char = ' ';
+    }
+    auto sign_size = (sign_char != '\0') ? 1uz : 0uz;
 
     if (spec.zero) {
+      if (sign_size > 0 && pos < max_pos) { buf[pos] = sign_char; }
       pos += sign_size;
       auto content = sign_size + raw_len;
       auto pad = (spec.width > static_cast<int>(content)) ? spec.width - content : 0;
@@ -433,17 +442,17 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
 
       if (align == '>') {
         for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
-        pos += sign_size;
+        if (sign_size > 0 && pos < max_pos) { buf[pos] = sign_char; ++pos; }
         for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
       } else if (align == '<') {
-        pos += sign_size;
+        if (sign_size > 0 && pos < max_pos) { buf[pos] = sign_char; ++pos; }
         for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
         for (size_t p = 0; p < pad; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
       } else {
         auto left = pad / 2;   // 中央揃え: 左側の余白（端数は右に回す）
         auto right = pad - left;
         for (size_t p = 0; p < left; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
-        pos += sign_size;
+        if (sign_size > 0 && pos < max_pos) { buf[pos] = sign_char; ++pos; }
         for (auto j = 0uz; j < raw_len; ++j) { if (pos < max_pos) buf[pos] = raw_data[j]; ++pos; }
         for (size_t p = 0; p < right; ++p) { if (pos < max_pos) buf[pos] = fill; ++pos; }
       }
