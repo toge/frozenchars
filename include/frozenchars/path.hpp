@@ -4,6 +4,9 @@
 #include "string_ops.hpp"
 #include "detail/char_utils.hpp"
 
+#include <array>
+#include <cstddef>
+
 namespace frozenchars::path {
 
 /**
@@ -164,6 +167,100 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval stem(char const (&path_str)[N]) noexcept -> FrozenString<N> {
   return stem(FrozenString{path_str});
+}
+
+/**
+ * @brief パス文字列を正規化する
+ *
+ * `.` / `..` を解決し、連続する '/' を単一化する。絶対パスは '/' で始まり、
+ * 相対パスは相対パスとして扱う。
+ *
+ * @tparam N パス文字列の長さ (終端文字'\0'を含む)
+ * @param path_str 対象パス
+ * @return auto 正規化済みパス
+ */
+template <size_t N>
+[[nodiscard]] auto consteval normalize(FrozenString<N> const& path_str) noexcept -> FrozenString<N + 1> {
+  auto res = FrozenString<N + 1>{};
+  auto offset = 0uz;
+  auto const absolute = (path_str.length > 0 && path_str.buffer[0] == '/');
+
+  auto starts = std::array<size_t, N>{};
+  auto lengths = std::array<size_t, N>{};
+  auto is_parent = std::array<bool, N>{};
+  auto count = 0uz;
+
+  auto segment_start = 0uz;
+  auto segment_len = 0uz;
+  for (auto i = 0uz; i <= path_str.length; ++i) {
+    auto const c = (i < path_str.length) ? path_str.buffer[i] : '/';
+    if (c == '/' || i == path_str.length) {
+      if (segment_len > 0) {
+        auto const has_dotdot = (segment_len == 2 && path_str.buffer[segment_start] == '.' && path_str.buffer[segment_start + 1] == '.');
+        auto const has_dot = (segment_len == 1 && path_str.buffer[segment_start] == '.');
+        if (has_dot) {
+          // skip
+        } else if (has_dotdot) {
+          if (absolute && count == 0) {
+            // stay at root
+          } else if (count > 0 && !is_parent[count - 1]) {
+            --count;
+          } else {
+            starts[count] = segment_start;
+            lengths[count] = segment_len;
+            is_parent[count] = true;
+            ++count;
+          }
+        } else {
+          starts[count] = segment_start;
+          lengths[count] = segment_len;
+          is_parent[count] = false;
+          ++count;
+        }
+      }
+      segment_start = i + 1;
+      segment_len = 0;
+      continue;
+    }
+    ++segment_len;
+  }
+
+  if (absolute) {
+    res.buffer[offset++] = '/';
+  }
+  if (count == 0) {
+    if (!absolute) {
+      res.buffer[offset++] = '.';
+    }
+    res.buffer[offset] = '\0';
+    res.length = offset;
+    return res;
+  }
+
+  auto first = true;
+  for (auto i = 0uz; i < count; ++i) {
+    if (!first) {
+      res.buffer[offset++] = '/';
+    }
+    if (is_parent[i]) {
+      res.buffer[offset++] = '.';
+      res.buffer[offset++] = '.';
+    } else {
+      for (auto j = starts[i]; j < starts[i] + lengths[i]; ++j) {
+        res.buffer[offset++] = path_str.buffer[j];
+      }
+    }
+    first = false;
+  }
+
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval normalize(char const (&path_str)[N]) noexcept -> FrozenString<N + 1> {
+  return normalize(FrozenString{path_str});
 }
 
 /**

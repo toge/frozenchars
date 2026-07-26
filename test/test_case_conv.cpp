@@ -60,6 +60,15 @@ TEST_CASE("case_conv: to_pascal_case") {
   STATIC_CHECK(to_pascal_case(str).sv() == "SnakeCaseValue");
 }
 
+TEST_CASE("case_conv: to_kebab_case") {
+  STATIC_CHECK(to_kebab_case("helloWorld").sv() == "hello-world");
+  STATIC_CHECK(to_kebab_case("HelloWorld").sv() == "hello-world");
+  STATIC_CHECK(to_kebab_case("hello_world").sv() == "hello-world");
+  STATIC_CHECK(to_kebab_case("a_b_c").sv() == "a-b-c");
+  STATIC_CHECK(to_kebab_case("hello").sv() == "hello");
+  STATIC_CHECK(to_kebab_case("").sv() == "");
+}
+
 TEST_CASE("case_conv: round-trip") {
   STATIC_CHECK(to_snake_case(to_camel_case("hello_world")).sv() == "hello_world");
   STATIC_CHECK(to_camel_case(to_snake_case("helloWorld")).sv() == "helloWorld");

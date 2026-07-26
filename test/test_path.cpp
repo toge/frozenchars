@@ -58,3 +58,11 @@ TEST_CASE("path::join", "[path]") {
   STATIC_CHECK(join(""_fs, "b"_fs).sv() == "b");
   STATIC_CHECK(join(""_fs, ""_fs).sv() == "");
 }
+
+TEST_CASE("path::normalize", "[path]") {
+  STATIC_CHECK(normalize("/usr/./local/../bin"_fs).sv() == "/usr/bin");
+  STATIC_CHECK(normalize("a/b/../c"_fs).sv() == "a/c");
+  STATIC_CHECK(normalize("../a"_fs).sv() == "../a");
+  STATIC_CHECK(normalize("./"_fs).sv() == ".");
+  STATIC_CHECK(normalize(""_fs).sv() == ".");
+}

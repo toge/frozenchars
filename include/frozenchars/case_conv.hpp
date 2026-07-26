@@ -184,4 +184,53 @@ template <size_t N>
   return to_pascal_case(FrozenString{str});
 }
 
+/**
+ * @brief camelCase/PascalCase/snake_case文字列をkebab-caseに変換する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 変換文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval to_kebab_case(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 2 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  auto prev_was_sep = false;
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    if (c == '_' || c == '-') {
+      if (offset > 0 && !prev_was_sep) {
+        res.buffer[offset++] = '-';
+        prev_was_sep = true;
+      }
+      continue;
+    }
+    if (c >= 'A' && c <= 'Z') {
+      if (offset > 0 && !prev_was_sep) {
+        res.buffer[offset++] = '-';
+      }
+      res.buffer[offset++] = static_cast<char>(c + ('a' - 'A'));
+      prev_was_sep = false;
+      continue;
+    }
+    if (offset > 0 && prev_was_sep && c == '-') {
+      continue;
+    }
+    res.buffer[offset++] = c;
+    prev_was_sep = false;
+  }
+  while (offset > 0 && res.buffer[offset - 1] == '-') {
+    --offset;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval to_kebab_case(char const (&str)[N]) noexcept {
+  return to_kebab_case(FrozenString{str});
+}
+
 } // namespace frozenchars

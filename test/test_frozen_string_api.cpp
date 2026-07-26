@@ -1,5 +1,6 @@
 #include "catch2/catch_all.hpp"
 
+#include <span>
 #include <unordered_map>
 
 #include "frozenchars/string.hpp"
@@ -90,4 +91,14 @@ TEST_CASE("FrozenString std::hash") {
   REQUIRE(h("abc"_fs) == h("abc"_fs));
   // std::string_view との整合性
   REQUIRE(h("abc"_fs) == std::hash<std::string_view>{}("abc"));
+}
+
+TEST_CASE("FrozenString span conversion") {
+  auto const fs = "abc"_fs;
+  auto const view = std::span<char const>{fs};
+  REQUIRE(view.size() == 3);
+  REQUIRE(view[0] == 'a');
+  REQUIRE(view[1] == 'b');
+  REQUIRE(view[2] == 'c');
+  REQUIRE(std::string_view{view.data(), view.size()} == "abc");
 }

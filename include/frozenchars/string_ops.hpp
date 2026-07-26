@@ -2,6 +2,7 @@
 
 #include "detail/string_utils.hpp"
 #include "freeze.hpp"
+#include "literals.hpp"
 
 #include <algorithm>
 #include <array>
@@ -425,6 +426,101 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval tolower(char const (&str)[N]) noexcept {
   return tolower(FrozenString{str});
+}
+
+template <size_t Count, char Ch>
+[[nodiscard]] auto consteval repeat_char() noexcept -> FrozenString<Count + 1> {
+  auto res = FrozenString<Count + 1>{};
+  for (auto i = 0uz; i < Count; ++i) {
+    res.buffer[i] = Ch;
+  }
+  res.buffer[Count] = '\0';
+  res.length = Count;
+  return res;
+}
+
+template <size_t MaxLen, size_t N>
+[[nodiscard]] auto consteval abbreviate(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
+  return abbreviate<MaxLen, FrozenString<4>{"..."}>(str);
+}
+
+template <size_t MaxLen, auto Suffix, size_t N>
+  requires detail::is_frozen_string_v<decltype(Suffix)>
+[[nodiscard]] auto consteval abbreviate(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
+  if (str.length <= MaxLen) {
+    return str;
+  }
+
+  auto res = FrozenString<MaxLen + 1>{};
+  if constexpr (Suffix.length > 0 && MaxLen >= 8) {
+    auto const prefix_len = MaxLen - Suffix.length;
+    for (auto i = 0uz; i < prefix_len; ++i) {
+      res.buffer[i] = str.buffer[i];
+    }
+    for (auto i = 0uz; i < Suffix.length; ++i) {
+      res.buffer[prefix_len + i] = Suffix.buffer[i];
+    }
+    res.buffer[MaxLen] = '\0';
+    res.length = MaxLen;
+    return res;
+  }
+
+  for (auto i = 0uz; i < MaxLen; ++i) {
+    res.buffer[i] = str.buffer[i];
+  }
+  res.buffer[MaxLen] = '\0';
+  res.length = MaxLen;
+  return res;
+}
+
+template <size_t MaxLen, size_t N>
+[[nodiscard]] auto consteval abbreviate(char const (&str)[N]) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
+  return abbreviate<MaxLen>(FrozenString{str});
+}
+
+template <size_t MaxLen, auto Suffix, size_t N>
+[[nodiscard]] auto consteval abbreviate(char const (&str)[N]) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
+  return abbreviate<MaxLen, Suffix>(FrozenString{str});
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval normalize_whitespace(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto seen_ws = false;
+  for (auto i = 0uz; i < str.length; ++i) {
+    auto const c = str.buffer[i];
+    if (detail::is_any_whitespace(c)) {
+      if (!seen_ws && offset > 0) {
+        res.buffer[offset++] = ' ';
+        seen_ws = true;
+      }
+      continue;
+    }
+    res.buffer[offset++] = c;
+    seen_ws = false;
+  }
+  while (offset > 0 && res.buffer[offset - 1] == ' ') {
+    --offset;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval normalize_whitespace(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return normalize_whitespace(FrozenString{str});
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval squeeze(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  return normalize_whitespace(str);
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval squeeze(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return squeeze(FrozenString{str});
 }
 
 namespace detail {

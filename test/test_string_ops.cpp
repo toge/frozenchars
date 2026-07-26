@@ -173,6 +173,20 @@ TEST_CASE("reverse(str)", "[string_ops]") {
   STATIC_CHECK(("hello"_fs | ops::reverse) == "olleh"_fs);
 }
 
+TEST_CASE("repeat_char and abbreviate", "[string_ops]") {
+  STATIC_CHECK(repeat_char<4, '-'>().sv() == "----");
+  STATIC_CHECK(repeat_char<3, 'x'>().sv() == "xxx");
+  STATIC_CHECK(abbreviate<8>("Hello, World!"_fs).sv() == "Hello...");
+  STATIC_CHECK(abbreviate<8, "..."_fs>("Hello, World!"_fs).sv() == "Hello...");
+  STATIC_CHECK(abbreviate<5>("abcdef"_fs).sv() == "abcde");
+}
+
+TEST_CASE("normalize_whitespace and squeeze", "[string_ops]") {
+  STATIC_CHECK(normalize_whitespace("  hello   world  "_fs).sv() == "hello world");
+  STATIC_CHECK(normalize_whitespace("hello\n\tworld"_fs).sv() == "hello world");
+  STATIC_CHECK(squeeze("  hello   world  "_fs).sv() == "hello world");
+}
+
 TEST_CASE("indent<Width>(str)", "[string_ops]") {
   STATIC_CHECK(("abc"_fs | ops::indent<1>).sv() == "\tabc"_fs);
   STATIC_CHECK((""_fs | ops::indent<1>).sv() == ""_fs);

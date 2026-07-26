@@ -62,3 +62,13 @@ TEST_CASE("encoding: utf8_length") {
 
   STATIC_CHECK(utf8_length<"\xE3\x81\x82\xE3\x81\x84"_fs>() == 2);
 }
+
+TEST_CASE("encoding: utf8 helpers") {
+  STATIC_CHECK(utf8_substr<1, 2>("abcあいd"_fs).sv() == "bc");
+  STATIC_CHECK(utf8_substr<1, 2>("AéB"_fs).sv() == "éB");
+  STATIC_CHECK(utf8_reverse("abcあい"_fs).sv() == "いあcba");
+  STATIC_CHECK(codepoint_to_utf8<0x41>().sv() == "A");
+  STATIC_CHECK(codepoint_to_utf8<0x3042>().sv() == "\xE3\x81\x82");
+  STATIC_CHECK(escape_c("line\nvalue"_fs).sv() == "line\\nvalue");
+  STATIC_CHECK(unescape_c("line\\nvalue"_fs).sv() == "line\nvalue");
+}

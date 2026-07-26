@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <ostream>
+#include <span>
 #include <string_view>
 
 namespace frozenchars {
@@ -142,6 +143,14 @@ struct FrozenString {
    */
   [[nodiscard]] constexpr operator std::string_view() const noexcept {
     return sv();
+  }
+
+  [[nodiscard]] constexpr operator std::span<char const>() const noexcept {
+    return {buffer.data(), length};
+  }
+
+  [[nodiscard]] constexpr operator std::span<char>() noexcept {
+    return {buffer.data(), length};
   }
 
   /**

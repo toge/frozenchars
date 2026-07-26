@@ -1,11 +1,146 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 #include "string.hpp"
 #include "string_ops.hpp"
 #include "detail/char_utils.hpp"
+
+namespace frozenchars::detail {
+
+constexpr auto utf8_char_length(char const c) noexcept -> size_t {
+  auto const uc = static_cast<unsigned char>(c);
+  if (uc < 0x80) {
+    return 1;
+  }
+  if ((uc & 0xE0) == 0xC0) {
+    return 2;
+  }
+  if ((uc & 0xF0) == 0xE0) {
+    return 3;
+  }
+  if ((uc & 0xF8) == 0xF0) {
+    return 4;
+  }
+  return 1;
+}
+
+constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed, std::uint32_t& codepoint) noexcept -> bool {
+  if (pos >= str.size()) {
+    return false;
+  }
+
+  auto const first = static_cast<unsigned char>(str[pos]);
+  if (first < 0x80) {
+    codepoint = first;
+    consumed = 1;
+    return true;
+  }
+
+  if ((first & 0xE0) == 0xC0 && pos + 1 < str.size()) {
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    if ((second & 0xC0) != 0x80) {
+      codepoint = first;
+      consumed = 1;
+      return true;
+    }
+    codepoint = ((first & 0x1F) << 6) | (second & 0x3F);
+    consumed = 2;
+    return true;
+  }
+
+  if ((first & 0xF0) == 0xE0 && pos + 2 < str.size()) {
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    auto const third = static_cast<unsigned char>(str[pos + 2]);
+    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80) {
+      codepoint = first;
+      consumed = 1;
+      return true;
+    }
+    codepoint = ((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F);
+    consumed = 3;
+    return true;
+  }
+
+  if ((first & 0xF8) == 0xF0 && pos + 3 < str.size()) {
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    auto const third = static_cast<unsigned char>(str[pos + 2]);
+    auto const fourth = static_cast<unsigned char>(str[pos + 3]);
+    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80 || (fourth & 0xC0) != 0x80) {
+      codepoint = first;
+      consumed = 1;
+      return true;
+    }
+    codepoint = ((first & 0x07) << 18) | ((second & 0x3F) << 12) | ((third & 0x3F) << 6) | (fourth & 0x3F);
+    consumed = 4;
+    return true;
+  }
+
+  codepoint = first;
+  consumed = 1;
+  return true;
+}
+
+template <size_t MaxN>
+constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::array<std::uint32_t, MaxN> {
+  auto codepoints = std::array<std::uint32_t, MaxN>{};
+  auto count = 0uz;
+  auto i = 0uz;
+  while (i < str.length) {
+    size_t consumed = 0;
+    std::uint32_t codepoint = 0;
+    (void)utf8_decode_at(str.sv(), i, consumed, codepoint);
+    codepoints[count++] = codepoint;
+    i += consumed;
+  }
+  return codepoints;
+}
+
+template <size_t MaxN>
+constexpr auto utf8_codepoints(FrozenString<MaxN> const& str, size_t& count) noexcept -> std::array<std::uint32_t, MaxN> {
+  auto codepoints = std::array<std::uint32_t, MaxN>{};
+  count = 0;
+  auto i = 0uz;
+  while (i < str.length) {
+    size_t consumed = 0;
+    std::uint32_t codepoint = 0;
+    (void)utf8_decode_at(str.sv(), i, consumed, codepoint);
+    codepoints[count++] = codepoint;
+    i += consumed;
+  }
+  return codepoints;
+}
+
+constexpr auto utf8_encode_codepoint(std::uint32_t codepoint, std::array<char, 4>& out, size_t& length) noexcept -> void {
+  if (codepoint <= 0x7F) {
+    out[0] = static_cast<char>(codepoint);
+    length = 1;
+    return;
+  }
+  if (codepoint <= 0x7FF) {
+    out[0] = static_cast<char>(0xC0 | (codepoint >> 6));
+    out[1] = static_cast<char>(0x80 | (codepoint & 0x3F));
+    length = 2;
+    return;
+  }
+  if (codepoint <= 0xFFFF) {
+    out[0] = static_cast<char>(0xE0 | (codepoint >> 12));
+    out[1] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+    out[2] = static_cast<char>(0x80 | (codepoint & 0x3F));
+    length = 3;
+    return;
+  }
+  out[0] = static_cast<char>(0xF0 | (codepoint >> 18));
+  out[1] = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+  out[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+  out[3] = static_cast<char>(0x80 | (codepoint & 0x3F));
+  length = 4;
+}
+
+} // namespace frozenchars::detail
 
 namespace frozenchars {
 
@@ -664,6 +799,186 @@ template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
 [[nodiscard]] auto consteval utf8_length() noexcept -> size_t {
   return utf8_length(Str);
+}
+
+template <size_t Start, size_t Count, size_t N>
+[[nodiscard]] auto consteval utf8_substr(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  auto emitted = 0uz;
+  while (i < str.length && emitted < Start + Count) {
+    size_t consumed = 0;
+    std::uint32_t codepoint = 0;
+    (void)detail::utf8_decode_at(str.sv(), i, consumed, codepoint);
+    if (emitted >= Start) {
+      for (auto j = 0uz; j < consumed; ++j) {
+        res.buffer[offset++] = str.buffer[i + j];
+      }
+    }
+    i += consumed;
+    ++emitted;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t Start, size_t Count, size_t N>
+[[nodiscard]] auto consteval utf8_substr(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return utf8_substr<Start, Count>(FrozenString{str});
+}
+
+template <size_t Start, size_t Count, auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval utf8_substr() noexcept -> FrozenString<Str.length> {
+  return utf8_substr<Start, Count>(Str);
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval utf8_reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  auto const codepoints = detail::utf8_codepoints(str);
+  auto count = 0uz;
+  auto const all = detail::utf8_codepoints(str, count);
+  (void)all;
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  for (auto i = count; i-- > 0;) {
+    auto bytes = std::array<char, 4>{};
+    size_t length = 0;
+    detail::utf8_encode_codepoint(codepoints[i], bytes, length);
+    for (auto j = 0uz; j < length; ++j) {
+      res.buffer[offset++] = bytes[j];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval utf8_reverse(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return utf8_reverse(FrozenString{str});
+}
+
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval utf8_reverse() noexcept -> FrozenString<Str.length> {
+  return utf8_reverse(Str);
+}
+
+template <auto Codepoint>
+[[nodiscard]] auto consteval codepoint_to_utf8() noexcept -> FrozenString<4 + 1> {
+  auto out = std::array<char, 4>{};
+  auto length = 0uz;
+  detail::utf8_encode_codepoint(static_cast<std::uint32_t>(Codepoint), out, length);
+  auto res = FrozenString<5>{};
+  for (auto i = 0uz; i < length; ++i) {
+    res.buffer[i] = out[i];
+  }
+  res.buffer[length] = '\0';
+  res.length = length;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval escape_c(FrozenString<N> const& str) noexcept -> FrozenString<2 * N + 1> {
+  auto res = FrozenString<2 * N + 1>{};
+  auto offset = 0uz;
+  for (auto const c : str.sv()) {
+    switch (c) {
+    case '\\':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = '\\';
+      break;
+    case '\n':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = 'n';
+      break;
+    case '\r':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = 'r';
+      break;
+    case '\t':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = 't';
+      break;
+    case '\0':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = '0';
+      break;
+    case '\'':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = '\'';
+      break;
+    case '"':
+      res.buffer[offset++] = '\\';
+      res.buffer[offset++] = '"';
+      break;
+    default:
+      res.buffer[offset++] = c;
+      break;
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval escape_c(char const (&str)[N]) noexcept -> FrozenString<2 * N + 1> {
+  return escape_c(FrozenString{str});
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval unescape_c(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto i = 0uz;
+  while (i < str.length) {
+    auto const c = str.buffer[i];
+    if (c == '\\' && i + 1 < str.length) {
+      auto const escaped = str.buffer[++i];
+      switch (escaped) {
+      case 'n':
+        res.buffer[offset++] = '\n';
+        break;
+      case 'r':
+        res.buffer[offset++] = '\r';
+        break;
+      case 't':
+        res.buffer[offset++] = '\t';
+        break;
+      case '0':
+        res.buffer[offset++] = '\0';
+        break;
+      case '\\':
+        res.buffer[offset++] = '\\';
+        break;
+      case '\'':
+        res.buffer[offset++] = '\'';
+        break;
+      case '"':
+        res.buffer[offset++] = '"';
+        break;
+      default:
+        res.buffer[offset++] = '\\';
+        res.buffer[offset++] = escaped;
+        break;
+      }
+    } else {
+      res.buffer[offset++] = c;
+    }
+    ++i;
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+template <size_t N>
+[[nodiscard]] auto consteval unescape_c(char const (&str)[N]) noexcept -> FrozenString<N> {
+  return unescape_c(FrozenString{str});
 }
 
 } // namespace frozenchars
