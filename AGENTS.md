@@ -5,7 +5,7 @@
 ## プロジェクト概要
 
 - ヘッダオンリー C++ ライブラリ。`FrozenString<N>`（`N=終端 '\0' を含むバッファ長`）が核。`consteval` 主体だが、ランタイムでも動くものは `constexpr`。
-- 公開ターゲットは `frozenchars::frozenchars`（CMake `INTERFACE`）。利用時は `#include "frozenchars.hpp"` 1行。
+- 公開ターゲットは `frozenchars::frozenchars`（CMake `INTERFACE`）。利用時は必要なモジュールのみ include（例: `#include "frozenchars/mod/core.hpp"`）。`frozenchars.hpp` 傘ヘッダは非推奨。
 - 現在は `cxx_std_23` 固定（`CMakeLists.txt:41`）。C++26 フォールバックは未実装（将来追加予定）。
 - CI は `.github/workflows/ci.yml` に存在（Fedora 44/43/41、GCC 16/15/14）。
 - README は 1000行超の和文ドキュメント（`README.md`、現時点で 1300 行超）。
@@ -20,7 +20,7 @@
   g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a.out
   ```
 - テストフレームワーク: Catch2 v3。全テストが `all_test` 1個の実行ファイルにまとまる（`-r junit` で CTest 実行）。
-- `test_split_(direct|logic|tester|v_debug).cpp` の4ファイルは `all_test` から除外。手動デバッグ用。
+
 - `compile_commands.json` は `build/compile_commands.json` に出力。
 - `partition` の戻り値型は `std::tuple<FrozenString<N>, FrozenString<K>, FrozenString<N>>`（入力サイズ N 固定）。GCC 16 の NTTP + ユーザー定義比較演算子に関する制約のため、`before_len/after_len` を NTTP として使わない設計。`test_string_ops.cpp` では C++26 の `constexpr auto [...]` を使わず C++23 互換の `auto const [...]` + 直接 `static_assert` を使用。
 
@@ -41,7 +41,7 @@
 ## やってはいけないこと
 
 - `include/` に `.cpp` を置かない（ヘッダオンリー維持）。
-- `docs/superpowers/` は通常ディレクトリ（シンボリックリンクではない）。`plans/` と `specs/` 配下の 2 ファイルが git 追跡済み。`.gitignore:9` で ignore 指定だが追跡済みなので注意。
+- `docs/superpowers/` は通常ディレクトリ（シンボリックリンクではない）。
 - `_fs` リテラルの戻り値型は `FrozenString<文字数+1>`（終端 '\0' を含む）。`"abc"_fs` は `FrozenString<4>`。これに依存する変更は全利用箇所を grep。
 
 ## 参考リソース
