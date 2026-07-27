@@ -21,6 +21,7 @@ enum class minify_markup_opt : uint8_t {
   none            = 0,
   remove_quotes   = 1 << 0, ///< 属性値のクォートを除去する
   remove_end_tags = 1 << 1, ///< 省略可能な終了タグを除去する
+  preserve_script = 1 << 2, ///< script 内の内容を加工せずそのまま保持
 };
 
 inline constexpr auto operator|(minify_markup_opt a, minify_markup_opt b) noexcept {
@@ -521,8 +522,8 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
 
     auto const c = input[i];
 
-    // <script> 内の JS コメント除去
-    if (in_script) {
+    // <script> 内の JS コメント除去（preserve_script 時はスキップ）
+    if (in_script && !has_flag(options, minify_markup_opt::preserve_script)) {
       // エスケープ文字の処理
       if (script_quote != '\0' && c == '\\') {
         if (offset < output_capacity) output[offset++] = c;
@@ -685,15 +686,24 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
     }
 
     // テキスト中の '>' は直前に空白があれば削ってから出力する
-    if (script_quote == '\0' && c == '>') {
+    // preserve_script 時は script 内で行わない
+    if (script_quote == '\0' && c == '>' && !(has_flag(options, minify_markup_opt::preserve_script) && in_script)) {
       emit_trimmed(c, output, offset);
       ++i;
       continue;
     }
 
     // 空白文字は遅延フラグを立ててスキップ
-    if ((!in_script || script_quote == '\0') && is_markup_space(c)) {
-      pending_space = true;
+    // preserve_script 時は script 内の空白をそのまま出力
+    if (is_markup_space(c)) {
+      if (has_flag(options, minify_markup_opt::preserve_script) && in_script) {
+        if (offset < output_capacity) output[offset++] = c;
+      } else if (!in_script || script_quote == '\0') {
+        pending_space = true;
+      } else {
+        // スクリプト内の文字列内や preserve_script 以外: そのまま出力
+        if (offset < output_capacity) output[offset++] = c;
+      }
       ++i;
       continue;
     }

@@ -393,6 +393,61 @@ TEST_CASE("minify_html - <script> 外の // は JS コメント扱いしない",
   REQUIRE(r.sv() == "<div>hello//world</div>");
 }
 
+TEST_CASE("minify_html - preserve_script で script 内をそのまま保持", "[minifier]")
+{
+  auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+                     | minify_markup_opt::preserve_script;
+
+  auto constexpr r = minify_html(
+    "<script>var x = 1; // comment\n var y = 2;</script>"_fs, opt);
+  static_assert(r.sv() == "<script>var x = 1; // comment\n var y = 2;</script>");
+  REQUIRE(r.sv() == "<script>var x = 1; // comment\n var y = 2;</script>");
+}
+
+TEST_CASE("minify_html - preserve_script でブロックコメントも保持", "[minifier]")
+{
+  auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+                     | minify_markup_opt::preserve_script;
+
+  auto constexpr r = minify_html(
+    "<script>var x = /* block */ 1;</script>"_fs, opt);
+  static_assert(r.sv() == "<script>var x = /* block */ 1;</script>");
+  REQUIRE(r.sv() == "<script>var x = /* block */ 1;</script>");
+}
+
+TEST_CASE("minify_html - preserve_script で空白をそのまま保持", "[minifier]")
+{
+  auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+                     | minify_markup_opt::preserve_script;
+
+  auto constexpr r = minify_html(
+    "<script>function  f(  x , y )  {  return  x + y ; }</script>"_fs, opt);
+  static_assert(r.sv() == "<script>function  f(  x , y )  {  return  x + y ; }</script>");
+  REQUIRE(r.sv() == "<script>function  f(  x , y )  {  return  x + y ; }</script>");
+}
+
+TEST_CASE("minify_html - preserve_script で HTML 側は通常通り minify", "[minifier]")
+{
+  auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+                     | minify_markup_opt::preserve_script;
+
+  auto constexpr r = minify_html(
+    "<div>  hi  </div><script>var x = 1; // comment\n</script>"_fs, opt);
+  static_assert(r.sv() == "<div>hi</div><script>var x = 1; // comment\n</script>");
+  REQUIRE(r.sv() == "<div>hi</div><script>var x = 1; // comment\n</script>");
+}
+
+TEST_CASE("minify_html - preserve_script ops パイプ", "[minifier]")
+{
+  auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
+                     | minify_markup_opt::preserve_script;
+
+  auto constexpr r = "<script>var x = 1; // comment\n</script>"_fs
+    | frozenchars::ops::minify_html(opt);
+  static_assert(r.sv() == "<script>var x = 1; // comment\n</script>");
+  REQUIRE(r.sv() == "<script>var x = 1; // comment\n</script>");
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // JSON minify
 // ═════════════════════════════════════════════════════════════════════════════
