@@ -264,6 +264,82 @@ TEST_CASE("minify_html - Mustache/injamm テンプレートタグ保護", "[mini
   REQUIRE(spaced.sv() == "a{{ x }} b");
 }
 
+TEST_CASE("minify_html - <script> 内 JS 行コメント除去", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script>var x = 1; // comment\n var y = 2;</script>"_fs);
+  static_assert(r.sv() == "<script>var x=1; var y=2;</script>");
+  REQUIRE(r.sv() == "<script>var x=1; var y=2;</script>");
+}
+
+TEST_CASE("minify_html - <script> 内 JS ブロックコメント除去", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script>var x = /* block */ 1;</script>"_fs);
+  static_assert(r.sv() == "<script>var x=1;</script>");
+  REQUIRE(r.sv() == "<script>var x=1;</script>");
+
+  auto constexpr multi = minify_html(
+    "<script>var x = /* multi\nline */ 1;</script>"_fs);
+  static_assert(multi.sv() == "<script>var x=1;</script>");
+  REQUIRE(multi.sv() == "<script>var x=1;</script>");
+}
+
+TEST_CASE("minify_html - <script> 内 JS 文字列リテラル保護", "[minifier]")
+{
+  auto constexpr dq = minify_html(
+    "<script>var url = \"http://example.com\";</script>"_fs);
+  static_assert(dq.sv() == "<script>var url=\"http://example.com\";</script>");
+  REQUIRE(dq.sv() == "<script>var url=\"http://example.com\";</script>");
+
+  auto constexpr sq = minify_html(
+    "<script>var s = 'http://example.com';</script>"_fs);
+  static_assert(sq.sv() == "<script>var s='http://example.com';</script>");
+  REQUIRE(sq.sv() == "<script>var s='http://example.com';</script>");
+
+  auto constexpr bt = minify_html(
+    "<script>var s = `hello ${name}`;</script>"_fs);
+  static_assert(bt.sv() == "<script>var s=`hello ${name}`;</script>");
+  REQUIRE(bt.sv() == "<script>var s=`hello ${name}`;</script>");
+}
+
+TEST_CASE("minify_html - <script> 内行コメント直前に </script> がある場合", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script>var s = 'ok'; // comment\n</script>"_fs);
+  static_assert(r.sv() == "<script>var s='ok';</script>");
+  REQUIRE(r.sv() == "<script>var s='ok';</script>");
+
+  auto constexpr inline_c = minify_html(
+    "<script>var s = 'x'; // comment</script>"_fs);
+  static_assert(inline_c.sv() == "<script>var s='x';</script>");
+  REQUIRE(inline_c.sv() == "<script>var s='x';</script>");
+}
+
+TEST_CASE("minify_html - <script> 内 <> は JS の一部として保持", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script>if (a < b && c > d) {}</script>"_fs);
+  static_assert(r.sv() == "<script>if (a<b && c>d) {}</script>");
+  REQUIRE(r.sv() == "<script>if (a<b && c>d) {}</script>");
+}
+
+TEST_CASE("minify_html - 複数の <script> ブロック", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<div>a</div><script>// c\nvar x=1;</script><div>b</div>"_fs);
+  static_assert(r.sv() == "<div>a</div><script>var x=1;</script><div>b</div>");
+  REQUIRE(r.sv() == "<div>a</div><script>var x=1;</script><div>b</div>");
+}
+
+TEST_CASE("minify_html - <script> 外の // は JS コメント扱いしない", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<div>hello // world</div>"_fs);
+  static_assert(r.sv() == "<div>hello//world</div>");
+  REQUIRE(r.sv() == "<div>hello//world</div>");
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // JSON minify
 // ═════════════════════════════════════════════════════════════════════════════

@@ -479,6 +479,16 @@ constexpr void flush_pending_space(char prev, char c, char* out, size_t& offset,
   pending_space = false;
 }
 
+/// @brief 位置 i が </script> の開始か判定する
+constexpr auto at_close_script(char const* buf, size_t len, size_t i) noexcept -> bool {
+  if (i + 8 >= len) return false;
+  if (buf[i] != '<' || buf[i + 1] != '/') return false;
+  auto const p = i + 2;
+  return ((buf[p] | 0x20) == 's' && (buf[p + 1] | 0x20) == 'c'
+       && (buf[p + 2] | 0x20) == 'r' && (buf[p + 3] | 0x20) == 'i'
+       && (buf[p + 4] | 0x20) == 'p' && (buf[p + 5] | 0x20) == 't');
+}
+
 /// @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装（バッファベース）
 ///
 /// 文字列リテラル内の文字は保持し、タグ周辺の不要空白とコメント（<!-- ... -->）を除去します。
@@ -495,18 +505,66 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
   auto offset        = 0uz;
   auto i             = 0uz;
   auto in_quote      = '\0';
-  auto pending_space = false;
-  auto const len     = std::char_traits<char>::length(input);
+  auto pending_space  = false;
+  auto in_script      = false;
+  auto script_quote   = '\0';
+  auto script_depth   = 0uz;
+  auto const len      = std::char_traits<char>::length(input);
 
   // 入力全体を1文字ずつ走査し、コメント除去・空白正規化・属性最適化を施しながら出力バッファに詰める
   while (i < len) {
     // HTML/XML コメントをブロックごとスキップ
-    if (in_quote == '\0' && skip_markup_comment(input, len, i)) {
+    if (in_quote == '\0' && !in_script && skip_markup_comment(input, len, i)) {
       pending_space = true;
       continue;
     }
 
     auto const c = input[i];
+
+    // <script> 内の JS コメント除去
+    if (in_script) {
+      // エスケープ文字の処理
+      if (script_quote != '\0' && c == '\\') {
+        if (offset < output_capacity) output[offset++] = c;
+        ++i;
+        if (i < len) {
+          if (offset < output_capacity) output[offset++] = input[i];
+          ++i;
+        }
+        continue;
+      }
+      // 行コメント //
+      if (script_quote == '\0' && c == '/' && i + 1 < len && input[i + 1] == '/') {
+        i += 2;
+        while (i < len && input[i] != '\n' && !at_close_script(input, len, i)) ++i;
+        pending_space = true;
+        continue;
+      }
+      // ブロックコメント /* */
+      if (script_quote == '\0' && c == '/' && i + 1 < len && input[i + 1] == '*') {
+        i += 2;
+        while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')
+            && !at_close_script(input, len, i)) ++i;
+        if (i + 1 < len) i += 2;
+        pending_space = true;
+        continue;
+      }
+      // テンプレートリテラルの補間 ${}
+      if (script_quote == '`' && c == '$' && i + 1 < len && input[i + 1] == '{') {
+        ++script_depth;
+      } else if (script_quote == '`' && script_depth > 0 && c == '{') {
+        ++script_depth;
+      } else if (script_quote == '`' && script_depth > 0 && c == '}') {
+        --script_depth;
+        // ponytail: ${} 内のネストされたテンプレートリテラルは未対応
+      }
+      // JS 文字列リテラルの開始/終了
+      if (script_quote == '\0' && (c == '"' || c == '\'' || c == '`')) {
+        script_quote = c;
+      } else if (c == script_quote && script_depth == 0) {
+        script_quote = '\0';
+      }
+    }
 
     // クォート内は内容をそのまま保持する
     if (in_quote != '\0') {
@@ -520,7 +578,7 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       continue;
     }
 
-    if (c == '"' || c == '\'') {
+    if (!in_script && (c == '"' || c == '\'')) {
       if (pending_space && offset > 0) {
         auto const prev = output[offset - 1];
         if (prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/') {
@@ -537,7 +595,7 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
     }
 
     // テンプレートタグ {{ ... }} は保護区間として透過コピーする（Mustache/injamm 対応）
-    if (c == '{' && i + 1 < len && input[i + 1] == '{') {
+    if (!in_script && c == '{' && i + 1 < len && input[i + 1] == '{') {
       // {{ の直前に遅延空白や出力済み空白があれば捨てる
       pending_space = false;
       if (offset > 0 && output[offset - 1] == ' ') {
@@ -567,11 +625,46 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
     }
 
     // タグ境界の前後空白は削除し、タグ内では単一空白に正規化する
+    // <script> 内部では </script> のみタグとして扱い、それ以外の < は JS コードの一部として出力
     if (c == '<') {
+      // <script> 内の </script> 検出
+      if (in_script && i + 8 < len && input[i + 1] == '/') {
+        auto const p = i + 2;
+        if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
+            && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
+            && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
+          auto const after = input[p + 6];
+          if (after == '>' || is_markup_space(after)) {
+            in_script = false;
+            // </script> は通常の閉じタグ処理へフォールスルー
+          }
+        }
+      }
+      // <script> 内の < は通常のタグとして扱わない
+      if (in_script) {
+        if (offset < output_capacity) output[offset++] = c;
+        ++i;
+        continue;
+      }
+
       if (offset > 0 && output[offset - 1] == ' ') {
         --offset;
       }
       pending_space = false;
+
+      // <script> 開始検出（大文字小文字不区別）
+      auto script_open = false;
+      if (i + 7 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
+        auto const p = i + 1;
+        if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
+            && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
+            && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
+          auto const after = input[p + 6];
+          if (after == '>' || is_markup_space(after) || after == '/') {
+            script_open = true;
+          }
+        }
+      }
 
       // 閉じタグ処理（void / 省略可能ならスキップ、それ以外は出力）
       if (emit_close_tag(input, len, i, output, offset, options)) {
@@ -580,6 +673,7 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
       if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
         i = emit_open_tag(input, len, i, output, offset, options);
+        if (script_open) in_script = true;
         continue;
       }
 
@@ -591,14 +685,14 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
     }
 
     // テキスト中の '>' は直前に空白があれば削ってから出力する
-    if (c == '>') {
+    if (script_quote == '\0' && c == '>') {
       emit_trimmed(c, output, offset);
       ++i;
       continue;
     }
 
     // 空白文字は遅延フラグを立ててスキップ
-    if (is_markup_space(c)) {
+    if ((!in_script || script_quote == '\0') && is_markup_space(c)) {
       pending_space = true;
       ++i;
       continue;
