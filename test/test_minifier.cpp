@@ -12,9 +12,62 @@
 #include "frozenchars/minify.hpp"
 
 using frozenchars::minify_cypher;
+using frozenchars::minify_js;
 using frozenchars::minify_markup_opt;
 using frozenchars::minify_sql_opt;
 using namespace frozenchars::literals;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// JS minify — コンパイル時検証（static_assert）
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// 1. 行コメント除去
+static_assert(minify_js("var x = 1; // comment\n var y = 2;").sv() == std::string_view("var x = 1;var y = 2;"));
+
+// 2. ブロックコメント除去
+static_assert(minify_js("var x = /* block */ 1;").sv() == std::string_view("var x = 1;"));
+
+// 3. 複数行ブロックコメント除去
+static_assert(minify_js("var x = /*\n  multi\n  line\n*/ 1;").sv() == std::string_view("var x = 1;"));
+
+// 4. 文字列内のコメント記号は除去しない
+static_assert(minify_js("var url = \"//not a comment\";").sv() == std::string_view("var url =\"//not a comment\";"));
+static_assert(minify_js("var url = \"/* also not */removed\";").sv() == std::string_view("var url =\"/* also not */removed\";"));
+
+// 5. シングルクォート文字列保護
+static_assert(minify_js("var s = 'hello world';").sv() == std::string_view("var s ='hello world';"));
+
+// 6. テンプレートリテラル保護
+static_assert(minify_js("var s = `hello ${name}`;").sv() == std::string_view("var s =`hello ${name}`;"));
+
+// 7. エスケープシーケンス保護
+static_assert(minify_js("var s = \"hello \\\"world\\\"\";").sv() == std::string_view("var s =\"hello \\\"world\\\"\";"));
+static_assert(minify_js("var s = 'hello \\'world\\'';").sv() == std::string_view("var s ='hello \\'world\\'';"));
+
+// 8. 空白圧縮（括弧周りなど）
+static_assert(minify_js("function  f(  x , y )  {  return  x + y ; }").sv() ==
+              std::string_view("function f(x,y){return x + y;}"));
+
+// 9. 識別子間のスペース保持、演算子前後
+static_assert(minify_js("if (a < b) { console . log (\"hi\"); }").sv() ==
+              std::string_view("if(a < b){console.log(\"hi\");}"));
+
+// 10. ブロックコメント除去後に隣接トークン間のスペースを補完
+static_assert(minify_js("var x/*comment*/=1;").sv() == std::string_view("var x =1;"));
+
+// 11. 空文字列
+static_assert(minify_js("").sv() == std::string_view(""));
+
+// 12. 空白のみ
+static_assert(minify_js("   \t\n  ").sv() == std::string_view(""));
+
+// 13. ダブルクォート内のエスケープされた quote は閉じない
+static_assert(minify_js("var s = \" \\\" \";").sv() == std::string_view("var s =\" \\\" \";"));
+
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ═════════════════════════════════════════════════════════════════════════════
@@ -588,6 +641,7 @@ TEST_CASE("minify ops - size() は実長を返しバッファ末尾はゼロ", "
   static_assert(("{ \"a\" : 1 }"_fs | frozenchars::ops::minify_json).size() == 7);
   static_assert(("a: 1\nb: 2"_fs | frozenchars::ops::minify_yaml).size() == 9);
   static_assert(("SELECT * FROM t"_fs | frozenchars::ops::minify_sql).size() == 15);
+  static_assert(("var x = 1; // c\n var y = 2;"_fs | frozenchars::ops::minify_js).size() == 20);
 
   // size() が capacity より小さく、末尾以降のバッファがゼロであること
   auto constexpr c = "MATCH (n) RETURN n"_fs | frozenchars::ops::minify_cypher;
@@ -651,4 +705,81 @@ TEST_CASE("minify_sql - ops パイプ演算子 (オプション指定)", "[minif
     | frozenchars::ops::minify_sql(minify_sql_opt::none);
   static_assert(result.sv() == "SELECT INTEGER FROM tbl");
   REQUIRE(result.sv() == "SELECT INTEGER FROM tbl");
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// JS minify — 実行時検証（TEST_CASE）
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("minify_js - 基本", "[minifier]")
+{
+  SECTION("行コメント除去")
+  {
+    auto constexpr r = minify_js("var x = 1; // comment\n var y = 2;");
+    static_assert(r.sv() == "var x = 1;var y = 2;");
+    REQUIRE(r.sv() == "var x = 1;var y = 2;");
+  }
+
+  SECTION("ブロックコメント除去")
+  {
+    auto constexpr r = minify_js("var x = /* block */ 1;");
+    static_assert(r.sv() == "var x = 1;");
+    REQUIRE(r.sv() == "var x = 1;");
+  }
+
+  SECTION("文字列保護")
+  {
+    auto constexpr r = minify_js("var url = \"http://example.com\";");
+    static_assert(r.sv() == "var url =\"http://example.com\";");
+    REQUIRE(r.sv() == "var url =\"http://example.com\";");
+  }
+
+  SECTION("テンプレートリテラル")
+  {
+    auto constexpr r = minify_js("var s = `hello ${name}`;");
+    static_assert(r.sv() == "var s =`hello ${name}`;");
+    REQUIRE(r.sv() == "var s =`hello ${name}`;");
+  }
+
+  SECTION("エスケープシーケンス")
+  {
+    auto constexpr r = minify_js("var s = \"hello \\\"world\\\"\";");
+    static_assert(r.sv() == "var s =\"hello \\\"world\\\"\";");
+    REQUIRE(r.sv() == "var s =\"hello \\\"world\\\"\";");
+  }
+}
+
+TEST_CASE("minify_js - ops パイプ演算子", "[minifier]")
+{
+  SECTION("FrozenString からパイプ")
+  {
+    auto constexpr result = "var x = 1; // comment\n var y = 2;"_fs
+      | frozenchars::ops::minify_js;
+    static_assert(result.sv() == "var x = 1;var y = 2;");
+    REQUIRE(result.sv() == "var x = 1;var y = 2;");
+  }
+
+  SECTION("空文字列")
+  {
+    auto constexpr result = ""_fs | frozenchars::ops::minify_js;
+    static_assert(result.sv() == "");
+    REQUIRE(result.sv() == "");
+  }
+
+  SECTION("複合パイプ: trim + minify_js")
+  {
+    auto constexpr result = "  var x = 1;  "_fs
+      | frozenchars::ops::trim
+      | frozenchars::ops::minify_js;
+    static_assert(result.sv() == "var x = 1;");
+    REQUIRE(result.sv() == "var x = 1;");
+  }
+}
+
+TEST_CASE("minify_js - size() 検証", "[minifier]")
+{
+  auto constexpr r = "var x = /* comment */ 1;"_fs | frozenchars::ops::minify_js;
+  static_assert(r.sv() == "var x = 1;");
+  static_assert(r.size() == 10);               // "var x = 1;" = 10 chars
+  REQUIRE(r.size() == 10);
 }

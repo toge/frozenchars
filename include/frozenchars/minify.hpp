@@ -882,6 +882,143 @@ template <size_t N>
   return minify_json(FrozenString{str});
 }
 
+// ─── JavaScript ───────────────────────────────────────────────────────────────
+
+/**
+ * @brief JavaScript コードを限定的に minify する
+ *
+ * 以下の処理を行います:
+ * - 行コメント `//` とブロックコメントの除去
+ * - 文字列リテラル外の連続する空白の単一スペースへの圧縮
+ * - 括弧・カンマ・セミコロンなどの前後にある不要な空白の除去
+ *
+ * 文字列リテラル（"、'、\`）、テンプレートリテラルの補間（${}）、
+ * およびエスケープシーケンス内の内容は保持します。
+ *
+ * @note このミニファイヤーは上記の限定的な処理のみを行います。
+ *       変数名の短縮、デッドコード除去、正規表現リテラルの検出などは
+ *       行いません。正規表現内の `/` はコメント開始と誤認識される
+ *       可能性があります。
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval minify_js(FrozenString<N> const& str) noexcept {
+  auto res            = FrozenString<N>{};
+  auto offset         = 0uz;
+  auto i              = 0uz;
+  auto quote          = '\0';
+  auto brace_depth    = 0uz;
+  auto pending_space  = false;
+
+  while (i < str.length) {
+    auto const c = str.buffer[i];
+
+    // エスケープ文字の処理
+    if (quote != '\0' && c == '\\') {
+      res.buffer[offset++] = c;
+      ++i;
+      if (i < str.length) {
+        res.buffer[offset++] = str.buffer[i];
+        ++i;
+      }
+      continue;
+    }
+
+    // 行コメント //
+    if (quote == '\0' && c == '/' && i + 1 < str.length && str.buffer[i + 1] == '/') {
+      i += 2;
+      while (i < str.length && str.buffer[i] != '\n') ++i;
+      pending_space = true;
+      continue;
+    }
+
+    // ブロックコメント /* */
+    if (quote == '\0' && c == '/' && i + 1 < str.length && str.buffer[i + 1] == '*') {
+      i += 2;
+      while (i + 1 < str.length && !(str.buffer[i] == '*' && str.buffer[i + 1] == '/')) ++i;
+      if (i + 1 < str.length) i += 2;
+      pending_space = true;
+      continue;
+    }
+
+    // テンプレートリテラルの補間 ${}
+    if (quote == '`' && c == '$' && i + 1 < str.length && str.buffer[i + 1] == '{') {
+      ++brace_depth;
+    } else if (quote == '`' && brace_depth > 0 && c == '{') {
+      ++brace_depth;
+    } else if (quote == '`' && brace_depth > 0 && c == '}') {
+      --brace_depth;
+      // ponytail: ${} 内のネストされたテンプレートリテラルは未対応
+    }
+
+    // 文字列リテラルの開始/終了
+    if (quote == '\0' && (c == '"' || c == '\'' || c == '`')) {
+      quote = c;
+    } else if (c == quote && brace_depth == 0) {
+      quote = '\0';
+      pending_space = false;
+    }
+
+    // 文字列内部はそのまま出力
+    if (quote != '\0') {
+      res.buffer[offset++] = c;
+      ++i;
+      continue;
+    }
+
+    // 空白文字は遅延フラグを立ててスキップ
+    if (detail::is_any_whitespace(c)) {
+      pending_space = true;
+      ++i;
+      continue;
+    }
+
+    // 遅延空白: トークン境界に必要な場合のみ出力
+    if (pending_space && offset > 0) {
+      auto const prev = res.buffer[offset - 1];
+      auto const no_space_after_prev = prev == '(' || prev == '['
+                                    || prev == '{' || prev == ')'
+                                    || prev == ']' || prev == '}'
+                                    || prev == ';' || prev == ','
+                                    || prev == '.' || prev == ':';
+      auto const no_space_before_cur = c == ')' || c == ']' || c == '}'
+                                    || c == ';' || c == ',' || c == '.'
+                                    || c == ':' || c == '(' || c == '['
+                                    || c == '{';
+      if (!no_space_after_prev && !no_space_before_cur) {
+        res.buffer[offset++] = ' ';
+      }
+      pending_space = false;
+    }
+
+    res.buffer[offset++] = c;
+    ++i;
+  }
+
+  // 末尾の余分な空白を除去して終端
+  if (offset > 0 && res.buffer[offset - 1] == ' ') {
+    --offset;
+  }
+  res.buffer[offset] = '\0';
+  res.length         = offset;
+  return res;
+}
+
+/**
+ * @brief JavaScript コードリテラルを限定的に minify する
+ *
+ * @tparam N 文字列長（終端文字を含む）
+ * @param str 対象文字列リテラル
+ * @return auto minify 後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval minify_js(char const (&str)[N]) noexcept {
+  return minify_js(FrozenString{str});
+}
+
 // ─── YAML ─────────────────────────────────────────────────────────────────────
 
 /**

@@ -538,6 +538,20 @@ struct minify_json_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief JavaScript minify をパイプ演算子で適用するアダプタ
+ */
+struct minify_js_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::minify_js(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::minify_js(FrozenString{str});
+  }
+};
+
+/**
  * @brief YAML minify をパイプ演算子で適用するアダプタ
  */
 struct minify_yaml_adaptor : pipe_adaptor_base {
@@ -653,6 +667,7 @@ inline constexpr html_decode_adaptor                 html_decode{};             
 inline constexpr minify_html_adaptor                 minify_html{};             ///< HTML ミニファイ
 inline constexpr minify_xml_adaptor                  minify_xml{};              ///< XML ミニファイ
 inline constexpr minify_json_adaptor                 minify_json{};             ///< JSON ミニファイ
+inline constexpr minify_js_adaptor                   minify_js{};               ///< JS 限定的ミニファイ
 inline constexpr minify_yaml_adaptor                 minify_yaml{};             ///< YAML ミニファイ
 inline constexpr minify_sql_adaptor                  minify_sql{};              ///< SQL ミニファイ
 inline constexpr minify_cypher_adaptor               minify_cypher{};           ///< Cypher ミニファイ
