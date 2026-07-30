@@ -371,8 +371,9 @@ constexpr auto emit_attribute(char const* buf, size_t len, size_t attr_start, si
 }
 
 /// @brief 開きタグ <tag ...> を処理し、属性の最適化を施して出力する
+/// @param preserve_script_out script 系タグかつ non-JS (PyScript 等) の場合 true を返す出力パラメータ（省略可）
 /// @return 次に処理すべき入力位置（タグの終端 '>' の直後）
-constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, size_t& offset, minify_markup_opt options) noexcept -> size_t {
+constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, size_t& offset, minify_markup_opt options, bool* preserve_script_out = nullptr) noexcept -> size_t {
   auto tag_start = i + 1;
   auto tag_end   = tag_start;
   while (tag_end < len && buf[tag_end] != '>' && !is_markup_space(buf[tag_end])) {
@@ -385,6 +386,18 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
   for (auto k = tag_start; k < tag_end; ++k) {
     out[offset++] = buf[k];
   }
+
+  // タグ種別判定（小文字化を避けつつケース非依存で比較）
+  auto const is_script_tag = (tag_len == 6
+      && ((buf[tag_start] | 0x20) == 's') && ((buf[tag_start + 1] | 0x20) == 'c') && ((buf[tag_start + 2] | 0x20) == 'r')
+      && ((buf[tag_start + 3] | 0x20) == 'i') && ((buf[tag_start + 4] | 0x20) == 'p') && ((buf[tag_start + 5] | 0x20) == 't'));
+  auto const is_py_script_tag = (tag_len == 9
+      && ((buf[tag_start] | 0x20) == 'p') && ((buf[tag_start + 1] | 0x20) == 'y') && ((buf[tag_start + 2] | 0x20) == '-')
+      && ((buf[tag_start + 3] | 0x20) == 's') && ((buf[tag_start + 4] | 0x20) == 'c') && ((buf[tag_start + 5] | 0x20) == 'r')
+      && ((buf[tag_start + 6] | 0x20) == 'i') && ((buf[tag_start + 7] | 0x20) == 'p') && ((buf[tag_start + 8] | 0x20) == 't'));
+
+  // PyScript 系タグ（<py-script>）は常に非加工対象にする
+  auto is_preserve = is_py_script_tag;
 
   // 属性を順次解析・出力する
   auto pos = tag_end;
@@ -449,6 +462,31 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
       }
     }
     auto const attr_len = pos - attr_start;
+
+    // script タグかつ type 属性で PyScript 系が指定されているか判定
+    if (is_script_tag && attr_len == 4
+        && ((buf[attr_start] | 0x20) == 't') && ((buf[attr_start + 1] | 0x20) == 'y') && ((buf[attr_start + 2] | 0x20) == 'p') && ((buf[attr_start + 3] | 0x20) == 'e')) {
+      auto val_content_start = val_quote != '\0' ? val_start + 1 : val_start;
+      auto val_content_len = val_quote != '\0' ? (val_end - val_start - 2) : (val_end - val_start);
+      // 簡易大文字小文字非依存比較
+      auto equals_ci = [&](size_t off, size_t l, char const* s, size_t sl) noexcept -> bool {
+        if (l != sl) return false;
+        for (size_t z = 0; z < l; ++z) {
+          if ((buf[off + z] | 0x20) != (s[z] | 0x20)) return false;
+        }
+        return true;
+      };
+      // PyScript の指定: 'py', 'mpy', 'text/python', 'text/py' を非加工対象として扱う
+      if (val_content_len >= 2) {
+        if (equals_ci(val_content_start, val_content_len, "py", 2)
+            || equals_ci(val_content_start, val_content_len, "mpy", 3)
+            || equals_ci(val_content_start, val_content_len, "text/python", 11)
+            || equals_ci(val_content_start, val_content_len, "text/py", 7)) {
+          is_preserve = true;
+        }
+      }
+    }
+
     pos = emit_attribute(buf, len, attr_start, attr_len, eq_pos, val_start, val_quote, val_end, out, offset, buf + tag_start, tag_len, options);
   }
 
@@ -460,6 +498,8 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
     out[offset++] = '>';
     ++pos;
   }
+
+  if (preserve_script_out) *preserve_script_out = is_preserve;
   return pos;
 }
 
@@ -508,6 +548,7 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
   auto in_quote      = '\0';
   auto pending_space  = false;
   auto in_script      = false;
+  auto in_script_preserved = false;
   auto script_quote   = '\0';
   auto script_depth   = 0uz;
   auto const len      = std::char_traits<char>::length(input);
@@ -522,8 +563,8 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
 
     auto const c = input[i];
 
-    // <script> 内の JS コメント除去（preserve_script 時はスキップ）
-    if (in_script && !has_flag(options, minify_markup_opt::preserve_script)) {
+    // <script> 内の JS コメント除去（preserve_script または PyScript 系の script はスキップ）
+    if (in_script && !has_flag(options, minify_markup_opt::preserve_script) && !in_script_preserved) {
       // エスケープ文字の処理
       if (script_quote != '\0' && c == '\\') {
         if (offset < output_capacity) output[offset++] = c;
@@ -673,8 +714,12 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       }
       // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
       if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-        i = emit_open_tag(input, len, i, output, offset, options);
-        if (script_open) in_script = true;
+        auto opened_preserve = false;
+        i = emit_open_tag(input, len, i, output, offset, options, &opened_preserve);
+        if (script_open) {
+          in_script = true;
+          in_script_preserved = opened_preserve;
+        }
         continue;
       }
 
@@ -686,17 +731,17 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
     }
 
     // テキスト中の '>' は直前に空白があれば削ってから出力する
-    // preserve_script 時は script 内で行わない
-    if (script_quote == '\0' && c == '>' && !(has_flag(options, minify_markup_opt::preserve_script) && in_script)) {
+    // preserve_script または PyScript 系の script は script 内で行わない
+    if (script_quote == '\0' && c == '>' && !((has_flag(options, minify_markup_opt::preserve_script) || in_script_preserved) && in_script)) {
       emit_trimmed(c, output, offset);
       ++i;
       continue;
     }
 
     // 空白文字は遅延フラグを立ててスキップ
-    // preserve_script 時は script 内の空白をそのまま出力
+    // preserve_script または PyScript 系は script 内の空白をそのまま出力
     if (is_markup_space(c)) {
-      if (has_flag(options, minify_markup_opt::preserve_script) && in_script) {
+      if ((has_flag(options, minify_markup_opt::preserve_script) || in_script_preserved) && in_script) {
         if (offset < output_capacity) output[offset++] = c;
       } else if (!in_script || script_quote == '\0') {
         pending_space = true;
