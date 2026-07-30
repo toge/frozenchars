@@ -499,6 +499,40 @@ TEST_CASE("minify_json - 基本", "[minifier]")
   REQUIRE(json.sv() == "{\"k\":\"a b\",\"n\":1,\"x\":true}");
 }
 
+TEST_CASE("minify_json - エッジケース", "[minifier]")
+{
+  // 文字列内の // はコメント扱いにしない
+  auto constexpr j1 = minify_json("{ \"a\": \"// not comment\" }"_fs);
+  static_assert(j1.sv() == "{\"a\":\"// not comment\"}");
+  REQUIRE(j1.sv() == "{\"a\":\"// not comment\"}");
+
+  // 文字列内の /* */ も保持
+  auto constexpr j2 = minify_json("{ \"a\": \"/* not comment */\" }"_fs);
+  static_assert(j2.sv() == "{\"a\":\"/* not comment */\"}");
+  REQUIRE(j2.sv() == "{\"a\":\"/* not comment */\"}");
+
+  // 外部のコメント除去
+  auto constexpr j3 = minify_json("{ /*c*/ \"k\":1 //e\n }"_fs);
+  static_assert(j3.sv() == "{\"k\":1}");
+  REQUIRE(j3.sv() == "{\"k\":1}");
+
+  // エスケープされたクォートとバックスラッシュ
+  auto constexpr j4 = minify_json("{ \"a\": \"He said \\\"Hi\\\"\\\\\" }"_fs);
+  static_assert(j4.sv() == "{\"a\":\"He said \\\"Hi\\\"\\\\\"}");
+  REQUIRE(j4.sv() == "{\"a\":\"He said \\\"Hi\\\"\\\\\"}");
+
+  // Unicode エスケープの保持
+  auto constexpr j5 = minify_json("{ \"s\": \"\\u2603\" }"_fs);
+  static_assert(j5.sv() == "{\"s\":\"\\u2603\"}");
+  REQUIRE(j5.sv() == "{\"s\":\"\\u2603\"}");
+
+  // 配列・オブジェクト内のコメント・空白除去
+  auto constexpr j6 = minify_json("{ /*c*/ \"arr\": [1, 2, /*x*/ 3] }"_fs);
+  static_assert(j6.sv() == "{\"arr\":[1,2,3]}");
+  REQUIRE(j6.sv() == "{\"arr\":[1,2,3]}");
+}
+
+
 // ═════════════════════════════════════════════════════════════════════════════
 // YAML minify
 // ═════════════════════════════════════════════════════════════════════════════
