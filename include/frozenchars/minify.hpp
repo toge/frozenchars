@@ -7,6 +7,14 @@
 #include <cstddef>
 #include <string_view>
 
+// デバッグ有効化マクロ: importmap の処理をランタイムでトレースする場合は 1 にする
+#ifndef FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
+#define FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP 0
+#endif
+#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
+#include <cstdio>
+#endif
+
 #include "detail/char_utils.hpp"
 #include "string_ops.hpp"
 
@@ -625,14 +633,24 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
 
     // importmap (JSON) の場合はスクリプト内を JSON 風に minify して一括コピーする
     if (in_script && script_mode == 1u) {
+#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
+      std::fprintf(stderr, "[minify] importmap branch enter i=%zu len=%zu\n", i, len);
+      size_t dbg_steps = 0;
+#endif
       // closing </script> の位置を見つける
       auto j = i;
       while (j < len && !at_close_script(input, len, j)) ++j;
+#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
+      std::fprintf(stderr, "[minify] importmap found close at j=%zu\n", j);
+#endif
       // input[i..j) を JSON 風に minify
       auto in_str = false;
       auto escaped = false;
       auto p = i;
       while (p < j) {
+#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
+        if ((++dbg_steps & 0xffffu) == 0u) std::fprintf(stderr, "[minify] importmap step=%zu p=%zu j=%zu\n", dbg_steps, p, j);
+#endif
         auto const ch = input[p];
         if (in_str) {
           if (offset < output_capacity) output[offset++] = ch;
@@ -673,6 +691,9 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
         if (offset < output_capacity) output[offset++] = ch;
         ++p;
       }
+#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
+      std::fprintf(stderr, "[minify] importmap finished steps=%zu out_offset=%zu\n", dbg_steps, offset);
+#endif
       // i を閉じタグ直前に進める（ループ先頭で閉じタグ処理される）
       i = j;
       continue;
