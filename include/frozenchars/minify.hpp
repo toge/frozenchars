@@ -24,6 +24,12 @@ enum class minify_markup_opt : uint8_t {
   preserve_script = 1 << 2, ///< script 内の内容を加工せずそのまま保持
 };
 
+// 変更履歴（日本語）:
+//  - script[type=...] が Python 系（py, mpy, text/python, text/py, application/python, text/x-python）
+//    と判定された場合、script 内の内容を自動的に非加工（preserve）扱いにする機能を追加しました。
+//  - この機能はデフォルトで有効であり、従来のオプション preserve_script とは別に
+//    script の type 属性を解析して自動判定します。
+
 inline constexpr auto operator|(minify_markup_opt a, minify_markup_opt b) noexcept {
   return static_cast<minify_markup_opt>(std::to_underlying(a) | std::to_underlying(b));
 }
