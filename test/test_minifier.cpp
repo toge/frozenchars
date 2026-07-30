@@ -414,6 +414,20 @@ TEST_CASE("minify_html - auto-preserve script[type=text/python]", "[minifier]")
   REQUIRE(r.sv() == "<script type=text/python>\n  print('y')\n</script>");
 }
 
+TEST_CASE("minify_html - auto-preserve script[type=application/python]", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script type=\"application/python\">\n  print('app')\n</script>"_fs);
+  REQUIRE(r.sv() == "<script type=application/python>\n  print('app')\n</script>");
+}
+
+TEST_CASE("minify_html - auto-preserve script[type=text/x-python]", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script type=\"text/x-python\">\n  print('x')\n</script>"_fs);
+  REQUIRE(r.sv() == "<script type=text/x-python>\n  print('x')\n</script>");
+}
+
 TEST_CASE("minify_html - preserve_script で script 内をそのまま保持", "[minifier]")
 {
   auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags

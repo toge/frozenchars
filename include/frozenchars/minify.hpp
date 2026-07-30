@@ -471,12 +471,14 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
         }
         return true;
       };
-      // PyScript の指定: 'py', 'mpy', 'text/python', 'text/py' を非加工対象として扱う
+      // PyScript の指定: 'py', 'mpy', 'text/python', 'text/py' に加え、一般的な MIME も非加工対象とする
       if (val_content_len >= 2) {
         if (equals_ci(val_content_start, val_content_len, "py", 2)
             || equals_ci(val_content_start, val_content_len, "mpy", 3)
             || equals_ci(val_content_start, val_content_len, "text/python", 11)
-            || equals_ci(val_content_start, val_content_len, "text/py", 7)) {
+            || equals_ci(val_content_start, val_content_len, "text/py", 7)
+            || equals_ci(val_content_start, val_content_len, "application/python", 18)
+            || equals_ci(val_content_start, val_content_len, "text/x-python", 13)) {
           is_preserve = true;
         }
       }
