@@ -379,7 +379,7 @@ constexpr auto emit_attribute(char const* buf, size_t len, size_t attr_start, si
 /// @brief 開きタグ <tag ...> を処理し、属性の最適化を施して出力する
 /// @param preserve_script_out script 系タグかつ non-JS (PyScript 等) の場合 true を返す出力パラメータ（省略可）
 /// @return 次に処理すべき入力位置（タグの終端 '>' の直後）
-constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, size_t& offset, minify_markup_opt options, bool* preserve_script_out = nullptr) noexcept -> size_t {
+constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, size_t& offset, minify_markup_opt options, unsigned* script_mode_out = nullptr) noexcept -> size_t {
   auto tag_start = i + 1;
   auto tag_end   = tag_start;
   while (tag_end < len && buf[tag_end] != '>' && !is_markup_space(buf[tag_end])) {
@@ -397,8 +397,8 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
   auto const is_script_tag = (tag_len == 6
       && ((buf[tag_start] | 0x20) == 's') && ((buf[tag_start + 1] | 0x20) == 'c') && ((buf[tag_start + 2] | 0x20) == 'r')
       && ((buf[tag_start + 3] | 0x20) == 'i') && ((buf[tag_start + 4] | 0x20) == 'p') && ((buf[tag_start + 5] | 0x20) == 't'));
-  // PyScript 系タグは <py-script> のような独自タグも存在するが、自動保護は script[type=...] のみ扱う
-  auto is_preserve = false;
+  // script の type 属性に基づくモード: 0 = JS (デフォルト/no type), 1 = importmap(JSON), 2 = preserve (その他)
+  auto mode = 0u;
 
   // 属性を順次解析・出力する
   auto pos = tag_end;
@@ -477,15 +477,26 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
         }
         return true;
       };
-      // PyScript の指定: 'py', 'mpy', 'text/python', 'text/py' に加え、一般的な MIME も非加工対象とする
-      if (val_content_len >= 2) {
+      // type 属性の判定: JavaScript 関連は mode=0、importmap は mode=1、その他は mode=2 (preserve)
+      if (val_content_len >= 1) {
         if (equals_ci(val_content_start, val_content_len, "py", 2)
             || equals_ci(val_content_start, val_content_len, "mpy", 3)
             || equals_ci(val_content_start, val_content_len, "text/python", 11)
             || equals_ci(val_content_start, val_content_len, "text/py", 7)
             || equals_ci(val_content_start, val_content_len, "application/python", 18)
             || equals_ci(val_content_start, val_content_len, "text/x-python", 13)) {
-          is_preserve = true;
+          mode = 2u; // preserve for python types
+        } else if (equals_ci(val_content_start, val_content_len, "importmap", 9)) {
+          mode = 1u; // importmap -> JSON minify
+        } else if (equals_ci(val_content_start, val_content_len, "module", 6)
+                   || equals_ci(val_content_start, val_content_len, "text/javascript", 15)
+                   || equals_ci(val_content_start, val_content_len, "application/javascript", 22)
+                   || equals_ci(val_content_start, val_content_len, "text/ecmascript", 15)
+                   || equals_ci(val_content_start, val_content_len, "application/ecmascript", 22)
+                   || equals_ci(val_content_start, val_content_len, "application/x-javascript", 24)) {
+          mode = 0u; // JS
+        } else {
+          mode = 2u; // unknown -> preserve
         }
       }
     }
@@ -502,7 +513,7 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
     ++pos;
   }
 
-  if (preserve_script_out) *preserve_script_out = is_preserve;
+  if (script_mode_out) *script_mode_out = mode;
   return pos;
 }
 
@@ -551,7 +562,8 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
   auto in_quote      = '\0';
   auto pending_space  = false;
   auto in_script      = false;
-  auto in_script_preserved = false;
+  // script_mode: 0 = JS (minify_js behavior), 1 = importmap (minify_json), 2 = preserve (no processing)
+  auto script_mode     = 0u;
   auto script_quote   = '\0';
   auto script_depth   = 0uz;
   auto const len      = std::char_traits<char>::length(input);
@@ -566,8 +578,8 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
 
     auto const c = input[i];
 
-    // <script> 内の JS コメント除去（preserve_script または PyScript 系の script はスキップ）
-    if (in_script && !has_flag(options, minify_markup_opt::preserve_script) && !in_script_preserved) {
+    // <script> 内の JS コメント除去（適切な script_mode の場合のみ）
+    if (in_script && !has_flag(options, minify_markup_opt::preserve_script) && script_mode == 0) {
       // エスケープ文字の処理
       if (script_quote != '\0' && c == '\\') {
         if (offset < output_capacity) output[offset++] = c;
@@ -609,6 +621,61 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       } else if (c == script_quote && script_depth == 0) {
         script_quote = '\0';
       }
+    }
+
+    // importmap (JSON) の場合はスクリプト内を JSON 風に minify して一括コピーする
+    if (in_script && script_mode == 1u) {
+      // closing </script> の位置を見つける
+      auto j = i;
+      while (j < len && !at_close_script(input, len, j)) ++j;
+      // input[i..j) を JSON 風に minify
+      auto in_str = false;
+      auto escaped = false;
+      auto p = i;
+      while (p < j) {
+        auto const ch = input[p];
+        if (in_str) {
+          if (offset < output_capacity) output[offset++] = ch;
+          if (escaped) {
+            escaped = false;
+          } else if (ch == '\\') {
+            escaped = true;
+          } else if (ch == '"') {
+            in_str = false;
+          }
+          ++p;
+          continue;
+        }
+        if (ch == '"') {
+          in_str = true;
+          if (offset < output_capacity) output[offset++] = ch;
+          ++p;
+          continue;
+        }
+        // 行コメント //
+        if (ch == '/' && p + 1 < j && input[p + 1] == '/') {
+          p += 2;
+          while (p < j && input[p] != '\n') ++p;
+          continue;
+        }
+        // ブロックコメント /* */
+        if (ch == '/' && p + 1 < j && input[p + 1] == '*') {
+          p += 2;
+          while (p + 1 < j && !(input[p] == '*' && input[p + 1] == '/')) ++p;
+          if (p + 1 < j) p += 2;
+          continue;
+        }
+        // 文字列外の空白は除去
+        if (detail::is_any_whitespace(ch)) {
+          ++p;
+          continue;
+        }
+        if (offset < output_capacity) output[offset++] = ch;
+        ++p;
+      }
+      // i を閉じタグ直前に進める（ループ先頭で閉じタグ処理される）
+      i = j;
+      continue;
     }
 
     // クォート内は内容をそのまま保持する
@@ -681,49 +748,56 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
           auto const after = input[p + 6];
           if (after == '>' || is_markup_space(after)) {
             in_script = false;
-            // </script> は通常の閉じタグ処理へフォールスルー
-          }
+          script_mode = 0u;
+          // </script> は通常の閉じタグ処理へフォールスルー
         }
       }
+      }
       // <script> 内の < は通常のタグとして扱わない
-      if (in_script) {
-        if (offset < output_capacity) output[offset++] = c;
-        ++i;
-        continue;
+      if (in_script && script_mode == 2u) {
+      // preserve モード: 文字をそのまま出力
+      if (offset < output_capacity) output[offset++] = c;
+      ++i;
+      continue;
+      } else if (in_script) {
+      // JS / importmap モード: treat '<' as part of script content
+      if (offset < output_capacity) output[offset++] = c;
+      ++i;
+      continue;
       }
 
       if (offset > 0 && output[offset - 1] == ' ') {
-        --offset;
+      --offset;
       }
       pending_space = false;
 
-      // <script> 開始検出（大文字小文字不区別）
+      // <script> 開始検出（大文字小文字非依存）
       auto script_open = false;
       if (i + 7 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-        auto const p = i + 1;
-        if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
-            && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
-            && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
-          auto const after = input[p + 6];
-          if (after == '>' || is_markup_space(after) || after == '/') {
-            script_open = true;
-          }
+      auto const p = i + 1;
+      if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
+          && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
+          && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
+        auto const after = input[p + 6];
+        if (after == '>' || is_markup_space(after) || after == '/') {
+          script_open = true;
         }
+      }
       }
 
       // 閉じタグ処理（void / 省略可能ならスキップ、それ以外は出力）
       if (emit_close_tag(input, len, i, output, offset, options)) {
-        continue;
+      continue;
       }
       // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
       if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-        auto opened_preserve = false;
-        i = emit_open_tag(input, len, i, output, offset, options, &opened_preserve);
-        if (script_open) {
-          in_script = true;
-          in_script_preserved = opened_preserve;
-        }
-        continue;
+      auto opened_mode = 0u;
+      i = emit_open_tag(input, len, i, output, offset, options, &opened_mode);
+      if (script_open) {
+        in_script = true;
+        script_mode = opened_mode;
+      }
+      continue;
       }
 
       if (offset < output_capacity) {
@@ -734,22 +808,22 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
     }
 
     // テキスト中の '>' は直前に空白があれば削ってから出力する
-    // preserve_script または PyScript 系の script は script 内で行わない
-    if (script_quote == '\0' && c == '>' && !((has_flag(options, minify_markup_opt::preserve_script) || in_script_preserved) && in_script)) {
+    // preserve_script または preserve-mode の script 内では行わない
+    if (script_quote == '\0' && c == '>' && !((has_flag(options, minify_markup_opt::preserve_script) || script_mode == 2u) && in_script)) {
       emit_trimmed(c, output, offset);
       ++i;
       continue;
     }
 
     // 空白文字は遅延フラグを立ててスキップ
-    // preserve_script または PyScript 系は script 内の空白をそのまま出力
+    // preserve_script または preserve-mode の script 内は空白をそのまま出力
     if (is_markup_space(c)) {
-      if ((has_flag(options, minify_markup_opt::preserve_script) || in_script_preserved) && in_script) {
+      if ((has_flag(options, minify_markup_opt::preserve_script) || script_mode == 2u) && in_script) {
         if (offset < output_capacity) output[offset++] = c;
       } else if (!in_script || script_quote == '\0') {
         pending_space = true;
       } else {
-        // スクリプト内の文字列内や preserve_script 以外: そのまま出力
+        // スクリプト内の文字列内や JS/importmap モード: そのまま出力 (JS will be post-processed by inline logic)
         if (offset < output_capacity) output[offset++] = c;
       }
       ++i;
