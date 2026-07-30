@@ -391,13 +391,8 @@ constexpr auto emit_open_tag(char const* buf, size_t len, size_t i, char* out, s
   auto const is_script_tag = (tag_len == 6
       && ((buf[tag_start] | 0x20) == 's') && ((buf[tag_start + 1] | 0x20) == 'c') && ((buf[tag_start + 2] | 0x20) == 'r')
       && ((buf[tag_start + 3] | 0x20) == 'i') && ((buf[tag_start + 4] | 0x20) == 'p') && ((buf[tag_start + 5] | 0x20) == 't'));
-  auto const is_py_script_tag = (tag_len == 9
-      && ((buf[tag_start] | 0x20) == 'p') && ((buf[tag_start + 1] | 0x20) == 'y') && ((buf[tag_start + 2] | 0x20) == '-')
-      && ((buf[tag_start + 3] | 0x20) == 's') && ((buf[tag_start + 4] | 0x20) == 'c') && ((buf[tag_start + 5] | 0x20) == 'r')
-      && ((buf[tag_start + 6] | 0x20) == 'i') && ((buf[tag_start + 7] | 0x20) == 'p') && ((buf[tag_start + 8] | 0x20) == 't'));
-
-  // PyScript 系タグ（<py-script>）は常に非加工対象にする
-  auto is_preserve = is_py_script_tag;
+  // PyScript 系タグは <py-script> のような独自タグも存在するが、自動保護は script[type=...] のみ扱う
+  auto is_preserve = false;
 
   // 属性を順次解析・出力する
   auto pos = tag_end;

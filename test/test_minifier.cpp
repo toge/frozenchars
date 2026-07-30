@@ -393,6 +393,27 @@ TEST_CASE("minify_html - <script> 外の // は JS コメント扱いしない",
   REQUIRE(r.sv() == "<div>hello//world</div>");
 }
 
+TEST_CASE("minify_html - auto-preserve <py-script>", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<py-script>\n  print('hi')\n</py-script>"_fs);
+  REQUIRE(r.sv() == "<py-script>print('hi')</py-script>");
+}
+
+TEST_CASE("minify_html - auto-preserve script[type=py]", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script type=\"py\">\n  print('x')\n</script>"_fs);
+  REQUIRE(r.sv() == "<script type=py>\n  print('x')\n</script>");
+}
+
+TEST_CASE("minify_html - auto-preserve script[type=text/python]", "[minifier]")
+{
+  auto constexpr r = minify_html(
+    "<script type=\"text/python\">\n  print('y')\n</script>"_fs);
+  REQUIRE(r.sv() == "<script type=text/python>\n  print('y')\n</script>");
+}
+
 TEST_CASE("minify_html - preserve_script で script 内をそのまま保持", "[minifier]")
 {
   auto constexpr opt = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
