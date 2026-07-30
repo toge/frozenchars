@@ -625,6 +625,49 @@ TEST_CASE("minify_html - <script type=importmap> JSON のエッジケース (run
 
   run_case("<script type=\"importmap\">{ \"s\": \"\\u2603\", \"t\": \"He \\\"X\\\"\" }</script>",
            "{\"s\":\"\\u2603\",\"t\":\"He \\\"X\\\"\"}");
+
+  // 追加ケース: 深いネスト
+  {
+    std::string inner = "{";
+    std::string expect = "{";
+    int depth = 20;
+    for (int i = 0; i < depth; ++i) {
+      if (i) { inner += ","; expect += ","; }
+      inner += "\"k" + std::to_string(i) + "\":{";
+      expect += "\"k" + std::to_string(i) + "\":{";
+    }
+    inner += "\"leaf\": 1";
+    expect += "\"leaf\":1";
+    for (int i = 0; i < depth; ++i) { inner += "}"; expect += "}"; }
+    std::string html = "<script type=\"importmap\">" + inner + "</script>";
+    run_case(html.c_str(), expect);
+  }
+
+  // 追加ケース: 大きな配列 + コメント混入
+  {
+    int N = 200;
+    std::string inner = "{\"arr\":[";
+    std::string expect = "{\"arr\":[";
+    for (int i = 1; i <= N; ++i) {
+      if (i > 1) { inner += ", "; expect += ","; }
+      inner += std::to_string(i);
+      inner += " /*c*/";
+      expect += std::to_string(i);
+    }
+    inner += "]}";
+    expect += "]}";
+    std::string html = "<script type=\"importmap\">" + inner + "</script>";
+    run_case(html.c_str(), expect);
+  }
+
+  // 追加ケース: エスケープ・改行・コメントを含む文字列
+  {
+    std::string inner = "{ \"s\": \"Line1\\nLine2\\\\\\\"\\\"\", /*c*/ \"n\": 2 }";
+    std::string expect = "{\"s\":\"Line1\\nLine2\\\\\\\"\\\"\",\"n\":2}";
+    std::string html = "<script type=\"importmap\">" + inner + "</script>";
+    run_case(html.c_str(), expect);
+  }
+
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
