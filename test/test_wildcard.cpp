@@ -27,6 +27,33 @@ TEST_CASE("wildcard: simple glob greedy matcher") {
   REQUIRE_FALSE(detail::wildcard_match_simple_glob<"file-??.txt">("file-a.txt"));
 }
 
+TEST_CASE("wildcard: precomputed bracket metadata") {
+  using plan = detail::wildcard_plan<"[!a-c\\-x]">;
+
+  STATIC_REQUIRE(plan::close_brackets[0] == 8);
+  STATIC_REQUIRE(plan::close_parens[0] == 9);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('a')]);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('b')]);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('-')]);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('x')]);
+  STATIC_REQUIRE(plan::char_class_tables[0][static_cast<unsigned char>('z')]);
+}
+
+TEST_CASE("wildcard: precomputed alternative metadata") {
+  using plan = detail::wildcard_plan<"(ab|cd|e(f|g))">;
+
+  STATIC_REQUIRE(plan::close_parens[0] == 13);
+  STATIC_REQUIRE(plan::close_parens[8] == 12);
+  STATIC_REQUIRE(plan::first_branch[0] == 1);
+  STATIC_REQUIRE(plan::branch_end[0] == 14);
+  STATIC_REQUIRE(plan::next_branch[1] == 4);
+  STATIC_REQUIRE(plan::next_branch[4] == 7);
+  STATIC_REQUIRE(plan::next_branch[7] == 14);
+  STATIC_REQUIRE(plan::branch_end[1] == 3);
+  STATIC_REQUIRE(plan::branch_end[4] == 6);
+  STATIC_REQUIRE(plan::branch_end[7] == 13);
+}
+
 TEST_CASE("wildcard: * non-matching") {
   REQUIRE_FALSE(wildcard_match<"a*c">("ab"));
   REQUIRE_FALSE(wildcard_match<"a*c">("abxd"));

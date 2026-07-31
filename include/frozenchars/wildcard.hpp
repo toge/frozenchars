@@ -3,6 +3,7 @@
 #include "string.hpp"
 #include "frozen_regex.hpp"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
@@ -51,6 +52,173 @@ template <FrozenString PAT>
   }
   return (depth == 0) ? i - 1 : PAT.size();
 }
+
+/**
+ * @brief 文字集合用の 256 エントリ事前計算テーブル
+ */
+template <FrozenString PAT>
+struct wildcard_char_class_table {
+  std::array<bool, 256> entries{};
+
+  [[nodiscard]] constexpr bool operator[](unsigned char ch) const noexcept {
+    return entries[ch];
+  }
+};
+
+/**
+ * @brief wildcard 一般 matcher 用の事前計算メタデータ
+ */
+template <FrozenString PAT>
+struct wildcard_plan {
+private:
+  struct metadata {
+    std::array<size_t, PAT.size()> close_brackets{};
+    std::array<size_t, PAT.size()> close_parens{};
+    std::array<wildcard_char_class_table<PAT>, PAT.size()> char_class_tables{};
+    std::array<size_t, PAT.size()> first_branch{};
+    std::array<size_t, PAT.size()> branch_end{};
+    std::array<size_t, PAT.size()> next_branch{};
+  };
+
+  [[nodiscard]] static consteval auto read_char_class_token(size_t i, size_t close) noexcept -> std::pair<unsigned char, size_t> {
+    if (PAT.data()[i] == '\\' && i + 1 < close) {
+      return {static_cast<unsigned char>(PAT.data()[i + 1]), i + 2};
+    }
+    return {static_cast<unsigned char>(PAT.data()[i]), i + 1};
+  }
+
+  [[nodiscard]] static consteval auto make_metadata() noexcept -> metadata {
+    auto data = metadata{};
+
+    for (auto& pos : data.close_brackets) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.close_parens) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.first_branch) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.branch_end) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.next_branch) {
+      pos = PAT.size();
+    }
+
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] == '[') {
+        data.close_brackets[i] = find_matching_close_bracket<PAT>(i);
+      }
+      if (PAT.data()[i] == '(') {
+        data.close_parens[i] = find_matching_close_paren<PAT>(i);
+      }
+    }
+
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] != '[') {
+        continue;
+      }
+
+      auto const close = data.close_brackets[i];
+      if (close >= PAT.size()) {
+        continue;
+      }
+
+      auto negated = false;
+      auto si = i + 1uz;
+      if (si < close && PAT.data()[si] == '!') {
+        negated = true;
+        ++si;
+      }
+
+      auto& table = data.char_class_tables[i].entries;
+      if (negated) {
+        for (auto& entry : table) {
+          entry = true;
+        }
+      }
+
+      for (auto j = si; j < close; ) {
+        auto const [lc, next_j] = read_char_class_token(j, close);
+        auto const is_range_token = PAT.data()[j] != '\\' && lc == static_cast<unsigned char>('-') && j != si && next_j < close;
+
+        if (next_j < close && PAT.data()[next_j] == '-' && !is_range_token) {
+          auto const dash_i = next_j;
+          if (dash_i + 1 < close) {
+            auto const [rc, after_range] = read_char_class_token(dash_i + 1, close);
+            if (lc <= rc) {
+              for (auto ch = static_cast<size_t>(lc); ch <= static_cast<size_t>(rc); ++ch) {
+                table[ch] = !negated;
+                if (ch == static_cast<size_t>(rc)) {
+                  break;
+                }
+              }
+            }
+            j = after_range;
+            continue;
+          }
+        }
+
+        table[lc] = !negated;
+        j = next_j;
+      }
+    }
+
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] != '(') {
+        continue;
+      }
+
+      auto const close = data.close_parens[i];
+      if (close >= PAT.size()) {
+        continue;
+      }
+
+      data.first_branch[i] = i + 1;
+
+      auto branch_start = i + 1uz;
+      auto depth = 0;
+
+      for (auto j = branch_start; j < close; ++j) {
+        auto const bc = PAT.data()[j];
+        if (bc == '\\') {
+          ++j;
+          continue;
+        }
+        if (bc == '(') {
+          ++depth;
+          continue;
+        }
+        if (bc == ')') {
+          --depth;
+          continue;
+        }
+        if (bc == '|' && depth == 0) {
+          data.branch_end[branch_start] = j;
+          data.next_branch[branch_start] = j + 1;
+          branch_start = j + 1;
+        }
+      }
+
+      data.branch_end[branch_start] = close;
+      data.next_branch[branch_start] = PAT.size();
+    }
+
+    return data;
+  }
+
+  static constexpr auto data = make_metadata();
+
+public:
+  static constexpr auto close_brackets = data.close_brackets;
+  static constexpr auto close_parens = data.close_parens;
+  static constexpr auto char_class_tables = data.char_class_tables;
+  static constexpr auto first_branch = data.first_branch;
+  static constexpr auto branch_end = data.branch_end;
+  static constexpr auto branch_next = data.next_branch;
+  static constexpr auto next_branch = branch_next;
+};
 
 /**
  * @brief wildcard パターンを frozen_regex に委譲するためのヘルパ
@@ -211,57 +379,11 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
     // Set: [abc], [!abc], [a-z], [-abc], [abc-], [a\\-z]
     if (c == '[') {
-      auto close = find_matching_close_bracket<PAT>(pi);
-      if (close < PAT.size() && close < pi_end) {
-        auto negated = false;
-        auto si = pi + 1uz;
-        if (si < close && PAT.data()[si] == '!') {
-          negated = true;
-          ++si;
-        }
-
+      auto const close = wildcard_plan<PAT>::close_brackets[pi];
+      if (close < pi_end) {
         if (ti >= text.size()) return {false, ti};
-        auto tc = text[ti];
-        auto in_set = false;
-
-        auto read_one = [&](size_t i) -> std::pair<char, size_t> {
-          if (PAT.data()[i] == '\\' && i + 1 < close) {
-            return {PAT.data()[i + 1], i + 2};
-          }
-          return {PAT.data()[i], i + 1};
-        };
-
-        for (auto i = si; i < close && !in_set; ) {
-          auto [lc, next_i] = read_one(i);
-
-          auto is_range = [&]() -> bool {
-            if (PAT.data()[i] == '\\') return false;
-            if (lc != '-') return false;
-            if (i == si) return false;
-            if (next_i >= close) return false;
-            return true;
-          };
-
-          if (next_i < close && PAT.data()[next_i] == '-' && !is_range()) {
-            auto dash_i = next_i;
-            if (PAT.data()[dash_i] != '\\' && dash_i + 1 < close) {
-              auto [rc, after_range] = read_one(dash_i + 1);
-              if (static_cast<unsigned char>(lc) <= static_cast<unsigned char>(tc) &&
-                  static_cast<unsigned char>(tc) <= static_cast<unsigned char>(rc)) {
-                in_set = true;
-              }
-              i = after_range;
-              continue;
-            }
-          }
-
-          if (lc == tc) {
-            in_set = true;
-          }
-          i = next_i;
-        }
-
-        if (negated) in_set = !in_set;
+        auto const tc = static_cast<unsigned char>(text[ti]);
+        auto const in_set = wildcard_plan<PAT>::char_class_tables[pi][tc];
         if (!in_set) return {false, ti};
 
         ++ti;
@@ -273,39 +395,20 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
     // Alternative: (branch1|branch2|...)
     if (c == '(') {
-      auto close = find_matching_close_paren<PAT>(pi);
-      if (close < PAT.size() && close < pi_end) {
+      auto const close = wildcard_plan<PAT>::close_parens[pi];
+      if (close < pi_end) {
         auto after_alt = close + 1uz;
 
-        auto branch_start = pi + 1uz;
-        auto depth = 0;
-
-        for (auto i = branch_start; i < close; ++i) {
-          auto bc = PAT.data()[i];
-          if (bc == '\\') { ++i; continue; }
-          if (bc == '(') { ++depth; continue; }
-          if (bc == ')') { --depth; continue; }
-          if (bc == '|' && depth == 0) {
-            auto br = wildcard_match_impl<PAT>(text, ti, branch_start, i, true);
-            if (br.matched) {
-              if (after_alt >= pi_end) {
-                if (partial || br.pos == text.size()) return br;
-              } else {
-                auto rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
-                if (rr.matched) return rr;
-              }
-            }
-            branch_start = i + 1uz;
-          }
-        }
-        // Last branch
-        {
-          auto br = wildcard_match_impl<PAT>(text, ti, branch_start, close, true);
+        for (auto branch = wildcard_plan<PAT>::first_branch[pi];
+             branch != wildcard_plan<PAT>::branch_end[pi];
+             branch = wildcard_plan<PAT>::next_branch[branch]) {
+          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true);
           if (br.matched) {
             if (after_alt >= pi_end) {
               if (partial || br.pos == text.size()) return br;
             } else {
-              return wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              if (rr.matched) return rr;
             }
           }
         }
