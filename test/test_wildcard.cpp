@@ -166,16 +166,33 @@ TEST_CASE("wildcard: unbalanced alternatives") {
   // 対応の取れていない '(' はリテラルとして扱われる
   REQUIRE(wildcard_match<"(ab">("(ab"));
   REQUIRE_FALSE(wildcard_match<"(ab">("ab"));
-  
+
   // 入れ子の対応の取れていない '('
   REQUIRE(wildcard_match<"((ab">("((ab"));
   REQUIRE_FALSE(wildcard_match<"((ab">("(ab"));
+}
+
+TEST_CASE("wildcard: unbalanced bracket stays literal") {
+  REQUIRE(wildcard_match<"[ab">("[ab"));
+  REQUIRE_FALSE(wildcard_match<"[ab">("a"));
 }
 
 TEST_CASE("wildcard_find: basic * matching") {
   auto r = wildcard_find<"a*c">("xxabcxx");
   REQUIRE(r.has_value());
   REQUIRE(*r == "abc");
+}
+
+TEST_CASE("wildcard_find: simple glob keeps shortest non-empty match") {
+  auto const r = wildcard_find<"*world">("hello world");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "hello world");
+}
+
+TEST_CASE("wildcard_find: first start wins even for greedy-capable patterns") {
+  auto const r = wildcard_find<"a*">("baaa");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "a");
 }
 
 TEST_CASE("wildcard_find: first match position") {
@@ -261,6 +278,15 @@ TEST_CASE("wildcard_find_all: non-overlapping") {
   auto count = 0;
   for ([[maybe_unused]] auto _ : wildcard_find_all<"aa">("aaaa")) ++count;
   REQUIRE(count == 2);
+}
+
+TEST_CASE("wildcard_find_all: simple glob keeps non-overlapping shortest matches") {
+  auto const expected = std::array{"a", "a", "a"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"a*">("aaa")) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 3);
 }
 
 TEST_CASE("wildcard_find_all: edge cases") {
