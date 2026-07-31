@@ -190,9 +190,11 @@ TEST_CASE("wildcard_find: simple glob keeps shortest non-empty match") {
 }
 
 TEST_CASE("wildcard_find: first start wins even for greedy-capable patterns") {
-  auto const r = wildcard_find<"a*">("baaa");
+  auto const text = std::string_view{"baaa"};
+  auto const r = wildcard_find<"a*">(text);
   REQUIRE(r.has_value());
   REQUIRE(*r == "a");
+  REQUIRE(r->data() == text.data() + 1);
 }
 
 TEST_CASE("wildcard_find: first match position") {
