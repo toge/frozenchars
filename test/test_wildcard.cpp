@@ -281,12 +281,12 @@ TEST_CASE("wildcard_find_all: non-overlapping") {
 }
 
 TEST_CASE("wildcard_find_all: simple glob keeps non-overlapping shortest matches") {
-  auto const expected = std::array{"a", "a", "a"};
+  auto const expected = std::array{"aa", "aa"};
   auto i = 0;
-  for (auto sv : wildcard_find_all<"a*">("aaa")) {
+  for (auto sv : wildcard_find_all<"aa*">("aaaa")) {
     REQUIRE(sv == expected[i++]);
   }
-  REQUIRE(i == 3);
+  REQUIRE(i == 2);
 }
 
 TEST_CASE("wildcard_find_all: edge cases") {
