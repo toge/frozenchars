@@ -211,6 +211,7 @@ private:
   static constexpr auto data = make_metadata();
 
 public:
+  static constexpr auto NO_BRANCH = PAT.size();
   static constexpr auto close_brackets = data.close_brackets;
   static constexpr auto close_parens = data.close_parens;
   static constexpr auto char_class_tables = data.char_class_tables;
@@ -400,7 +401,7 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
         auto after_alt = close + 1uz;
 
         for (auto branch = wildcard_plan<PAT>::first_branch[pi];
-             branch != wildcard_plan<PAT>::branch_end[pi];
+             branch != wildcard_plan<PAT>::NO_BRANCH;
              branch = wildcard_plan<PAT>::next_branch[branch]) {
           auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true);
           if (br.matched) {

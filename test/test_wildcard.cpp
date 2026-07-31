@@ -45,13 +45,30 @@ TEST_CASE("wildcard: precomputed alternative metadata") {
   STATIC_REQUIRE(plan::close_parens[0] == 13);
   STATIC_REQUIRE(plan::close_parens[8] == 12);
   STATIC_REQUIRE(plan::first_branch[0] == 1);
-  STATIC_REQUIRE(plan::branch_end[0] == 14);
   STATIC_REQUIRE(plan::next_branch[1] == 4);
   STATIC_REQUIRE(plan::next_branch[4] == 7);
-  STATIC_REQUIRE(plan::next_branch[7] == 14);
+  STATIC_REQUIRE(plan::next_branch[7] == plan::NO_BRANCH);
   STATIC_REQUIRE(plan::branch_end[1] == 3);
   STATIC_REQUIRE(plan::branch_end[4] == 6);
   STATIC_REQUIRE(plan::branch_end[7] == 13);
+}
+
+TEST_CASE("wildcard: nested alternative metadata keeps branch ends separate from iteration sentinel") {
+  using plan = detail::wildcard_plan<"*(a|(bc|de))*">;
+
+  STATIC_REQUIRE(plan::close_parens[1] == 11);
+  STATIC_REQUIRE(plan::first_branch[1] == 2);
+  STATIC_REQUIRE(plan::branch_end[2] == 3);
+  STATIC_REQUIRE(plan::next_branch[2] == 4);
+  STATIC_REQUIRE(plan::branch_end[4] == 11);
+  STATIC_REQUIRE(plan::next_branch[4] == plan::NO_BRANCH);
+
+  STATIC_REQUIRE(plan::close_parens[4] == 10);
+  STATIC_REQUIRE(plan::first_branch[4] == 5);
+  STATIC_REQUIRE(plan::branch_end[5] == 7);
+  STATIC_REQUIRE(plan::next_branch[5] == 8);
+  STATIC_REQUIRE(plan::branch_end[8] == 10);
+  STATIC_REQUIRE(plan::next_branch[8] == plan::NO_BRANCH);
 }
 
 TEST_CASE("wildcard: * non-matching") {
@@ -195,6 +212,16 @@ TEST_CASE("wildcard: alternatives with nested alternatives") {
   REQUIRE(wildcard_match<"(a|(bc|de))">("bc"));
   REQUIRE(wildcard_match<"(a|(bc|de))">("de"));
   REQUIRE_FALSE(wildcard_match<"(a|(bc|de))">("bd"));
+}
+
+TEST_CASE("wildcard: runtime nested alternatives after star use metadata matcher") {
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"*(a|(bc|de))*">::can_delegate);
+
+  auto const positive = std::string{"zzdezz"};
+  auto const negative = std::string{"zzbdzz"};
+
+  REQUIRE(wildcard_match<"*(a|(bc|de))*">(positive));
+  REQUIRE_FALSE(wildcard_match<"*(a|(bc|de))*">(negative));
 }
 
 TEST_CASE("wildcard: unbalanced alternatives") {
