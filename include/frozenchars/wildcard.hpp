@@ -324,6 +324,57 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
   return {ti == text.size(), ti};
 }
 
+/**
+ * @brief 単純 glob (`*`, `?`, リテラルのみ) を貪欲にマッチングする
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @return bool マッチした場合 true
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr bool wildcard_match_simple_glob(std::string_view text) noexcept {
+  auto ti = 0uz;
+  auto pi = 0uz;
+  auto star_pi = std::string_view::npos;
+  auto retry_ti = 0uz;
+
+  while (ti < text.size()) {
+    if (pi < PAT.size()) {
+      auto const c = PAT.data()[pi];
+      if (c == '*') {
+        while (pi < PAT.size() && PAT.data()[pi] == '*') {
+          ++pi;
+        }
+        star_pi = pi;
+        retry_ti = ti;
+        if (pi == PAT.size()) {
+          return true;
+        }
+        continue;
+      }
+      if (c == '?' || c == text[ti]) {
+        ++ti;
+        ++pi;
+        continue;
+      }
+    }
+
+    if (star_pi != std::string_view::npos) {
+      pi = star_pi;
+      ti = ++retry_ti;
+      continue;
+    }
+
+    return false;
+  }
+
+  while (pi < PAT.size() && PAT.data()[pi] == '*') {
+    ++pi;
+  }
+
+  return pi == PAT.size();
+}
+
 } // namespace detail
 
 /**
@@ -337,15 +388,19 @@ template <FrozenString PAT>
     return frozen_regex<regex_pat>::contains(text);
   }
 
-  // 単純パターン高速パス: リテラル + '?' のみ
-  constexpr auto is_simple = []() consteval {
-    // エスケープを含むパターンは単純パス非対象（simple_match は \\ 未対応）
+  constexpr auto is_simple_glob = []() consteval {
     for (auto i = 0uz; i < PAT.size(); ++i) {
       auto const c = PAT.data()[i];
-      if (c == '\\' || c == '*' || c == '[' || c == '(') return false;
+      if (c == '[' || c == '(' || c == '\\') {
+        return false;
+      }
     }
     return true;
   }();
+
+  if constexpr (is_simple_glob) {
+    return detail::wildcard_match_simple_glob<PAT>(text);
+  }
 
   // エスケープ文字の有無
   constexpr auto has_escape = []() consteval {
@@ -354,15 +409,6 @@ template <FrozenString PAT>
     }
     return false;
   }();
-
-  if constexpr (is_simple) {
-    if (text.size() != PAT.size()) return false;
-    for (auto i = 0uz; i < PAT.size(); ++i) {
-      if (PAT.data()[i] == '?') continue;
-      if (text[i] != PAT.data()[i]) return false;
-    }
-    return true;
-  }
 
   // 早期リジェクト: エスケープ文字を含む場合はスキップ（正しい位置計算が複雑なため）
   if constexpr (!has_escape) {

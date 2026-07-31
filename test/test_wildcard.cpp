@@ -19,6 +19,14 @@ TEST_CASE("wildcard: basic * matching") {
   REQUIRE(wildcard_match<"a*c">("aabbbbbc"));
 }
 
+TEST_CASE("wildcard: simple glob greedy matcher") {
+  REQUIRE(detail::wildcard_match_simple_glob<"a*b?c">("axbyc"));
+  REQUIRE(detail::wildcard_match_simple_glob<"*suffix">("prefix_suffix"));
+  REQUIRE(detail::wildcard_match_simple_glob<"file-??.txt">("file-ab.txt"));
+  REQUIRE_FALSE(detail::wildcard_match_simple_glob<"a*b?c">("axbc"));
+  REQUIRE_FALSE(detail::wildcard_match_simple_glob<"file-??.txt">("file-a.txt"));
+}
+
 TEST_CASE("wildcard: * non-matching") {
   REQUIRE_FALSE(wildcard_match<"a*c">("ab"));
   REQUIRE_FALSE(wildcard_match<"a*c">("abxd"));
