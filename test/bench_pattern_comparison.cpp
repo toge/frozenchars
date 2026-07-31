@@ -154,6 +154,7 @@ int main(int argc, char** argv) {
   wc_results.push_back(measure("wc: med(8) miss",                [&]{ g_sink += wildcard_match<wc_med_alt>("CONNECT"); }, iters));
   wc_results.push_back(measure("wc: path(4) '/api/v1/users'",    [&]{ g_sink += wildcard_match<wc_path>("/api/v1/users"); }, iters));
   wc_results.push_back(measure("wc: path(4) miss",               [&]{ g_sink += wildcard_match<wc_path>("/api/v1/other"); }, iters));
+  wc_results.push_back(measure("wc: alt prefix miss",            [&]{ g_sink += wildcard_match<wc_path>("/api/v1/other"); }, iters));
   wc_results.push_back(measure("wc: cls[abc] 'a' hit",           [&]{ g_sink += wildcard_match<wc_cls>("a"); }, iters));
   wc_results.push_back(measure("wc: cls[abc] miss",              [&]{ g_sink += wildcard_match<wc_cls>("d"); }, iters));
   wc_results.push_back(measure("wc: cls[a-m] 'a' hit",           [&]{ g_sink += wildcard_match<wc_cls_wide>("a"); }, iters));
