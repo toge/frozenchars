@@ -596,7 +596,19 @@ template <FrozenString PAT>
   constexpr auto starts_with_star = PAT.size() > 0 && PAT.data()[0] == '*';
 
   if constexpr (starts_with_star) {
-    return wildcard_find_shortest_match_from<PAT>(text, search_from);
+    if (auto const result = wildcard_find_shortest_match_from<PAT>(text, search_from)) {
+      return result;
+    }
+
+    if (search_from < text.size()) {
+      for (auto candidate = search_from + 1; candidate <= text.size(); ++candidate) {
+        if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+          return result;
+        }
+      }
+    }
+
+    return std::nullopt;
   }
 
   if constexpr (prefix_length > 0) {

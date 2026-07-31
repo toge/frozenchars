@@ -402,6 +402,21 @@ TEST_CASE("wildcard_find_all: character sets") {
   REQUIRE(i == 3);
 }
 
+TEST_CASE("wildcard_find: leading star alternatives skip empty current-start match") {
+  auto const r = wildcard_find<"*(a|)">(std::string_view{"ba"});
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "a");
+}
+
+TEST_CASE("wildcard_find_all: leading star alternatives keep later non-empty matches") {
+  auto expected = std::array{"a", "a"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"*(a|)">(std::string_view{"baba"})) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 2);
+}
+
 TEST_CASE("wildcard_find_all: alternatives") {
   auto expected = std::array{"ab", "cd"};
   auto i = 0;
