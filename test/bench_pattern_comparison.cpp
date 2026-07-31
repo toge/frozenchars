@@ -103,6 +103,8 @@ int main(int argc, char** argv) {
   constexpr auto wc_small_alt = FrozenString{"(GET|POST|PUT|DELETE)"};
   constexpr auto wc_med_alt   = FrozenString{"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE)"};
   constexpr auto wc_path      = FrozenString{"(/api/v1/users|/api/v1/posts|/api/v1/comments|/api/v1/tags)"};
+  constexpr auto wc_nset_abc_de = FrozenString{"[!abc]de"};
+  constexpr auto wc_prefix_alt  = FrozenString{"prefix_(ab|cde)_suffix"};
   constexpr auto wc_cls       = FrozenString{"[abc]"};
   constexpr auto wc_cls_wide  = FrozenString{"[a-m]"};
 
@@ -154,7 +156,10 @@ int main(int argc, char** argv) {
   wc_results.push_back(measure("wc: med(8) miss",                [&]{ g_sink += wildcard_match<wc_med_alt>("CONNECT"); }, iters));
   wc_results.push_back(measure("wc: path(4) '/api/v1/users'",    [&]{ g_sink += wildcard_match<wc_path>("/api/v1/users"); }, iters));
   wc_results.push_back(measure("wc: path(4) miss",               [&]{ g_sink += wildcard_match<wc_path>("/api/v1/other"); }, iters));
-  wc_results.push_back(measure("wc: alt prefix miss",            [&]{ g_sink += wildcard_match<wc_path>("/api/v1/other"); }, iters));
+  wc_results.push_back(measure("wc: cls[!abc] 'x' hit",          [&]{ g_sink += wildcard_match<wc_nset_abc_de>("xde"); }, iters));
+  wc_results.push_back(measure("wc: cls[!abc] miss",             [&]{ g_sink += wildcard_match<wc_nset_abc_de>("cde"); }, iters));
+  wc_results.push_back(measure("wc: prefix_(ab|cde)_suffix hit", [&]{ g_sink += wildcard_match<wc_prefix_alt>("prefix_ab_suffix"); }, iters));
+  wc_results.push_back(measure("wc: prefix_(ab|cde)_suffix miss",[&]{ g_sink += wildcard_match<wc_prefix_alt>("prefix_ef_suffix"); }, iters));
   wc_results.push_back(measure("wc: cls[abc] 'a' hit",           [&]{ g_sink += wildcard_match<wc_cls>("a"); }, iters));
   wc_results.push_back(measure("wc: cls[abc] miss",              [&]{ g_sink += wildcard_match<wc_cls>("d"); }, iters));
   wc_results.push_back(measure("wc: cls[a-m] 'a' hit",           [&]{ g_sink += wildcard_match<wc_cls_wide>("a"); }, iters));
