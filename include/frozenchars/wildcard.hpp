@@ -78,6 +78,7 @@ private:
     std::array<size_t, PAT.size()> first_branch{};
     std::array<size_t, PAT.size()> branch_end{};
     std::array<size_t, PAT.size()> next_branch{};
+    size_t fixed_prefix_length = 0;
   };
 
   [[nodiscard]] static consteval auto read_char_class_token(size_t i, size_t close) noexcept -> std::pair<unsigned char, size_t> {
@@ -205,6 +206,14 @@ private:
       data.next_branch[branch_start] = PAT.size();
     }
 
+    while (data.fixed_prefix_length < PAT.size()) {
+      auto const c = PAT.data()[data.fixed_prefix_length];
+      if (c == '*' || c == '?' || c == '[' || c == '(' || c == '\\') {
+        break;
+      }
+      ++data.fixed_prefix_length;
+    }
+
     return data;
   }
 
@@ -219,6 +228,7 @@ public:
   static constexpr auto branch_end = data.branch_end;
   static constexpr auto branch_next = data.next_branch;
   static constexpr auto next_branch = branch_next;
+  static constexpr auto fixed_prefix_length = data.fixed_prefix_length;
 };
 
 /**
@@ -479,6 +489,138 @@ template <FrozenString PAT>
   return pi == PAT.size();
 }
 
+struct find_result {
+  size_t start;
+  size_t end;
+};
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_shortest_match_from(std::string_view text, size_t start) noexcept
+  -> std::optional<find_result> {
+  auto const r = wildcard_match_impl<PAT>(text, start, 0, PAT.size(), true);
+  if (r.matched && r.pos > start) {
+    return find_result{start, r.pos};
+  }
+  return std::nullopt;
+}
+
+template <FrozenString PAT>
+[[nodiscard]] consteval auto wildcard_simple_glob_leading_literal_anchor() noexcept -> find_result {
+  auto start = 0uz;
+  while (start < PAT.size() && PAT.data()[start] == '*') {
+    ++start;
+  }
+
+  auto end = start;
+  while (end < PAT.size() && PAT.data()[end] != '*' && PAT.data()[end] != '?') {
+    ++end;
+  }
+
+  return find_result{start, end};
+}
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_simple_glob_from(std::string_view text, size_t search_from) noexcept
+  -> std::optional<find_result> {
+  if constexpr (PAT.size() == 0) {
+    return std::nullopt;
+  }
+
+  constexpr auto prefix_length = wildcard_plan<PAT>::fixed_prefix_length;
+  constexpr auto starts_with_star = PAT.size() > 0 && PAT.data()[0] == '*';
+
+  if constexpr (prefix_length > 0) {
+    constexpr auto prefix = std::string_view{PAT.data(), prefix_length};
+
+    for (auto candidate = text.find(prefix, search_from);
+         candidate != std::string_view::npos;
+         candidate = text.find(prefix, candidate + 1)) {
+      if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+        return result;
+      }
+    }
+    return std::nullopt;
+  }
+
+  if constexpr (starts_with_star) {
+    constexpr auto anchor = wildcard_simple_glob_leading_literal_anchor<PAT>();
+    if constexpr (anchor.end > anchor.start) {
+      auto const literal = std::string_view{PAT.data() + anchor.start, anchor.end - anchor.start};
+      if (text.find(literal, search_from) == std::string_view::npos) {
+        return std::nullopt;
+      }
+    }
+    return wildcard_find_shortest_match_from<PAT>(text, search_from);
+  }
+
+  for (auto candidate = search_from; candidate <= text.size(); ++candidate) {
+    if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+      return result;
+    }
+  }
+
+  return std::nullopt;
+}
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_simple_glob(std::string_view text) noexcept
+  -> std::optional<std::string_view> {
+  if (auto const result = wildcard_find_simple_glob_from<PAT>(text, 0)) {
+    return text.substr(result->start, result->end - result->start);
+  }
+  return std::nullopt;
+}
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_from(std::string_view text, size_t search_from) noexcept
+  -> std::optional<find_result> {
+  if constexpr (PAT.size() == 0) {
+    return std::nullopt;
+  }
+
+  constexpr auto is_simple_glob = []() consteval {
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      auto const c = PAT.data()[i];
+      if (c == '[' || c == '(' || c == '\\') {
+        return false;
+      }
+    }
+    return true;
+  }();
+
+  if constexpr (is_simple_glob) {
+    return wildcard_find_simple_glob_from<PAT>(text, search_from);
+  }
+
+  constexpr auto prefix_length = wildcard_plan<PAT>::fixed_prefix_length;
+  constexpr auto starts_with_star = PAT.size() > 0 && PAT.data()[0] == '*';
+
+  if constexpr (starts_with_star) {
+    return wildcard_find_shortest_match_from<PAT>(text, search_from);
+  }
+
+  if constexpr (prefix_length > 0) {
+    constexpr auto prefix = std::string_view{PAT.data(), prefix_length};
+
+    for (auto candidate = text.find(prefix, search_from);
+         candidate != std::string_view::npos;
+         candidate = text.find(prefix, candidate + 1)) {
+      if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+        return result;
+      }
+    }
+    return std::nullopt;
+  }
+
+  for (auto candidate = search_from; candidate <= text.size(); ++candidate) {
+    if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+      return result;
+    }
+  }
+
+  return std::nullopt;
+}
+
 } // namespace detail
 
 /**
@@ -621,11 +763,8 @@ template <FrozenString PAT, size_t M>
  */
 template <FrozenString PAT>
 [[nodiscard]] constexpr std::optional<std::string_view> wildcard_find(std::string_view text) noexcept {
-  for (auto i = 0uz; i <= text.size(); ++i) {
-    auto const r = detail::wildcard_match_impl<PAT>(text, i, 0, PAT.size(), true);
-    if (r.matched && r.pos > i) {
-      return text.substr(i, r.pos - i);
-    }
+  if (auto const result = detail::wildcard_find_from<PAT>(text, 0)) {
+    return text.substr(result->start, result->end - result->start);
   }
   return std::nullopt;
 }
@@ -653,15 +792,11 @@ template <FrozenString PAT>
 
     iterator& operator++() noexcept {
       auto search_from = end_;
-      while (search_from <= text_.size()) {
-        auto const r = detail::wildcard_match_impl<PAT>(text_, search_from, 0, PAT.size(), true);
-        if (r.matched && r.pos > search_from) {
-          start_ = search_from;
-          end_ = r.pos;
-          done_ = false;
-          return *this;
-        }
-        ++search_from;
+      if (auto const result = detail::wildcard_find_from<PAT>(text_, search_from)) {
+        start_ = result->start;
+        end_ = result->end;
+        done_ = false;
+        return *this;
       }
       done_ = true;
       return *this;

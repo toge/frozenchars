@@ -71,6 +71,16 @@ TEST_CASE("wildcard: nested alternative metadata keeps branch ends separate from
   STATIC_REQUIRE(plan::next_branch[8] == plan::NO_BRANCH);
 }
 
+TEST_CASE("wildcard: precomputed fixed prefix metadata") {
+  using literal_plan = detail::wildcard_plan<"abc*de">;
+  using star_plan = detail::wildcard_plan<"*abc">;
+  using set_plan = detail::wildcard_plan<"ab[cd]e">;
+
+  STATIC_REQUIRE(literal_plan::fixed_prefix_length == 3);
+  STATIC_REQUIRE(star_plan::fixed_prefix_length == 0);
+  STATIC_REQUIRE(set_plan::fixed_prefix_length == 2);
+}
+
 TEST_CASE("wildcard: * non-matching") {
   REQUIRE_FALSE(wildcard_match<"a*c">("ab"));
   REQUIRE_FALSE(wildcard_match<"a*c">("abxd"));
@@ -249,6 +259,12 @@ TEST_CASE("wildcard_find: simple glob keeps shortest non-empty match") {
   auto const r = wildcard_find<"*world">("hello world");
   REQUIRE(r.has_value());
   REQUIRE(*r == "hello world");
+}
+
+TEST_CASE("wildcard_find: simple glob helper keeps shortest non-empty match") {
+  auto const r = detail::wildcard_find_simple_glob<"a*">("baaa");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "a");
 }
 
 TEST_CASE("wildcard_find: first start wins even for greedy-capable patterns") {
