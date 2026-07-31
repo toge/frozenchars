@@ -80,7 +80,8 @@
 
 `find` 系 API は現在、各開始位置から一般 matcher を再試行している。これを以下の方針で減らす。
 
-- 単純 glob では greedy matcher を再利用する
+- 単純 glob では greedy 判定ロジックをそのまま最長一致に使うのではなく、**開始位置の候補絞り込み** と **その開始位置での最短非空終端の決定** を分ける
+- `wildcard_find` / `wildcard_find_all` では、同一開始位置に対しては **最初に成立する非空終端** を採用し、`wildcard_match` 用の最長寄り greedy 挙動をそのまま露出させない
 - 固定プレフィックスを持つパターンでは、先頭候補を文字単位で総当たりせず、プレフィックス一致位置だけを候補にする
 - 一般 matcher のメタデータを共有し、`match` と `find` 系でパターン解析ロジックを重複させない
 
@@ -99,8 +100,8 @@
   - 単純 glob が greedy path に入っても既存結果が変わらないこと
   - `wildcard_find` / `wildcard_find_all` がプレフィックス最適化後も同じ結果を返すこと
   - 不完全な `[` / `(` を含むパターンの既存挙動が維持されること
-- `bench_wildcard`
-- `bench_pattern_comparison`
+- `bench_wildcard` に `wildcard_find` / `wildcard_find_all` のケースを追加する
+- `bench_pattern_comparison` は既存どおり `wildcard_match` の比較確認に使う
 - 改善確認の主対象は `a*b` 系、文字集合、否定集合、alternatives、`*.[hc](pp|)`、および `find` 系に追加する回帰ケースとする
 
 ## 実装順
