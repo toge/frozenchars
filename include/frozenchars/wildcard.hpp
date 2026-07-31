@@ -3,6 +3,7 @@
 #include "string.hpp"
 #include "frozen_regex.hpp"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
@@ -51,6 +52,184 @@ template <FrozenString PAT>
   }
   return (depth == 0) ? i - 1 : PAT.size();
 }
+
+/**
+ * @brief 文字集合用の 256 エントリ事前計算テーブル
+ */
+template <FrozenString PAT>
+struct wildcard_char_class_table {
+  std::array<bool, 256> entries{};
+
+  [[nodiscard]] constexpr bool operator[](unsigned char ch) const noexcept {
+    return entries[ch];
+  }
+};
+
+/**
+ * @brief wildcard 一般 matcher 用の事前計算メタデータ
+ */
+template <FrozenString PAT>
+struct wildcard_plan {
+private:
+  struct metadata {
+    std::array<size_t, PAT.size()> close_brackets{};
+    std::array<size_t, PAT.size()> close_parens{};
+    std::array<wildcard_char_class_table<PAT>, PAT.size()> char_class_tables{};
+    std::array<size_t, PAT.size()> first_branch{};
+    std::array<size_t, PAT.size()> branch_end{};
+    std::array<size_t, PAT.size()> next_branch{};
+    size_t fixed_prefix_length = 0;
+  };
+
+  [[nodiscard]] static consteval auto read_char_class_token(size_t i, size_t close) noexcept -> std::pair<unsigned char, size_t> {
+    if (PAT.data()[i] == '\\' && i + 1 < close) {
+      return {static_cast<unsigned char>(PAT.data()[i + 1]), i + 2};
+    }
+    return {static_cast<unsigned char>(PAT.data()[i]), i + 1};
+  }
+
+  [[nodiscard]] static consteval auto make_metadata() noexcept -> metadata {
+    auto data = metadata{};
+
+    for (auto& pos : data.close_brackets) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.close_parens) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.first_branch) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.branch_end) {
+      pos = PAT.size();
+    }
+    for (auto& pos : data.next_branch) {
+      pos = PAT.size();
+    }
+
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] == '[') {
+        data.close_brackets[i] = find_matching_close_bracket<PAT>(i);
+      }
+      if (PAT.data()[i] == '(') {
+        data.close_parens[i] = find_matching_close_paren<PAT>(i);
+      }
+    }
+
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] != '[') {
+        continue;
+      }
+
+      auto const close = data.close_brackets[i];
+      if (close >= PAT.size()) {
+        continue;
+      }
+
+      auto negated = false;
+      auto si = i + 1uz;
+      if (si < close && PAT.data()[si] == '!') {
+        negated = true;
+        ++si;
+      }
+
+      auto& table = data.char_class_tables[i].entries;
+      if (negated) {
+        for (auto& entry : table) {
+          entry = true;
+        }
+      }
+
+      for (auto j = si; j < close; ) {
+        auto const [lc, next_j] = read_char_class_token(j, close);
+        auto const is_range_token = PAT.data()[j] != '\\' && lc == static_cast<unsigned char>('-') && j != si && next_j < close;
+
+        if (next_j < close && PAT.data()[next_j] == '-' && !is_range_token) {
+          auto const dash_i = next_j;
+          if (dash_i + 1 < close) {
+            auto const [rc, after_range] = read_char_class_token(dash_i + 1, close);
+            if (lc <= rc) {
+              for (auto ch = static_cast<size_t>(lc); ch <= static_cast<size_t>(rc); ++ch) {
+                table[ch] = !negated;
+                if (ch == static_cast<size_t>(rc)) {
+                  break;
+                }
+              }
+            }
+            j = after_range;
+            continue;
+          }
+        }
+
+        table[lc] = !negated;
+        j = next_j;
+      }
+    }
+
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      if (PAT.data()[i] != '(') {
+        continue;
+      }
+
+      auto const close = data.close_parens[i];
+      if (close >= PAT.size()) {
+        continue;
+      }
+
+      data.first_branch[i] = i + 1;
+
+      auto branch_start = i + 1uz;
+      auto depth = 0;
+
+      for (auto j = branch_start; j < close; ++j) {
+        auto const bc = PAT.data()[j];
+        if (bc == '\\') {
+          ++j;
+          continue;
+        }
+        if (bc == '(') {
+          ++depth;
+          continue;
+        }
+        if (bc == ')') {
+          --depth;
+          continue;
+        }
+        if (bc == '|' && depth == 0) {
+          data.branch_end[branch_start] = j;
+          data.next_branch[branch_start] = j + 1;
+          branch_start = j + 1;
+        }
+      }
+
+      data.branch_end[branch_start] = close;
+      data.next_branch[branch_start] = PAT.size();
+    }
+
+    while (data.fixed_prefix_length < PAT.size()) {
+      auto const c = PAT.data()[data.fixed_prefix_length];
+      if (c == '*' || c == '?' || c == '[' || c == '(' || c == '\\') {
+        break;
+      }
+      ++data.fixed_prefix_length;
+    }
+
+    return data;
+  }
+
+  static constexpr auto data = make_metadata();
+
+public:
+  static constexpr auto NO_BRANCH = PAT.size();
+  static constexpr auto close_brackets = data.close_brackets;
+  static constexpr auto close_parens = data.close_parens;
+  static constexpr auto char_class_tables = data.char_class_tables;
+  static constexpr auto first_branch = data.first_branch;
+  static constexpr auto branch_end = data.branch_end;
+  static constexpr auto branch_next = data.next_branch;
+  static constexpr auto next_branch = branch_next;
+  static constexpr auto fixed_prefix_length = data.fixed_prefix_length;
+};
 
 /**
  * @brief wildcard パターンを frozen_regex に委譲するためのヘルパ
@@ -211,57 +390,11 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
     // Set: [abc], [!abc], [a-z], [-abc], [abc-], [a\\-z]
     if (c == '[') {
-      auto close = find_matching_close_bracket<PAT>(pi);
-      if (close < PAT.size() && close < pi_end) {
-        auto negated = false;
-        auto si = pi + 1uz;
-        if (si < close && PAT.data()[si] == '!') {
-          negated = true;
-          ++si;
-        }
-
+      auto const close = wildcard_plan<PAT>::close_brackets[pi];
+      if (close < pi_end) {
         if (ti >= text.size()) return {false, ti};
-        auto tc = text[ti];
-        auto in_set = false;
-
-        auto read_one = [&](size_t i) -> std::pair<char, size_t> {
-          if (PAT.data()[i] == '\\' && i + 1 < close) {
-            return {PAT.data()[i + 1], i + 2};
-          }
-          return {PAT.data()[i], i + 1};
-        };
-
-        for (auto i = si; i < close && !in_set; ) {
-          auto [lc, next_i] = read_one(i);
-
-          auto is_range = [&]() -> bool {
-            if (PAT.data()[i] == '\\') return false;
-            if (lc != '-') return false;
-            if (i == si) return false;
-            if (next_i >= close) return false;
-            return true;
-          };
-
-          if (next_i < close && PAT.data()[next_i] == '-' && !is_range()) {
-            auto dash_i = next_i;
-            if (PAT.data()[dash_i] != '\\' && dash_i + 1 < close) {
-              auto [rc, after_range] = read_one(dash_i + 1);
-              if (static_cast<unsigned char>(lc) <= static_cast<unsigned char>(tc) &&
-                  static_cast<unsigned char>(tc) <= static_cast<unsigned char>(rc)) {
-                in_set = true;
-              }
-              i = after_range;
-              continue;
-            }
-          }
-
-          if (lc == tc) {
-            in_set = true;
-          }
-          i = next_i;
-        }
-
-        if (negated) in_set = !in_set;
+        auto const tc = static_cast<unsigned char>(text[ti]);
+        auto const in_set = wildcard_plan<PAT>::char_class_tables[pi][tc];
         if (!in_set) return {false, ti};
 
         ++ti;
@@ -273,39 +406,20 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
     // Alternative: (branch1|branch2|...)
     if (c == '(') {
-      auto close = find_matching_close_paren<PAT>(pi);
-      if (close < PAT.size() && close < pi_end) {
+      auto const close = wildcard_plan<PAT>::close_parens[pi];
+      if (close < pi_end) {
         auto after_alt = close + 1uz;
 
-        auto branch_start = pi + 1uz;
-        auto depth = 0;
-
-        for (auto i = branch_start; i < close; ++i) {
-          auto bc = PAT.data()[i];
-          if (bc == '\\') { ++i; continue; }
-          if (bc == '(') { ++depth; continue; }
-          if (bc == ')') { --depth; continue; }
-          if (bc == '|' && depth == 0) {
-            auto br = wildcard_match_impl<PAT>(text, ti, branch_start, i, true);
-            if (br.matched) {
-              if (after_alt >= pi_end) {
-                if (partial || br.pos == text.size()) return br;
-              } else {
-                auto rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
-                if (rr.matched) return rr;
-              }
-            }
-            branch_start = i + 1uz;
-          }
-        }
-        // Last branch
-        {
-          auto br = wildcard_match_impl<PAT>(text, ti, branch_start, close, true);
+        for (auto branch = wildcard_plan<PAT>::first_branch[pi];
+             branch != wildcard_plan<PAT>::NO_BRANCH;
+             branch = wildcard_plan<PAT>::next_branch[branch]) {
+          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true);
           if (br.matched) {
             if (after_alt >= pi_end) {
               if (partial || br.pos == text.size()) return br;
             } else {
-              return wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              if (rr.matched) return rr;
             }
           }
         }
@@ -324,6 +438,201 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
   return {ti == text.size(), ti};
 }
 
+/**
+ * @brief 単純 glob (`*`, `?`, リテラルのみ) を貪欲にマッチングする
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @return bool マッチした場合 true
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr bool wildcard_match_simple_glob(std::string_view text) noexcept {
+  auto ti = 0uz;
+  auto pi = 0uz;
+  auto star_pi = std::string_view::npos;
+  auto retry_ti = 0uz;
+
+  while (ti < text.size()) {
+    if (pi < PAT.size()) {
+      auto const c = PAT.data()[pi];
+      if (c == '*') {
+        while (pi < PAT.size() && PAT.data()[pi] == '*') {
+          ++pi;
+        }
+        star_pi = pi;
+        retry_ti = ti;
+        if (pi == PAT.size()) {
+          return true;
+        }
+        continue;
+      }
+      if (c == '?' || c == text[ti]) {
+        ++ti;
+        ++pi;
+        continue;
+      }
+    }
+
+    if (star_pi != std::string_view::npos) {
+      pi = star_pi;
+      ti = ++retry_ti;
+      continue;
+    }
+
+    return false;
+  }
+
+  while (pi < PAT.size() && PAT.data()[pi] == '*') {
+    ++pi;
+  }
+
+  return pi == PAT.size();
+}
+
+struct find_result {
+  size_t start;
+  size_t end;
+};
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_shortest_match_from(std::string_view text, size_t start) noexcept
+  -> std::optional<find_result> {
+  auto const r = wildcard_match_impl<PAT>(text, start, 0, PAT.size(), true);
+  if (r.matched && r.pos > start) {
+    return find_result{start, r.pos};
+  }
+  return std::nullopt;
+}
+
+template <FrozenString PAT>
+[[nodiscard]] consteval auto wildcard_simple_glob_leading_literal_anchor() noexcept -> find_result {
+  auto start = 0uz;
+  while (start < PAT.size() && PAT.data()[start] == '*') {
+    ++start;
+  }
+
+  auto end = start;
+  while (end < PAT.size() && PAT.data()[end] != '*' && PAT.data()[end] != '?') {
+    ++end;
+  }
+
+  return find_result{start, end};
+}
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_simple_glob_from(std::string_view text, size_t search_from) noexcept
+  -> std::optional<find_result> {
+  if constexpr (PAT.size() == 0) {
+    return std::nullopt;
+  }
+
+  constexpr auto prefix_length = wildcard_plan<PAT>::fixed_prefix_length;
+  constexpr auto starts_with_star = PAT.size() > 0 && PAT.data()[0] == '*';
+
+  if constexpr (prefix_length > 0) {
+    constexpr auto prefix = std::string_view{PAT.data(), prefix_length};
+
+    for (auto candidate = text.find(prefix, search_from);
+         candidate != std::string_view::npos;
+         candidate = text.find(prefix, candidate + 1)) {
+      if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+        return result;
+      }
+    }
+    return std::nullopt;
+  }
+
+  if constexpr (starts_with_star) {
+    constexpr auto anchor = wildcard_simple_glob_leading_literal_anchor<PAT>();
+    if constexpr (anchor.end > anchor.start) {
+      auto const literal = std::string_view{PAT.data() + anchor.start, anchor.end - anchor.start};
+      if (text.find(literal, search_from) == std::string_view::npos) {
+        return std::nullopt;
+      }
+    }
+    return wildcard_find_shortest_match_from<PAT>(text, search_from);
+  }
+
+  for (auto candidate = search_from; candidate <= text.size(); ++candidate) {
+    if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+      return result;
+    }
+  }
+
+  return std::nullopt;
+}
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_simple_glob(std::string_view text) noexcept
+  -> std::optional<std::string_view> {
+  if (auto const result = wildcard_find_simple_glob_from<PAT>(text, 0)) {
+    return text.substr(result->start, result->end - result->start);
+  }
+  return std::nullopt;
+}
+
+template <FrozenString PAT>
+[[nodiscard]] constexpr auto wildcard_find_from(std::string_view text, size_t search_from) noexcept
+  -> std::optional<find_result> {
+  if constexpr (PAT.size() == 0) {
+    return std::nullopt;
+  }
+
+  constexpr auto is_simple_glob = []() consteval {
+    for (auto i = 0uz; i < PAT.size(); ++i) {
+      auto const c = PAT.data()[i];
+      if (c == '[' || c == '(' || c == '\\') {
+        return false;
+      }
+    }
+    return true;
+  }();
+
+  if constexpr (is_simple_glob) {
+    return wildcard_find_simple_glob_from<PAT>(text, search_from);
+  }
+
+  constexpr auto prefix_length = wildcard_plan<PAT>::fixed_prefix_length;
+  constexpr auto starts_with_star = PAT.size() > 0 && PAT.data()[0] == '*';
+
+  if constexpr (starts_with_star) {
+    if (auto const result = wildcard_find_shortest_match_from<PAT>(text, search_from)) {
+      return result;
+    }
+
+    if (search_from < text.size()) {
+      for (auto candidate = search_from + 1; candidate <= text.size(); ++candidate) {
+        if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+          return result;
+        }
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  if constexpr (prefix_length > 0) {
+    constexpr auto prefix = std::string_view{PAT.data(), prefix_length};
+
+    for (auto candidate = text.find(prefix, search_from);
+         candidate != std::string_view::npos;
+         candidate = text.find(prefix, candidate + 1)) {
+      if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+        return result;
+      }
+    }
+    return std::nullopt;
+  }
+
+  for (auto candidate = search_from; candidate <= text.size(); ++candidate) {
+    if (auto const result = wildcard_find_shortest_match_from<PAT>(text, candidate)) {
+      return result;
+    }
+  }
+
+  return std::nullopt;
+}
+
 } // namespace detail
 
 /**
@@ -337,15 +646,19 @@ template <FrozenString PAT>
     return frozen_regex<regex_pat>::contains(text);
   }
 
-  // 単純パターン高速パス: リテラル + '?' のみ
-  constexpr auto is_simple = []() consteval {
-    // エスケープを含むパターンは単純パス非対象（simple_match は \\ 未対応）
+  constexpr auto is_simple_glob = []() consteval {
     for (auto i = 0uz; i < PAT.size(); ++i) {
       auto const c = PAT.data()[i];
-      if (c == '\\' || c == '*' || c == '[' || c == '(') return false;
+      if (c == '[' || c == '(' || c == '\\') {
+        return false;
+      }
     }
     return true;
   }();
+
+  if constexpr (is_simple_glob) {
+    return detail::wildcard_match_simple_glob<PAT>(text);
+  }
 
   // エスケープ文字の有無
   constexpr auto has_escape = []() consteval {
@@ -354,15 +667,6 @@ template <FrozenString PAT>
     }
     return false;
   }();
-
-  if constexpr (is_simple) {
-    if (text.size() != PAT.size()) return false;
-    for (auto i = 0uz; i < PAT.size(); ++i) {
-      if (PAT.data()[i] == '?') continue;
-      if (text[i] != PAT.data()[i]) return false;
-    }
-    return true;
-  }
 
   // 早期リジェクト: エスケープ文字を含む場合はスキップ（正しい位置計算が複雑なため）
   if constexpr (!has_escape) {
@@ -471,11 +775,8 @@ template <FrozenString PAT, size_t M>
  */
 template <FrozenString PAT>
 [[nodiscard]] constexpr std::optional<std::string_view> wildcard_find(std::string_view text) noexcept {
-  for (auto i = 0uz; i <= text.size(); ++i) {
-    auto const r = detail::wildcard_match_impl<PAT>(text, i, 0, PAT.size(), true);
-    if (r.matched && r.pos > i) {
-      return text.substr(i, r.pos - i);
-    }
+  if (auto const result = detail::wildcard_find_from<PAT>(text, 0)) {
+    return text.substr(result->start, result->end - result->start);
   }
   return std::nullopt;
 }
@@ -503,15 +804,11 @@ template <FrozenString PAT>
 
     iterator& operator++() noexcept {
       auto search_from = end_;
-      while (search_from <= text_.size()) {
-        auto const r = detail::wildcard_match_impl<PAT>(text_, search_from, 0, PAT.size(), true);
-        if (r.matched && r.pos > search_from) {
-          start_ = search_from;
-          end_ = r.pos;
-          done_ = false;
-          return *this;
-        }
-        ++search_from;
+      if (auto const result = detail::wildcard_find_from<PAT>(text_, search_from)) {
+        start_ = result->start;
+        end_ = result->end;
+        done_ = false;
+        return *this;
       }
       done_ = true;
       return *this;

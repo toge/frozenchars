@@ -19,6 +19,68 @@ TEST_CASE("wildcard: basic * matching") {
   REQUIRE(wildcard_match<"a*c">("aabbbbbc"));
 }
 
+TEST_CASE("wildcard: simple glob greedy matcher") {
+  REQUIRE(detail::wildcard_match_simple_glob<"a*b?c">("axbyc"));
+  REQUIRE(detail::wildcard_match_simple_glob<"*suffix">("prefix_suffix"));
+  REQUIRE(detail::wildcard_match_simple_glob<"file-??.txt">("file-ab.txt"));
+  REQUIRE_FALSE(detail::wildcard_match_simple_glob<"a*b?c">("axbc"));
+  REQUIRE_FALSE(detail::wildcard_match_simple_glob<"file-??.txt">("file-a.txt"));
+}
+
+TEST_CASE("wildcard: precomputed bracket metadata") {
+  using plan = detail::wildcard_plan<"[!a-c\\-x]">;
+
+  STATIC_REQUIRE(plan::close_brackets[0] == 8);
+  STATIC_REQUIRE(plan::close_parens[0] == 9);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('a')]);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('b')]);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('-')]);
+  STATIC_REQUIRE_FALSE(plan::char_class_tables[0][static_cast<unsigned char>('x')]);
+  STATIC_REQUIRE(plan::char_class_tables[0][static_cast<unsigned char>('z')]);
+}
+
+TEST_CASE("wildcard: precomputed alternative metadata") {
+  using plan = detail::wildcard_plan<"(ab|cd|e(f|g))">;
+
+  STATIC_REQUIRE(plan::close_parens[0] == 13);
+  STATIC_REQUIRE(plan::close_parens[8] == 12);
+  STATIC_REQUIRE(plan::first_branch[0] == 1);
+  STATIC_REQUIRE(plan::next_branch[1] == 4);
+  STATIC_REQUIRE(plan::next_branch[4] == 7);
+  STATIC_REQUIRE(plan::next_branch[7] == plan::NO_BRANCH);
+  STATIC_REQUIRE(plan::branch_end[1] == 3);
+  STATIC_REQUIRE(plan::branch_end[4] == 6);
+  STATIC_REQUIRE(plan::branch_end[7] == 13);
+}
+
+TEST_CASE("wildcard: nested alternative metadata keeps branch ends separate from iteration sentinel") {
+  using plan = detail::wildcard_plan<"*(a|(bc|de))*">;
+
+  STATIC_REQUIRE(plan::close_parens[1] == 11);
+  STATIC_REQUIRE(plan::first_branch[1] == 2);
+  STATIC_REQUIRE(plan::branch_end[2] == 3);
+  STATIC_REQUIRE(plan::next_branch[2] == 4);
+  STATIC_REQUIRE(plan::branch_end[4] == 11);
+  STATIC_REQUIRE(plan::next_branch[4] == plan::NO_BRANCH);
+
+  STATIC_REQUIRE(plan::close_parens[4] == 10);
+  STATIC_REQUIRE(plan::first_branch[4] == 5);
+  STATIC_REQUIRE(plan::branch_end[5] == 7);
+  STATIC_REQUIRE(plan::next_branch[5] == 8);
+  STATIC_REQUIRE(plan::branch_end[8] == 10);
+  STATIC_REQUIRE(plan::next_branch[8] == plan::NO_BRANCH);
+}
+
+TEST_CASE("wildcard: precomputed fixed prefix metadata") {
+  using literal_plan = detail::wildcard_plan<"abc*de">;
+  using star_plan = detail::wildcard_plan<"*abc">;
+  using set_plan = detail::wildcard_plan<"ab[cd]e">;
+
+  STATIC_REQUIRE(literal_plan::fixed_prefix_length == 3);
+  STATIC_REQUIRE(star_plan::fixed_prefix_length == 0);
+  STATIC_REQUIRE(set_plan::fixed_prefix_length == 2);
+}
+
 TEST_CASE("wildcard: * non-matching") {
   REQUIRE_FALSE(wildcard_match<"a*c">("ab"));
   REQUIRE_FALSE(wildcard_match<"a*c">("abxd"));
@@ -162,20 +224,55 @@ TEST_CASE("wildcard: alternatives with nested alternatives") {
   REQUIRE_FALSE(wildcard_match<"(a|(bc|de))">("bd"));
 }
 
+TEST_CASE("wildcard: runtime nested alternatives after star use metadata matcher") {
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"*(a|(bc|de))*">::can_delegate);
+
+  auto const positive = std::string{"zzdezz"};
+  auto const negative = std::string{"zzbdzz"};
+
+  REQUIRE(wildcard_match<"*(a|(bc|de))*">(positive));
+  REQUIRE_FALSE(wildcard_match<"*(a|(bc|de))*">(negative));
+}
+
 TEST_CASE("wildcard: unbalanced alternatives") {
   // 対応の取れていない '(' はリテラルとして扱われる
   REQUIRE(wildcard_match<"(ab">("(ab"));
   REQUIRE_FALSE(wildcard_match<"(ab">("ab"));
-  
+
   // 入れ子の対応の取れていない '('
   REQUIRE(wildcard_match<"((ab">("((ab"));
   REQUIRE_FALSE(wildcard_match<"((ab">("(ab"));
+}
+
+TEST_CASE("wildcard: unbalanced bracket stays literal") {
+  REQUIRE(wildcard_match<"[ab">("[ab"));
+  REQUIRE_FALSE(wildcard_match<"[ab">("a"));
 }
 
 TEST_CASE("wildcard_find: basic * matching") {
   auto r = wildcard_find<"a*c">("xxabcxx");
   REQUIRE(r.has_value());
   REQUIRE(*r == "abc");
+}
+
+TEST_CASE("wildcard_find: simple glob keeps shortest non-empty match") {
+  auto const r = wildcard_find<"*world">("hello world");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "hello world");
+}
+
+TEST_CASE("wildcard_find: simple glob helper keeps shortest non-empty match") {
+  auto const r = detail::wildcard_find_simple_glob<"a*">("baaa");
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "a");
+}
+
+TEST_CASE("wildcard_find: first start wins even for greedy-capable patterns") {
+  auto const text = std::string_view{"baaa"};
+  auto const r = wildcard_find<"a*">(text);
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "a");
+  REQUIRE(r->data() == text.data() + 1);
 }
 
 TEST_CASE("wildcard_find: first match position") {
@@ -263,6 +360,15 @@ TEST_CASE("wildcard_find_all: non-overlapping") {
   REQUIRE(count == 2);
 }
 
+TEST_CASE("wildcard_find_all: simple glob keeps non-overlapping shortest matches") {
+  auto const expected = std::array{"aa", "aa"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"aa*">("aaaa")) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 2);
+}
+
 TEST_CASE("wildcard_find_all: edge cases") {
   auto count = 0;
   for ([[maybe_unused]] auto _ : wildcard_find_all<"">("")) ++count;
@@ -294,6 +400,21 @@ TEST_CASE("wildcard_find_all: character sets") {
     REQUIRE(sv == expected[i++]);
   }
   REQUIRE(i == 3);
+}
+
+TEST_CASE("wildcard_find: leading star alternatives skip empty current-start match") {
+  auto const r = wildcard_find<"*(a|)">(std::string_view{"ba"});
+  REQUIRE(r.has_value());
+  REQUIRE(*r == "a");
+}
+
+TEST_CASE("wildcard_find_all: leading star alternatives keep later non-empty matches") {
+  auto expected = std::array{"a", "a"};
+  auto i = 0;
+  for (auto sv : wildcard_find_all<"*(a|)">(std::string_view{"baba"})) {
+    REQUIRE(sv == expected[i++]);
+  }
+  REQUIRE(i == 2);
 }
 
 TEST_CASE("wildcard_find_all: alternatives") {

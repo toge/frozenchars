@@ -64,6 +64,78 @@ auto run_frozenchars(std::string_view text, std::string_view name,
   };
 }
 
+/** @brief frozenchars の wildcard_find を実行し計測する。
+    @tparam PAT ワイルドカードパターン (NTTP)
+    @param text 検索対象文字列
+    @param name 結果表示ラベル
+    @param iterations 反復回数
+    @return 計測結果 */
+template <FrozenString PAT>
+auto run_find_case(std::string_view text, std::string_view name,
+                   std::uint64_t iterations) -> bench_result {
+  for (auto i = std::uint64_t{0}; i < 500; ++i) {
+    auto const result = wildcard_find<PAT>(text);
+    g_sink += result ? result->size() : 0;
+  }
+
+  auto const begin = std::chrono::steady_clock::now();
+  for (auto i = std::uint64_t{0}; i < iterations; ++i) {
+    auto const result = wildcard_find<PAT>(text);
+    g_sink += result ? result->size() : 0;
+  }
+  auto const end = std::chrono::steady_clock::now();
+
+  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
+  auto const elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0;
+  auto const ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
+
+  return bench_result{
+    .name = name,
+    .iterations = iterations,
+    .total_ms = elapsed_ms,
+    .ns_per_iter = ns_per_iter,
+  };
+}
+
+/** @brief frozenchars の wildcard_find_all を実行し計測する。
+    @tparam PAT ワイルドカードパターン (NTTP)
+    @param text 検索対象文字列
+    @param name 結果表示ラベル
+    @param iterations 反復回数
+    @return 計測結果 */
+template <FrozenString PAT>
+auto run_find_all_case(std::string_view text, std::string_view name,
+                       std::uint64_t iterations) -> bench_result {
+  for (auto i = std::uint64_t{0}; i < 500; ++i) {
+    auto matched_size = std::size_t{0};
+    for (auto const sv : wildcard_find_all<PAT>(text)) {
+      matched_size += sv.size();
+    }
+    g_sink += matched_size;
+  }
+
+  auto const begin = std::chrono::steady_clock::now();
+  for (auto i = std::uint64_t{0}; i < iterations; ++i) {
+    auto matched_size = std::size_t{0};
+    for (auto const sv : wildcard_find_all<PAT>(text)) {
+      matched_size += sv.size();
+    }
+    g_sink += matched_size;
+  }
+  auto const end = std::chrono::steady_clock::now();
+
+  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
+  auto const elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0;
+  auto const ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
+
+  return bench_result{
+    .name = name,
+    .iterations = iterations,
+    .total_ms = elapsed_ms,
+    .ns_per_iter = ns_per_iter,
+  };
+}
+
 /** @brief wildcards ライブラリのマッチ関数を実行し計測する。
     @param text マッチ対象文字列
     @param pattern ワイルドカードパターン文字列
@@ -145,6 +217,71 @@ template <FrozenString PAT>
   return true;
 }
 
+/** @brief frozenchars の wildcard_find 結果を検証する。
+    @tparam PAT ワイルドカードパターン (NTTP)
+    @param text 検索対象文字列
+    @param expected 期待されるマッチ部分
+    @return 検証成功時に true */
+template <FrozenString PAT>
+[[nodiscard]] bool verify_find(std::string_view text, std::optional<std::string_view> expected) {
+  auto const result = wildcard_find<PAT>(text);
+  if (result != expected) {
+    std::cerr << "VERIFY FAIL: frozenchars wildcard_find<\""
+              << PAT.data() << "\">(\"" << text << "\") = ";
+    if (result) {
+      std::cerr << '"' << *result << '"';
+    } else {
+      std::cerr << "nullopt";
+    }
+    std::cerr << ", expected ";
+    if (expected) {
+      std::cerr << '"' << *expected << '"';
+    } else {
+      std::cerr << "nullopt";
+    }
+    std::cerr << "\n";
+    return false;
+  }
+  return true;
+}
+
+/** @brief frozenchars の wildcard_find_all 結果を検証する。
+    @tparam PAT ワイルドカードパターン (NTTP)
+    @param text 検索対象文字列
+    @param expected 期待されるマッチ列
+    @return 検証成功時に true */
+template <FrozenString PAT>
+[[nodiscard]] bool verify_find_all(std::string_view text, std::initializer_list<std::string_view> expected) {
+  auto index = std::size_t{0};
+  for (auto const sv : wildcard_find_all<PAT>(text)) {
+    if (index >= expected.size()) {
+      std::cerr << "VERIFY FAIL: frozenchars wildcard_find_all<\""
+                << PAT.data() << "\">(\"" << text << "\") produced extra match \""
+                << sv << "\"\n";
+      return false;
+    }
+
+    auto const expected_it = expected.begin() + static_cast<std::ptrdiff_t>(index);
+    if (sv != *expected_it) {
+      std::cerr << "VERIFY FAIL: frozenchars wildcard_find_all<\""
+                << PAT.data() << "\">(\"" << text << "\") match[" << index << "] = \""
+                << sv << "\", expected \"" << *expected_it << "\"\n";
+      return false;
+    }
+    ++index;
+  }
+
+  if (index != expected.size()) {
+    auto const expected_it = expected.begin() + static_cast<std::ptrdiff_t>(index);
+    std::cerr << "VERIFY FAIL: frozenchars wildcard_find_all<\""
+              << PAT.data() << "\">(\"" << text << "\") missing expected match \""
+              << *expected_it << "\"\n";
+    return false;
+  }
+
+  return true;
+}
+
 /** @brief wildcards ライブラリのマッチ結果を検証する。
     @param text マッチ対象文字列
     @param pattern ワイルドカードパターン文字列
@@ -206,6 +343,7 @@ int main(int argc, char** argv) {
   bool all_ok = true;
 
   constexpr auto pat_a_star_b = FrozenString{"a*b"};
+  constexpr auto pat_a_star = FrozenString{"a*"};
   constexpr auto pat_a_q_b = FrozenString{"a?b"};
   constexpr auto pat_set_abc_de = FrozenString{"[abc]de"};
   constexpr auto pat_nset_abc_de = FrozenString{"[!abc]de"};
@@ -239,6 +377,8 @@ int main(int argc, char** argv) {
   all_ok &= verify_frozen<pat_star>("", true);
   all_ok &= verify_frozen<pat_empty>("", true);
   all_ok &= verify_frozen<pat_empty>("a", false);
+  all_ok &= verify_find<pat_a_star_b>(long_text, std::optional<std::string_view>{std::string_view{long_text}});
+  all_ok &= verify_find_all<pat_a_star>("aaa", {"a", "a", "a"});
 
   // wildcards ライブラリの検証
   all_ok &= verify_wildcards(long_text, "a*b", true);
@@ -275,7 +415,7 @@ int main(int argc, char** argv) {
 
   // ベンチマーク実行
   auto results = std::vector<bench_result>{};
-  results.reserve(24);
+  results.reserve(40);
 
   // frozenchars のケース
   results.push_back(run_frozenchars<pat_a_star_b>(long_text, "fc: a*b (100c, match)", iterations));
@@ -296,6 +436,8 @@ int main(int argc, char** argv) {
   results.push_back(run_frozenchars<pat_star>("", "fc: * (empty)", iterations));
   results.push_back(run_frozenchars<pat_empty>("", "fc: empty (match)", iterations));
   results.push_back(run_frozenchars<pat_empty>("a", "fc: empty (nomatch)", iterations));
+  results.push_back(run_find_case<pat_a_star_b>(long_text, "fc-find: a*b", iterations));
+  results.push_back(run_find_all_case<pat_a_star>("aaa", "fc-find-all: a*", iterations));
 
   // wildcards ライブラリのケース
   results.push_back(run_wildcards(long_text, "a*b", "wc: a*b (100c, match)", iterations));
