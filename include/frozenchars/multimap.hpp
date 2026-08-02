@@ -45,12 +45,15 @@ struct multimap_index {
   }();
 
   // ソート位置 → 宣言順インデックス（sorted_key_views_[i] は key_views_[sorted_indices_[i]]）
+  // 同一キー内は宣言順を保証する全順序（安定ソートと同等）で並べる
   static constexpr std::array<std::size_t, size()> sorted_indices_ = [] {
     std::array<std::size_t, size()> order{};
     for (auto i = 0uz; i < size(); ++i) {
       order[i] = i;
     }
-    std::ranges::sort(order, [](auto a, auto b) { return key_views_[a] < key_views_[b]; });
+    std::ranges::sort(order, [](auto const a, auto const b) {
+      return key_views_[a] == key_views_[b] ? a < b : key_views_[a] < key_views_[b];
+    });
     return order;
   }();
 

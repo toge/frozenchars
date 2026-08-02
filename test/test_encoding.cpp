@@ -98,7 +98,7 @@ TEST_CASE("encoding: unescape_c extended escapes", "[encoding]") {
   STATIC_CHECK(unescape_c("\\x41\\x42"_fs).sv() == "AB");
   STATIC_CHECK(unescape_c("\\x1"_fs).sv() == "\x01");
   STATIC_CHECK(unescape_c("\\u3042"_fs).sv() == "あ");
-  STATIC_CHECK(unescape_c("\\U0001F600"_fs).sv() == "\U0001F600");
+  STATIC_CHECK(unescape_c("\\U0001F600"_fs).sv() == "\xF0\x9F\x98\x80");  // U+1F600 の UTF-8
   // 不正・範囲外シーケンスは保持（runtime 版は寛容）
   STATIC_CHECK(unescape_c("\\xZZ"_fs).sv() == "\\xZZ");
   STATIC_CHECK(unescape_c("\\uD800"_fs).sv() == "\\uD800");
