@@ -209,3 +209,60 @@ TEST_CASE("dedent(str)", "[string_ops]") {
   // 混在インデント
   STATIC_CHECK(dedent("  abc\n  \t  def"_fs).sv() == "abc\n\t  def");
 }
+
+TEST_CASE("levenshtein_distance", "[string_ops]") {
+  STATIC_CHECK(levenshtein_distance<"kitten"_fs, "sitting"_fs>() == 3);
+  STATIC_CHECK(levenshtein_distance<"git comit"_fs, "git commit"_fs>() == 1);
+  STATIC_CHECK(levenshtein_distance<"abc"_fs, "abc"_fs>() == 0);
+  STATIC_CHECK(levenshtein_distance<"abc"_fs, "xyz"_fs>() == 3);
+  STATIC_CHECK(levenshtein_distance("kitten"_fs, "sitting"_fs) == 3);
+  STATIC_CHECK(levenshtein_distance(""_fs, ""_fs) == 0);
+  STATIC_CHECK(levenshtein_distance("abc"_fs, "abc"_fs) == 0);
+}
+
+TEST_CASE("lcp", "[string_ops]") {
+  STATIC_CHECK(lcp<"kitten"_fs, "kitchen"_fs>().sv() == "kit");
+  STATIC_CHECK(lcp<"abc"_fs, "abd"_fs, "abx"_fs>().sv() == "ab");
+  STATIC_CHECK(lcp<"abc"_fs, "abc"_fs>().sv() == "abc");
+  STATIC_CHECK(lcp<"abc"_fs, "xyz"_fs>().sv() == "");
+  STATIC_CHECK(lcp<"abc"_fs>().sv() == "abc");
+  STATIC_CHECK(lcp<>().sv() == "");
+}
+
+TEST_CASE("levenshtein_distance mixed NTTP/runtime overload", "[string_ops]") {
+  STATIC_CHECK(levenshtein_distance<"kitten"_fs>("sitting") == 3);
+  STATIC_CHECK(levenshtein_distance<"kitten"_fs>("kitten") == 0);
+  STATIC_CHECK(levenshtein_distance<"abc"_fs>("") == 3);
+  STATIC_CHECK(levenshtein_distance<"abc"_fs>(std::string_view{"sitting"}) == 7);
+  STATIC_CHECK(levenshtein_distance<"git commit"_fs>(std::string_view{"git comit"}) == 1);
+}
+
+TEST_CASE("levenshtein_distance runtime string_view overload", "[string_ops]") {
+  STATIC_CHECK(levenshtein_distance(std::string_view{"kitten"}, std::string_view{"sitting"}) == 3);
+  STATIC_CHECK(levenshtein_distance(std::string_view{""}, std::string_view{"abc"}) == 3);
+  STATIC_CHECK(levenshtein_distance(std::string_view{"abc"}, std::string_view{"abc"}) == 0);
+  STATIC_CHECK(levenshtein_distance("kitten", "sitting") == 3);  // char[] は string_view へ変換
+}
+
+TEST_CASE("levenshtein_distance mixed falls back to heap for huge NTTP", "[string_ops]") {
+  constexpr auto long_x = repeat_char<3000, 'x'>();  // detail::k_levenshtein_stack_cap 超過 → ヒープ版
+  STATIC_CHECK(long_x.size() > detail::k_levenshtein_stack_cap);
+  static_assert(!noexcept(levenshtein_distance<long_x>(std::string_view{})));  // ヒープ版は noexcept でない
+  static_assert(noexcept(levenshtein_distance<"commit"_fs>(std::string_view{})));  // 小さい NTTP は noexcept
+  STATIC_CHECK(levenshtein_distance<long_x>("") == 3000);
+  STATIC_CHECK(levenshtein_distance<long_x>("x") == 2999);
+  STATIC_CHECK(levenshtein_distance<long_x>("xxxx") == 2996);
+  STATIC_CHECK(levenshtein_distance<"abc"_fs, 2>("abc") == 0);  // StackCap で小さい NTTP もヒープ版へ
+  static_assert(!noexcept(levenshtein_distance<"abc"_fs, 2>(std::string_view{})));
+  static_assert(noexcept(levenshtein_distance<"abc"_fs, 128>(std::string_view{})));
+}
+
+TEST_CASE("suggest nearest candidate for CLI typo", "[string_ops]") {
+  STATIC_CHECK(suggest<"commit", "status", "checkout", "branch">(std::string_view{"comit"}, 2) == "commit");
+  STATIC_CHECK(suggest<"commit", "status">(std::string_view{"commit"}, 2) == "commit");  // 完全一致
+  STATIC_CHECK(suggest<"commit", "status">(std::string_view{"comit"}, 1) == "commit");
+  STATIC_CHECK(suggest<"commit", "status">(std::string_view{"comit"}, 0) == std::nullopt);  // 閾値超過
+  STATIC_CHECK(suggest<"commit", "status">(std::string_view{"zzzzzzzz"}, 2) == std::nullopt);
+  STATIC_CHECK(suggest<>("x", 5) == std::nullopt);  // 候補なし
+  STATIC_CHECK(suggest<"cat", "bat">(std::string_view{"dat"}, 1) == "cat");  // 同距離は先頭優先
+}

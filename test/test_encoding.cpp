@@ -72,3 +72,36 @@ TEST_CASE("encoding: utf8 helpers") {
   STATIC_CHECK(escape_c("line\nvalue"_fs).sv() == "line\\nvalue");
   STATIC_CHECK(unescape_c("line\\nvalue"_fs).sv() == "line\nvalue");
 }
+
+TEST_CASE("encoding: escape_c extended control escapes", "[encoding]") {
+  STATIC_CHECK(escape_c("a\tb"_fs).sv() == "a\\tb");
+  STATIC_CHECK(escape_c("\a\b\f\v"_fs).sv() == "\\a\\b\\f\\v");
+  STATIC_CHECK(escape_c("a\x01\x7F"_fs).sv() == "a\\x01\\x7F");
+  STATIC_CHECK(escape_c("it's \"quoted\""_fs).sv() == "it\\'s \\\"quoted\\\"");
+}
+
+TEST_CASE("encoding: escape_c unicode to \\u / \\U", "[encoding]") {
+  STATIC_CHECK(escape_c("あ"_fs).sv() == "\\u3042");
+  STATIC_CHECK(escape_c("😀"_fs).sv() == "\\U0001F600");
+  STATIC_CHECK(escape_c("aあz"_fs).sv() == "a\\u3042z");
+  // 不正 UTF-8 バイトは \xHH
+  STATIC_CHECK(escape_c("\x80"_fs).sv() == "\\x80");
+}
+
+TEST_CASE("encoding: escape_c / unescape_c NTTP variants", "[encoding]") {
+  STATIC_CHECK(escape_c<"a\tb"_fs>().sv() == "a\\tb");
+  STATIC_CHECK(unescape_c<escape_c<"こんにちは 😀"_fs>()>().sv() == "こんにちは 😀");
+}
+
+TEST_CASE("encoding: unescape_c extended escapes", "[encoding]") {
+  STATIC_CHECK(unescape_c("\\a\\b\\f\\v"_fs).sv() == "\a\b\f\v");
+  STATIC_CHECK(unescape_c("\\x41\\x42"_fs).sv() == "AB");
+  STATIC_CHECK(unescape_c("\\x1"_fs).sv() == "\x01");
+  STATIC_CHECK(unescape_c("\\u3042"_fs).sv() == "あ");
+  STATIC_CHECK(unescape_c("\\U0001F600"_fs).sv() == "\U0001F600");
+  // 不正・範囲外シーケンスは保持（runtime 版は寛容）
+  STATIC_CHECK(unescape_c("\\xZZ"_fs).sv() == "\\xZZ");
+  STATIC_CHECK(unescape_c("\\uD800"_fs).sv() == "\\uD800");
+  STATIC_CHECK(unescape_c("\\U00110000"_fs).sv() == "\\U00110000");
+  STATIC_CHECK(unescape_c("\\u12"_fs).sv() == "\\u12");
+}

@@ -8,7 +8,9 @@
 #include <array>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <string_view>
+#include <vector>
 
 namespace frozenchars {
 
@@ -2192,6 +2194,209 @@ template <typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval dedent(T const& v) noexcept {
   return dedent(freeze(v));
+}
+
+namespace detail {
+
+/**
+ * @brief レーベンシュタイン距離の行バッファをスタック配列で持つ上限（要素数）
+ *
+ * 1 要素は std::size_t（8 バイト）。これを超えるとスタックオーバーフローの
+ * リスクがあるため、混合版はヒープ（std::vector）へフォールバックする。
+ */
+inline constexpr std::size_t k_levenshtein_stack_cap = 2048uz;
+
+/**
+ * @brief 2 つの文字列の編集距離（レーベンシュタイン距離）を DP で計算する
+ *
+ * @tparam Cap 1 行分のバッファ容量（max(長さa, 長さb) + 1 以上）
+ * @param a 一方の文字列
+ * @param b もう一方の文字列
+ * @return std::size_t 編集距離
+ */
+template <std::size_t Cap>
+[[nodiscard]] constexpr auto levenshtein_distance_impl(std::string_view const a, std::string_view const b) noexcept -> std::size_t {
+  auto prev = std::array<std::size_t, Cap>{};
+  auto curr = std::array<std::size_t, Cap>{};
+  for (auto j = 0uz; j <= b.size(); ++j) {
+    prev[j] = j;
+  }
+  for (auto i = 1uz; i <= a.size(); ++i) {
+    curr[0] = i;
+    for (auto j = 1uz; j <= b.size(); ++j) {
+      auto const cost = (a[i - 1] == b[j - 1]) ? 0uz : 1uz;
+      curr[j] = std::min(curr[j - 1] + 1, std::min(prev[j] + 1, prev[j - 1] + cost));
+    }
+    std::swap(prev, curr);
+  }
+  return prev[b.size()];
+}
+
+/**
+ * @brief 複数の FrozenString に共通する最長共通接頭辞の長さを求める
+ *
+ * @tparam Strs 対象文字列（FrozenString NTTP）
+ * @return std::size_t 最長共通接頭辞の長さ（空パックは 0）
+ */
+template <FrozenString... Strs>
+[[nodiscard]] consteval auto lcp_length() noexcept -> std::size_t {
+  if constexpr (sizeof...(Strs) == 0) {
+    return 0;
+  } else {
+    constexpr std::array views{ Strs.sv()... };
+    auto const min_len = std::min({Strs.sv().size()...});
+    for (auto i = 0uz; i < min_len; ++i) {
+      auto const c = views[0][i];
+      if (!((Strs.sv()[i] == c) && ...)) {
+        return i;
+      }
+    }
+    return min_len;
+  }
+}
+
+} // namespace detail
+
+/**
+ * @brief 2 つの FrozenString NTTP 間の編集距離（レーベンシュタイン距離）を計算する
+ *
+ * コマンドラインの誤字検出（"git comit" → "git commit" のサジェストなど）に利用できる。
+ *
+ * @tparam A 一方の文字列（FrozenString NTTP）
+ * @tparam B もう一方の文字列（FrozenString NTTP）
+ * @return std::size_t 編集距離
+ */
+template <FrozenString A, FrozenString B>
+[[nodiscard]] consteval auto levenshtein_distance() noexcept -> std::size_t {
+  return detail::levenshtein_distance_impl<std::max(A.size(), B.size()) + 1>(A.sv(), B.sv());
+}
+
+/**
+ * @brief 2 つの FrozenString 間の編集距離（レーベンシュタイン距離）を計算する（引数版）
+ *
+ * @tparam N 一方のバッファ長（終端含む）
+ * @tparam M もう一方のバッファ長（終端含む）
+ * @param a 一方の文字列
+ * @param b もう一方の文字列
+ * @return std::size_t 編集距離
+ */
+template <std::size_t N, std::size_t M>
+[[nodiscard]] auto consteval levenshtein_distance(FrozenString<N> const& a, FrozenString<M> const& b) noexcept -> std::size_t {
+  return detail::levenshtein_distance_impl<std::max(N, M) + 1>(a.sv(), b.sv());
+}
+
+/**
+ * @brief 2 つの文字列の編集距離（レーベンシュタイン距離）を計算する（実行時 string_view 版）
+ *
+ * コンパイル時引数が必要な consteval 版とは異なり、実行時の std::string_view を直接受け取れる。
+ * C++23 の constexpr std::vector により、コンパイル時にも実行時にも動作する。
+ *
+ * @param a 一方の文字列
+ * @param b もう一方の文字列
+ * @return std::size_t 編集距離
+ */
+[[nodiscard]] constexpr auto levenshtein_distance(std::string_view const a, std::string_view const b) -> std::size_t {
+  std::vector<std::size_t> prev(b.size() + 1);
+  std::vector<std::size_t> curr(b.size() + 1);
+  for (auto j = 0uz; j <= b.size(); ++j) {
+    prev[j] = j;
+  }
+  for (auto i = 1uz; i <= a.size(); ++i) {
+    curr[0] = i;
+    for (auto j = 1uz; j <= b.size(); ++j) {
+      auto const cost = (a[i - 1] == b[j - 1]) ? 0uz : 1uz;
+      curr[j] = std::min(curr[j - 1] + 1, std::min(prev[j] + 1, prev[j - 1] + cost));
+    }
+    std::swap(prev, curr);
+  }
+  return prev[b.size()];
+}
+
+/**
+ * @brief FrozenString NTTP と実行時文字列の編集距離（レーベンシュタイン距離）を計算する（混合版）
+ *
+ * 片方がコンパイル時既知なので、DP の行バッファを静的な std::array で持てる（ヒープ確保なし）。
+ * レーベンシュタイン距離は対称なので、実行時文字列を外側・NTTP を内側に回して行サイズを固定する。
+ *
+ * NTTP 文字列が StackCap を超える場合は、スタック配列ではオーバーフローしうるため
+ * 実行時版（std::vector、ヒープ確保）へ自動フォールバックする。その場合のみ noexcept が外れる。
+ *
+ * @tparam A 一方の文字列（FrozenString NTTP）
+ * @tparam StackCap 行バッファをスタック配列で持つ上限（要素数）。デフォルトは
+ *   detail::k_levenshtein_stack_cap。小さい NTTP でもヒープ版を強制できる。
+ * @param b もう一方の文字列（実行時）
+ * @return std::size_t 編集距離
+ */
+template <FrozenString A, std::size_t StackCap = detail::k_levenshtein_stack_cap>
+[[nodiscard]] constexpr auto levenshtein_distance(std::string_view const b) noexcept(A.size() + 1 <= StackCap)
+    -> std::size_t {
+  if constexpr (A.size() + 1 <= StackCap) {
+    return detail::levenshtein_distance_impl<A.size() + 1>(b, A.sv());
+  } else {
+    return levenshtein_distance(A.sv(), b);
+  }
+}
+
+/**
+ * @brief 実行時入力に最も近い候補文字列を返す（CLI 誤字サジェスト用）
+ *
+ * 各候補との編集距離を計算し、最小距離が max_distance 以下ならその候補を返す。
+ * 同距離の候補が複数ある場合は宣言順で最初のものを返す。
+ * 候補が空、または距離が閾値を超える場合は std::nullopt を返す。
+ *
+ * 候補は NTTP なので長さがコンパイル時既知 → 距離の下限（|長さ差|）による枝刈りが効く。
+ * 内部で呼ぶ levenshtein_distance はデフォルトの StackCap を使用する（候補はコマンド名程度の
+ * 短い文字列が前提で、ヒープフォールバックは実質発生しない）。
+ *
+ * @tparam Candidates 候補文字列（FrozenString NTTP）
+ * @param input 実行時の入力文字列（CLI 引数など）
+ * @param max_distance 許容する最大編集距離
+ * @return std::optional<std::string_view> 最も近い候補、該当なしは std::nullopt
+ */
+template <FrozenString... Candidates>
+[[nodiscard]] constexpr auto suggest(std::string_view const input, std::size_t const max_distance) noexcept(
+    ((Candidates.size() + 1 <= detail::k_levenshtein_stack_cap) && ...))
+    -> std::optional<std::string_view> {
+  std::optional<std::string_view> best;
+  std::optional<std::size_t> best_dist;
+  auto consider = [&]<FrozenString Candidate>() {
+    auto const candidate = std::string_view{Candidate.buffer.data(), Candidate.length};
+    auto const len_diff = input.size() > candidate.size() ? input.size() - candidate.size()
+                                                          : candidate.size() - input.size();
+    if (len_diff > max_distance) {
+      return;  // 距離は |長さ差| 以上なので、この候補は絶対に閾値を超える
+    }
+    auto const dist = levenshtein_distance<Candidate>(input);
+    if (dist <= max_distance && (!best_dist || dist < *best_dist)) {
+      best_dist = dist;
+      best = candidate;
+    }
+  };
+  (consider.template operator()<Candidates>(), ...);
+  return best;
+}
+
+/**
+ * @brief 複数の FrozenString に共通する最長共通接頭辞（Longest Common Prefix）を抽出する
+ *
+ * 空パックは空文字列、単一要素はその文字列自身を返す。
+ *
+ * @tparam Strs 対象文字列（FrozenString NTTP）
+ * @return FrozenString<L + 1> 最長共通接頭辞
+ */
+template <FrozenString... Strs>
+[[nodiscard]] consteval auto lcp() noexcept -> FrozenString<detail::lcp_length<Strs...>() + 1> {
+  constexpr auto LEN = detail::lcp_length<Strs...>();
+  auto res = FrozenString<LEN + 1>{};
+  if constexpr (sizeof...(Strs) > 0) {
+    constexpr std::array views{ Strs.sv()... };
+    for (auto i = 0uz; i < LEN; ++i) {
+      res.buffer[i] = views[0][i];
+    }
+  }
+  res.buffer[LEN] = '\0';
+  res.length = LEN;
+  return res;
 }
 
 }  // namespace frozenchars

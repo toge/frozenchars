@@ -1,5 +1,8 @@
 build/
 build-*/
+build_*/
+Testing/
+
 .worktrees/
 vcpkg_installed/
 a.out

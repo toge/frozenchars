@@ -44,10 +44,12 @@
 - [base64_encode（Base64エンコード）](#base64_encode（base64エンコド）)
 - [base64_decode（Base64デコード）](#base64_decode（base64デコド）)
 - [html_encode / html_decode（HTMLエンティティ変換）](#html_encode-html_decode（htmlエンティティ変換）)
+- [escape_c / unescape_c（C エスケープ変換）](#escape_c-unescape_c（c-エスケープ変換）)
 - [minify_html / minify_xml / minify_json / minify_yaml / minify_sql / minify_cypher（マークアップ / データ / クエリ 縮小）](#minify_html-minify_xml-minify_json-minify_yaml-minify_sql-minify_cypher（マクアップ-デタ-クエリ-縮小）)
 - [minify_lua（Lua / Luau 縮小）](#minify_lua（lua--luau-縮小）)
 - [linebreak（改行表現の相互変換）](#linebreak（改行表現の相互変換）)
 - [word_wrap（ワードラップ）](#word_wrap（ワドラップ）)
+- [levenshtein_distance / lcp（編集距離・最長共通接頭辞）](#levenshtein_distance-lcp（編集距離最長共通接頭辞）)
 - [文字種判定述語（is_alpha / is_digit / ...）](#文字種判定述語（is_alpha-is_digit-）)
 - [utf8_length（UTF-8 コードポイント数）](#utf8_length（utf-8-コドポイント数）)
 - [make_querystring（クエリ文字列生成）](#make_querystring（クエリ文字列生成）)
@@ -73,6 +75,8 @@
     - [contains_all — 複数キーの一括存在判定](#contains_all-—-複数キの一括存在判定)
     - [keys_in_declaration_order — 宣言順キー配列](#keys_in_declaration_order-—-宣言順キ配列)
     - [operator== / operator!= — 値ごとの等価比較](#operator-operator-—-値ごとの等価比較)
+  - [frozen_bimap（値逆引き付きマップ）](#frozen_bimap（値逆引き付きマップ）)
+  - [frozen_multimap（重複キー許容マップ）](#frozen_multimap（重複キー許容マップ）)
   - [frozen_trie_map（圧縮トライ マップ）](#frozen_trie_map（圧縮トライ-マップ）)
   - [frozen_map / frozen_trie_map / STL コンテナの選び方](#frozen_map--frozen_trie_map--stl-コンテナの選び方)
   - [parse_to_tuple（型列文字列 → std::tuple<...>）](#parse_to_tuple（型列文字列-→-stdtuple）)
@@ -768,6 +772,36 @@ auto constexpr v = "<test>"_fs | fops::html_encode | fops::html_decode;
 static_assert(v.sv() == "<test>");
 ```
 
+## `escape_c` / `unescape_c`（C エスケープ変換）
+
+`escape_c` は文字列を C エスケープシーケンスに変換し、`unescape_c` はその逆変換を行います。
+
+`escape_c` が変換する対象:
+
+- 制御文字 : `\a \b \f \n \r \t \v \0` と引用符 `\' \"`、バックスラッシュ `\\`
+- その他の非表示文字・不正 UTF-8 バイト : `\xHH`（16 進大文字）
+- 有効な UTF-8 シーケンス : 符号点に復号して `\uXXXX`（BMP）または `\UXXXXXXXX`（補助符号点）
+
+`unescape_c` は上記に加えて `\xHH`（1〜2 桁）を復号します。不正な `\u`/`\U`（サロゲート・範囲外）は
+そのまま保持します（NTTP 版はコンパイルエラーになります）。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(escape_c("a\tb"_fs).sv() == "a\\tb");
+static_assert(escape_c("あ"_fs).sv() == "\\u3042");
+static_assert(escape_c("😀"_fs).sv() == "\\U0001F600");
+
+static_assert(unescape_c("\\u3042"_fs).sv() == "あ");
+static_assert(unescape_c("\\x41"_fs).sv() == "A");
+
+// NTTP 版（コンパイル時のみ）
+static_assert(escape_c<"a\tb"_fs>().sv() == "a\\tb");
+static_assert(unescape_c<escape_c<"こんにちは"_fs>()>().sv() == "こんにちは");
+```
+
 ## `minify_html` / `minify_xml` / `minify_json` / `minify_yaml` / `minify_sql` / `minify_cypher`（マークアップ / データ / クエリ 縮小）
 
 HTML / XML / JSON / YAML / SQL / Cypher の各ソースをコンパイル時に縮小（minify）します。
@@ -1009,6 +1043,62 @@ static_assert(("a\nb"_fs | ops::indent<1, ' '>) == " a\n b"_fs);
 static_assert(dedent("  hello\n  world"_fs).sv() == "hello\nworld");
 static_assert(dedent("  hello\n    indented"_fs).sv() == "hello\n  indented");
 ```
+
+## `levenshtein_distance` / `lcp`（編集距離・最長共通接頭辞）
+
+`levenshtein_distance` は 2 つの文字列間の編集距離（挿入・削除・置換の最小回数）を返します。
+コマンドラインの誤字サジェスト（`"git comit"` → `"git commit"`）などに利用できます。
+
+`lcp` は複数の文字列に共通する最長共通接頭辞（Longest Common Prefix）を抽出します。
+空パックは空文字列、単一要素はその文字列自身を返します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// NTTP 版（コンパイル時）
+static_assert(levenshtein_distance<"kitten"_fs, "sitting"_fs>() == 3);
+static_assert(levenshtein_distance<"git comit"_fs, "git commit"_fs>() == 1);
+
+// 引数版（FrozenString）
+static_assert(levenshtein_distance("abc"_fs, "abc"_fs) == 0);
+
+// 混合版: 片方 NTTP・片方実行時
+//   小さい NTTP はスタック配列（ヒープ確保なし）で高速に計算し、
+//   NTTP が第 2 テンプレート引数 StackCap（デフォルト detail::k_levenshtein_stack_cap = 2048）を
+//   超えるとスタックオーバーフロー防止のため実行時版（std::vector、ヒープ確保）へ自動フォールバックする。
+static_assert(levenshtein_distance<"commit"_fs>(std::string_view{"comit"}) == 1);
+// 小さな NTTP でも StackCap を下げればヒープ版を強制できる
+static_assert(levenshtein_distance<"commit"_fs, 4>(std::string_view{"comit"}) == 1);
+
+// 実行時 string_view 版
+auto d = levenshtein_distance(std::string_view{"comit"}, std::string_view{"commit"});  // == 1
+
+// 最長共通接頭辞
+static_assert(lcp<"kitten"_fs, "kitchen"_fs>().sv() == "kit");
+static_assert(lcp<>().sv() == "");
+```
+
+### CLI 誤字サジェスト（`suggest`）
+
+コンパイル時既知の候補文字列の中から、実行時入力に最も近いものを返します。
+候補は NTTP なので長さがコンパイル時既知となり、距離の下限（|長さ差|）による枝刈りで
+無関係な候補の DP 計算をスキップします。距離が `max_distance` を超える候補は返しません。
+
+```cpp
+#include "frozenchars.hpp"
+#include <optional>
+#include <string_view>
+
+// argv[1] が "comit" の場合
+auto const input = std::string_view{argv[1]};
+if (auto const s = suggest<"commit", "status", "checkout", "branch", "rebase">(input, 2)) {
+  std::cout << "Did you mean '" << *s << "'?\n";  // → "Did you mean 'commit'?"
+}
+```
+
+候補が空・距離が閾値を超える場合は `std::nullopt` を返します。同距離の候補は宣言順で最初のものを返します。
 
 ## 文字種判定述語（`is_alpha` / `is_digit` / ...）
 
@@ -1684,6 +1774,63 @@ assert(a != make_frozen_map<int, "x"_fs, "y"_fs>(
 ```
 
 キー集合が異なる型同士では比較できません（コンパイルエラー）。
+
+### `frozen_bimap`（値逆引き付きマップ）
+
+`frozen_bimap` は `frozen_map` の全機能を継承し、値からキーへの逆引き（`by_value`）を追加したマップです。
+キー検索は `frozen_map` と同様の O(1) ハッシュ探索、逆引きは O(n) の線形走査で行います。
+逆引きは先頭一致（同じ値が複数ある場合は最初のキー）を返します。
+
+```cpp
+#include "frozenchars/bimap.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto status = make_frozen_bimap<int, "ok"_fs, "error"_fs, "retry"_fs>(
+  std::pair{"ok", 200}, std::pair{"error", 500}, std::pair{"retry", 429}
+);
+
+assert(status["ok"_fs] == 200);           // frozen_map 互換のキー検索
+assert(status.by_value(500) == "error");  // 値からキーへ逆引き
+assert(status.by_value(404) == std::nullopt);
+assert(status.contains_value(429));
+
+// kv リテラルからも構築できる（キーは型から抽出）
+auto status2 = make_frozen_bimap_kv<int,
+  kv{"ok", 200}, kv{"error", 500}
+>();
+```
+
+キーは重複できません（`frozen_bimap keys must be unique` でコンパイルエラー）。
+
+### `frozen_multimap`（重複キー許容マップ）
+
+`frozen_multimap` は同じキーを複数回宣言できるマップです。値は宣言順の配列に格納され、
+探索はソート済みキービューへの二分探索（O(log n)）で行います。
+`equal_range` で重複キー全体の範囲を取得でき、イテレータはソート順（キー昇順、同一キー内は宣言順）で走査します。
+
+Accept-Encoding ヘッダのような重複キーが出現し得るケースを扱うのに適しています。
+
+```cpp
+#include "frozenchars/multimap.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto enc = make_frozen_multimap<int, "gzip"_fs, "deflate"_fs, "gzip"_fs, "br"_fs>(
+  std::pair{"gzip", 1}, std::pair{"deflate", 2}, std::pair{"gzip", 3}, std::pair{"br", 4}
+);
+
+assert(enc.count("gzip") == 2);
+auto const [first, last] = enc.equal_range("gzip");
+for (auto it = first; it != last; ++it) {
+  // 重複キー "gzip" の値 1 と 3 を走査
+}
+
+assert(enc.at("gzip") == 1);  // 重複キーはソート順で最初の値を返す
+assert(enc.contains_all<"gzip"_fs, "br"_fs>());  // 複数キーの一括存在判定
+```
 
 ### `frozen_trie_map`（圧縮トライ マップ）
 

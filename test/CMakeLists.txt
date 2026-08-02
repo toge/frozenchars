@@ -176,6 +176,30 @@ assert_frozen_map_compile_fail(
 )
 
 assert_frozen_map_compile_fail(
+  NAME frozen_bimap_empty_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_bimap_empty_keys.cpp
+  EXPECTED_TEXT "frozen_bimap requires at least one key"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_bimap_duplicate_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_bimap_duplicate_keys.cpp
+  EXPECTED_TEXT "frozen_bimap keys must be unique"
+)
+
+assert_frozen_map_compile_fail(
+  NAME frozen_multimap_empty_keys
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_multimap_empty_keys.cpp
+  EXPECTED_TEXT "frozen_multimap requires at least one key"
+)
+
+assert_frozen_map_compile_fail(
+  NAME unescape_c_surrogate
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/unescape_c_surrogate.cpp
+  EXPECTED_TEXT "surrogate or out of range"
+)
+
+assert_frozen_map_compile_fail(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"

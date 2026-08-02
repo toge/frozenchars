@@ -1,0 +1,356 @@
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <concepts>
+#include <cstddef>
+#include <initializer_list>
+#include <optional>
+#include <ranges>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+
+#include "map.hpp"
+
+namespace frozenchars {
+
+namespace detail {
+
+/**
+ * @brief frozen_multimap 用の静的インデックス（宣言順キー + ソート済みビュー + 二分探索）
+ *
+ * frozen_map の lookup_index は重複キーで衝突ゼロのシード探索が破綻するため、
+ * マルチマップ専用に宣言順のキー配列とソート済みキー配列だけを持つ。
+ *
+ * @tparam Keys キー列（FrozenString NTTP、重複可）
+ */
+template <FrozenString... Keys>
+struct multimap_index {
+  static constexpr auto size() noexcept -> std::size_t { return sizeof...(Keys); }
+
+  // 宣言順のキービュー（values_ のインデックス空間と一致）
+  static constexpr std::array<std::string_view, size()> key_views_{
+    std::string_view{Keys.buffer.data(), Keys.length}...
+  };
+
+  // 辞書順にソートしたキービュー（lower_bound / upper_bound 用）
+  static constexpr std::array<std::string_view, size()> sorted_key_views_ = [] {
+    auto res = key_views_;
+    std::ranges::sort(res);
+    return res;
+  }();
+
+  // ソート位置 → 宣言順インデックス（sorted_key_views_[i] は key_views_[sorted_indices_[i]]）
+  static constexpr std::array<std::size_t, size()> sorted_indices_ = [] {
+    std::array<std::size_t, size()> order{};
+    for (auto i = 0uz; i < size(); ++i) {
+      order[i] = i;
+    }
+    std::ranges::sort(order, [](auto a, auto b) { return key_views_[a] < key_views_[b]; });
+    return order;
+  }();
+
+  // key 以上の最初のソート位置
+  [[nodiscard]] static constexpr auto first_pos(std::string_view key) noexcept -> std::size_t {
+    return static_cast<std::size_t>(std::ranges::lower_bound(sorted_key_views_, key) - sorted_key_views_.begin());
+  }
+  // key より大きい最初のソート位置
+  [[nodiscard]] static constexpr auto last_pos(std::string_view key) noexcept -> std::size_t {
+    return static_cast<std::size_t>(std::ranges::upper_bound(sorted_key_views_, key) - sorted_key_views_.begin());
+  }
+};
+
+} // namespace detail
+
+/**
+ * @brief 重複キーを許容する、キー固定の連想コンテナ（frozen multimap）
+ *
+ * キーは FrozenString NTTP で固定。同じキーを複数宣言でき、値は宣言順の配列に格納される。
+ * 探索はソート済みキービューへの二分探索で O(log n)、重複キーは [first, last) の範囲で返る。
+ * イテレータはソート順（キー昇順、同一キー内は宣言順）で走査する。
+ *
+ * @tparam T 値の型
+ * @tparam Keys キー列（FrozenString NTTP、重複可）
+ */
+template <typename T, FrozenString... Keys>
+class frozen_multimap {
+  static_assert(sizeof...(Keys) > 0, "frozen_multimap requires at least one key");
+
+public:
+  using key_type = std::string_view;
+  using mapped_type = T;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
+  using value_type = std::pair<std::string_view const, T>;
+  using reference = std::pair<std::string_view, T&>;
+  using const_reference = std::pair<std::string_view, T const&>;
+
+  /**
+   * @brief frozen_multimap のイテレータ基底（ランダムアクセス、ソート順で走査）
+   *
+   * @tparam Owner 所有側の frozen_multimap 型
+   * @tparam Ref 参照の値型（pair-like）
+   */
+  template <typename Owner, typename Ref>
+  class iterator_base {
+  public:
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = frozen_multimap::value_type;
+    using difference_type = std::ptrdiff_t;
+
+    // operator-> の戻り値用プロキシ（キー・値へのメンバアクセスを提供）
+    struct arrow_proxy {
+      Ref ref_v;
+      std::string_view& key;
+      decltype(std::declval<Ref>().second)& value;
+      constexpr arrow_proxy(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
+      constexpr auto operator->() noexcept -> arrow_proxy* { return this; }
+      constexpr auto operator->() const noexcept -> const arrow_proxy* { return this; }
+    };
+    using pointer = arrow_proxy;
+    using reference = Ref;
+
+    constexpr iterator_base() noexcept = default;
+    constexpr iterator_base(Owner* owner, size_type index) noexcept : owner_{owner}, index_{index} {}
+    constexpr auto operator*() const noexcept -> reference {
+      return reference{detail::multimap_index<Keys...>::sorted_key_views_[index_],
+                       owner_->values_[detail::multimap_index<Keys...>::sorted_indices_[index_]]};
+    }
+    constexpr auto operator->() const noexcept -> pointer { return pointer{operator*()}; }
+    constexpr auto operator++() noexcept -> iterator_base& { ++index_; return *this; }
+    constexpr auto operator++(int) noexcept -> iterator_base { auto tmp = *this; ++index_; return tmp; }
+    constexpr auto operator--() noexcept -> iterator_base& { --index_; return *this; }
+    constexpr auto operator--(int) noexcept -> iterator_base { auto tmp = *this; --index_; return tmp; }
+    constexpr auto operator+=(difference_type n) noexcept -> iterator_base& { index_ += n; return *this; }
+    constexpr auto operator-=(difference_type n) noexcept -> iterator_base& { index_ -= n; return *this; }
+    friend constexpr auto operator+(iterator_base a, difference_type n) noexcept -> iterator_base { return a += n; }
+    friend constexpr auto operator+(difference_type n, iterator_base a) noexcept -> iterator_base { return a += n; }
+    friend constexpr auto operator-(iterator_base a, difference_type n) noexcept -> iterator_base { return a -= n; }
+    friend constexpr auto operator-(iterator_base a, iterator_base b) noexcept -> difference_type { return static_cast<difference_type>(a.index_) - static_cast<difference_type>(b.index_); }
+    friend constexpr bool operator==(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ == b.index_; }
+    friend constexpr auto operator<=>(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ <=> b.index_; }
+  private:
+    Owner* owner_{nullptr};
+    size_type index_{0};
+  };
+
+  using iterator = iterator_base<frozen_multimap, reference>;
+  using const_iterator = iterator_base<frozen_multimap const, const_reference>;
+
+  static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
+  static constexpr auto max_size() noexcept -> size_type { return size(); }
+  [[nodiscard]] static constexpr auto empty() noexcept -> bool { return false; }
+  /**
+   * @brief 辞書順にソートされたキー配列（重複を含む）を取得する
+   */
+  [[nodiscard]] static constexpr auto keys() noexcept -> std::span<const std::string_view, size()> {
+    return lookup_::sorted_key_views_;
+  }
+  /**
+   * @brief 宣言順のキー配列を取得する
+   */
+  [[nodiscard]] static constexpr auto keys_in_declaration_order() noexcept
+      -> std::span<std::string_view const, size()> {
+    return lookup_::key_views_;
+  }
+  /**
+   * @brief キーに対応する要素数を返す（重複を加算）
+   *
+   * @param key 調べるキー
+   * @return size_type キーに対応する要素数
+   */
+  [[nodiscard]] constexpr auto count(std::string_view key) const noexcept -> size_type {
+    return lookup_::last_pos(key) - lookup_::first_pos(key);
+  }
+  /**
+   * @brief キーが存在するかを判定する
+   *
+   * @param key 調べるキー
+   * @return bool 存在すれば true
+   */
+  [[nodiscard]] constexpr auto contains(std::string_view key) const noexcept -> bool {
+    return count(key) != 0;
+  }
+  /**
+   * @brief 複数のキーが全て存在するかを一括判定する (consteval)
+   * @details 空パックに対しては true (vacuous truth) を返す。
+   */
+  template <FrozenString... QueryKeys>
+  [[nodiscard]] static consteval auto contains_all() noexcept -> bool {
+    return ((contains_impl<QueryKeys>()) && ... && true);
+  }
+  /**
+   * @brief キーに対応する最初の要素を探索する
+   *
+   * @param key 探索するキー
+   * @return iterator 見つかった要素、未検出は end()
+   */
+  [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator {
+    auto const pos = lookup_::first_pos(key);
+    return pos < size() && lookup_::sorted_key_views_[pos] == key ? iterator{this, pos} : end();
+  }
+  /**
+   * @brief キーに対応する最初の要素を探索する（const 版）
+   *
+   * @param key 探索するキー
+   * @return const_iterator 見つかった要素、未検出は end()
+   */
+  [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator {
+    auto const pos = lookup_::first_pos(key);
+    return pos < size() && lookup_::sorted_key_views_[pos] == key ? const_iterator{this, pos} : end();
+  }
+  /**
+   * @brief キーに対応する要素範囲 [first, last) を返す
+   *
+   * @param key 探索するキー
+   * @return std::pair<iterator, iterator> 要素範囲、未検出は [end(), end())
+   */
+  [[nodiscard]] constexpr auto equal_range(std::string_view key) noexcept -> std::pair<iterator, iterator> {
+    auto const first = lookup_::first_pos(key);
+    auto const last = lookup_::last_pos(key);
+    if (first < size() && lookup_::sorted_key_views_[first] == key) {
+      return {iterator{this, first}, iterator{this, last}};
+    }
+    return {end(), end()};
+  }
+  /**
+   * @brief キーに対応する要素範囲 [first, last) を返す（const 版）
+   *
+   * @param key 探索するキー
+   * @return std::pair<const_iterator, const_iterator> 要素範囲、未検出は [end(), end())
+   */
+  [[nodiscard]] constexpr auto equal_range(std::string_view key) const noexcept
+      -> std::pair<const_iterator, const_iterator> {
+    auto const first = lookup_::first_pos(key);
+    auto const last = lookup_::last_pos(key);
+    if (first < size() && lookup_::sorted_key_views_[first] == key) {
+      return {const_iterator{this, first}, const_iterator{this, last}};
+    }
+    return {end(), end()};
+  }
+  /**
+   * @brief キーに対応する最初の値への参照を取得する（未検出は例外）
+   *
+   * 重複キーの場合はソート順で最初に現れる値を返す。
+   *
+   * @param key 探索するキー
+   * @return T& 最初の値への参照
+   * @throw std::out_of_range キーが存在しない場合
+   */
+  [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
+    auto const pos = lookup_::first_pos(key);
+    if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
+      return values_[lookup_::sorted_indices_[pos]];
+    }
+    throw std::out_of_range(
+      std::string{"frozen_multimap key not found: "} + std::string{key});
+  }
+  /**
+   * @brief キーに対応する最初の値への参照を取得する（const 版、未検出は例外）
+   *
+   * @param key 探索するキー
+   * @return T const& 最初の値への参照
+   * @throw std::out_of_range キーが存在しない場合
+   */
+  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
+    auto const pos = lookup_::first_pos(key);
+    if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
+      return values_[lookup_::sorted_indices_[pos]];
+    }
+    throw std::out_of_range(
+      std::string{"frozen_multimap key not found: "} + std::string{key});
+  }
+  constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
+  constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
+  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
+  constexpr auto end() const noexcept -> const_iterator { return const_iterator{this, size()}; }
+  constexpr auto cbegin() const noexcept -> const_iterator { return begin(); }
+  constexpr auto cend() const noexcept -> const_iterator { return end(); }
+
+  constexpr frozen_multimap() noexcept requires std::default_initializable<T> = default;
+  constexpr explicit frozen_multimap(std::array<T, size()> values) noexcept(std::is_nothrow_move_constructible_v<T>) : values_{std::move(values)} {}
+  constexpr explicit frozen_multimap(std::initializer_list<T> values) requires std::constructible_from<T, T const&> : values_{copy_initializer_list(values)} {}
+  constexpr explicit frozen_multimap(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
+
+private:
+  using lookup_ = detail::multimap_index<Keys...>;
+
+  /**
+   * @brief 単一 NTTP キーがマップ内に存在するか (contains_all 内部用)
+   */
+  template <FrozenString Key>
+  [[nodiscard]] static consteval auto contains_impl() noexcept -> bool {
+    return ((Key.sv() == std::string_view{Keys.buffer.data(), Keys.length}) || ... || false);
+  }
+
+  // 初期化リストから値配列を構築（要素数検証付き）
+  static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
+    if (values.size() != size()) throw std::invalid_argument("frozen_multimap size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size()));
+    return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
+  }
+  // エントリ配列をキー一致の未使用宣言順スロットへ順次配置（重複キーは宣言順に割り当て、欠落キーは例外）
+  static constexpr auto reorder_entries(std::array<frozen_map_entry<T>, size()> entries) -> std::array<T, size()> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      for (auto slot = 0uz; slot < size(); ++slot) {
+        if (values[slot].has_value()) {
+          continue;
+        }
+        if (lookup_::key_views_[slot] == entry.key) {
+          values[slot].emplace(std::move(entry.value));
+          break;
+        }
+      }
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        throw std::invalid_argument("missing key");
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return std::array<T, size()>{ std::move(*values[I])... };
+    }(std::make_index_sequence<size()>{});
+  }
+
+  std::array<T, size()> values_{};  // 宣言順の値の格納（インデックスは key_views_ と一致）
+};
+
+/**
+ * @brief pair-like 要素群から frozen_multimap を構築する
+ *
+ * @tparam T 値の型
+ * @tparam Keys キー列（FrozenString NTTP、重複可）
+ * @tparam Entries 要素の型パラメータパック
+ * @param entries キー・値ペアの要素群
+ * @return frozen_multimap<T, Keys...> 構築されたマルチマップ
+ */
+template <typename T, FrozenString... Keys, typename... Entries>
+  requires((detail::PairLikeEntry<Entries> && ...) &&
+           (std::convertible_to<decltype(detail::pair_like_get<0>(std::declval<Entries>())), std::string_view> && ...) &&
+           (std::convertible_to<decltype(detail::pair_like_get<1>(std::declval<Entries>())), T> && ...))
+constexpr auto make_frozen_multimap(Entries&&... entries) -> frozen_multimap<T, Keys...> {
+  static_assert(sizeof...(Keys) == sizeof...(Entries), "make_frozen_multimap requires exactly one entry per key");
+  auto arr = std::array<frozen_map_entry<T>, sizeof...(Keys)>{
+    frozen_map_entry<T>{detail::pair_like_get<0>(std::forward<Entries>(entries)), detail::pair_like_get<1>(std::forward<Entries>(entries))}...
+  };
+  return frozen_multimap<T, Keys...>{std::move(arr)};
+}
+
+/**
+ * @brief 値配列から frozen_multimap を構築する
+ *
+ * @tparam T 値の型
+ * @tparam Keys キー列（FrozenString NTTP、重複可）
+ * @param values 宣言順に対応する値の配列
+ * @return frozen_multimap<T, Keys...> 構築されたマルチマップ
+ */
+template <typename T, FrozenString... Keys>
+constexpr auto make_frozen_multimap(std::array<T, sizeof...(Keys)> values) -> frozen_multimap<T, Keys...> {
+  return frozen_multimap<T, Keys...>{std::move(values)};
+}
+
+} // namespace frozenchars

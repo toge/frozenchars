@@ -140,6 +140,109 @@ constexpr auto utf8_encode_codepoint(std::uint32_t codepoint, std::array<char, 4
   length = 4;
 }
 
+/**
+ * @brief 指定位置のバイトが有効な UTF-8 シーケンスかを判定し、その長さを返す
+ *
+ * オーバーロング・サロゲート・U+10FFFF 超えは不正と判定する。
+ *
+ * @param str 検査対象の文字列
+ * @param pos 判定開始位置
+ * @return size_t 有効なら長さ（2〜4）、不正・ASCII・孤立バイトなら 0
+ */
+[[nodiscard]] constexpr auto valid_utf8_seq_length(std::string_view const str, size_t const pos) noexcept -> size_t {
+  if (pos >= str.size()) {
+    return 0;
+  }
+  auto const first = static_cast<unsigned char>(str[pos]);
+  auto const is_cont = [&](size_t const at) noexcept {
+    return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80;
+  };
+  if (first >= 0xC2 && first <= 0xDF) {
+    return is_cont(pos + 1) ? 2 : 0;
+  }
+  if (first >= 0xE0 && first <= 0xEF) {
+    if (!is_cont(pos + 1)) {
+      return 0;
+    }
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    if (first == 0xE0 && second < 0xA0) {
+      return 0;  // オーバーロング
+    }
+    if (first == 0xED && second > 0x9F) {
+      return 0;  // サロゲート
+    }
+    return is_cont(pos + 2) ? 3 : 0;
+  }
+  if (first >= 0xF0 && first <= 0xF4) {
+    if (!is_cont(pos + 1)) {
+      return 0;
+    }
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    if (first == 0xF0 && second < 0x90) {
+      return 0;  // オーバーロング
+    }
+    if (first == 0xF4 && second > 0x8F) {
+      return 0;  // U+10FFFF 超え
+    }
+    return (is_cont(pos + 2) && is_cont(pos + 3)) ? 4 : 0;
+  }
+  return 0;
+}
+
+/**
+ * @brief 文字列の指定位置から 16 進数字を最大 max_digits 桁読み取る
+ *
+ * @param str 読み取り元
+ * @param i 読み取り開始位置
+ * @param max_digits 読み取り上限桁数
+ * @return hex_digits_result 結果（有効桁数が 0 の場合は valid=false）
+ */
+struct hex_digits_result {
+  bool valid;             ///< 1 桁以上読み取れたか
+  std::uint32_t value;    ///< 読み取った値
+  std::size_t count;      ///< 読み取った桁数
+};
+
+[[nodiscard]] consteval auto parse_hex_digits(std::string_view const str, size_t const i, size_t const max_digits) noexcept -> hex_digits_result {
+  std::uint32_t value = 0;
+  auto count = 0uz;
+  while (count < max_digits && i + count < str.size() && is_hex_digit(str[i + count])) {
+    value = (value << 4) | hex_digit_to_value(str[i + count]);
+    ++count;
+  }
+  return {count > 0, value, count};
+}
+
+/**
+ * @brief NTTP 文字列中に不正な \u/\U エスケープ（サロゲート・U+10FFFF 超え）が含まれるか判定する
+ *
+ * @tparam Str 検査対象の文字列（FrozenString NTTP）
+ * @return bool 含まれれば true
+ */
+template <FrozenString Str>
+[[nodiscard]] consteval auto has_invalid_codepoint_escape() noexcept -> bool {
+  auto const s = Str.sv();
+  for (auto i = 0uz; i + 1 < s.size(); ++i) {
+    if (s[i] != '\\') {
+      continue;
+    }
+    auto const esc = s[i + 1];
+    if (esc == 'u') {
+      auto const r = parse_hex_digits(s, i + 2, 4);
+      if (r.valid && r.count == 4 && (r.value >= 0xD800 && r.value <= 0xDFFF)) {
+        return true;
+      }
+    }
+    if (esc == 'U') {
+      auto const r = parse_hex_digits(s, i + 2, 8);
+      if (r.valid && r.count == 8 && r.value > 0x10FFFF) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 } // namespace frozenchars::detail
 
 namespace frozenchars {
@@ -881,43 +984,76 @@ template <auto Codepoint>
   return res;
 }
 
+/**
+ * @brief 文字列を C エスケープシーケンスに変換する
+ *
+ * 制御文字（\a \b \f \n \r \t \v \0）・引用符・バックスラッシュを 2 文字のエスケープに変換する。
+ * それ以外の非表示文字・不正 UTF-8 バイトは \xHH（16 進大文字）、有効な UTF-8 シーケンスは
+ * 符号点に復号して \uXXXX（BMP）または \UXXXXXXXX（補助）に変換する。
+ *
+ * @tparam N 入力バッファ長（終端含む）
+ * @param str 対象文字列
+ * @return FrozenString<4 * N + 1> エスケープ後の文字列（最悪 1 バイトが \xNN の 4 文字になるため）
+ */
 template <size_t N>
-[[nodiscard]] auto consteval escape_c(FrozenString<N> const& str) noexcept -> FrozenString<2 * N + 1> {
-  auto res = FrozenString<2 * N + 1>{};
+[[nodiscard]] auto consteval escape_c(FrozenString<N> const& str) noexcept -> FrozenString<4 * N + 1> {
+  auto res = FrozenString<4 * N + 1>{};
   auto offset = 0uz;
-  for (auto const c : str.sv()) {
+  auto i = 0uz;
+  auto emit = [&](char escaped) {
+    res.buffer[offset++] = '\\';
+    res.buffer[offset++] = escaped;
+  };
+  auto emit_hex_digits = [&](std::uint32_t value, size_t const digits) {
+    for (auto shift = static_cast<int>(digits * 4 - 4); shift >= 0; shift -= 4) {
+      res.buffer[offset++] = detail::value_to_hex_digit((value >> shift) & 0xF);
+    }
+  };
+  while (i < str.length) {
+    auto const c = str.buffer[i];
     switch (c) {
-    case '\\':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = '\\';
+    case '\a': emit('a'); ++i; break;
+    case '\b': emit('b'); ++i; break;
+    case '\f': emit('f'); ++i; break;
+    case '\v': emit('v'); ++i; break;
+    case '\n': emit('n'); ++i; break;
+    case '\r': emit('r'); ++i; break;
+    case '\t': emit('t'); ++i; break;
+    case '\0': emit('0'); ++i; break;
+    case '\'': emit('\''); ++i; break;
+    case '"': emit('"'); ++i; break;
+    case '\\': emit('\\'); ++i; break;
+    default: {
+      auto const uc = static_cast<unsigned char>(c);
+      if (uc >= 0x80) {
+        auto const seq_len = detail::valid_utf8_seq_length(str.sv(), i);
+        if (seq_len != 0) {
+          std::uint32_t codepoint = 0;
+          size_t consumed = 0;
+          (void)detail::utf8_decode_at(str.sv(), i, consumed, codepoint);
+          if (codepoint <= 0xFFFF) {
+            emit('u');
+            emit_hex_digits(codepoint, 4);
+          } else {
+            emit('U');
+            emit_hex_digits(codepoint, 8);
+          }
+          i += seq_len;
+        } else {
+          emit('x');
+          emit_hex_digits(uc, 2);
+          ++i;
+        }
+      } else if (c <= 0x1F || c == 0x7F) {
+        emit('x');
+        emit_hex_digits(uc, 2);
+        ++i;
+      } else {
+        res.buffer[offset++] = c;
+        ++i;
+      }
       break;
-    case '\n':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = 'n';
-      break;
-    case '\r':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = 'r';
-      break;
-    case '\t':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = 't';
-      break;
-    case '\0':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = '0';
-      break;
-    case '\'':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = '\'';
-      break;
-    case '"':
-      res.buffer[offset++] = '\\';
-      res.buffer[offset++] = '"';
-      break;
-    default:
-      res.buffer[offset++] = c;
-      break;
+    }
     }
   }
   res.buffer[offset] = '\0';
@@ -926,41 +1062,100 @@ template <size_t N>
 }
 
 template <size_t N>
-[[nodiscard]] auto consteval escape_c(char const (&str)[N]) noexcept -> FrozenString<2 * N + 1> {
+[[nodiscard]] auto consteval escape_c(char const (&str)[N]) noexcept -> FrozenString<4 * N + 1> {
   return escape_c(FrozenString{str});
 }
 
+/**
+ * @brief escape_c の NTTP 版
+ *
+ * @tparam Str 対象文字列（FrozenString NTTP）
+ * @return auto エスケープ後の文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval escape_c() noexcept {
+  return escape_c(FrozenString{Str});
+}
+
+/**
+ * @brief C エスケープシーケンスを元の文字列に変換する
+ *
+ * \a \b \f \n \r \t \v \0 \\ \' \" に加え、\xHH（16 進 1〜2 桁）、\uXXXX（BMP 符号点）、
+ * \UXXXXXXXX（補助符号点）を復号する。不正な \u/\U シーケンス（サロゲート・U+10FFFF 超え・
+ * 非 16 進・桁不足）は元のシーケンスをそのまま保持する。
+ *
+ * @tparam N 入力バッファ長（終端含む）
+ * @param str 対象文字列
+ * @return FrozenString<N> アンエスケープ後の文字列（出力は入力長以下）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval unescape_c(FrozenString<N> const& str) noexcept -> FrozenString<N> {
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   auto i = 0uz;
+  auto preserve = [&](char escaped, std::size_t const count) {
+    res.buffer[offset++] = '\\';
+    res.buffer[offset++] = escaped;
+    for (auto k = 0uz; k < count; ++k) {
+      res.buffer[offset++] = str.buffer[i + 1 + k];
+    }
+    i += count;
+  };
+  auto encode_codepoint = [&](std::uint32_t const codepoint) {
+    auto out = std::array<char, 4>{};
+    size_t len = 0;
+    detail::utf8_encode_codepoint(codepoint, out, len);
+    for (auto k = 0uz; k < len; ++k) {
+      res.buffer[offset++] = out[k];
+    }
+  };
   while (i < str.length) {
     auto const c = str.buffer[i];
     if (c == '\\' && i + 1 < str.length) {
       auto const escaped = str.buffer[++i];
       switch (escaped) {
-      case 'n':
-        res.buffer[offset++] = '\n';
+      case 'a': res.buffer[offset++] = '\a'; break;
+      case 'b': res.buffer[offset++] = '\b'; break;
+      case 'f': res.buffer[offset++] = '\f'; break;
+      case 'v': res.buffer[offset++] = '\v'; break;
+      case 'n': res.buffer[offset++] = '\n'; break;
+      case 'r': res.buffer[offset++] = '\r'; break;
+      case 't': res.buffer[offset++] = '\t'; break;
+      case '0': res.buffer[offset++] = '\0'; break;
+      case '\\': res.buffer[offset++] = '\\'; break;
+      case '\'': res.buffer[offset++] = '\''; break;
+      case '"': res.buffer[offset++] = '"'; break;
+      case 'x': {
+        auto const r = detail::parse_hex_digits(str.sv(), i + 1, 2);
+        if (!r.valid) {
+          preserve('x', 0);
+        } else {
+          res.buffer[offset++] = static_cast<char>(r.value);
+          i += r.count;
+        }
         break;
-      case 'r':
-        res.buffer[offset++] = '\r';
+      }
+      case 'u': {
+        auto const r = detail::parse_hex_digits(str.sv(), i + 1, 4);
+        if (!r.valid || r.count != 4 || (r.value >= 0xD800 && r.value <= 0xDFFF)) {
+          preserve('u', r.valid ? r.count : 0);
+        } else {
+          encode_codepoint(r.value);
+          i += r.count;
+        }
         break;
-      case 't':
-        res.buffer[offset++] = '\t';
+      }
+      case 'U': {
+        auto const r = detail::parse_hex_digits(str.sv(), i + 1, 8);
+        if (!r.valid || r.count != 8 || r.value > 0x10FFFF) {
+          preserve('U', r.valid ? r.count : 0);
+        } else {
+          encode_codepoint(r.value);
+          i += r.count;
+        }
         break;
-      case '0':
-        res.buffer[offset++] = '\0';
-        break;
-      case '\\':
-        res.buffer[offset++] = '\\';
-        break;
-      case '\'':
-        res.buffer[offset++] = '\'';
-        break;
-      case '"':
-        res.buffer[offset++] = '"';
-        break;
+      }
       default:
         res.buffer[offset++] = '\\';
         res.buffer[offset++] = escaped;
@@ -979,6 +1174,22 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval unescape_c(char const (&str)[N]) noexcept -> FrozenString<N> {
   return unescape_c(FrozenString{str});
+}
+
+/**
+ * @brief unescape_c の NTTP 版
+ *
+ * 不正な \u/\U シーケンス（サロゲート・U+10FFFF 超え）はコンパイルエラーになる。
+ *
+ * @tparam Str 対象文字列（FrozenString NTTP）
+ * @return auto アンエスケープ後の文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval unescape_c() noexcept {
+  static_assert(!detail::has_invalid_codepoint_escape<Str>(),
+    "frozenchars: unescape_c: invalid \\u/\\U code point (surrogate or out of range)");
+  return unescape_c(FrozenString{Str});
 }
 
 } // namespace frozenchars
