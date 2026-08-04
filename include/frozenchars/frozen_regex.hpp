@@ -394,9 +394,24 @@ struct frozen_regex {
     return arr;
   }();
 
-  /// @brief 指定文字列がパターンにマッチするかを二分探索で判定
+  /// @brief 存在するキー長の集合（長さによる O(1) 早期棄却用）
+  static constexpr auto valid_lengths_ = [] {
+    std::array<bool, max_length_v + 1> table{};
+    for (auto const& k : key_views_) table[k.size()] = true;
+    return table;
+  }();
+
+  /// @brief CHD 2 段ハッシュテーブル（contains 用）
+  static constexpr auto chd_bucket_count_ = detail::next_pow2(count_v);
+  static constexpr auto chd_table_size_ = detail::next_pow2(count_v * 2);
+  static constexpr auto chd_ =
+    detail::build_chd<chd_bucket_count_, chd_table_size_>(key_views_);
+
+  /// @brief 指定文字列がパターンにマッチするかを判定（長さ棄却 + CHD 2 段ハッシュで O(1)）
   [[nodiscard]] static constexpr auto contains(std::string_view s) noexcept -> bool {
-    return std::ranges::binary_search(key_views_, s);
+    if (s.size() > max_length_v || !valid_lengths_[s.size()]) return false;
+    auto const index = detail::chd_find(chd_, s);
+    return index >= 0 && key_views_[static_cast<std::size_t>(index)] == s;
   }
 
   /// @brief 列挙された全文字列を FrozenString 配列として取得

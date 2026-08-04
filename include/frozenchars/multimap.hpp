@@ -176,7 +176,7 @@ public:
    * @return bool 存在すれば true
    */
   [[nodiscard]] constexpr auto contains(std::string_view key) const noexcept -> bool {
-    return count(key) != 0;
+    return std::ranges::binary_search(lookup_::sorted_key_views_, key);
   }
   /**
    * @brief 複数のキーが全て存在するかを一括判定する (consteval)

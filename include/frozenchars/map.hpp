@@ -254,6 +254,108 @@ template <std::size_t TableSize, FrozenString... Keys>
 }
 
 /**
+ * @brief CHD（bucket displacement）方式の 2 段ハッシュテーブル
+ *
+ * 1 段目: hash(key, 0) でバケットを決定。
+ * 2 段目: バケットごとのシード d を使い hash(key, d) でスロットを決定。
+ * 構築時に大きいバケットから順に衝突しないシードを探索するため、任意のキー数で O(1) 探索が可能。
+ */
+template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
+struct chd_result {
+  using index_t = index_type_t<KeyCount>;
+  std::array<std::uint32_t, BucketCount> bucket_seeds{};  ///< バケットごとの 2 段目シード
+  std::array<index_t, TableSize> table{};                 ///< スロット → 要素インデックス（-1 = 空）
+};
+
+/**
+ * @brief CHD テーブルをコンパイル時に構築する
+ *
+ * @tparam BucketCount バケット数（2 冪）
+ * @tparam TableSize スロット数（2 冪、KeyCount 以上）
+ * @param key_views キービューの配列
+ * @return chd_result 構築されたテーブル
+ */
+template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
+[[nodiscard]] consteval auto build_chd(std::array<std::string_view, KeyCount> const& key_views)
+    -> chd_result<BucketCount, TableSize, KeyCount> {
+  using result_t = chd_result<BucketCount, TableSize, KeyCount>;
+  using index_t = typename result_t::index_t;
+  constexpr auto bucket_mask = BucketCount - 1;
+  constexpr auto slot_mask = TableSize - 1;
+
+  auto result = result_t{};
+  result.table.fill(static_cast<index_t>(-1));
+
+  // 各キーの 1 段目バケット割り当て
+  std::array<std::size_t, KeyCount> bucket_of{};
+  for (auto i = 0uz; i < KeyCount; ++i) {
+    bucket_of[i] = static_cast<std::size_t>(hash_impl(key_views[i], 0) & bucket_mask);
+  }
+
+  // カウンティングソートでバケットごとのキーを連続領域に並べる
+  std::array<std::uint32_t, BucketCount + 1> starts{};
+  for (auto const b : bucket_of) ++starts[b + 1];
+  for (auto b = 0uz; b < BucketCount; ++b) starts[b + 1] += starts[b];
+  std::array<std::uint32_t, KeyCount> keys_by_bucket{};
+  {
+    auto cursor = starts;
+    for (auto i = 0uz; i < KeyCount; ++i) {
+      keys_by_bucket[cursor[bucket_of[i]]++] = static_cast<std::uint32_t>(i);
+    }
+  }
+
+  // 大きいバケットから処理する（空きスロットが多いうちに配置してシード探索を高速化）
+  std::array<std::uint32_t, BucketCount> order{};
+  for (auto b = 0uz; b < BucketCount; ++b) order[b] = static_cast<std::uint32_t>(b);
+  std::ranges::sort(order, [&](auto const a, auto const b) {
+    return (starts[a + 1] - starts[a]) > (starts[b + 1] - starts[b]);
+  });
+
+  std::array<std::size_t, KeyCount> cand{};  // 現在のバケットの暫定スロット
+  for (auto const b : order) {
+    auto const first = starts[b];
+    auto const last = starts[b + 1];
+    if (first == last) break;  // サイズ降順なので以降はすべて空バケット
+    auto found = false;
+    for (auto d = 1u; d < 1'000'000u && !found; ++d) {
+      auto ok = true;
+      for (auto m = first; m < last; ++m) {
+        auto const slot = static_cast<std::size_t>(hash_impl(key_views[keys_by_bucket[m]], d) & slot_mask);
+        if (result.table[slot] != static_cast<index_t>(-1)) { ok = false; break; }
+        auto dup = false;
+        for (auto p = first; p < m; ++p) {
+          if (cand[p - first] == slot) { dup = true; break; }
+        }
+        if (dup) { ok = false; break; }
+        cand[m - first] = slot;
+      }
+      if (ok) {
+        for (auto m = first; m < last; ++m) {
+          result.table[cand[m - first]] = static_cast<index_t>(keys_by_bucket[m]);
+        }
+        result.bucket_seeds[b] = d;
+        found = true;
+      }
+    }
+    if (!found) throw "frozen_map CHD seed search exhausted";
+  }
+  return result;
+}
+
+/**
+ * @brief CHD テーブルからキー候補のインデックスを引く
+ *
+ * @return index_t 候補インデックス（-1 = 候補なし）。最終的なキー一致確認は呼び出し側で行う。
+ */
+template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
+[[nodiscard]] constexpr auto chd_find(chd_result<BucketCount, TableSize, KeyCount> const& chd,
+                                      std::string_view key) noexcept {
+  auto const bucket = static_cast<std::size_t>(hash_impl(key, 0) & (BucketCount - 1));
+  auto const slot = static_cast<std::size_t>(hash_impl(key, chd.bucket_seeds[bucket]) & (TableSize - 1));
+  return chd.table[slot];
+}
+
+/**
  * @brief キー集合に対する高速ルックアップ用の静的メタデータを保持する
  *
  * @tparam Keys キー列（FrozenString NTTP）
@@ -331,6 +433,18 @@ struct lookup_index {
   static constexpr auto metadata_ = make_lookup_metadata();
   static constexpr auto k_seed = metadata_.seed;        // ハッシュシード
   static constexpr auto lookup_table_ = metadata_.table;  // スロット → 要素インデックス
+
+  // 大規模（k_lookup_threshold 超）: CHD 2 段ハッシュで O(1) を維持する
+  static constexpr auto chd_bucket_count_ = use_lookup_table_ ? 1uz : detail::next_pow2(size());
+  static constexpr auto chd_table_size_ = use_lookup_table_ ? 1uz : detail::next_pow2(size() * 2);  // 負荷率 1/2
+  static consteval auto make_chd_metadata() {
+    if constexpr (use_lookup_table_) {
+      return detail::chd_result<1, 1, size()>{};  // 未使用のダミー
+    } else {
+      return detail::build_chd<chd_bucket_count_, chd_table_size_>(key_views_);
+    }
+  }
+  static constexpr auto chd_ = make_chd_metadata();
 
   static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);  // 全キーが 16 バイト以下（128bit 比較可能）
 
@@ -417,10 +531,13 @@ struct lookup_index {
         return static_cast<size_type>(index);
       return size();
     } else {
-      // 大規模: ソート済みキーに対する二分探索
-      auto const it = std::ranges::lower_bound(sorted_key_views_, key);
-      if (it == sorted_key_views_.end() || *it != key) return size();
-      return static_cast<size_type>(sorted_indices_[it - sorted_key_views_.begin()]);
+      // 大規模: CHD 2 段ハッシュでスロットを引き、key_equals で確定
+      if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
+      auto const index = detail::chd_find(chd_, key);
+      if (index == static_cast<decltype(index)>(-1)) return size();
+      if (key_equals(key, static_cast<size_type>(index))) [[likely]]
+        return static_cast<size_type>(index);
+      return size();
     }
   }
 };

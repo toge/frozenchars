@@ -158,6 +158,39 @@ int main(int argc, char** argv) {
   results.push_back(measure("samelen(10) find hit", [&]{ auto it = samelen_map.find("configuration_key_fiv"); g_sink += (it != samelen_map.end()); }, iters));
   results.push_back(measure("samelen(10) find miss", [&]{ auto it = samelen_map.find("configuration_key_xxx"); g_sink += (it != samelen_map.end()); }, iters));
 
+  // ---- XXLマップ: 100キー（k_lookup_threshold 超 → CHD 2 段ハッシュパス）----
+  constexpr auto xxl_map = frozen_map<int,
+    "key001"_fs, "key002"_fs, "key003"_fs, "key004"_fs, "key005"_fs,
+    "key006"_fs, "key007"_fs, "key008"_fs, "key009"_fs, "key010"_fs,
+    "key011"_fs, "key012"_fs, "key013"_fs, "key014"_fs, "key015"_fs,
+    "key016"_fs, "key017"_fs, "key018"_fs, "key019"_fs, "key020"_fs,
+    "key021"_fs, "key022"_fs, "key023"_fs, "key024"_fs, "key025"_fs,
+    "key026"_fs, "key027"_fs, "key028"_fs, "key029"_fs, "key030"_fs,
+    "key031"_fs, "key032"_fs, "key033"_fs, "key034"_fs, "key035"_fs,
+    "key036"_fs, "key037"_fs, "key038"_fs, "key039"_fs, "key040"_fs,
+    "key041"_fs, "key042"_fs, "key043"_fs, "key044"_fs, "key045"_fs,
+    "key046"_fs, "key047"_fs, "key048"_fs, "key049"_fs, "key050"_fs,
+    "key051"_fs, "key052"_fs, "key053"_fs, "key054"_fs, "key055"_fs,
+    "key056"_fs, "key057"_fs, "key058"_fs, "key059"_fs, "key060"_fs,
+    "key061"_fs, "key062"_fs, "key063"_fs, "key064"_fs, "key065"_fs,
+    "key066"_fs, "key067"_fs, "key068"_fs, "key069"_fs, "key070"_fs,
+    "key071"_fs, "key072"_fs, "key073"_fs, "key074"_fs, "key075"_fs,
+    "key076"_fs, "key077"_fs, "key078"_fs, "key079"_fs, "key080"_fs,
+    "key081"_fs, "key082"_fs, "key083"_fs, "key084"_fs, "key085"_fs,
+    "key086"_fs, "key087"_fs, "key088"_fs, "key089"_fs, "key090"_fs,
+    "key091"_fs, "key092"_fs, "key093"_fs, "key094"_fs, "key095"_fs,
+    "key096"_fs, "key097"_fs, "key098"_fs, "key099"_fs, "key100"_fs>{
+    [] {
+      auto v = std::array<int, 100>{};
+      for (auto i = 0uz; i < 100; ++i) v[i] = static_cast<int>(i + 1);
+      return v;
+    }()
+  };
+  results.push_back(measure("xxl(100) find hit first", [&]{ auto it = xxl_map.find("key001"); g_sink += (it != xxl_map.end()); }, iters));
+  results.push_back(measure("xxl(100) find hit last", [&]{ auto it = xxl_map.find("key100"); g_sink += (it != xxl_map.end()); }, iters));
+  results.push_back(measure("xxl(100) find miss lenOK", [&]{ auto it = xxl_map.find("key999"); g_sink += (it != xxl_map.end()); }, iters));
+  results.push_back(measure("xxl(100) find miss lenBad", [&]{ auto it = xxl_map.find("nope"); g_sink += (it != xxl_map.end()); }, iters));
+
   {
     constexpr std::string_view keys[] = {"timeout","retry","backoff","endpoint","headers",
                                          "method","path","query","body","status"};
