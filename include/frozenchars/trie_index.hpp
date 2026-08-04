@@ -403,8 +403,8 @@ public:
           static_cast<std::size_t>(node_idx) * 256 +
           static_cast<unsigned char>(next_char)];
         if (child_idx != 0xFF) {
+          // pos は進めない: 子ノードのラベルは先頭文字を含むため、次周の compare_label で照合する
           node_idx = static_cast<int>(child_idx);
-          ++pos;
           continue;
         }
         return NPOS;

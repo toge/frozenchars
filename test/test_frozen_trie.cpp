@@ -84,6 +84,20 @@ TEST_CASE("frozen_trie_index handles deep branching", "[frozen_trie]") {
   CHECK(Idx::find("prepar") == Idx::NPOS);
 }
 
+TEST_CASE("frozen_trie_index handles more than 8 children (LUT path)", "[frozen_trie]") {
+  // 子ノード数 > 8 で k_use_child_lut が有効になる経路の回帰テスト
+  using Idx = frozen_trie_index<
+    "alpha"_fs, "bravo"_fs, "charlie"_fs, "delta"_fs, "echo"_fs,
+    "foxtrot"_fs, "golf"_fs, "hotel"_fs, "india"_fs, "juliet"_fs>;
+
+  STATIC_CHECK(Idx::k_use_child_lut);
+  CHECK(Idx::find("alpha") == 0);
+  CHECK(Idx::find("charlie") == 2);
+  CHECK(Idx::find("juliet") == 9);
+  CHECK(Idx::find("alph") == Idx::NPOS);
+  CHECK(Idx::find("zulu") == Idx::NPOS);
+}
+
 TEST_CASE("frozen_trie_index handles single key", "[frozen_trie]") {
   using Idx = frozen_trie_index<"onlykey"_fs>;
 
