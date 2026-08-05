@@ -506,10 +506,10 @@ struct minify_html_adaptor : pipe_adaptor_base {
  * @brief XML minify をパイプ演算子で適用するアダプタ
  */
 struct minify_xml_adaptor : pipe_adaptor_base {
-  minify_markup_opt options;  ///< ミニファイオプション（デフォルト: remove_quotes | remove_end_tags）
-  constexpr minify_xml_adaptor(
-    minify_markup_opt opts = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags
-  ) noexcept : options(opts) {}
+   minify_markup_opt options;  ///< ミニファイオプション（デフォルト: remove_end_tags）
+   constexpr minify_xml_adaptor(
+     minify_markup_opt opts = minify_markup_opt::remove_end_tags
+   ) noexcept : options(opts) {}
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::minify_xml(str, options);

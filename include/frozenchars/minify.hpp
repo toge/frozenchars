@@ -925,9 +925,9 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
-  return detail::minify_markup(str, options);
-}
+[[nodiscard]] auto consteval minify_xml(FrozenString<N> const& str, minify_markup_opt options = minify_markup_opt::remove_end_tags) noexcept {
+   return detail::minify_markup(str, options);
+ }
 
 /**
  * @brief XML 文字列リテラルを minify する
@@ -938,9 +938,9 @@ template <size_t N>
  * @return auto minify 後の文字列
  */
 template <size_t N>
-[[nodiscard]] auto consteval minify_xml(char const (&str)[N], minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept {
-  return minify_xml(FrozenString{str}, options);
-}
+[[nodiscard]] auto consteval minify_xml(char const (&str)[N], minify_markup_opt options = minify_markup_opt::remove_end_tags) noexcept {
+   return minify_xml(FrozenString{str}, options);
+ }
 
 // ─── JSON ─────────────────────────────────────────────────────────────────────
 

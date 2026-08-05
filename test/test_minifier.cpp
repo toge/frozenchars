@@ -936,6 +936,14 @@ TEST_CASE("minify_xml - ops パイプ演算子", "[minifier]")
   REQUIRE(result.sv() == "<root>hi</root>");
 }
 
+TEST_CASE("minify_xml - 属性値のクォートは削除しない", "[minifier]")
+{
+  auto constexpr result = R"(<div class="foo" data-x="1">)"_fs
+    | frozenchars::ops::minify_xml;
+  static_assert(result.sv() == R"(<div class="foo" data-x="1">)");
+  REQUIRE(result.sv() == R"(<div class="foo" data-x="1">)");
+}
+
 TEST_CASE("minify_json - ops パイプ演算子", "[minifier]")
 {
   auto constexpr result = "{  \"k\": 1  // c\n}"_fs

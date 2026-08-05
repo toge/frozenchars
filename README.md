@@ -808,9 +808,9 @@ HTML / XML / JSON / YAML / SQL / Cypher の各ソースをコンパイル時に�
 すべて `consteval` で実行され、結果は `static_assert` でコンパイル時に検証できます。
 
 - `minify_html(str, options = ...)` / `minify_xml(...)` : HTML/XML のマークアップを縮小します
-  - `minify_markup_opt::remove_quotes` を立てると、`class="x"` のような属性値クォートが安全に取り除ける場合に削除されます
-  - `minify_markup_opt::remove_end_tags` を立てると、HTML の `</li>` / `</p>` / `</thead>` など省略可能な終了タグが削除されます
-  - オプションは `|` で複数指定できます。デフォルトでは両方が有効です
+   - `minify_markup_opt::remove_quotes` を立てると、`class="x"` のような属性値クォートが安全に取り除ける場合に削除されます（HTML のデフォルトで有効、XML では属性値のクォートは常に保持します）
+   - `minify_markup_opt::remove_end_tags` を立てると、HTML の `</li>` / `</p>` / `</thead>` など省略可能な終了タグが削除されます
+   - オプションは `|` で複数指定できます。デフォルトでは `remove_end_tags` が有効です
 - `minify_json(str)` : JSON の文字列リテラル外から空白と `//` / `/* */` コメントを削除します
 - `minify_yaml(str)` : YAML の値内・文字列リテラル内 `#` を残しつつ、行コメントとそれ以降の空白を削除します
 - `minify_sql(str, options = ...)` : SQL の `--` / `/* */` コメントと冗長な空白を削除します
@@ -851,7 +851,7 @@ auto constexpr xml = minify_xml(
   "  <!-- comment -->\n"
   "  <item id = \"1\" > value </item>\n"
   "</root>"_fs);
-static_assert(xml.sv() == "<root><item id=1>value</item></root>");
+static_assert(xml.sv() == "<root><item id=\"1\">value</item></root>");
 
 // JSON（文字列リテラル内・コメントは別扱い）
 auto constexpr minified_json = minify_json(
