@@ -944,6 +944,15 @@ TEST_CASE("minify_xml - 属性値のクォートは削除しない", "[minifier]
   REQUIRE(result.sv() == R"(<div class="foo" data-x="1">)");
 }
 
+TEST_CASE("minify_xml - <style> 内の CSS を minify する", "[minifier]")
+{
+  // <style> 内の CSS コメント除去 + 空白詰め
+  auto constexpr result = "<svg><style>/* comment */.foo { color: red; }</style></svg>"_fs
+    | frozenchars::ops::minify_xml;
+  static_assert(result.sv() == "<svg><style>.foo{color:red}</style></svg>");
+  REQUIRE(result.sv() == "<svg><style>.foo{color:red}</style></svg>");
+}
+
 TEST_CASE("minify_json - ops パイプ演算子", "[minifier]")
 {
   auto constexpr result = "{  \"k\": 1  // c\n}"_fs

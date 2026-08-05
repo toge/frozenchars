@@ -552,6 +552,16 @@ constexpr auto at_close_script(char const* buf, size_t len, size_t i) noexcept -
        && (buf[p + 4] | 0x20) == 'p' && (buf[p + 5] | 0x20) == 't');
 }
 
+/// @brief 位置 i が </style> の開始か判定する
+constexpr auto at_close_style(char const* buf, size_t len, size_t i) noexcept -> bool {
+  if (i + 7 >= len) return false;
+  if (buf[i] != '<' || buf[i + 1] != '/') return false;
+  auto const p = i + 2;
+  return ((buf[p] | 0x20) == 's' && (buf[p + 1] | 0x20) == 't'
+       && (buf[p + 2] | 0x20) == 'y' && (buf[p + 3] | 0x20) == 'l'
+       && (buf[p + 4] | 0x20) == 'e');
+}
+
 /// @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装（バッファベース）
 ///
 /// 文字列リテラル内の文字は保持し、タグ周辺の不要空白とコメント（<!-- ... -->）を除去します。
@@ -574,6 +584,7 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
   auto script_mode     = 0u;
   auto script_quote   = '\0';
   auto script_depth   = 0uz;
+  auto in_style       = false;
   auto const len      = std::char_traits<char>::length(input);
 
   // 入力全体を1文字ずつ走査し、コメント除去・空白正規化・属性最適化を施しながら出力バッファに詰める
@@ -699,6 +710,68 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       continue;
     }
 
+    // <style> 内の CSS を minify
+    if (in_style) {
+      // </style> 閉じタグ検出
+      if (c == '<' && i + 7 < len && input[i + 1] == '/'
+          && ((input[i + 2] | 0x20) == 's') && ((input[i + 3] | 0x20) == 't'
+          && ((input[i + 4] | 0x20) == 'y') && ((input[i + 5] | 0x20) == 'l')
+          && ((input[i + 6] | 0x20) == 'e'))) {
+        auto const after = input[i + 7];
+        if (after == '>' || is_markup_space(after)) {
+          in_style = false;
+          pending_space = false;
+        }
+      }
+
+      if (in_style) {
+        // /* */ コメント除去
+        if (c == '/' && i + 1 < len && input[i + 1] == '*') {
+          i += 2;
+          while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')) ++i;
+          if (i + 1 < len) i += 2;
+          pending_space = true;
+          continue;
+        }
+
+        // 空白を遅延して詰める
+        if (is_markup_space(c)) {
+          pending_space = true;
+          ++i;
+          continue;
+        }
+
+        // CSS 構文文字の前の不要な空白を除去
+        if (pending_space && (c == '{' || c == '}' || c == ':' || c == ';')) {
+          if (offset > 0 && output[offset - 1] == ' ') --offset;
+          pending_space = false;
+        }
+
+        // 末尾のセミコロンを } の前に除去
+        if (c == '}' && offset > 0 && output[offset - 1] == ';') {
+          --offset;
+        }
+
+        // 遅延空白を出力（セレクタ間のスペースは保持）
+        // CSS 構文文字の直後の空白は除去（{ : ; の後の空白）
+        if (pending_space && offset > 0) {
+          auto const prev = output[offset - 1];
+          auto const emit_css = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/'
+                                && prev != '{' && prev != ':' && prev != ';'
+                                && c != '>' && c != '=' && c != '/'
+                                && c != '{' && c != '}' && c != ':';
+          if (emit_css) {
+            output[offset++] = ' ';
+          }
+          pending_space = false;
+        }
+
+        if (offset < output_capacity) output[offset++] = c;
+        ++i;
+        continue;
+      }
+    }
+
     // クォート内は内容をそのまま保持する
     if (in_quote != '\0') {
       if (offset < output_capacity) {
@@ -792,34 +865,51 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       }
       pending_space = false;
 
-      // <script> 開始検出（大文字小文字非依存）
-      auto script_open = false;
-      if (i + 7 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-      auto const p = i + 1;
-      if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
-          && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
-          && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
-        auto const after = input[p + 6];
-        if (after == '>' || is_markup_space(after) || after == '/') {
-          script_open = true;
-        }
-      }
-      }
+// <script> 開始検出（大文字小文字非依存）
+       auto script_open = false;
+       if (i + 7 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
+       auto const p = i + 1;
+       if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
+           && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
+           && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
+         auto const after = input[p + 6];
+         if (after == '>' || is_markup_space(after) || after == '/') {
+           script_open = true;
+         }
+       }
+       }
 
-      // 閉じタグ処理（void / 省略可能ならスキップ、それ以外は出力）
-      if (emit_close_tag(input, len, i, output, offset, options)) {
-      continue;
-      }
-      // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
-      if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-      auto opened_mode = 0u;
-      i = emit_open_tag(input, len, i, output, offset, options, &opened_mode);
-      if (script_open) {
-        in_script = true;
-        script_mode = opened_mode;
-      }
-      continue;
-      }
+       // <style> 開始検出（大文字小文字非依存）
+       auto style_open = false;
+       if (i + 6 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
+       auto const p = i + 1;
+       if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 't'
+           && (input[p + 2] | 0x20) == 'y' && (input[p + 3] | 0x20) == 'l'
+           && (input[p + 4] | 0x20) == 'e') {
+         auto const after = input[p + 5];
+         if (after == '>' || is_markup_space(after) || after == '/') {
+           style_open = true;
+         }
+       }
+       }
+
+       // 閉じタグ処理（void / 省略可能ならスキップ、それ以外は出力）
+       if (emit_close_tag(input, len, i, output, offset, options)) {
+       continue;
+       }
+       // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
+       if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
+       auto opened_mode = 0u;
+       i = emit_open_tag(input, len, i, output, offset, options, &opened_mode);
+       if (script_open) {
+         in_script = true;
+         script_mode = opened_mode;
+       }
+       if (style_open) {
+         in_style = true;
+       }
+       continue;
+       }
 
       if (offset < output_capacity) {
         output[offset++] = c;
