@@ -1,7 +1,5 @@
 #pragma once
 
-#include <algorithm>
-
 #include "detail/crush_detail.hpp"
 #include "frozenchars/string.hpp"
 
@@ -21,7 +19,12 @@ template <FrozenString Input>
 [[nodiscard]] consteval auto crushed_size() -> size_t {
   auto const input_sv = Input.sv();
   auto u16 = frozenchars::json::detail::utf8_to_utf16(input_sv);
-  u16.erase(std::remove(u16.begin(), u16.end(), frozenchars::json::detail::JSON_CRUSH_DELIMITER), u16.end());
+  {
+    std::u16string filtered;
+    filtered.reserve(u16.size());
+    for (auto c : u16) if (c != frozenchars::json::detail::JSON_CRUSH_DELIMITER) filtered.push_back(c);
+    u16 = std::move(filtered);
+  }
 
   auto const swapped = frozenchars::json::detail::json_crush_swap<char16_t>(u16, true);
   auto const result = frozenchars::json::detail::js_crush_utf16<char16_t>(swapped);
@@ -29,7 +32,7 @@ template <FrozenString Input>
   auto output_u16 = result.crushed;
   if (!result.split.empty()) {
     output_u16.push_back(frozenchars::json::detail::JSON_CRUSH_DELIMITER);
-    output_u16.append(result.split);
+    frozenchars::json::detail::append_view(output_u16, std::u16string_view{result.split.data(), result.split.size()});
   }
   output_u16.push_back(u'_');
 
@@ -56,7 +59,12 @@ template <FrozenString Input>
 
   // UTF-16 に変換し、内部で使うデリミタが入力に含まれていれば除去
   auto u16 = frozenchars::json::detail::utf8_to_utf16(input_sv);
-  u16.erase(std::remove(u16.begin(), u16.end(), frozenchars::json::detail::JSON_CRUSH_DELIMITER), u16.end());
+  {
+    std::u16string filtered;
+    filtered.reserve(u16.size());
+    for (auto c : u16) if (c != frozenchars::json::detail::JSON_CRUSH_DELIMITER) filtered.push_back(c);
+    u16 = std::move(filtered);
+  }
 
   // JSON 構造文字を短い記号へ swap
   auto const swapped = frozenchars::json::detail::json_crush_swap<char16_t>(u16, true);
@@ -68,7 +76,7 @@ template <FrozenString Input>
   auto output_u16 = result.crushed;
   if (!result.split.empty()) {
     output_u16.push_back(frozenchars::json::detail::JSON_CRUSH_DELIMITER);
-    output_u16.append(result.split);
+    frozenchars::json::detail::append_view(output_u16, std::u16string_view{result.split.data(), result.split.size()});
   }
   output_u16.push_back(u'_');
 

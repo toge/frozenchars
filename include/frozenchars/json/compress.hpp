@@ -3,6 +3,7 @@
 #include <string_view>
 
 #include "detail/compress_detail.hpp"
+#include "detail/crush_detail.hpp"
 #include "frozenchars/json/crush.hpp"
 #include "frozenchars/string.hpp"
 
@@ -76,14 +77,19 @@ template <FrozenString Input>
 
   // 続けて JSON-Crush 圧縮：UTF-16変換→デリミタ除去→swap→js_crush
   auto u16 = frozenchars::json::detail::utf8_to_utf16(compressed_str);
-  u16.erase(std::remove(u16.begin(), u16.end(), frozenchars::json::detail::JSON_CRUSH_DELIMITER), u16.end());
+  {
+    std::u16string filtered;
+    filtered.reserve(u16.size());
+    for (auto c : u16) if (c != frozenchars::json::detail::JSON_CRUSH_DELIMITER) filtered.push_back(c);
+    u16 = std::move(filtered);
+  }
   auto const swapped = frozenchars::json::detail::json_crush_swap<char16_t>(u16, true);
   auto const crush_result = frozenchars::json::detail::js_crush_utf16<char16_t>(swapped);
   // 圧縮本体に分割文字列をデリミタ区切りで連結し、末尾に終端記号 '_' を付加
   auto output_u16 = crush_result.crushed;
   if (!crush_result.split.empty()) {
     output_u16.push_back(frozenchars::json::detail::JSON_CRUSH_DELIMITER);
-    output_u16.append(crush_result.split);
+    frozenchars::json::detail::append_view(output_u16, std::u16string_view{crush_result.split.data(), crush_result.split.size()});
   }
   output_u16.push_back(u'_');
   auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);

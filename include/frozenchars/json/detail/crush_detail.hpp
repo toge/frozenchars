@@ -13,6 +13,83 @@
 
 namespace frozenchars::json::detail {
 
+template <typename CharT>
+[[nodiscard]] constexpr auto str_equal(std::basic_string_view<CharT> a, std::basic_string_view<CharT> b) -> bool {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) if (a[i] != b[i]) return false;
+  return true;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto str_equal(std::basic_string<CharT> const& a, std::basic_string<CharT> const& b) -> bool {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) if (a[i] != b[i]) return false;
+  return true;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto str_equal(std::basic_string<CharT> const& a, std::basic_string_view<CharT> b) -> bool {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) if (a[i] != b[i]) return false;
+  return true;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto starts_with_at(
+    std::basic_string_view<CharT> s, size_t pos, std::basic_string_view<CharT> pat) -> bool {
+  if (pat.size() > s.size() - pos) return false;
+  for (size_t i = 0; i < pat.size(); ++i) if (s[pos + i] != pat[i]) return false;
+  return true;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto starts_with_at(
+    std::basic_string<CharT> const& s, size_t pos, std::basic_string_view<CharT> pat) -> bool {
+  if (pat.size() > s.size() - pos) return false;
+  for (size_t i = 0; i < pat.size(); ++i) if (s[pos + i] != pat[i]) return false;
+  return true;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto find_substr(
+    std::basic_string_view<CharT> haystack, std::basic_string_view<CharT> needle, size_t pos) -> size_t {
+  constexpr size_t npos = std::basic_string_view<CharT>::npos;
+  if (needle.empty()) return pos <= haystack.size() ? pos : npos;
+  if (needle.size() > haystack.size()) return npos;
+  for (size_t i = pos; i + needle.size() <= haystack.size(); ++i) {
+    bool ok = true;
+    for (size_t j = 0; j < needle.size(); ++j) if (haystack[i + j] != needle[j]) { ok = false; break; }
+    if (ok) return i;
+  }
+  return npos;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto find_substr(
+    std::basic_string<CharT> const& haystack, std::basic_string_view<CharT> needle, size_t pos) -> size_t {
+  constexpr size_t npos = std::basic_string<CharT>::npos;
+  if (needle.empty()) return pos <= haystack.size() ? pos : npos;
+  if (needle.size() > haystack.size()) return npos;
+  for (size_t i = pos; i + needle.size() <= haystack.size(); ++i) {
+    bool ok = true;
+    for (size_t j = 0; j < needle.size(); ++j) if (haystack[i + j] != needle[j]) { ok = false; break; }
+    if (ok) return i;
+  }
+  return npos;
+}
+
+template <typename CharT>
+[[nodiscard]] constexpr auto make_string(std::basic_string_view<CharT> v) -> std::basic_string<CharT> {
+  std::basic_string<CharT> s;
+  for (auto c : v) s.push_back(c);
+  return s;
+}
+
+template <typename CharT>
+constexpr void append_view(std::basic_string<CharT>& dest, std::basic_string_view<CharT> v) {
+  for (auto c : v) dest.push_back(c);
+}
+
 /**
  * @brief Rabin-Karp 法による部分文字列ハッシュ計算器
  *
@@ -105,7 +182,7 @@ template <typename CharT>
     std::basic_string_view<CharT> const from,
     CharT const to) -> std::basic_string<CharT> {
   size_t pos = 0;
-  while ((pos = str.find(from, pos)) != std::basic_string<CharT>::npos) {
+  while ((pos = find_substr<CharT>(str, from, pos)) != std::basic_string<CharT>::npos) {
     str.replace(pos, from.size(), 1, to);
     pos += 1;
   }
@@ -159,8 +236,8 @@ template <typename CharT>
         auto const sub = string.substr(positions[0], len);
         if (!has_unmatched_surrogate(sub)) {
           candidates.push_back({
-            std::basic_string<CharT>(sub), cnt,
-            encoded_uri_length<CharT>(std::basic_string_view<CharT>(sub))
+            make_string<CharT>(sub), cnt,
+            encoded_uri_length<CharT>(sub)
           });
         }
       }
@@ -173,7 +250,7 @@ template <typename CharT>
   for (auto const& c : candidates) {
     bool found = false;
     for (auto const& d : deduped) {
-      if (d.value == c.value) { found = true; break; }
+      if (str_equal<CharT>(d.value, c.value)) { found = true; break; }
     }
     if (!found) deduped.push_back(c);
   }
@@ -195,7 +272,8 @@ constexpr void count_candidates(
   for (auto& c : candidates) {
     c.count = 0;
     size_t pos = 0;
-    while ((pos = str.find(c.value, pos)) != std::basic_string_view<CharT>::npos) {
+    std::basic_string_view<CharT> cv{c.value.data(), c.value.size()};
+    while ((pos = find_substr<CharT>(str, cv, pos)) != std::basic_string_view<CharT>::npos) {
       ++c.count;
       pos += c.value.size();
     }
@@ -222,10 +300,10 @@ template <typename CharT>
     auto result = std::basic_string<CharT>{};
     result.reserve(s.size());
     for (size_t i = 0; i < s.size(); ) {
-      if (i + a.size() <= s.size() && s.substr(i, a.size()) == a) {
-        result.append(b); i += a.size();
-      } else if (i + b.size() <= s.size() && s.substr(i, b.size()) == b) {
-        result.append(a); i += b.size();
+      if (starts_with_at<CharT>(s, i, a)) {
+        append_view(result, b); i += a.size();
+      } else if (starts_with_at<CharT>(s, i, b)) {
+        append_view(result, a); i += b.size();
       } else {
         result.push_back(s[i]); ++i;
       }
@@ -253,7 +331,7 @@ template <typename CharT>
     {to_view(groups_data[3].a), to_view(groups_data[3].b)},
     {to_view(groups_data[4].a), to_view(groups_data[4].b)},
   };
-  auto str = std::basic_string<CharT>{input};
+  auto str = make_string<CharT>(input);
   if (forward) {
     for (auto const& g : groups) str = apply(str, g.a, g.b);
   } else {
@@ -325,7 +403,7 @@ template <typename CharT>
     auto const& best_sub = candidates[best_idx].value;
     string = replace_all_with_char<CharT>(string, best_sub, replace_char);
     string.push_back(replace_char);
-    string.append(best_sub);
+    append_view(string, std::basic_string_view<CharT>{best_sub.data(), best_sub.size()});
     split_string.insert(split_string.begin(), replace_char);
 
     // 残り候補も同じ置換を反映し、短くなりすぎ・重複したものを除いて再構築
@@ -337,7 +415,7 @@ template <typename CharT>
       if (rewritten.size() < 2) continue;
       bool found = false;
       for (auto const& s : seen) {
-        if (s.value == rewritten) { found = true; break; }
+        if (str_equal<CharT>(s.value, rewritten)) { found = true; break; }
       }
       if (!found) {
         seen.push_back({rewritten});

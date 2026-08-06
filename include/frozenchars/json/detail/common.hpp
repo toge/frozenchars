@@ -22,18 +22,20 @@ inline constexpr auto JSON_CRUSH_DELIMITER = char16_t{0x0001};
 inline constexpr auto replacement_characters_utf16 = [] {
   std::array<char16_t, 222> chars{};
   size_t idx = 0;
+  auto is_unescaped = [](char16_t c) -> bool {
+    constexpr char16_t unescaped[] = {u'-', u'_', u'.', u'!', u'~', u'*', u'\'', u'(', u')'};
+    for (auto x : unescaped) if (x == c) return true;
+    return false;
+  };
   for (int i = 254; i >= 32; --i) {
     if (i == 92) continue;
-    bool in_uri_safe = false;
-    std::u16string_view const unescaped = u"-_.!~*'()";
-    in_uri_safe = (i >= 48 && i <= 57) || (i >= 65 && i <= 90) || (i >= 97 && i <= 122) ||
-                  unescaped.find(static_cast<char16_t>(i)) != std::u16string_view::npos;
+    bool in_uri_safe = (i >= 48 && i <= 57) || (i >= 65 && i <= 90) || (i >= 97 && i <= 122) ||
+                       is_unescaped(static_cast<char16_t>(i));
     if (!in_uri_safe) chars[idx++] = static_cast<char16_t>(i);
   }
   for (int i = 126; i > 0; --i) {
     bool in_uri_safe = (i >= 48 && i <= 57) || (i >= 65 && i <= 90) || (i >= 97 && i <= 122);
-    std::u16string_view const unescaped = u"-_.!~*'()";
-    in_uri_safe = in_uri_safe || unescaped.find(static_cast<char16_t>(i)) != std::u16string_view::npos;
+    in_uri_safe = in_uri_safe || is_unescaped(static_cast<char16_t>(i));
     if (in_uri_safe) chars[idx++] = static_cast<char16_t>(i);
   }
   return chars;

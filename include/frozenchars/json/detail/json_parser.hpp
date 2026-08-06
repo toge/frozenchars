@@ -165,9 +165,14 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     auto const str = parse_string(s, p);
     return {json_type::string, false, 0, str, {}, {}};
   }
-  if (c == 't' && s.substr(p, 4) == "true")  { p += 4; return {json_type::boolean, true, 0, {}, {}, {}}; }
-  if (c == 'f' && s.substr(p, 5) == "false") { p += 5; return {json_type::boolean, false, 0, {}, {}, {}}; }
-  if (c == 'n' && s.substr(p, 4) == "null")  { p += 4; return {json_type::null, false, 0, {}, {}, {}}; }
+  auto starts_with = [&](size_t pos, std::string_view pat) -> bool {
+    if (pat.size() > s.size() - pos) return false;
+    for (size_t i = 0; i < pat.size(); ++i) if (s[pos + i] != pat[i]) return false;
+    return true;
+  };
+  if (c == 't' && starts_with(p, "true"))  { p += 4; return {json_type::boolean, true, 0, {}, {}, {}}; }
+  if (c == 'f' && starts_with(p, "false")) { p += 5; return {json_type::boolean, false, 0, {}, {}, {}}; }
+  if (c == 'n' && starts_with(p, "null"))  { p += 4; return {json_type::null, false, 0, {}, {}, {}}; }
   if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
   throw std::runtime_error("unexpected character");
 }

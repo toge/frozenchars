@@ -17,7 +17,11 @@ add_compile_options(
     $<$<CXX_COMPILER_ID:Clang>:-Wall>
     $<$<CXX_COMPILER_ID:Clang>:-Wextra>
     $<$<CXX_COMPILER_ID:Clang>:-pedantic>
-    $<$<CXX_COMPILER_ID:Clang>:-fconstexpr-steps=10000000>
+    $<$<CXX_COMPILER_ID:AppleClang>:-Wall>
+    $<$<CXX_COMPILER_ID:AppleClang>:-Wextra>
+    $<$<CXX_COMPILER_ID:AppleClang>:-pedantic>
+    $<$<CXX_COMPILER_ID:Clang>:-fconstexpr-steps=100000000>
+    $<$<CXX_COMPILER_ID:AppleClang>:-fconstexpr-steps=100000000>
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
     $<$<CXX_COMPILER_ID:MSVC>:/constexpr:steps10000000>
 )
