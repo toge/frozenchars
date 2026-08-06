@@ -98,6 +98,13 @@ TEST_CASE("frozen_trie_index handles more than 8 children (LUT path)", "[frozen_
   CHECK(Idx::find("zulu") == Idx::NPOS);
 }
 
+TEST_CASE("frozen_trie_index rejects short input in long label comparison", "[frozen_trie]") {
+  using Idx = frozen_trie_index<"0123456789abcdefXYZ"_fs>;
+
+  CHECK_FALSE(Idx::compare_label("x", 0, Idx::k_nodes[0].label_offset, Idx::k_nodes[0].label_length));
+  CHECK(Idx::find("0123456789abcdefXYZ") == 0);
+}
+
 TEST_CASE("frozen_trie_index handles single key", "[frozen_trie]") {
   using Idx = frozen_trie_index<"onlykey"_fs>;
 

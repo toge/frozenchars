@@ -318,10 +318,10 @@ public:
     }
   }();
 
-  /// @brief 高速ラベル比較（SIMD / バイト単位フォールバック）
+private:
   [[nodiscard]] static constexpr auto
-  compare_label(std::string_view key, std::size_t pos,
-                std::uint16_t label_offset, std::uint8_t label_length) noexcept -> bool {
+  compare_label_unchecked(std::string_view key, std::size_t pos,
+                          std::uint16_t label_offset, std::uint8_t label_length) noexcept -> bool {
 #if defined(__SSE2__)
     if (!std::is_constant_evaluated() && label_length >= 16) {
       auto const* kp = key.data() + pos;
@@ -364,6 +364,20 @@ public:
     return true;
   }
 
+public:
+  /// @brief 高速ラベル比較（SIMD / バイト単位フォールバック）
+  [[nodiscard]] static constexpr auto
+  compare_label(std::string_view key, std::size_t pos,
+                std::uint16_t label_offset, std::uint8_t label_length) noexcept -> bool {
+    auto const label_offset_size = static_cast<std::size_t>(label_offset);
+    auto const label_length_size = static_cast<std::size_t>(label_length);
+    if (pos > key.size() || key.size() - pos < label_length_size ||
+        label_offset_size > k_labels.size() || label_length_size > k_labels.size() - label_offset_size) {
+      return false;
+    }
+    return compare_label_unchecked(key, pos, label_offset, label_length);
+  }
+
   /**
    * @brief キーを検索する
    * @param key 検索キー
@@ -381,7 +395,7 @@ public:
       if (remaining < static_cast<std::size_t>(node.label_length)) {
         return NPOS;
       }
-      if (!compare_label(key, pos, node.label_offset, node.label_length)) {
+      if (!compare_label_unchecked(key, pos, node.label_offset, node.label_length)) {
         return NPOS;
       }
       pos += static_cast<std::size_t>(node.label_length);

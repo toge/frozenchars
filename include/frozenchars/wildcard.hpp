@@ -291,8 +291,13 @@ struct wildcard_to_regex_helper {
       if (c == '!' && i > 0 && PAT.data()[i - 1] == '[') {
         bool bracket_escaped = false;
         if (i >= 2 && PAT.data()[i - 2] == '\\') {
-          auto count = 1uz;
-          for (auto j = i - 3; j < i && PAT.data()[j] == '\\'; --j) ++count;
+          auto count = 0uz;
+          auto j = i - 2;
+          while (PAT.data()[j] == '\\') {
+            ++count;
+            if (j == 0) break;
+            --j;
+          }
           bracket_escaped = (count % 2 == 1);
         }
         fs.buffer[i] = bracket_escaped ? '!' : '^';

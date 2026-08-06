@@ -345,26 +345,26 @@ TEST_CASE("frozen_map make_frozen_map builds from pair-like entries", "[frozen_m
 }
 
 TEST_CASE("frozen_map keyed initialization rejects unknown keys", "[frozen_map]") {
-  REQUIRE_THROWS_AS(
+  REQUIRE_THROWS_WITH(
     (frozen_map<int, "timeout"_fs, "retry"_fs>{
       std::array{
         frozen_map_entry<int>{"timeout", 30},
         frozen_map_entry<int>{"other", 5},
       }
     }),
-    std::invalid_argument
+    Catch::Matchers::ContainsSubstring("unknown key")
   );
 }
 
 TEST_CASE("frozen_map keyed initialization rejects duplicate keys", "[frozen_map]") {
-  REQUIRE_THROWS_AS(
+  REQUIRE_THROWS_WITH(
     (frozen_map<int, "timeout"_fs, "retry"_fs>{
       std::array{
         frozen_map_entry<int>{"timeout", 30},
         frozen_map_entry<int>{"timeout", 5},
       }
     }),
-    std::invalid_argument
+    Catch::Matchers::ContainsSubstring("duplicate key")
   );
 }
 

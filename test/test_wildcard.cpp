@@ -154,6 +154,16 @@ TEST_CASE("wildcard: escape sequences") {
   REQUIRE(wildcard_match<"a\\[b">("a[b"));
 }
 
+TEST_CASE("wildcard: escaped bracket is not a negation marker") {
+  using helper = detail::wildcard_to_regex_helper<"\\[!">;
+
+  STATIC_REQUIRE(helper::can_delegate);
+  STATIC_REQUIRE(helper::regex_pattern.sv() == "\\[!");
+  REQUIRE(wildcard_match<"\\[!">("[!"));
+  REQUIRE_FALSE(wildcard_match<"\\[!">("!"));
+}
+
+
 TEST_CASE("wildcard: character sets") {
   REQUIRE(wildcard_match<"[abc]">("a"));
   REQUIRE(wildcard_match<"[abc]">("b"));

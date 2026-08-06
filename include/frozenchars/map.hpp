@@ -864,10 +864,10 @@ private:
     for (auto& entry : entries) {
       auto const index = lookup_::find_index_raw(entry.key);
       if (index == size()) {
-        continue;
+        throw std::invalid_argument("frozen_map unknown key");
       }
       if (values[index].has_value()) {
-        continue;
+        throw std::invalid_argument("frozen_map duplicate key");
       }
       values[index].emplace(std::move(entry.value));
     }

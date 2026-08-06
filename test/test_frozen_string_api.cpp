@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <span>
+#include <stdexcept>
 #include <unordered_map>
 
 #include "frozenchars/string.hpp"
@@ -32,6 +33,15 @@ TEST_CASE("FrozenString::front and back") {
   static_assert("abc"_fs.back() == 'c');
   REQUIRE("abc"_fs.front() == 'a');
   REQUIRE("abc"_fs.back() == 'c');
+}
+
+TEST_CASE("FrozenString rejects invalid element access") {
+  auto const empty = FrozenString<1>{};
+  auto const text = "abc"_fs;
+
+  REQUIRE_THROWS_AS(empty.front(), std::out_of_range);
+  REQUIRE_THROWS_AS(empty.back(), std::out_of_range);
+  REQUIRE_THROWS_AS(text[3], std::out_of_range);
 }
 
 TEST_CASE("FrozenString range-based for") {

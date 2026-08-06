@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <ostream>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 
 namespace frozenchars {
@@ -91,22 +92,25 @@ struct FrozenString {
   /**
    * @brief 先頭要素を返す (length > 0 を事前条件とする)
    */
-  [[nodiscard]] constexpr auto front() const noexcept -> char {
+  [[nodiscard]] constexpr auto front() const -> char {
+    if (empty()) throw std::out_of_range{"FrozenString::front() called on empty string"};
     return buffer[0];
   }
 
   /**
-   * @brief 末尾要素を返す (length > 0 を事前条件とする)
+   * @brief 末尾要素を返す
    */
-  [[nodiscard]] constexpr auto back() const noexcept -> char {
+  [[nodiscard]] constexpr auto back() const -> char {
+    if (empty()) throw std::out_of_range{"FrozenString::back() called on empty string"};
     return buffer[length - 1];
   }
 
   /**
-   * @brief 指定インデックスの文字を返す (境界チェック無し)
+   * @brief 指定インデックスの文字を返す
    * @param i インデックス
    */
-  [[nodiscard]] constexpr auto operator[](size_t i) const noexcept -> char {
+  [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
+    if (i >= length) throw std::out_of_range{"FrozenString::operator[] index out of range"};
     return buffer[i];
   }
 

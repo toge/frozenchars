@@ -4,40 +4,23 @@ set(FROZENCHARS_VERSION "0.1.0")
 
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
-option(BUILD_TEST "Enable tests" ON)
+option(FROZENCHARS_BUILD_TEST "Enable tests" ON)
 
-## add warning
-if (CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3")
-endif()
-
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fconstexpr-steps=10000000")
-endif()
-
-if (MSVC)
-    if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-        string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    else()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-    endif()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /constexpr:steps10000000")
-endif()
-
-## optimization
-if (CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
-endif()
-if (MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Ox")
-endif()
-
-## other flag
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+add_compile_options(
+    $<$<CXX_COMPILER_ID:GNU>:-Wall>
+    $<$<CXX_COMPILER_ID:GNU>:-Wextra>
+    $<$<CXX_COMPILER_ID:GNU>:-pedantic>
+    $<$<CXX_COMPILER_ID:Clang>:-Wall>
+    $<$<CXX_COMPILER_ID:Clang>:-Wextra>
+    $<$<CXX_COMPILER_ID:Clang>:-pedantic>
+    $<$<CXX_COMPILER_ID:Clang>:-fconstexpr-steps=10000000>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<CXX_COMPILER_ID:MSVC>:/constexpr:steps10000000>
+)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -93,7 +76,7 @@ install(EXPORT frozencharsTargets
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
 )
 
-if(BUILD_TEST)
+if(FROZENCHARS_BUILD_TEST)
     enable_testing()
     add_subdirectory(test)
 endif()
