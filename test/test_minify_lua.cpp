@@ -119,6 +119,37 @@ TEST_CASE("minify_lua - keep_directives オプション", "[minifier]")
   }
 }
 
+TEST_CASE("minify_lua - セミコロン除去", "[minifier]")
+{
+  // EOF 直前のセミコロンは除去
+  SECTION("末尾セミコロン")
+  {
+    auto constexpr result = minify_lua("local x = 1;");
+    REQUIRE(result.sv() == "local x=1");
+  }
+
+  // '}' 直前のセミコロンは除去
+  SECTION("ブロック末尾セミコロン")
+  {
+    auto constexpr result = minify_lua("do local x = 1; end");
+    REQUIRE(result.sv() == "do local x=1;end");
+  }
+
+  // 文脈で必要なセミコロンは保持
+  SECTION("識別子間のセミコロン")
+  {
+    auto constexpr result = minify_lua("x = 1; y = 2");
+    REQUIRE(result.sv() == "x=1;y=2");
+  }
+
+  // コメント経由で '}' が続く場合は除去
+  SECTION("コメント経由ブロック末尾")
+  {
+    auto constexpr result = minify_lua("do local x = 1; -- c\nend");
+    REQUIRE(result.sv() == "do local x=1;end");
+  }
+}
+
 TEST_CASE("minify_lua - ops パイプ演算子", "[minifier]")
 {
   SECTION("FrozenString からパイプ")

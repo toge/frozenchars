@@ -178,6 +178,12 @@ auto constexpr is_redundant_attribute(char const* tag, size_t tag_len, char cons
       return true;
     }
   }
+  // <button type="submit"> → type 属性は冗長（デフォルトが submit）
+  if (tag_len == 6 && tag[0] == 'b' && tag[1] == 'u' && tag[2] == 't' && tag[3] == 't' && tag[4] == 'o' && tag[5] == 'n' && attr_len == 4 && attr_name[0] == 't' && attr_name[1] == 'y' && attr_name[2] == 'p' && attr_name[3] == 'e') {
+    if (val_len == 6 && attr_val[0] == 's' && attr_val[1] == 'u' && attr_val[2] == 'b' && attr_val[3] == 'm' && attr_val[4] == 'i' && attr_val[5] == 't') {
+      return true;
+    }
+  }
   return false;
 }
 
@@ -584,6 +590,7 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
   auto script_mode     = 0u;
   auto script_quote   = '\0';
   auto script_depth   = 0uz;
+  auto script_dollar_brace = false;  // ${ の次の '{' 二重カウント防止
   auto in_style       = false;
   auto const len      = std::char_traits<char>::length(input);
 
@@ -628,12 +635,14 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       // テンプレートリテラルの補間 ${}
       if (script_quote == '`' && c == '$' && i + 1 < len && input[i + 1] == '{') {
         ++script_depth;
-      } else if (script_quote == '`' && script_depth > 0 && c == '{') {
+        script_dollar_brace = true;
+      } else if (script_quote == '`' && script_depth > 0 && c == '{' && !script_dollar_brace) {
         ++script_depth;
       } else if (script_quote == '`' && script_depth > 0 && c == '}') {
         --script_depth;
         // ponytail: ${} 内のネストされたテンプレートリテラルは未対応
       }
+      if (c != '{' && c != '}' && c != '$') script_dollar_brace = false;
       // JS 文字列リテラルの開始/終了
       if (script_quote == '\0' && (c == '"' || c == '\'' || c == '`')) {
         script_quote = c;
@@ -918,6 +927,60 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       continue;
     }
 
+    // script 内 JS: セミコロン除去（ASI 安全な範囲）
+    if (in_script && script_mode == 0u && !has_flag(options, minify_markup_opt::preserve_script) && script_quote == '\0' && c == ';') {
+      auto j = i + 1;
+      auto keep = true;
+      auto tl_depth = 0uz;
+      while (true) {
+        while (j < len && detail::is_any_whitespace(input[j])) ++j;
+        if (j >= len || at_close_script(input, len, j)) { keep = false; break; }
+        auto const nc = input[j];
+        if (tl_depth > 0) {
+          if (nc == '{') { ++tl_depth; ++j; continue; }
+          if (nc == '}') { --tl_depth; ++j; continue; }
+          ++j; continue;
+        }
+        if (nc == '}') { keep = false; break; }
+        if (nc == '`') {
+          ++j;
+          while (j < len && input[j] != '`') {
+            if (input[j] == '\\') { j += 2; continue; }
+            if (input[j] == '$' && j + 1 < len && input[j + 1] == '{') { tl_depth = 1; j += 2; continue; }
+            ++j;
+          }
+          if (j < len) ++j;
+          continue;
+        }
+        if (nc == '"' || nc == '\'') {
+          ++j;
+          while (j < len && input[j] != nc) {
+            if (input[j] == '\\') j += 2; else ++j;
+          }
+          if (j < len) ++j;
+          continue;
+        }
+        if (nc == '<' && at_close_script(input, len, j)) { keep = false; break; }
+        if (nc == '/' && j + 1 < len && input[j + 1] == '/') {
+          while (j < len && input[j] != '\n' && !at_close_script(input, len, j)) ++j;
+          continue;
+        }
+        if (nc == '/' && j + 1 < len && input[j + 1] == '*') {
+          j += 2;
+          while (j + 1 < len && !(input[j] == '*' && input[j + 1] == '/') && !at_close_script(input, len, j)) ++j;
+          if (j + 1 < len && !at_close_script(input, len, j)) j += 2;
+          continue;
+        }
+        break;
+      }
+      if (keep) {
+        if (offset < output_capacity) output[offset++] = ';';
+      }
+      pending_space = false;
+      ++i;
+      continue;
+    }
+
     // テキスト中の '>' は直前に空白があれば削ってから出力する
     // preserve_script または preserve-mode の script 内では行わない
     if (script_quote == '\0' && c == '>' && !((has_flag(options, minify_markup_opt::preserve_script) || script_mode == 2u) && in_script)) {
@@ -1155,6 +1218,7 @@ template <size_t N>
   auto quote          = '\0';
   auto brace_depth    = 0uz;
   auto pending_space  = false;
+  auto dollar_brace   = false;  // ${ の次の '{' 二重カウント防止
 
   while (i < str.length) {
     auto const c = str.buffer[i];
@@ -1190,12 +1254,15 @@ template <size_t N>
     // テンプレートリテラルの補間 ${}
     if (quote == '`' && c == '$' && i + 1 < str.length && str.buffer[i + 1] == '{') {
       ++brace_depth;
-    } else if (quote == '`' && brace_depth > 0 && c == '{') {
+      dollar_brace = true;  // 次の '{' は二重カウントしない
+    } else if (quote == '`' && brace_depth > 0 && c == '{' && !dollar_brace) {
       ++brace_depth;
     } else if (quote == '`' && brace_depth > 0 && c == '}') {
       --brace_depth;
+      dollar_brace = false;  // 式の閉じでリセット
       // ponytail: ${} 内のネストされたテンプレートリテラルは未対応
     }
+    if (c != '{' && c != '}' && c != '$') dollar_brace = false;
 
     // 文字列リテラルの開始/終了
     if (quote == '\0' && (c == '"' || c == '\'' || c == '`')) {
@@ -1215,6 +1282,65 @@ template <size_t N>
     // 空白文字は遅延フラグを立ててスキップ
     if (detail::is_any_whitespace(c)) {
       pending_space = true;
+      ++i;
+      continue;
+    }
+
+    // セミコロン除去（ASI 安全な範囲）:
+    // 直後の実トークンが '}' または EOF なら削除する。
+    // コメント・文字列・テンプレートリテラルをスキップして確認する。
+    if (quote == '\0' && c == ';') {
+      auto j = i + 1;
+      auto keep = true;
+      auto tl_depth = 0uz;  // テンプレートリテラルの ${} ネスト深度
+      while (true) {
+        while (j < str.length && detail::is_any_whitespace(str.buffer[j])) ++j;
+        if (j >= str.length) { keep = false; break; }
+        auto const nc = str.buffer[j];
+        // テンプレートリテラルの ${} 内: } は式の閉じ而非文の閉じ
+        if (tl_depth > 0) {
+          if (nc == '{') { ++tl_depth; ++j; continue; }
+          if (nc == '}') { --tl_depth; ++j; continue; }
+          ++j; continue;
+        }
+        if (nc == '}') { keep = false; break; }
+        // テンプレートリテラル開始
+        if (nc == '`') {
+          ++j;
+          while (j < str.length && str.buffer[j] != '`') {
+            if (str.buffer[j] == '\\') { j += 2; continue; }
+            if (str.buffer[j] == '$' && j + 1 < str.length && str.buffer[j + 1] == '{') { tl_depth = 1; j += 2; continue; }
+            ++j;
+          }
+          if (j < str.length) ++j;  // skip closing backtick
+          continue;
+        }
+        // 文字列: 閉じクォートまでスキップ
+        if (nc == '"' || nc == '\'') {
+          ++j;
+          while (j < str.length && str.buffer[j] != nc) {
+            if (str.buffer[j] == '\\') j += 2; else ++j;
+          }
+          if (j < str.length) ++j;
+          continue;
+        }
+        // コメント
+        if (nc == '/' && j + 1 < str.length && str.buffer[j + 1] == '/') {
+          while (j < str.length && str.buffer[j] != '\n') ++j;
+          continue;
+        }
+        if (nc == '/' && j + 1 < str.length && str.buffer[j + 1] == '*') {
+          j += 2;
+          while (j + 1 < str.length && !(str.buffer[j] == '*' && str.buffer[j + 1] == '/')) ++j;
+          if (j + 1 < str.length) j += 2;
+          continue;
+        }
+        break;
+      }
+      if (keep) {
+        res.buffer[offset++] = ';';
+      }
+      pending_space = false;
       ++i;
       continue;
     }
@@ -2127,6 +2253,44 @@ constexpr std::size_t minify_lua(const char *input, char *output,
         ++i;
       } else if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
         pending_space = true;
+        ++i;
+      } else if (c == ';') {
+        // セミコロン除去（ASI 安全な範囲）:
+        // Lua の ';' は文分離記号で省略可能な場合が多い。
+        // 直後の実トークンが '}' ']' ')' EOF なら削除する。
+        auto j = i + 1;
+        auto keep = true;
+        while (true) {
+          while (input[j] == ' ' || input[j] == '\t' || input[j] == '\n' || input[j] == '\r' || input[j] == '\f') ++j;
+          if (input[j] == '\0') { keep = false; break; }
+          if (input[j] == '}' || input[j] == ']' || input[j] == ')') { keep = false; break; }
+          // ラインコメント -- をスキップ
+          if (input[j] == '-' && input[j + 1] == '-') {
+            // 長括弧コメント --[=*[...]=] をスキップ
+            if (input[j + 2] == '[') {
+              int const level = long_bracket_level(input, j + 2);
+              if (level >= 0) {
+                std::size_t const close = find_long_bracket_close(input, j + 2, level);
+                if (close != static_cast<std::size_t>(-1)) {
+                  j = close + static_cast<std::size_t>(level) + 2;
+                  continue;
+                }
+              }
+            }
+            // 行コメント
+            j += 2;
+            while (input[j] != '\0' && input[j] != '\n') ++j;
+            continue;
+          }
+          break;
+        }
+        if (keep) {
+          pending_space = false;
+          write_char(';');
+        } else {
+          // セミコロン削除時: 次のトークンとの結合を防ぐため空白を要求
+          pending_space = true;
+        }
         ++i;
       } else {
         // 遅延された空白を出力するか判定: 識別子-識別子間など必要な場合のみ空白を挿入する

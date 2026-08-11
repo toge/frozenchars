@@ -1615,6 +1615,7 @@ struct sql_type_mapping {
 inline constexpr sql_type_mapping sql_type_shortenings[] = {
     {"BOOLEAN", 7, "BOOL", 4},
     {"CHARACTER", 9, "CHAR", 4},
+    {"DECIMAL", 7, "DEC", 3},
     {"INTEGER", 7, "INT", 3},
 };
 

@@ -26,38 +26,38 @@ using namespace frozenchars::literals;
 namespace {
 
 // 1. 行コメント除去
-static_assert(minify_js("var x = 1; // comment\n var y = 2;").sv() == std::string_view("var x = 1;var y = 2;"));
+static_assert(minify_js("var x = 1; // comment\n var y = 2;").sv() == std::string_view("var x = 1;var y = 2"));
 
 // 2. ブロックコメント除去
-static_assert(minify_js("var x = /* block */ 1;").sv() == std::string_view("var x = 1;"));
+static_assert(minify_js("var x = /* block */ 1;").sv() == std::string_view("var x = 1"));
 
 // 3. 複数行ブロックコメント除去
-static_assert(minify_js("var x = /*\n  multi\n  line\n*/ 1;").sv() == std::string_view("var x = 1;"));
+static_assert(minify_js("var x = /*\n  multi\n  line\n*/ 1;").sv() == std::string_view("var x = 1"));
 
 // 4. 文字列内のコメント記号は除去しない
-static_assert(minify_js("var url = \"//not a comment\";").sv() == std::string_view("var url =\"//not a comment\";"));
-static_assert(minify_js("var url = \"/* also not */removed\";").sv() == std::string_view("var url =\"/* also not */removed\";"));
+static_assert(minify_js("var url = \"//not a comment\";").sv() == std::string_view("var url =\"//not a comment\""));
+static_assert(minify_js("var url = \"/* also not */removed\";").sv() == std::string_view("var url =\"/* also not */removed\""));
 
 // 5. シングルクォート文字列保護
-static_assert(minify_js("var s = 'hello world';").sv() == std::string_view("var s ='hello world';"));
+static_assert(minify_js("var s = 'hello world';").sv() == std::string_view("var s ='hello world'"));
 
 // 6. テンプレートリテラル保護
-static_assert(minify_js("var s = `hello ${name}`;").sv() == std::string_view("var s =`hello ${name}`;"));
+static_assert(minify_js("var s = `hello ${name}`;").sv() == std::string_view("var s =`hello ${name}`"));
 
 // 7. エスケープシーケンス保護
-static_assert(minify_js("var s = \"hello \\\"world\\\"\";").sv() == std::string_view("var s =\"hello \\\"world\\\"\";"));
-static_assert(minify_js("var s = 'hello \\'world\\'';").sv() == std::string_view("var s ='hello \\'world\\'';"));
+static_assert(minify_js("var s = \"hello \\\"world\\\"\";").sv() == std::string_view("var s =\"hello \\\"world\\\"\""));
+static_assert(minify_js("var s = 'hello \\'world\\'';").sv() == std::string_view("var s ='hello \\'world\\''"));
 
 // 8. 空白圧縮（括弧周りなど）
 static_assert(minify_js("function  f(  x , y )  {  return  x + y ; }").sv() ==
-              std::string_view("function f(x,y){return x + y;}"));
+              std::string_view("function f(x,y){return x + y}"));
 
 // 9. 識別子間のスペース保持、演算子前後
 static_assert(minify_js("if (a < b) { console . log (\"hi\"); }").sv() ==
-              std::string_view("if(a < b){console.log(\"hi\");}"));
+              std::string_view("if(a < b){console.log(\"hi\")}"));
 
 // 10. ブロックコメント除去後に隣接トークン間のスペースを補完
-static_assert(minify_js("var x/*comment*/=1;").sv() == std::string_view("var x =1;"));
+static_assert(minify_js("var x/*comment*/=1;").sv() == std::string_view("var x =1"));
 
 // 11. 空文字列
 static_assert(minify_js("").sv() == std::string_view(""));
@@ -66,7 +66,7 @@ static_assert(minify_js("").sv() == std::string_view(""));
 static_assert(minify_js("   \t\n  ").sv() == std::string_view(""));
 
 // 13. ダブルクォート内のエスケープされた quote は閉じない
-static_assert(minify_js("var s = \" \\\" \";").sv() == std::string_view("var s =\" \\\" \";"));
+static_assert(minify_js("var s = \" \\\" \";").sv() == std::string_view("var s =\" \\\" \""));
 
 }
 
@@ -239,6 +239,16 @@ TEST_CASE("minify_html - boolean 属性", "[minifier]")
   auto constexpr html6 = minify_html("<div itemscope=\"itemscope\">x</div>"_fs);
   static_assert(html6.sv() == "<div itemscope>x</div>");
   REQUIRE(html6.sv() == "<div itemscope>x</div>");
+
+  // button type=\"submit\" はデフォルトなので冗長
+  auto constexpr btn = minify_html("<button type=\"submit\">OK</button>"_fs);
+  static_assert(btn.sv() == "<button>OK</button>");
+  REQUIRE(btn.sv() == "<button>OK</button>");
+
+  // button type=\"button\" はデフォルトではないので保持
+  auto constexpr btn2 = minify_html("<button type=\"button\">OK</button>"_fs);
+  static_assert(btn2.sv() == "<button type=button>OK</button>");
+  REQUIRE(btn2.sv() == "<button type=button>OK</button>");
 }
 
 TEST_CASE("minify_html - 省略可能な終了タグ", "[minifier]")
@@ -322,52 +332,52 @@ TEST_CASE("minify_html - <script> 内 JS 行コメント除去", "[minifier]")
 {
   auto constexpr r = minify_html(
     "<script>var x = 1; // comment\n var y = 2;</script>"_fs);
-  static_assert(r.sv() == "<script>var x=1; var y=2;</script>");
-  REQUIRE(r.sv() == "<script>var x=1; var y=2;</script>");
+  static_assert(r.sv() == "<script>var x=1; var y=2</script>");
+  REQUIRE(r.sv() == "<script>var x=1; var y=2</script>");
 }
 
 TEST_CASE("minify_html - <script> 内 JS ブロックコメント除去", "[minifier]")
 {
   auto constexpr r = minify_html(
     "<script>var x = /* block */ 1;</script>"_fs);
-  static_assert(r.sv() == "<script>var x=1;</script>");
-  REQUIRE(r.sv() == "<script>var x=1;</script>");
+  static_assert(r.sv() == "<script>var x=1</script>");
+  REQUIRE(r.sv() == "<script>var x=1</script>");
 
   auto constexpr multi = minify_html(
     "<script>var x = /* multi\nline */ 1;</script>"_fs);
-  static_assert(multi.sv() == "<script>var x=1;</script>");
-  REQUIRE(multi.sv() == "<script>var x=1;</script>");
+  static_assert(multi.sv() == "<script>var x=1</script>");
+  REQUIRE(multi.sv() == "<script>var x=1</script>");
 }
 
 TEST_CASE("minify_html - <script> 内 JS 文字列リテラル保護", "[minifier]")
 {
   auto constexpr dq = minify_html(
     "<script>var url = \"http://example.com\";</script>"_fs);
-  static_assert(dq.sv() == "<script>var url=\"http://example.com\";</script>");
-  REQUIRE(dq.sv() == "<script>var url=\"http://example.com\";</script>");
+  static_assert(dq.sv() == "<script>var url=\"http://example.com\"</script>");
+  REQUIRE(dq.sv() == "<script>var url=\"http://example.com\"</script>");
 
   auto constexpr sq = minify_html(
     "<script>var s = 'http://example.com';</script>"_fs);
-  static_assert(sq.sv() == "<script>var s='http://example.com';</script>");
-  REQUIRE(sq.sv() == "<script>var s='http://example.com';</script>");
+  static_assert(sq.sv() == "<script>var s='http://example.com'</script>");
+  REQUIRE(sq.sv() == "<script>var s='http://example.com'</script>");
 
   auto constexpr bt = minify_html(
     "<script>var s = `hello ${name}`;</script>"_fs);
-  static_assert(bt.sv() == "<script>var s=`hello ${name}`;</script>");
-  REQUIRE(bt.sv() == "<script>var s=`hello ${name}`;</script>");
+  static_assert(bt.sv() == "<script>var s=`hello ${name}`</script>");
+  REQUIRE(bt.sv() == "<script>var s=`hello ${name}`</script>");
 }
 
 TEST_CASE("minify_html - <script> 内行コメント直前に </script> がある場合", "[minifier]")
 {
   auto constexpr r = minify_html(
     "<script>var s = 'ok'; // comment\n</script>"_fs);
-  static_assert(r.sv() == "<script>var s='ok';</script>");
-  REQUIRE(r.sv() == "<script>var s='ok';</script>");
+  static_assert(r.sv() == "<script>var s='ok'</script>");
+  REQUIRE(r.sv() == "<script>var s='ok'</script>");
 
   auto constexpr inline_c = minify_html(
     "<script>var s = 'x'; // comment</script>"_fs);
-  static_assert(inline_c.sv() == "<script>var s='x';</script>");
-  REQUIRE(inline_c.sv() == "<script>var s='x';</script>");
+  static_assert(inline_c.sv() == "<script>var s='x'</script>");
+  REQUIRE(inline_c.sv() == "<script>var s='x'</script>");
 }
 
 TEST_CASE("minify_html - <script> 内 <> は JS の一部として保持", "[minifier]")
@@ -382,8 +392,8 @@ TEST_CASE("minify_html - 複数の <script> ブロック", "[minifier]")
 {
   auto constexpr r = minify_html(
     "<div>a</div><script>// c\nvar x=1;</script><div>b</div>"_fs);
-  static_assert(r.sv() == "<div>a</div><script>var x=1;</script><div>b</div>");
-  REQUIRE(r.sv() == "<div>a</div><script>var x=1;</script><div>b</div>");
+  static_assert(r.sv() == "<div>a</div><script>var x=1</script><div>b</div>");
+  REQUIRE(r.sv() == "<div>a</div><script>var x=1</script><div>b</div>");
 }
 
 TEST_CASE("minify_html - <script> 外の // は JS コメント扱いしない", "[minifier]")
@@ -709,6 +719,14 @@ TEST_CASE("minify_sql - 型短縮", "[minifier]")
   REQUIRE(sql_type.sv() == "SELECT INT,BOOL FROM tbl WHERE col::text='x'");
 }
 
+TEST_CASE("minify_sql - DECIMAL 短縮", "[minifier]")
+{
+  auto constexpr sql_dec = minify_sql(
+    "SELECT  DECIMAL(10,2)  FROM  tbl"_fs);
+  static_assert(sql_dec.sv() == "SELECT DEC(10,2) FROM tbl");
+  REQUIRE(sql_dec.sv() == "SELECT DEC(10,2) FROM tbl");
+}
+
 TEST_CASE("minify_sql - none オプション", "[minifier]")
 {
   auto constexpr sql_no_shorten = minify_sql(
@@ -902,7 +920,7 @@ TEST_CASE("minify ops - size() は実長を返しバッファ末尾はゼロ", "
   static_assert(("{ \"a\" : 1 }"_fs | frozenchars::ops::minify_json).size() == 7);
   static_assert(("a: 1\nb: 2"_fs | frozenchars::ops::minify_yaml).size() == 9);
   static_assert(("SELECT * FROM t"_fs | frozenchars::ops::minify_sql).size() == 15);
-  static_assert(("var x = 1; // c\n var y = 2;"_fs | frozenchars::ops::minify_js).size() == 20);
+  static_assert(("var x = 1; // c\n var y = 2;"_fs | frozenchars::ops::minify_js).size() == 19);
 
   // size() が capacity より小さく、末尾以降のバッファがゼロであること
   auto constexpr c = "MATCH (n) RETURN n"_fs | frozenchars::ops::minify_cypher;
@@ -994,36 +1012,36 @@ TEST_CASE("minify_js - 基本", "[minifier]")
   SECTION("行コメント除去")
   {
     auto constexpr r = minify_js("var x = 1; // comment\n var y = 2;");
-    static_assert(r.sv() == "var x = 1;var y = 2;");
-    REQUIRE(r.sv() == "var x = 1;var y = 2;");
+    static_assert(r.sv() == "var x = 1;var y = 2");
+    REQUIRE(r.sv() == "var x = 1;var y = 2");
   }
 
   SECTION("ブロックコメント除去")
   {
     auto constexpr r = minify_js("var x = /* block */ 1;");
-    static_assert(r.sv() == "var x = 1;");
-    REQUIRE(r.sv() == "var x = 1;");
+    static_assert(r.sv() == "var x = 1");
+    REQUIRE(r.sv() == "var x = 1");
   }
 
   SECTION("文字列保護")
   {
     auto constexpr r = minify_js("var url = \"http://example.com\";");
-    static_assert(r.sv() == "var url =\"http://example.com\";");
-    REQUIRE(r.sv() == "var url =\"http://example.com\";");
+    static_assert(r.sv() == "var url =\"http://example.com\"");
+    REQUIRE(r.sv() == "var url =\"http://example.com\"");
   }
 
   SECTION("テンプレートリテラル")
   {
     auto constexpr r = minify_js("var s = `hello ${name}`;");
-    static_assert(r.sv() == "var s =`hello ${name}`;");
-    REQUIRE(r.sv() == "var s =`hello ${name}`;");
+    static_assert(r.sv() == "var s =`hello ${name}`");
+    REQUIRE(r.sv() == "var s =`hello ${name}`");
   }
 
   SECTION("エスケープシーケンス")
   {
     auto constexpr r = minify_js("var s = \"hello \\\"world\\\"\";");
-    static_assert(r.sv() == "var s =\"hello \\\"world\\\"\";");
-    REQUIRE(r.sv() == "var s =\"hello \\\"world\\\"\";");
+    static_assert(r.sv() == "var s =\"hello \\\"world\\\"\"");
+    REQUIRE(r.sv() == "var s =\"hello \\\"world\\\"\"");
   }
 }
 
@@ -1033,8 +1051,8 @@ TEST_CASE("minify_js - ops パイプ演算子", "[minifier]")
   {
     auto constexpr result = "var x = 1; // comment\n var y = 2;"_fs
       | frozenchars::ops::minify_js;
-    static_assert(result.sv() == "var x = 1;var y = 2;");
-    REQUIRE(result.sv() == "var x = 1;var y = 2;");
+    static_assert(result.sv() == "var x = 1;var y = 2");
+    REQUIRE(result.sv() == "var x = 1;var y = 2");
   }
 
   SECTION("空文字列")
@@ -1049,15 +1067,15 @@ TEST_CASE("minify_js - ops パイプ演算子", "[minifier]")
     auto constexpr result = "  var x = 1;  "_fs
       | frozenchars::ops::trim
       | frozenchars::ops::minify_js;
-    static_assert(result.sv() == "var x = 1;");
-    REQUIRE(result.sv() == "var x = 1;");
+    static_assert(result.sv() == "var x = 1");
+    REQUIRE(result.sv() == "var x = 1");
   }
 }
 
 TEST_CASE("minify_js - size() 検証", "[minifier]")
 {
   auto constexpr r = "var x = /* comment */ 1;"_fs | frozenchars::ops::minify_js;
-  static_assert(r.sv() == "var x = 1;");
-  static_assert(r.size() == 10);               // "var x = 1;" = 10 chars
-  REQUIRE(r.size() == 10);
+  static_assert(r.sv() == "var x = 1");
+  static_assert(r.size() == 9);                // "var x = 1" = 9 chars
+  REQUIRE(r.size() == 9);
 }
