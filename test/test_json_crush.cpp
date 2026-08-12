@@ -54,3 +54,26 @@ TEST_CASE("crush handles surrogate pairs", "[json][crush]") {
   CHECK(sv.back() == '_');
   CHECK_FALSE(sv.empty());
 }
+
+TEST_CASE("uncrush roundtrip", "[json][crush]") {
+  STATIC_CHECK(frozenchars::json::uncrush<
+               frozenchars::json::crush<R"({"a":"x"})"_fs>()>().sv() == R"({"a":"x"})");
+
+  STATIC_CHECK(frozenchars::json::uncrush<
+               frozenchars::json::crush<R"({"a":"value","b":"value","c":"value","d":"value"})"_fs>()>().sv()
+               == R"({"a":"value","b":"value","c":"value","d":"value"})");
+
+  // "ab" の繰り返し（辞書領域が破壊されないことの回帰ケース）
+  STATIC_CHECK(frozenchars::json::uncrush<
+               frozenchars::json::crush<R"({"k":"abababab"})"_fs>()>().sv() == R"({"k":"abababab"})");
+
+  STATIC_CHECK(frozenchars::json::uncrush<
+               frozenchars::json::crush<R"({})"_fs>()>().sv() == R"({})");
+
+  STATIC_CHECK(frozenchars::json::uncrush<
+               frozenchars::json::crush<R"([1,2,3,1,2,3])"_fs>()>().sv() == R"([1,2,3,1,2,3])");
+
+  // サロゲートペア
+  STATIC_CHECK(frozenchars::json::uncrush<
+               frozenchars::json::crush<R"({"a":"😀","b":"😀"})"_fs>()>().sv() == R"({"a":"😀","b":"😀"})");
+}

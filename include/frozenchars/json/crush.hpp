@@ -40,6 +40,63 @@ template <FrozenString Input>
   return output_u8.size() + 1;
 }
 
+/**
+ * @brief crush 済み文字列を元の UTF-8 JSON テキストへ復元する
+ *
+ * @param input crush 出力（末尾に '_' を含む）
+ * @return std::string 復元した UTF-8 JSON テキスト
+ * @throw std::runtime_error 末尾 '_' が無い、または置換文字が見つからない場合
+ */
+[[nodiscard]] consteval auto uncrush_to_string(std::string_view const input) -> std::string {
+  if (input.empty() || input.back() != '_') {
+    throw std::runtime_error("uncrush: missing trailing '_'");
+  }
+  auto const body_utf8 = input.substr(0, input.size() - 1);
+  auto u16 = frozenchars::json::detail::utf8_to_utf16(body_utf8);
+
+  // デリミタ U+0001 で body / split に分割
+  std::u16string_view body = u16;
+  std::u16string_view split;
+  if (auto const delim = u16.rfind(frozenchars::json::detail::JSON_CRUSH_DELIMITER); delim != std::u16string::npos) {
+    body = std::u16string_view(u16.data(), delim);
+    split = std::u16string_view(u16.data() + delim + 1, u16.size() - delim - 1);
+  }
+
+  // split を正順（先頭 = 最後に使われた置換文字）に処理する。
+  // 各置換文字は自分の辞書エントリ「置換文字＋元部分文字列」を末尾に持ち、
+  // 置換文字は「当時の文字列全体に出現しない」文字から選ばれるため、
+  // rfind は常にその辞書エントリを一意に指す。
+  auto data = std::u16string(body);
+  for (auto const rc : split) {
+    auto const p = data.rfind(rc);
+    if (p == std::u16string::npos) {
+      throw std::runtime_error("uncrush: replacement char not found");
+    }
+    auto const original = data.substr(p + 1);
+    data.resize(p);
+    size_t pos = 0;
+    while ((pos = data.find(rc, pos)) != std::u16string::npos) {
+      data.replace(pos, 1, original);
+      pos += original.size();
+    }
+  }
+
+  // JSON 構造文字を復元（swap の逆方向）
+  auto const swapped_back = frozenchars::json::detail::json_crush_swap<char16_t>(data, false);
+  return frozenchars::json::detail::utf16_to_utf8(swapped_back);
+}
+
+/**
+ * @brief uncrush 後の出力に必要なバッファ長をコンパイル時に算出する
+ *
+ * @tparam Input 入力の FrozenString
+ * @return size_t 終端 '\0' を含む必要バッファ長
+ */
+template <FrozenString Input>
+[[nodiscard]] consteval auto uncrushed_size() -> size_t {
+  return uncrush_to_string(Input.sv()).size() + 1;
+}
+
 } // namespace detail
 
 /**
@@ -89,6 +146,27 @@ template <FrozenString Input>
   }
   res.buffer[output_u8.size()] = '\0';
   res.length = output_u8.size();
+  return res;
+}
+
+/**
+ * @brief crush 済み JSON をコンパイル時に復元する
+ *
+ * @tparam Input crush 出力（FrozenString、末尾 '_' を含む）
+ * @return FrozenString<N> 復元した UTF-8 JSON テキスト（N は自動決定）
+ * @details 辞書を逆展開して置換文字を元の部分文字列へ戻し、構造文字を復元する。
+ */
+template <FrozenString Input>
+  requires(Input.length > 0)
+[[nodiscard]] consteval auto uncrush() -> FrozenString<detail::uncrushed_size<Input>()> {
+  constexpr auto N = detail::uncrushed_size<Input>();
+  auto const result = detail::uncrush_to_string(Input.sv());
+  auto res = FrozenString<N>{};
+  for (size_t i = 0; i < result.size() && i < N - 1; ++i) {
+    res.buffer[i] = result[i];
+  }
+  res.buffer[result.size()] = '\0';
+  res.length = result.size();
   return res;
 }
 

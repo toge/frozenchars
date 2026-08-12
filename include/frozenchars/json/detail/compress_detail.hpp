@@ -31,6 +31,30 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
 }
 
 /**
+ * @brief Base62 文字列を符号なし整数に変換する
+ *
+ * @param s 変換する Base62 文字列
+ * @return uint64_t 変換結果
+ * @throw std::runtime_error 不正な文字を含む場合
+ */
+[[nodiscard]] constexpr auto from_base62(std::string_view const s) -> uint64_t {
+  uint64_t value = 0;
+  for (auto const c : s) {
+    value *= 62;
+    if (c >= '0' && c <= '9') {
+      value += static_cast<uint64_t>(c - '0');
+    } else if (c >= 'A' && c <= 'Z') {
+      value += static_cast<uint64_t>(c - 'A' + 10);
+    } else if (c >= 'a' && c <= 'z') {
+      value += static_cast<uint64_t>(c - 'a' + 36);
+    } else {
+      throw std::runtime_error("from_base62: invalid character");
+    }
+  }
+  return value;
+}
+
+/**
  * @brief 64ビット符号付き整数を10進文字列に変換する
  *
  * @param v 変換する値
@@ -51,20 +75,16 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
  * @brief JSON 値を圧縮用の中間文字列表現に変換する
  *
  * @param val 変換する値
- * @return std::string 中間表現。null は "_"、文字列は前後のクォートを除去し、
+ * @return std::string 各スカラー値の有効な JSON リテラル原文。
+ * string / number は元入力のクォート・エスケープ・小数を保持する。
  * 配列・オブジェクトは再帰的に展開する
  */
 [[nodiscard]] constexpr auto value_to_string(json_value const& val) -> std::string {
   switch (val.type) {
-  case json_type::null: return "_";
+  case json_type::null: return "null";
   case json_type::boolean: return val.bool_val ? "true" : "false";
-  case json_type::number: return int64_to_string(val.num_val);
-  case json_type::string: {
-    auto sv = val.str_val;
-    if (sv.size() >= 2 && sv.front() == '"' && sv.back() == '"')
-      sv = sv.substr(1, sv.size() - 2);
-    return std::string(sv);
-  }
+  case json_type::number: return std::string(val.str_val);
+  case json_type::string: return std::string(val.str_val);
   case json_type::array: {
     std::string r = "[";
     for (size_t i = 0; i < val.arr.size(); ++i) {
@@ -129,10 +149,8 @@ struct CompressMemory {
   std::string result = "{";
   for (size_t i = 0; i < val.keys.size(); ++i) {
     if (i > 0) result += ",";
-    auto key_str = std::string(val.keys[i]);
-    if (key_str.size() >= 2 && key_str.front() == '"' && key_str.back() == '"')
-      key_str = key_str.substr(1, key_str.size() - 2);
-    result += key_str + ":";
+    result += std::string(val.keys[i]);
+    result += ":";
     result += compress_value(mem, val.arr[i]);
   }
   result += "}";
@@ -170,7 +188,8 @@ struct CompressMemory {
   case json_type::number:
   case json_type::string: {
     auto const s = value_to_string(val);
-    return get_or_add_value(mem, s);
+    auto const ref = get_or_add_value(mem, s);
+    return "\"" + ref + "\"";
   }
   case json_type::array: return compress_array(mem, val);
   case json_type::object: return compress_object(mem, val);
@@ -191,7 +210,7 @@ struct CompressMemory {
   std::string result = R"({"values":[)";
   for (size_t i = 0; i < mem.values.size(); ++i) {
     if (i > 0) result += ",";
-    result += "\"" + mem.values[i] + "\"";
+    result += mem.values[i];
   }
   result += "],\"root\":";
   result += encoded_root;

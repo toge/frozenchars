@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- `json::decompress` / `json::uncrush`: コンパイル時 JSON 圧縮（`compress` / `crush`）の復元 API。
+- `json::compress` の出力を有効な JSON に変更。数値の原文（小数・指数）と型情報を保持。
+
+### Fixed
+
+- `json::crush` の辞書領域が後続の置換で破壊される問題を修正（データ領域限定の置換に変更）。
+- `json::crush` が置換を行わない（圧縮が機能しない）問題を修正。
+
 ## [0.1.0]
 
 初回リリース。ヘッダオンリー C++23 コンパイル時文字列ライブラリ。

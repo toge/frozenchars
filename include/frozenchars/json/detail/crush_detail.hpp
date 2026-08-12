@@ -101,16 +101,20 @@ template <typename CharT>
  * @param str 対象文字列（値渡し）
  * @param from 置換対象の部分文字列
  * @param to 置換後の1文字
+ * @param data_end 置換対象とするデータ領域の終端位置
  * @return std::basic_string<CharT> 置換後の文字列
  */
 template <typename CharT>
 [[nodiscard]] constexpr auto replace_all_with_char(
     std::basic_string<CharT> str,
     std::basic_string_view<CharT> const from,
-    CharT const to) -> std::basic_string<CharT> {
+    CharT const to,
+    size_t const data_end) -> std::basic_string<CharT> {
+  auto end = data_end;
   size_t pos = 0;
-  while ((pos = str.find(from, pos)) != std::basic_string<CharT>::npos) {
+  while ((pos = str.find(from, pos)) != std::basic_string<CharT>::npos && pos + from.size() <= end) {
     str.replace(pos, from.size(), 1, to);
+    end -= from.size() - 1;
     pos += 1;
   }
   return str;
@@ -122,15 +126,17 @@ template <typename CharT>
  * @tparam CharT 文字型
  * @param string 対象文字列
  * @param max_len 候補として考慮する部分文字列の最大長
+ * @param data_end 候補を収集するデータ領域の終端位置
  * @return 重複を除去した圧縮候補（OrderedCandidate）の一覧
  * @details 長さ 2..max_len の全部分文字列をローリングハッシュで生成しソートして
  * 同一部分文字列をまとめ、重複せず2回以上出現するものを候補とする。
  */
 template <typename CharT>
 [[nodiscard]] constexpr auto build_initial_candidates(
-    std::basic_string_view<CharT> const string, int64_t const max_len = 50) {
+    std::basic_string_view<CharT> const string, int64_t const max_len = 50,
+    size_t const data_end = std::basic_string_view<CharT>::npos) {
   struct BucketEntry { uint64_t hash; size_t len; size_t pos; };
-  auto const n = string.size();
+  auto const n = data_end == std::basic_string_view<CharT>::npos ? string.size() : data_end;
   std::vector<BucketEntry> all_entries;
   RollingHash<CharT> const hasher{string};
   // 長さごとに全部分文字列のハッシュ・長さ・位置を収集
@@ -189,17 +195,19 @@ template <typename CharT>
  * @tparam CharT 文字型
  * @param str 対象文字列
  * @param candidates 出現回数を更新する候補一覧（count を書き換える）
+ * @param data_end 出現を数えるデータ領域の終端位置
  * @note 出現は非重複でカウントする（1回数えたら値の長さぶん進める）
  */
 template <typename CharT>
 constexpr void count_candidates(
     std::basic_string_view<CharT> const str,
-    std::vector<OrderedCandidate<CharT>>& candidates) {
+    std::vector<OrderedCandidate<CharT>>& candidates,
+    size_t const data_end) {
   for (auto& c : candidates) {
     c.count = 0;
     size_t pos = 0;
     std::basic_string_view<CharT> cv{c.value.data(), c.value.size()};
-    while ((pos = str.find(cv, pos)) != std::basic_string_view<CharT>::npos) {
+    while ((pos = str.find(cv, pos)) != std::basic_string_view<CharT>::npos && pos + cv.size() <= data_end) {
       ++c.count;
       pos += c.value.size();
     }
@@ -286,17 +294,20 @@ struct JSCrushResult {
  * @param max_len 候補とする部分文字列の最大長
  * @return JSCrushResult<CharT> 圧縮本体と分割文字列
  * @details 未使用の置換文字を選び、圧縮効果（delta）が最大の候補を1文字に置換する処理を
- * 反復する。置換のたびに候補を書き換えて出現回数を数え直し、効果が無くなったら終了する。
+ * 反復する。置換はデータ領域（辞書開始位置より前）に限定し、末尾に追記した辞書
+ * （「置換文字＋元部分文字列」）は以後不変とする。これにより復元時に辞書を
+ * 一意に参照できる。
  */
 template <typename CharT>
 [[nodiscard]] constexpr auto js_crush_utf16(
     std::basic_string<CharT> string, int64_t const max_len = 50) -> JSCrushResult<CharT> {
   std::basic_string<CharT> split_string;
-  auto candidates = build_initial_candidates<CharT>(string, max_len);
+  size_t data_end = string.size();  // データ領域の終端（辞書開始位置）
+  auto candidates = build_initial_candidates<CharT>(string, max_len, data_end);
   int replace_pos = static_cast<int>(replacement_characters_utf16.size());
 
   while (true) {
-    // 現在の文字列に出現する文字を記録し、未使用の置換文字を選ぶ
+    // 現在の文字列（辞書含む）に出現する文字を記録し、未使用の置換文字を選ぶ
     std::bitset<65536> present;
     for (auto c : string) {
       if (static_cast<uint16_t>(c) < 65536) present.set(static_cast<uint16_t>(c));
@@ -309,28 +320,32 @@ template <typename CharT>
     if (replace_char == 0) break;  // 使える置換文字が尽きたら終了
 
     // 圧縮効果 delta = (出現回数-1)*符号長 - (出現回数+1)*置換長 が最大の候補を探す
+    // constexpr 評価の演算数を抑えるため、erase ではなく合格候補の新ベクタへ詰め直す
     int64_t rep_len = 1;
     int64_t delim_len = 1;
     size_t best_idx = 0;
     int64_t best_delta = 0;
-    auto it = candidates.begin();
-    while (it != candidates.end()) {
-      int64_t delta = (it->count - 1) * static_cast<int64_t>(it->value.size()) - (it->count + 1) * rep_len;
+    std::vector<OrderedCandidate<CharT>> kept;
+    kept.reserve(candidates.size());
+    for (auto& c : candidates) {
+      int64_t delta = (c.count - 1) * static_cast<int64_t>(c.value.size()) - (c.count + 1) * rep_len;
       if (split_string.empty()) delta -= delim_len;
-      if (delta <= 0) {
-        it = candidates.erase(it);
-      } else {
-        if (delta > best_delta) { best_delta = delta; best_idx = std::distance(candidates.begin(), it); }
-        ++it;
-      }
+      if (delta <= 0) continue;
+      if (delta > best_delta) { best_delta = delta; best_idx = kept.size(); }
+      kept.push_back(std::move(c));
     }
+    candidates = std::move(kept);
     if (best_delta <= 0 || candidates.empty()) break;  // これ以上縮まないなら終了
 
-    // 最良候補を置換文字に置き換え、末尾に「置換文字＋元部分文字列」を辞書として付加
+    // 最良候補をデータ領域のみで置換し、末尾に「置換文字＋元部分文字列」を辞書として付加
+    // 既存の辞書は置換によるシフト後も内容不変で保持し、新しい辞書を末尾に追記する
     auto const& best_sub = candidates[best_idx].value;
-    string = replace_all_with_char<CharT>(string, best_sub, replace_char);
+    auto const dict_size = string.size() - data_end;
+    string = replace_all_with_char<CharT>(string, best_sub, replace_char, data_end);
+    data_end = string.size() - dict_size;
     string.push_back(replace_char);
     string.append(best_sub);
+    data_end = string.size();
     split_string.insert(split_string.begin(), replace_char);
 
     // 残り候補も同じ置換を反映し、短くなりすぎ・重複したものを除いて再構築
@@ -338,7 +353,7 @@ template <typename CharT>
     std::vector<SeenEntry> seen;
     std::vector<OrderedCandidate<CharT>> next_cands;
     for (auto& c : candidates) {
-      auto rewritten = replace_all_with_char<CharT>(c.value, best_sub, replace_char);
+      auto rewritten = replace_all_with_char<CharT>(c.value, best_sub, replace_char, c.value.size());
       if (rewritten.size() < 2) continue;
       bool found = false;
       for (auto const& s : seen) {
@@ -350,7 +365,7 @@ template <typename CharT>
       }
     }
     candidates = std::move(next_cands);
-    count_candidates<CharT>(string, candidates);
+    count_candidates<CharT>(string, candidates, data_end);
   }
   return {std::move(string), std::move(split_string)};
 }

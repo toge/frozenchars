@@ -178,8 +178,8 @@ glaze 連携と JSON 圧縮はデフォルトでは読み込まれません。�
 
 ```cpp
 #include "frozenchars/glaze_frozen_map.hpp"   // glaze 連携（FROZENCHARS_HAS_GLAZE ガード）
-#include "frozenchars/json/compress.hpp"      // JSON 圧縮
-#include "frozenchars/json/crush.hpp"         // JSON クラッシュ圧縮
+#include "frozenchars/json/compress.hpp"      // JSON 圧縮（compress / decompress）
+#include "frozenchars/json/crush.hpp"         // JSON クラッシュ圧縮（crush / uncrush）
 ```
 
 ### 傘ヘッダの非推奨化
@@ -929,6 +929,48 @@ auto const* input = "MATCH (n) RETURN n";
 auto const len = minify_cypher(input, buf, sizeof(buf));
 // len = 16, buf = "MATCH(n)RETURN n\0"
 ```
+
+## `json::compress` / `json::decompress` / `json::crush` / `json::uncrush`（JSON 構造圧縮と復元）
+
+JSON 文字列をコンパイル時に圧縮し、復元（デコード）できます。いずれも `consteval` で、
+`#include "frozenchars/json/compress.hpp"` / `#include "frozenchars/json/crush.hpp"` から利用します。
+
+- `json::compress(str)` : JSON をパースし、重複する値を `values` テーブルと `root` 参照に
+  置き換えた**有効な JSON** に構造圧縮します。数値は原文（小数・指数含む）を保持し、
+  文字列のクォート・エスケープも壊しません。
+- `json::decompress(str)` : `compress` の結果を元の JSON テキストへ復元します。
+  意味的に同一の JSON を生成します（空白は正規化されます）。
+- `json::crush(str)` : UTF-16 変換・構造文字の置換・繰り返し部分文字列の辞書圧縮を
+  行い、末尾に `_` を付けた 1 バイナリ文字列へ圧縮します。
+- `json::uncrush(str)` : `crush` の結果をバイト完全に復元します。
+
+```cpp
+#include "frozenchars/literals.hpp"
+#include "frozenchars/json/compress.hpp"
+#include "frozenchars/json/crush.hpp"
+using namespace frozenchars::literals;
+
+// 構造圧縮 → 復元（意味的に同一）
+constexpr auto compressed = frozenchars::json::compress<
+  R"([{"name":"item","val":1},{"name":"item","val":1}])"_fs>();
+static_assert(frozenchars::json::validate_json(compressed.sv()));  // 出力は有効な JSON
+static_assert(frozenchars::json::decompress<compressed>().sv()
+  == R"([{"name":"item","val":1},{"name":"item","val":1}])");
+
+// 小数・型も保持される
+constexpr auto nums = frozenchars::json::decompress<
+  frozenchars::json::compress<R"({"x":1.5,"s":"1"})"_fs>()>();
+static_assert(nums.sv() == R"({"x":1.5,"s":"1"})");
+
+// crush → uncrush（バイト完全）
+constexpr auto crushed = frozenchars::json::crush<
+  R"({"a":"value","b":"value","c":"value"})"_fs>();
+static_assert(frozenchars::json::uncrush<crushed>().sv()
+  == R"({"a":"value","b":"value","c":"value"})");
+```
+
+`json::crush_compress(str)` は `compress` → `crush` を連続適用するパイプラインです。
+復元は `decompress` ∘ `uncrush` の合成で行います。
 
 ## `minify_lua`（Lua / Luau 縮小）
 
