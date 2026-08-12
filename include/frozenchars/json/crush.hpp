@@ -32,7 +32,7 @@ template <FrozenString Input>
   auto output_u16 = result.crushed;
   if (!result.split.empty()) {
     output_u16.push_back(frozenchars::json::detail::JSON_CRUSH_DELIMITER);
-    frozenchars::json::detail::append_view(output_u16, std::u16string_view{result.split.data(), result.split.size()});
+    output_u16.append(result.split);
   }
   output_u16.push_back(u'_');
 
@@ -76,7 +76,7 @@ template <FrozenString Input>
   auto output_u16 = result.crushed;
   if (!result.split.empty()) {
     output_u16.push_back(frozenchars::json::detail::JSON_CRUSH_DELIMITER);
-    frozenchars::json::detail::append_view(output_u16, std::u16string_view{result.split.data(), result.split.size()});
+    output_u16.append(result.split);
   }
   output_u16.push_back(u'_');
 

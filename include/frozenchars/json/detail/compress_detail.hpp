@@ -48,36 +48,6 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
 }
 
 /**
- * @brief 2つの JSON 値が構造的に等しいかを判定する
- *
- * @param a 比較対象1
- * @param b 比較対象2
- * @return bool 型・内容ともに一致すれば true。配列・オブジェクトは再帰的に比較する
- */
-[[nodiscard]] constexpr auto val_equal(json_value const& a, json_value const& b) -> bool {
-  if (a.type != b.type) return false;
-  switch (a.type) {
-  case json_type::null: return true;
-  case json_type::boolean: return a.bool_val == b.bool_val;
-  case json_type::number: return a.num_val == b.num_val;
-  case json_type::string: return a.str_val == b.str_val;
-  case json_type::array:
-    if (a.arr.size() != b.arr.size()) return false;
-    for (size_t i = 0; i < a.arr.size(); ++i)
-      if (!val_equal(a.arr[i], b.arr[i])) return false;
-    return true;
-  case json_type::object:
-    if (a.keys.size() != b.keys.size()) return false;
-    for (size_t i = 0; i < a.keys.size(); ++i) {
-      if (a.keys[i] != b.keys[i]) return false;
-      if (!val_equal(a.arr[i], b.arr[i])) return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-/**
  * @brief JSON 値を圧縮用の中間文字列表現に変換する
  *
  * @param val 変換する値
@@ -120,29 +90,26 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
 }
 
 /**
- * @brief 圧縮中に登場した値の一覧と検索用キャッシュを保持する
+ * @brief 圧縮中に登場した値の一覧を保持する
  */
 struct CompressMemory {
   std::vector<std::string> values;       ///< 登録順に格納した値テーブル（出力に使用）
-  std::vector<std::string> value_cache;  ///< 重複検索用のキャッシュ（values と同一内容）
 };
 
 /**
  * @brief 値をテーブルに登録し、その参照インデックスを Base62 で返す
  *
  * @param mem 値テーブル
- * @param val 対象の JSON 値（未使用、シグネチャ互換のため保持）
  * @param serialized 登録する直列化済み文字列
  * @return std::string 既存なら既存インデックス、新規なら追加後のインデックスの Base62 表現
  */
-[[nodiscard]] constexpr auto get_or_add_value(CompressMemory& mem, [[maybe_unused]] json_value const& val, std::string const& serialized) -> std::string {
+[[nodiscard]] constexpr auto get_or_add_value(CompressMemory& mem, std::string const& serialized) -> std::string {
   for (size_t i = 0; i < mem.values.size(); ++i) {
-    if (mem.value_cache[i] == serialized) {
+    if (mem.values[i] == serialized) {
       return to_base62(static_cast<uint64_t>(i));
     }
   }
   mem.values.push_back(serialized);
-  mem.value_cache.push_back(serialized);
   return to_base62(static_cast<uint64_t>(mem.values.size() - 1));
 }
 
@@ -203,7 +170,7 @@ struct CompressMemory {
   case json_type::number:
   case json_type::string: {
     auto const s = value_to_string(val);
-    return get_or_add_value(mem, val, s);
+    return get_or_add_value(mem, s);
   }
   case json_type::array: return compress_array(mem, val);
   case json_type::object: return compress_object(mem, val);

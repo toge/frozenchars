@@ -89,7 +89,7 @@ template <FrozenString Input>
   auto output_u16 = crush_result.crushed;
   if (!crush_result.split.empty()) {
     output_u16.push_back(frozenchars::json::detail::JSON_CRUSH_DELIMITER);
-    frozenchars::json::detail::append_view(output_u16, std::u16string_view{crush_result.split.data(), crush_result.split.size()});
+    output_u16.append(crush_result.split);
   }
   output_u16.push_back(u'_');
   auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);

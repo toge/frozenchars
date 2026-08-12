@@ -23,9 +23,10 @@ TEST_CASE("crush repeated values compresses", "[json][crush]") {
   auto const sv = crushed.sv();
   CHECK(sv.back() == '_');
   CHECK_FALSE(sv.empty());
-  // "value" is repeated 3 times -> some replacement should have happened
-  auto const has_replacement = sv.contains('\x01');
-  CHECK((has_replacement || !sv.empty()));
+  // "value" が3回出現するため、置換文字（デリミタ U+0001）が付与される
+  CHECK(sv.contains('\x01'));
+  // 圧縮前より短くなること（入力は33バイト）
+  CHECK(sv.size() < input.length);
 }
 
 TEST_CASE("crush empty object", "[json][crush]") {
@@ -44,4 +45,12 @@ TEST_CASE("crush preserves output format", "[json][crush]") {
   CHECK(sv.back() == '_');
   // input was swapped: "a" -> 'a', etc. Output is valid crushed format
   CHECK(sv.find('_') != std::string_view::npos);
+}
+
+TEST_CASE("crush handles surrogate pairs", "[json][crush]") {
+  // U+1F600 はサロゲートペア。候補分割でペアを壊してはいけない
+  constexpr auto crushed = frozenchars::json::crush<R"({"a":"😀","b":"😀"})"_fs>();
+  auto const sv = crushed.sv();
+  CHECK(sv.back() == '_');
+  CHECK_FALSE(sv.empty());
 }
