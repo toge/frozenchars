@@ -324,7 +324,10 @@ assert_frozen_map_compile_fail(
   NAME dump_log_diagnostic
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/dump_log_diagnostic.cpp
   EXPECTED_TEXT "DUMPLOG_PROBE_MARKER first line"
+  # GCC/Clang は診断にログ文字列を出力する。MSVC は構造化診断のため std::array<char> が
+  # バイト列として整形されログ文字列が現れない代わりに、不完全型名が出力される。
   EXPECTED_TEXTS "DUMPLOG_PROBE_MARKER"
+                 "use of undefined type 'frozenchars::constexpr_log_dump"
 )
 
 
