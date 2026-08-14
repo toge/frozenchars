@@ -87,6 +87,9 @@ struct constexpr_log {
   /**
    * @brief frozen_format でフォーマットしたメッセージを1行追加する。
    *
+   * @note frozen_format が consteval のため、この関数も consteval（コンパイル時評価のみ）。
+   * 実行時に呼び出すことはできない。フォーマット対象は常にコンパイル時のみで十分なため制約はない。
+   *
    * @tparam Fmt フォーマット文字列（FrozenString NTTP）
    * @tparam L メッセージのログレベル（既定 info）。MinLevel 未満ならフォーマットも行わない
    * @tparam Cap フォーマット結果の最大サイズ（既定 256）
@@ -95,7 +98,7 @@ struct constexpr_log {
    * @return bool 処理済みなら true。バッファ / メッセージ数が上限で false
    */
   template <FrozenString Fmt, log_level L = log_level::info, size_t Cap = 256, typename... Args>
-  constexpr bool log_format(Args const&... args) {
+  consteval bool log_format(Args const&... args) {
     if constexpr (static_cast<int>(L) >= static_cast<int>(MinLevel)) {
       auto const s = frozen_format<Fmt, Cap>(args...);
       return append_line(s.sv());
