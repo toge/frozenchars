@@ -89,6 +89,7 @@
 - [frozen_set（コンパイル時集合）](#frozen_set（コンパイル時集合）)
 - [remove_comments / remove_comment_lines（コメント行除去）](#remove_comments-remove_comment_lines（コメント行除去）)
 - [chrono（日付・時刻のコンパイル時相互変換）](#chrono（日付時刻のコンパイル時相互変換）)
+- [log（コンパイル時ログ）](#log（コンパイル時ログ）)
 - [テスト](#テスト)
 - [インストール / パッケージ生成](#インストル-パッケジ生成)
 - [ライセンス](#ライセンス)
@@ -2276,6 +2277,81 @@ static_assert(parsed == ymd);
 
 > ⚠ `compilation_timestamp()` は `__DATE__` / `__TIME__` マクロに依存するため、日単位の精度です。
 > 秒精度のタイムスタンプが必要な場合は `parse_iso_datetime` で明示的に文字列を渡してください。
+
+
+## `log`（コンパイル時ログ）
+
+`frozenchars/log.hpp`（`frozenchars/mod/log.hpp`）は、constexpr / consteval 評価中の
+デバッグ用ログ（printf debug に近い機能）を提供します。constexpr 評価中に真の I/O はできないため、
+**メッセージをコンパイル時に蓄積**し、実行時かコンパイラ診断のどちらかで取得します。
+
+```cpp
+#include "frozenchars/log.hpp"
+#include "frozenchars/literals.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+```
+
+### constexpr_log（コンパイル時蓄積）
+
+`consteval` 関数内で `log()` / `log_format()` によりメッセージを蓄積し、戻り値を
+ネームスペーススコープの `constexpr` 変数に置くことで、**実行時に `std::string_view`
+または行ごとの `std::array<std::string_view>` として取得**できます。
+
+```cpp
+consteval auto make_log() {
+  constexpr_log<512, 32> log;              // <バッファ文字数, 最大メッセージ数>
+  log.log("start");
+  log.log_format<"value={}"_fs>(42);
+  return log;
+}
+
+constexpr auto g_log = make_log();          // 静的記憶域（ビルド時に構築）
+
+// 実行時
+std::string_view text = g_log.sv();                        // 全文 "start\nvalue=42\n"
+auto msgs = g_log.messages();                              // std::array<std::string_view, 32>
+// msgs[0] == "start", msgs[1] == "value=42"
+```
+
+### ログレベル
+
+`MinLevel` 未満のレベルのメッセージは蓄積されません（`if constexpr` で破棄されるため、
+フォーマットも行われずコンパイル時のコストはゼロです）。
+
+```cpp
+consteval auto make_level_log() {
+  constexpr_log<256, 16, false, log_level::info> log;   // info 未満は破棄
+  log.log<log_level::trace>("not stored");
+  log.log<log_level::error>("stored");
+  log.log("default info");                              // 既定レベルは info
+  return log;
+}
+```
+
+### ビルド時タイムスタンプ
+
+`WithTimestamp = true` にすると、各行の先頭にビルド時刻のプレフィクス
+`[YYYY-MM-DDTHH:MM:SSZ] ` が付きます（`__DATE__` / `__TIME__` 由来）。
+
+```cpp
+consteval auto make_ts_log() {
+  constexpr_log<256, 8, true> log;
+  log.log("hello");
+  return log;
+}
+// 例: "[2026-08-14T01:54:24Z] hello\n"
+```
+
+### dump（コンパイラ診断への出力）
+
+`dump<g_log>()` を呼ぶと**意図的にコンパイルエラーを発生**させ、診断メッセージに
+ログ全体の内容を出力します（Constexpr-Doom の `inspect` テクニックと同様）。デバッグ用です。
+
+```cpp
+constexpr auto g_log = make_log();
+auto d = dump<g_log>();   // コンパイルエラーになり、診断にログ全文が出る
+```
 
 
 ## テスト

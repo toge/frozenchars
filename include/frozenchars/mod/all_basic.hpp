@@ -16,3 +16,4 @@
 #include "frozenchars/mod/chrono.hpp"
 #include "frozenchars/mod/color.hpp"
 #include "frozenchars/mod/ops.hpp"
+#include "frozenchars/mod/log.hpp"

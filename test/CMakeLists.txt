@@ -318,4 +318,13 @@ assert_frozen_map_compile_fail(
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
+# ---- constexpr_log compile-fail tests ----
+
+assert_frozen_map_compile_fail(
+  NAME dump_log_diagnostic
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/dump_log_diagnostic.cpp
+  EXPECTED_TEXT "DUMPLOG_PROBE_MARKER first line"
+  EXPECTED_TEXTS "DUMPLOG_PROBE_MARKER"
+)
+
 
