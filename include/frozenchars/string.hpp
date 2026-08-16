@@ -192,10 +192,14 @@ struct FrozenString {
  * @brief FrozenString同士を結合する
  */
 template <size_t N1, size_t N2>
-constexpr auto operator+(FrozenString<N1> const& lhs, FrozenString<N2> const& rhs) noexcept {
-  auto res = FrozenString<N1 + N2>{};
-  for (size_t i = 0; i < lhs.length; ++i) res.buffer[i] = lhs.buffer[i];
-  for (size_t i = 0; i < rhs.length; ++i) res.buffer[lhs.length + i] = rhs.buffer[i];
+constexpr auto operator+(FrozenString<N1> const& lhs, FrozenString<N2> const& rhs) noexcept -> FrozenString<N1 + N2 - 1> {
+  auto res = FrozenString<N1 + N2 - 1>{};
+  for (size_t i = 0; i < lhs.length; ++i) {
+    res.buffer[i] = lhs.buffer[i];
+  }
+  for (size_t i = 0; i < rhs.length; ++i) {
+    res.buffer[lhs.length + i] = rhs.buffer[i];
+  }
   res.buffer[lhs.length + rhs.length] = '\0';
   res.length = lhs.length + rhs.length;
   return res;

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-set(FROZENCHARS_VERSION "0.1.0")
+set(FROZENCHARS_VERSION "0.5.0")
 
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
