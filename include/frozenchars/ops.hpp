@@ -63,6 +63,54 @@ struct rtrim_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief 文字集合 Chars に含まれる文字を左端から除去するパイプアダプタ
+ * @tparam Chars 除去する文字集合（デフォルト: ASCII 空白）
+ */
+template <FrozenString Chars = detail::default_strip_chars>
+struct lstrip_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::lstrip<Chars>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::lstrip<Chars>(str);
+  }
+};
+
+/**
+ * @brief 文字集合 Chars に含まれる文字を右端から除去するパイプアダプタ
+ * @tparam Chars 除去する文字集合（デフォルト: ASCII 空白）
+ */
+template <FrozenString Chars = detail::default_strip_chars>
+struct rstrip_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::rstrip<Chars>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::rstrip<Chars>(str);
+  }
+};
+
+/**
+ * @brief 文字集合 Chars に含まれる文字を両端から除去するパイプアダプタ
+ * @tparam Chars 除去する文字集合（デフォルト: ASCII 空白）
+ */
+template <FrozenString Chars = detail::default_strip_chars>
+struct strip_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::strip<Chars>(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::strip<Chars>(str);
+  }
+};
+
+/**
  * @brief ASCII 英字を大文字に変換するパイプアダプタ
  */
 struct toupper_adaptor : pipe_adaptor_base {
@@ -639,6 +687,15 @@ struct sql_uppercase_keywords_adaptor : pipe_adaptor_base {
 inline constexpr trim_adaptor<>            trim{};             ///< 述語デフォルト（空白文字）で両端トリム
 inline constexpr ltrim_adaptor<>           ltrim{};            ///< 述語デフォルト（空白文字）で左端トリム
 inline constexpr rtrim_adaptor<>           rtrim{};            ///< 述語デフォルト（空白文字）で右端トリム
+inline constexpr strip_adaptor<>           strip{};            ///< ASCII 空白を両端から除去（Python の str.strip 相当）
+inline constexpr lstrip_adaptor<>          lstrip{};           ///< ASCII 空白を左端から除去（str.lstrip 相当）
+inline constexpr rstrip_adaptor<>          rstrip{};           ///< ASCII 空白を右端から除去（str.rstrip 相当）
+template <FrozenString Chars>
+inline constexpr strip_adaptor<Chars> strip_chars{};           ///< 指定文字集合を両端から除去
+template <FrozenString Chars>
+inline constexpr lstrip_adaptor<Chars> lstrip_chars{};         ///< 指定文字集合を左端から除去
+template <FrozenString Chars>
+inline constexpr rstrip_adaptor<Chars> rstrip_chars{};         ///< 指定文字集合を右端から除去
 inline constexpr toupper_adaptor           toupper{};          ///< ASCII 大文字変換
 inline constexpr tolower_adaptor           tolower{};          ///< ASCII 小文字変換
 inline constexpr collapse_spaces_adaptor<> collapse_spaces{};  ///< 連続空白を1空白に圧縮

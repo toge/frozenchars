@@ -26,6 +26,27 @@ TEST_CASE("pipe: raw string | stateless adaptor", "[pipe][no_fs]") {
   SECTION("rtrim") {
     STATIC_CHECK(("  hello  " | ops::rtrim).sv() == "  hello");
   }
+  SECTION("strip") {
+    STATIC_CHECK(("  hello  " | ops::strip).sv() == "hello");
+  }
+  SECTION("lstrip") {
+    STATIC_CHECK(("  hello  " | ops::lstrip).sv() == "hello  ");
+  }
+  SECTION("rstrip") {
+    STATIC_CHECK(("  hello  " | ops::rstrip).sv() == "  hello");
+  }
+  SECTION("strip whitespace") {
+    STATIC_CHECK(("\t\n hello \r\n" | ops::strip).sv() == "hello");
+  }
+  SECTION("strip_chars") {
+    STATIC_CHECK((",,a,b;c;;" | ops::strip_chars<",;">).sv() == "a,b;c");
+  }
+  SECTION("lstrip_chars") {
+    STATIC_CHECK((",,a,b;c;;" | ops::lstrip_chars<",;">).sv() == "a,b;c;;");
+  }
+  SECTION("rstrip_chars") {
+    STATIC_CHECK((",,a,b;c;;" | ops::rstrip_chars<",;">).sv() == ",,a,b;c");
+  }
   SECTION("url_encode") {
     STATIC_CHECK(("hello world" | ops::url_encode).sv() == "hello%20world");
   }

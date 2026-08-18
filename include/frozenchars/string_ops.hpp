@@ -1248,6 +1248,129 @@ template <char TrimChar = ' ', typename Ptr>
   return trim<TrimChar>(freeze(str));
 }
 
+namespace detail {
+
+/**
+ * @brief strip 系関数のデフォルト削除文字集合（Python の ASCII 空白と同一）
+ */
+inline constexpr auto default_strip_chars = FrozenString{" \t\n\r\f\v"};
+
+/**
+ * @brief 指定した文字集合のいずれかの文字か判定する述語を生成する
+ *
+ * @tparam Chars 文字集合（NTTP）
+ */
+template <FrozenString Chars>
+inline constexpr auto is_in_chars = [](char c) noexcept {
+  for (auto const x : Chars.sv()) {
+    if (x == c) {
+      return true;
+    }
+  }
+  return false;
+};
+
+} // namespace detail
+
+/**
+ * @brief 文字列の左端から文字集合に含まれる文字を削除した文字列を生成する
+ * Python の str.lstrip() 相当。デフォルトでは ASCII 空白を除去する
+ *
+ * @tparam Chars 削除する文字集合（デフォルト: ASCII 空白）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 生成した文字列
+ */
+template <FrozenString Chars = detail::default_strip_chars, size_t N>
+[[nodiscard]] auto consteval lstrip(FrozenString<N> const& str) noexcept {
+  return ltrim_if<detail::is_in_chars<Chars>>(str);
+}
+
+/**
+ * @brief 文字列の右端から文字集合に含まれる文字を削除した文字列を生成する
+ * Python の str.rstrip() 相当。デフォルトでは ASCII 空白を除去する
+ *
+ * @tparam Chars 削除する文字集合（デフォルト: ASCII 空白）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 生成した文字列
+ */
+template <FrozenString Chars = detail::default_strip_chars, size_t N>
+[[nodiscard]] auto consteval rstrip(FrozenString<N> const& str) noexcept {
+  return rtrim_if<detail::is_in_chars<Chars>>(str);
+}
+
+/**
+ * @brief 文字列の両端から文字集合に含まれる文字を削除した文字列を生成する
+ * Python の str.strip() 相当。デフォルトでは ASCII 空白を除去する
+ *
+ * @tparam Chars 削除する文字集合（デフォルト: ASCII 空白）
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 生成した文字列
+ */
+template <FrozenString Chars = detail::default_strip_chars, size_t N>
+[[nodiscard]] auto consteval strip(FrozenString<N> const& str) noexcept {
+  return trim_if<detail::is_in_chars<Chars>>(str);
+}
+
+/**
+ * @brief 文字列リテラルの左端から文字集合に含まれる文字を削除した文字列を生成する
+ *
+ * @tparam Chars 削除する文字集合（デフォルト: ASCII 空白）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 生成した文字列
+ */
+template <FrozenString Chars = detail::default_strip_chars, size_t N>
+[[nodiscard]] auto consteval lstrip(char const (&str)[N]) noexcept {
+  return lstrip<Chars>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列リテラルの右端から文字集合に含まれる文字を削除した文字列を生成する
+ *
+ * @tparam Chars 削除する文字集合（デフォルト: ASCII 空白）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 生成した文字列
+ */
+template <FrozenString Chars = detail::default_strip_chars, size_t N>
+[[nodiscard]] auto consteval rstrip(char const (&str)[N]) noexcept {
+  return rstrip<Chars>(FrozenString{str});
+}
+
+/**
+ * @brief 文字列リテラルの両端から文字集合に含まれる文字を削除した文字列を生成する
+ *
+ * @tparam Chars 削除する文字集合（デフォルト: ASCII 空白）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 生成した文字列
+ */
+template <FrozenString Chars = detail::default_strip_chars, size_t N>
+[[nodiscard]] auto consteval strip(char const (&str)[N]) noexcept {
+  return strip<Chars>(FrozenString{str});
+}
+
+template <FrozenString Chars = detail::default_strip_chars, typename Ptr>
+  requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+[[nodiscard]] auto consteval lstrip(Ptr&& str) noexcept {
+  return lstrip<Chars>(freeze(str));
+}
+
+template <FrozenString Chars = detail::default_strip_chars, typename Ptr>
+  requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+[[nodiscard]] auto consteval rstrip(Ptr&& str) noexcept {
+  return rstrip<Chars>(freeze(str));
+}
+
+template <FrozenString Chars = detail::default_strip_chars, typename Ptr>
+  requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
+[[nodiscard]] auto consteval strip(Ptr&& str) noexcept {
+  return strip<Chars>(freeze(str));
+}
+
 /**
  * @brief 連続した条件を満たす文字を1つの文字に変換する
  *

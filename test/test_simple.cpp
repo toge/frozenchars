@@ -220,6 +220,56 @@ TEST_CASE("trim helpers") {
   REQUIRE(s7.sv() == "hello");
 }
 
+TEST_CASE("strip helpers") {
+  auto constexpr s1 = ops::strip("  hello  "_fs);
+  static_assert(s1.sv() == "hello");
+  REQUIRE(s1.sv() == "hello");
+
+  auto constexpr s2 = ops::lstrip("  hello  "_fs);
+  static_assert(s2.sv() == "hello  ");
+  REQUIRE(s2.sv() == "hello  ");
+
+  auto constexpr s3 = ops::lstrip("  hello  ");
+  static_assert(s3.sv() == "hello  ");
+  REQUIRE(s3.sv() == "hello  ");
+
+  auto constexpr s4 = ops::rstrip("  hello  "_fs);
+  static_assert(s4.sv() == "  hello");
+  REQUIRE(s4.sv() == "  hello");
+
+  auto constexpr s5 = strip("\t\n hello \r\n"_fs);
+  static_assert(s5.sv() == "hello");
+  REQUIRE(s5.sv() == "hello");
+
+  auto constexpr s6 = strip<",;">(",,a,b;c;;"_fs);
+  static_assert(s6.sv() == "a,b;c");
+  REQUIRE(s6.sv() == "a,b;c");
+
+  auto constexpr s7 = strip<",;">(",,a,b;c;;");
+  static_assert(s7.sv() == "a,b;c");
+  REQUIRE(s7.sv() == "a,b;c");
+
+  auto constexpr s8 = strip<"">("  abc  "_fs);
+  static_assert(s8.sv() == "  abc  ");
+  REQUIRE(s8.sv() == "  abc  ");
+
+  auto constexpr s9 = strip(FrozenString{"  hi  "});
+  static_assert(s9.sv() == "hi");
+  REQUIRE(s9.sv() == "hi");
+
+  auto constexpr s10 = strip("\v\f x \v\f"_fs);
+  static_assert(s10.sv() == "x");
+  REQUIRE(s10.sv() == "x");
+
+  auto constexpr s11 = lstrip<",;">(",,a,b;c;;"_fs);
+  static_assert(s11.sv() == "a,b;c;;");
+  REQUIRE(s11.sv() == "a,b;c;;");
+
+  auto constexpr s12 = rstrip<",;">(",,a,b;c;;"_fs);
+  static_assert(s12.sv() == ",,a,b;c");
+  REQUIRE(s12.sv() == ",,a,b;c");
+}
+
 TEST_CASE("split_count") {
   auto constexpr count1 = split_count("a,b,c"_fs, is_comma);
   static_assert(count1 == 3);

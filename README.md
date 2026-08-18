@@ -37,6 +37,7 @@
 - [right / center（幅寄せ）](#right-center（幅寄せ）)
 - [toupper / tolower（大文字・小文字変換）](#toupper-tolower（大文字・小文字変換）)
 - [trim / ltrim / rtrim（端の文字を削る）](#trim-ltrim-rtrim（端の文字を削る）)
+- [strip / lstrip / rstrip（文字集合で端の文字を削る）](#strip-lstrip-rstrip（文字集合で端の文字を削る）)
 - [substr（部分文字列）](#substr（部分文字列）)
 - [contains（部分文字列の有無判定）](#contains（部分文字列の有無判定）)
 - [starts_with（接頭辞チェック）](#starts_with（接頭辞チェック）)
@@ -352,6 +353,42 @@ auto constexpr s3 = rtrim("hello   ");         // "hello"
 static_assert(s1.sv() == "hello");
 static_assert(s2.sv() == "hello");
 static_assert(s3.sv() == "hello");
+```
+
+## `strip` / `lstrip` / `rstrip`（文字集合で端の文字を削る）
+
+Python の `str.strip()` / `str.lstrip()` / `str.rstrip()` 相当のスタンドアロン関数です。
+`trim` 系とは異なり、**デフォルトで半角スペースに加えてタブ・改行などの全 ASCII 空白文字**を削除し、
+削除対象を**文字集合**（NTTP 文字列）で指定できます。
+
+- `strip<Chars = " \t\n\r\f\v">(...)`
+- `lstrip<Chars = " \t\n\r\f\v">(...)`
+- `rstrip<Chars = " \t\n\r\f\v">(...)`
+
+`FrozenString`、文字列リテラル、`const char*` を受け取ります。`Chars` が空文字列の場合は何も削除しません。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr s1 = strip("  hello  "_fs);          // "hello"（タブや改行も除去される）
+auto constexpr s2 = lstrip("\t hello "_fs);         // "hello "
+auto constexpr s3 = rstrip("hello  \n");            // "hello"
+auto constexpr s4 = strip<",;">(",,a,b;c;;"_fs);    // "a,b;c"（文字集合指定）
+
+static_assert(s1.sv() == "hello");
+static_assert(s2.sv() == "hello ");
+static_assert(s3.sv() == "hello");
+static_assert(s4.sv() == "a,b;c");
+```
+
+パイプ演算子では `ops::strip` / `ops::lstrip` / `ops::rstrip`（デフォルト: 全 ASCII 空白）、
+`ops::strip_chars<Chars>` / `ops::lstrip_chars<Chars>` / `ops::rstrip_chars<Chars>`（文字集合指定）が使えます。
+
+```cpp
+auto constexpr r1 = "  hello  "_fs | ops::strip;          // "hello"
+auto constexpr r2 = ",,a,b;c;;"_fs | ops::strip_chars<",;">;  // "a,b;c"
 ```
 
 ## `substr`（部分文字列）
