@@ -29,6 +29,11 @@ concept FloatingPoint = std::is_floating_point_v<T>;
 template <typename T>
 concept Numeric = Integral<T> || FloatingPoint<T>;
 
+/**
+ * @brief parse_number 系関数が受け入れる変換先の型
+ *
+ * @tparam T 変換先の数値型（int / long / long long / 各 unsigned / float / double）
+ */
 template <typename T>
 concept ParseNumberTarget =
   std::same_as<std::remove_cv_t<T>, int>
@@ -45,7 +50,11 @@ concept ParseNumberTarget =
  *
  */
 struct Hex {
-  long long value;
+  long long value;  ///< 文字列化対象の整数値
+  /**
+   * @brief 整数値からタグを構築する
+   * @param v 文字列化する整数値
+   */
   constexpr Hex(Integral auto v)
   : value(v)
   {}
@@ -56,7 +65,11 @@ struct Hex {
  *
  */
 struct Bin {
-  long long value;
+  long long value;  ///< 文字列化対象の整数値
+  /**
+   * @brief 整数値からタグを構築する
+   * @param v 文字列化する整数値
+   */
   constexpr Bin(Integral auto v)
   : value(v)
   {}
@@ -67,7 +80,11 @@ struct Bin {
  *
  */
 struct Oct {
-  long long value;
+  long long value;  ///< 文字列化対象の整数値
+  /**
+   * @brief 整数値からタグを構築する
+   * @param v 文字列化する整数値
+   */
   constexpr Oct(Integral auto v)
   : value(v)
   {}
@@ -78,8 +95,13 @@ struct Oct {
  *
  */
 struct Precision {
-  double value;
-  int precision;
+  double value;  ///< 文字列化対象の値（double に正規化）
+  int precision;  ///< 小数点以下の桁数
+  /**
+   * @brief 浮動小数点数と精度からタグを構築する
+   * @param v 文字列化する浮動小数点数
+   * @param p 小数点以下の桁数（既定 2）
+   */
   constexpr Precision(FloatingPoint auto v, int p = 2)
   : value(static_cast<double>(v)), precision(p)
   {}

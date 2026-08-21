@@ -144,8 +144,11 @@ public:
   using iterator = iterator_base<frozen_multimap, reference>;
   using const_iterator = iterator_base<frozen_multimap const, const_reference>;
 
+  /** @brief キーの総数を返す（重複を含む） */
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
+  /** @brief 格納可能な最大要素数（size() と同じ） */
   static constexpr auto max_size() noexcept -> size_type { return size(); }
+  /** @brief 常に false（frozen_multimap は少なくとも1つのキーを要求する） */
   [[nodiscard]] static constexpr auto empty() noexcept -> bool { return false; }
   /**
    * @brief 辞書順にソートされたキー配列（重複を含む）を取得する
@@ -267,16 +270,37 @@ public:
     throw std::out_of_range(
       std::string{"frozen_multimap key not found: "} + std::string{key});
   }
+  /// @brief 先頭イテレータを返す（ソート順）
   constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
+  /// @brief 末尾イテレータを返す
   constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
+  /// @brief 先頭イテレータを返す（const 版）
   constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
+  /// @brief 末尾イテレータを返す（const 版）
   constexpr auto end() const noexcept -> const_iterator { return const_iterator{this, size()}; }
+  /// @brief 先頭イテレータを返す（const_iterator）
   constexpr auto cbegin() const noexcept -> const_iterator { return begin(); }
+  /// @brief 末尾イテレータを返す（const_iterator）
   constexpr auto cend() const noexcept -> const_iterator { return end(); }
 
+  /**
+   * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
+   */
   constexpr frozen_multimap() noexcept requires std::default_initializable<T> = default;
+  /**
+   * @brief 値配列から構築する（宣言順に対応）
+   * @param values 宣言順に対応する値の配列
+   */
   constexpr explicit frozen_multimap(std::array<T, size()> values) noexcept(std::is_nothrow_move_constructible_v<T>) : values_{std::move(values)} {}
+  /**
+   * @brief 初期化リストから構築する（要素数はキー数と一致が必要）
+   * @param values 宣言順に対応する値の初期化リスト
+   */
   constexpr explicit frozen_multimap(std::initializer_list<T> values) requires std::constructible_from<T, T const&> : values_{copy_initializer_list(values)} {}
+  /**
+   * @brief キー・値エントリ配列から構築する（重複キーは宣言順スロットへ割り当て、欠落キーは例外）
+   * @param entries キー・値ペアの配列
+   */
   constexpr explicit frozen_multimap(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
 
 private:

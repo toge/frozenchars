@@ -40,6 +40,9 @@ requires (Freezable<Key> && Freezable<Value>)
   );
 }
 
+/**
+ * @brief キー・バリューペアと残りの引数からクエリ文字列を生成する（再帰用）
+ */
 template <class Key, class Value, class... Tail>
 requires (sizeof...(Tail) % 2 == 0 && Freezable<Key> && Freezable<Value>)
 [[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
@@ -62,6 +65,9 @@ template <FreezablePair T>
   );
 }
 
+/**
+ * @brief タプルと残りの引数からクエリ文字列を生成する（再帰用）
+ */
 template <FreezablePair Head, class... Tail>
 [[nodiscard]] auto consteval make_querystring_impl(Head&& head, Tail&&... tail) {
   return concat(

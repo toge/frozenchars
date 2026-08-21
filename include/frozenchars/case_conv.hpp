@@ -228,6 +228,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 文字列をケバブケースに変換する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval to_kebab_case(char const (&str)[N]) noexcept {
   return to_kebab_case(FrozenString{str});

@@ -418,7 +418,7 @@ struct lookup_index {
   }();
 
   static constexpr auto k_lookup_threshold = 64uz;  // ルックアップテーブルを使う要素数の上限（これ超えは二分探索へ）
-  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);
+  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);  // ルックアップテーブル方式か（false なら CHD 方式）
   static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz;  // 負荷率 1/4 を見込んだ 2 冪サイズ
   static constexpr auto mask_ = table_size_ - 1;  // ビットマスク（table_size_ は 2 冪）
 
@@ -430,7 +430,7 @@ struct lookup_index {
       return detail::lookup_seed_result<table_size_, size()>{0, {static_cast<index_t>(-1)}};
     }
   }
-  static constexpr auto metadata_ = make_lookup_metadata();
+  static constexpr auto metadata_ = make_lookup_metadata();  // ルックアップテーブル方式のメタデータ（シード + テーブル）
   static constexpr auto k_seed = metadata_.seed;        // ハッシュシード
   static constexpr auto lookup_table_ = metadata_.table;  // スロット → 要素インデックス
 
@@ -444,7 +444,7 @@ struct lookup_index {
       return detail::build_chd<chd_bucket_count_, chd_table_size_>(key_views_);
     }
   }
-  static constexpr auto chd_ = make_chd_metadata();
+  static constexpr auto chd_ = make_chd_metadata();  // CHD 方式のメタデータ（バケットシード + テーブル）
 
   static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);  // 全キーが 16 バイト以下（128bit 比較可能）
 
@@ -588,6 +588,9 @@ concept is_frozen_map_associative_result = (is_std_map_v<Result> || is_std_unord
       result.emplace(std::move(key), std::move(value));
     };
 
+/**
+ * @brief is_frozen_map_associative_result のエイリアスコンセプト（公開名）
+ */
 template <typename Result, typename ValueArg>
 concept frozen_map_associative_result = is_frozen_map_associative_result<Result, ValueArg>;
 
@@ -599,6 +602,9 @@ concept is_frozen_map_array_result = is_std_array_v<Result> && std::tuple_size_v
     PairLikeEntry<typename std::remove_cvref_t<Result>::value_type> &&
     std::constructible_from<typename std::remove_cvref_t<Result>::value_type, std::string_view, ValueArg>;
 
+/**
+ * @brief is_frozen_map_array_result のエイリアスコンセプト（公開名）
+ */
 template <typename Result, std::size_t ExpectedSize, typename ValueArg>
 concept frozen_map_array_result = is_frozen_map_array_result<Result, ExpectedSize, ValueArg>;
 
@@ -689,8 +695,11 @@ public:
 
   static_assert(sizeof...(Keys) > 0, "frozen_map requires at least one key");
   static_assert(!detail::has_duplicate_keys<Keys...>(), "frozen_map keys must be unique");
+  /** @brief キーの総数を返す */
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
+  /** @brief 格納可能な最大要素数（size() と同じ） */
   static constexpr auto max_size() noexcept -> size_type { return size(); }
+  /** @brief 常に false（frozen_map は少なくとも1つのキーを要求する） */
   [[nodiscard]] static constexpr auto empty() noexcept -> bool { return false; }
   /**
    * @brief 同じキー集合を持つ 2 つの frozen_map の全値が等しいかを判定する
@@ -702,6 +711,9 @@ public:
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});
   }
+  /**
+   * @brief 非等値比較（operator== の否定）
+   */
   [[nodiscard]] friend constexpr auto operator!=(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
     return !(lhs == rhs);
   }
@@ -747,15 +759,36 @@ public:
   [[nodiscard]] constexpr auto count(std::string_view key) const noexcept -> size_type {
     return lookup_::find_index_raw(key) != size() ? 1uz : 0uz;
   }
+  /// @brief 先頭イテレータを返す
   constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
+  /// @brief 末尾イテレータを返す
   constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
+  /// @brief 先頭イテレータを返す（const 版）
   constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
+  /// @brief 末尾イテレータを返す（const 版）
   constexpr auto end() const noexcept -> const_iterator { return const_iterator{this, size()}; }
+  /// @brief 先頭イテレータを返す（const_iterator）
   constexpr auto cbegin() const noexcept -> const_iterator { return begin(); }
+  /// @brief 末尾イテレータを返す（const_iterator）
   constexpr auto cend() const noexcept -> const_iterator { return end(); }
+  /**
+   * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
+   */
   constexpr frozen_map() noexcept requires std::default_initializable<T> = default;
+  /**
+   * @brief 値配列から構築する（キー順に対応）
+   * @param values キー順に対応する値の配列
+   */
   constexpr explicit frozen_map(std::array<T, size()> values) noexcept(std::is_nothrow_move_constructible_v<T>) : values_{std::move(values)} {}
+  /**
+   * @brief 初期化リストから構築する（要素数はキー数と一致が必要）
+   * @param values キー順に対応する値の初期化リスト
+   */
   constexpr explicit frozen_map(std::initializer_list<T> values) requires std::constructible_from<T, T const&> : values_{copy_initializer_list(values)} {}
+  /**
+   * @brief キー・値エントリ配列から構築する（キー一致で配置、欠落キーは例外）
+   * @param entries キー・値ペアの配列
+   */
   constexpr explicit frozen_map(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
   /**
    * @brief キーが存在するかを判定する
@@ -825,10 +858,25 @@ public:
     if (auto const slot = find_index_opt(key); slot) [[likely]] return values_[*slot];
     return default_value;
   }
+  /**
+   * @brief キーに対応する値への参照を取得する（未検出は at() が例外を送出）
+   * @param key 探索するキー
+   * @return T& / T const& 値への参照
+   */
   constexpr auto operator[](std::string_view key) -> T& { return at(key); }
   constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
+  /**
+   * @brief lvalue のマップを指定した結果型へ変換する
+   * @tparam Result 変換先（std::map / std::unordered_map / std::array<pair-like, size()>）
+   * @return Result 変換結果
+   */
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map const&, mapped_type>>
   [[nodiscard]] constexpr auto to() const& -> Result { return to_result<Result>(*this); }
+  /**
+   * @brief rvalue のマップを指定した結果型へ変換する（値はムーブされる）
+   * @tparam Result 変換先（std::map / std::unordered_map / std::array<pair-like, size()>）
+   * @return Result 変換結果
+   */
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map&&, mapped_type>>
   [[nodiscard]] constexpr auto to() && -> Result { return to_result<Result>(std::move(*this)); }
 private:
@@ -934,6 +982,14 @@ constexpr auto make_frozen_map(Entries&&... entries) -> frozen_map<T, Keys...> {
   return frozen_map<T, Keys...>{std::move(arr)};
 }
 
+/**
+ * @brief 値配列から frozen_map を構築する
+ *
+ * @tparam T 値の型
+ * @tparam Keys キー列（FrozenString NTTP）
+ * @param values キー順に対応する値の配列
+ * @return frozen_map<T, Keys...> 構築されたマップ
+ */
 template <typename T, FrozenString... Keys>
 constexpr auto make_frozen_map(std::array<T, sizeof...(Keys)> values) -> frozen_map<T, Keys...> {
   return frozen_map<T, Keys...>{std::move(values)};
@@ -968,15 +1024,19 @@ constexpr auto make_frozen_map_kv() -> frozen_map<T, KVs.key...> {
 
 namespace std {
 
+/// @brief frozen_map_entry を 2 要素の tuple-like として扱うための特殊化
 template <typename T>
 struct tuple_size<frozenchars::frozen_map_entry<T>> : std::integral_constant<std::size_t, 2> {};
 
+/// @brief frozen_map_entry の指定位置の型（0=キー, 1=値）
 template <std::size_t I, typename T>
 struct tuple_element<I, frozenchars::frozen_map_entry<T>> { using type = std::conditional_t<I == 0, std::string_view, T>; };
 
+/// @brief kv を 2 要素の tuple-like として扱うための特殊化
 template <std::size_t N, typename V>
 struct tuple_size<frozenchars::kv<N, V>> : std::integral_constant<std::size_t, 2> {};
 
+/// @brief kv の指定位置の型（0=キー, 1=値）
 template <std::size_t I, std::size_t N, typename V>
 struct tuple_element<I, frozenchars::kv<N, V>> { using type = std::conditional_t<I == 0, std::string_view, V>; };
 

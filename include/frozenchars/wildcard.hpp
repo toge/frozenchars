@@ -88,6 +88,10 @@ private:
     return {static_cast<unsigned char>(PAT.data()[i]), i + 1};
   }
 
+  /**
+   * @brief パターンを解析してメタデータを構築する
+   * @return metadata 括弧対応・文字クラス・分岐情報・固定接頭辞長を含む解析結果
+   */
   [[nodiscard]] static consteval auto make_metadata() noexcept -> metadata {
     auto data = metadata{};
 
@@ -217,9 +221,10 @@ private:
     return data;
   }
 
-  static constexpr auto data = make_metadata();
+  static constexpr auto data = make_metadata();  // 事前計算済みメタデータ
 
 public:
+  /** @brief 分岐が存在しないことを示すセンチネル値（PAT.size()） */
   static constexpr auto NO_BRANCH = PAT.size();
   static constexpr auto close_brackets = data.close_brackets;
   static constexpr auto close_parens = data.close_parens;
@@ -274,6 +279,7 @@ struct wildcard_to_regex_helper {
     return paren_depth == 0;
   }();
 
+  /** @brief frozen_regex に渡すパターン（[! → [^ 変換済み） */
   static constexpr FrozenString<PAT.size() + 1> regex_pattern = []() consteval {
     FrozenString<PAT.size() + 1> fs;
     fs.length = PAT.size();
@@ -494,11 +500,22 @@ template <FrozenString PAT>
   return pi == PAT.size();
 }
 
+/**
+ * @brief マッチした範囲（テキスト内の開始・終了位置）
+ */
 struct find_result {
-  size_t start;
-  size_t end;
+  size_t start;  ///< マッチ開始位置
+  size_t end;    ///< マッチ終了位置（start を含まない）
 };
 
+/**
+ * @brief start 位置から始まる最短マッチを探索する
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @param start 探索開始位置
+ * @return std::optional<find_result> マッチ範囲、未検出は nullopt
+ */
 template <FrozenString PAT>
 [[nodiscard]] constexpr auto wildcard_find_shortest_match_from(std::string_view text, size_t start) noexcept
   -> std::optional<find_result> {
@@ -509,6 +526,9 @@ template <FrozenString PAT>
   return std::nullopt;
 }
 
+/**
+ * @brief 先頭の `*` に続くリテラル部分の範囲を返す（探索のアンカー計算用）
+ */
 template <FrozenString PAT>
 [[nodiscard]] consteval auto wildcard_simple_glob_leading_literal_anchor() noexcept -> find_result {
   auto start = 0uz;
@@ -524,6 +544,16 @@ template <FrozenString PAT>
   return find_result{start, end};
 }
 
+/**
+ * @brief 単純グロブ（`*` / `?` のみ）パターンの search_from 以降の最短マッチを探索する
+ *
+ * 固定接頭辞や先頭リテラルをアンカーに候補位置を絞り込む。
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @param search_from 探索開始位置
+ * @return std::optional<find_result> マッチ範囲、未検出は nullopt
+ */
 template <FrozenString PAT>
 [[nodiscard]] constexpr auto wildcard_find_simple_glob_from(std::string_view text, size_t search_from) noexcept
   -> std::optional<find_result> {
@@ -567,6 +597,13 @@ template <FrozenString PAT>
   return std::nullopt;
 }
 
+/**
+ * @brief 単純グロブ（`*` / `?` のみ）パターンでマッチした部分文字列を返す
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @return std::optional<std::string_view> マッチした部分文字列、未検出は nullopt
+ */
 template <FrozenString PAT>
 [[nodiscard]] constexpr auto wildcard_find_simple_glob(std::string_view text) noexcept
   -> std::optional<std::string_view> {
@@ -576,6 +613,16 @@ template <FrozenString PAT>
   return std::nullopt;
 }
 
+/**
+ * @brief search_from 以降でパターンにマッチする最短範囲を探索する
+ *
+ * パターン構成（単純グロブか、文字クラス・分岐を含むか）に応じて最適な探索戦略を選択する。
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @param search_from 探索開始位置
+ * @return std::optional<find_result> マッチ範囲、未検出は nullopt
+ */
 template <FrozenString PAT>
 [[nodiscard]] constexpr auto wildcard_find_from(std::string_view text, size_t search_from) noexcept
   -> std::optional<find_result> {
@@ -822,6 +869,7 @@ template <FrozenString PAT>
     bool operator!=(sentinel_type) const noexcept { return !done_; }
   };
 
+  /** @brief 範囲for で全マッチを走査するための range */
   struct range {
     std::string_view text_;
 

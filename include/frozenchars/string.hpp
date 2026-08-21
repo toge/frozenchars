@@ -20,8 +20,8 @@ namespace frozenchars {
 template <size_t N>
 struct FrozenString {
   static_assert(N > 0, "FrozenString requires N > 0");
-  std::array<char, N> buffer{};
-  size_t length = 0;
+  std::array<char, N> buffer{};  ///< 文字列本体（終端 '\0' 込み、未使用領域はゼロ初期化）
+  size_t length = 0;             ///< 終端 '\0' を除く文字列長
 
   /**
    * @brief デフォルトコンストラクタ
@@ -149,10 +149,16 @@ struct FrozenString {
     return sv();
   }
 
+  /**
+   * @brief 読み取り専用 span への変換
+   */
   [[nodiscard]] constexpr operator std::span<char const>() const noexcept {
     return {buffer.data(), length};
   }
 
+  /**
+   * @brief 可変 span への変換
+   */
   [[nodiscard]] constexpr operator std::span<char>() noexcept {
     return {buffer.data(), length};
   }
@@ -167,22 +173,37 @@ struct FrozenString {
     return lhs.buffer == rhs.buffer && lhs.length == rhs.length;
   }
 
+  /**
+   * @brief 非等値比較
+   */
   [[nodiscard]] friend constexpr auto operator!=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
     return !(lhs == rhs);
   }
 
+  /**
+   * @brief 辞書順比較（小なり）
+   */
   [[nodiscard]] friend constexpr auto operator<(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
     return lhs.sv() < rhs.sv();
   }
 
+  /**
+   * @brief 辞書順比較（以下）
+   */
   [[nodiscard]] friend constexpr auto operator<=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
     return !(rhs < lhs);
   }
 
+  /**
+   * @brief 辞書順比較（大なり）
+   */
   [[nodiscard]] friend constexpr auto operator>(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
     return rhs < lhs;
   }
 
+  /**
+   * @brief 辞書順比較（以上）
+   */
   [[nodiscard]] friend constexpr auto operator>=(FrozenString const& lhs, FrozenString const& rhs) noexcept -> bool {
     return !(lhs < rhs);
   }
@@ -227,17 +248,24 @@ std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
 
 namespace detail {
 
+/**
+ * @brief 型 T が FrozenString か判定するトレイト
+ */
 template <typename T>
 struct is_frozen_string : std::false_type {};
 
 template <std::size_t N>
 struct is_frozen_string<FrozenString<N>> : std::true_type {};
 
+/// @brief is_frozen_string の簡易定数版
 template <typename T>
 inline constexpr bool is_frozen_string_v = is_frozen_string<std::remove_cvref_t<T>>::value;
 
 } // namespace detail
 
+/**
+ * @brief 型 T が FrozenString であることを要求するコンセプト（NTTP の requires 節用）
+ */
 template <typename T>
 concept FrozenStringLike = detail::is_frozen_string_v<T>;
 

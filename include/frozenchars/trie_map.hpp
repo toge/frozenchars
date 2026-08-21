@@ -104,10 +104,16 @@ public:
   using iterator = iterator_base<frozen_trie_map, reference>;
   using const_iterator = iterator_base<frozen_trie_map const, const_reference>;
 
+  /** @brief キーの総数を返す */
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
+  /** @brief 格納可能な最大要素数（size() と同じ） */
   static constexpr auto max_size() noexcept -> size_type { return size(); }
+  /** @brief 常に false（frozen_trie_map は少なくとも1つのキーを要求する） */
   static constexpr auto empty() noexcept -> bool { return false; }
 
+  /**
+   * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
+   */
   constexpr frozen_trie_map() noexcept requires std::default_initializable<T> = default;
   /**
    * @brief 値の配列から構築

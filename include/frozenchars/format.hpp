@@ -13,14 +13,21 @@
 #ifdef __cpp_lib_format
 namespace std {
 
+/**
+ * @brief FrozenString を std::format で書式化できるようにする std::formatter 特殊化
+ *
+ * 書式指定の解釈は std::string_view 用の formatter に委譲する。
+ */
 template <size_t N>
 struct formatter<frozenchars::FrozenString<N>, char> {
-  formatter<std::string_view, char> delegate_{};
+  formatter<std::string_view, char> delegate_{};  ///< 処理を委譲する string_view 用 formatter
 
+  /// @brief 書式指定を解析する（委譲）
   constexpr auto parse(format_parse_context& ctx) {
     return delegate_.parse(ctx);
   }
 
+  /// @brief 文字列をフォーマットして出力する（委譲）
   template <typename FormatContext>
   auto format(frozenchars::FrozenString<N> const& value, FormatContext& ctx) const {
     return delegate_.format(value.sv(), ctx);

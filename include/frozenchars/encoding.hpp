@@ -11,6 +11,12 @@
 
 namespace frozenchars::detail {
 
+/**
+ * @brief 先頭バイトから UTF-8 シーケンスのバイト数を求める
+ *
+ * @param c シーケンスの先頭バイト
+ * @return size_t バイト数（1〜4）。不正なリーディングバイトは 1（フェイルソフト）
+ */
 constexpr auto utf8_char_length(char const c) noexcept -> size_t {
   auto const uc = static_cast<unsigned char>(c);
   if (uc < 0x80) {
@@ -28,6 +34,17 @@ constexpr auto utf8_char_length(char const c) noexcept -> size_t {
   return 1;
 }
 
+/**
+ * @brief 指定位置から UTF-8 シーケンスを 1 符号点に復号する
+ *
+ * 継続バイトが不正な場合は先頭バイトのみを 1 符号点として扱う（フェイルソフト）。
+ *
+ * @param str 復号元の文字列
+ * @param pos 復号開始位置（バイト単位）
+ * @param consumed 消費したバイト数（出力）
+ * @param codepoint 復号した符号点（出力）
+ * @return bool pos が範囲内なら true
+ */
 constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed, std::uint32_t& codepoint) noexcept -> bool {
   if (pos >= str.size()) {
     return false;
@@ -84,6 +101,13 @@ constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed
   return true;
 }
 
+/**
+ * @brief 文字列を符号点列に変換する
+ *
+ * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
+ * @param str 対象文字列
+ * @return std::array<std::uint32_t, MaxN> 符号点配列（length 以降は 0）
+ */
 template <size_t MaxN>
 constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::array<std::uint32_t, MaxN> {
   auto codepoints = std::array<std::uint32_t, MaxN>{};
@@ -99,6 +123,14 @@ constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::a
   return codepoints;
 }
 
+/**
+ * @brief 文字列を符号点列に変換する（符号点数も取得する版）
+ *
+ * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
+ * @param str 対象文字列
+ * @param count 変換した符号点数（出力）
+ * @return std::array<std::uint32_t, MaxN> 符号点配列（count 以降は 0）
+ */
 template <size_t MaxN>
 constexpr auto utf8_codepoints(FrozenString<MaxN> const& str, size_t& count) noexcept -> std::array<std::uint32_t, MaxN> {
   auto codepoints = std::array<std::uint32_t, MaxN>{};
@@ -114,6 +146,13 @@ constexpr auto utf8_codepoints(FrozenString<MaxN> const& str, size_t& count) noe
   return codepoints;
 }
 
+/**
+ * @brief 符号点を UTF-8 バイト列にエンコードする
+ *
+ * @param codepoint エンコードする符号点
+ * @param out エンコード結果の格納先（最大 4 バイト）
+ * @param length 書き込んだバイト数（出力）
+ */
 constexpr auto utf8_encode_codepoint(std::uint32_t codepoint, std::array<char, 4>& out, size_t& length) noexcept -> void {
   if (codepoint <= 0x7F) {
     out[0] = static_cast<char>(codepoint);
@@ -190,12 +229,7 @@ constexpr auto utf8_encode_codepoint(std::uint32_t codepoint, std::array<char, 4
 }
 
 /**
- * @brief 文字列の指定位置から 16 進数字を最大 max_digits 桁読み取る
- *
- * @param str 読み取り元
- * @param i 読み取り開始位置
- * @param max_digits 読み取り上限桁数
- * @return hex_digits_result 結果（有効桁数が 0 の場合は valid=false）
+ * @brief 16 進数字の読み取り結果
  */
 struct hex_digits_result {
   bool valid;             ///< 1 桁以上読み取れたか
@@ -203,6 +237,14 @@ struct hex_digits_result {
   std::size_t count;      ///< 読み取った桁数
 };
 
+/**
+ * @brief 文字列の指定位置から 16 進数字を最大 max_digits 桁読み取る
+ *
+ * @param str 読み取り元
+ * @param i 読み取り開始位置
+ * @param max_digits 読み取り上限桁数
+ * @return hex_digits_result 結果（有効桁数が 0 の場合は valid=false）
+ */
 [[nodiscard]] consteval auto parse_hex_digits(std::string_view const str, size_t const i, size_t const max_digits) noexcept -> hex_digits_result {
   std::uint32_t value = 0;
   auto count = 0uz;
@@ -332,11 +374,17 @@ template <size_t N>
   return hex_encode(str);
 }
 
+/**
+ * @brief 文字列リテラルをアスキー形式に変換する (16進エンコード)
+ */
 template <size_t N>
 [[nodiscard]] auto consteval to_ascii(char const (&str)[N]) noexcept {
   return hex_encode(str);
 }
 
+/**
+ * @brief 文字列をアスキー形式に変換する (16進エンコード、NTTP版)
+ */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
 [[nodiscard]] auto consteval to_ascii() noexcept {
@@ -351,11 +399,17 @@ template <size_t N>
   return hex_decode(str);
 }
 
+/**
+ * @brief 文字列リテラルをアスキー形式から復元する (16進デコード)
+ */
 template <size_t N>
 [[nodiscard]] auto consteval from_ascii(char const (&str)[N]) noexcept {
   return hex_decode(str);
 }
 
+/**
+ * @brief アスキー形式から文字列を復元する (16進デコード、NTTP版)
+ */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
 [[nodiscard]] auto consteval from_ascii() noexcept {
@@ -904,6 +958,15 @@ template <auto Str>
   return utf8_length(Str);
 }
 
+/**
+ * @brief UTF-8 文字列を符号点単位で部分切り出しする
+ *
+ * @tparam Start 開始符号点インデックス
+ * @tparam Count 切り出す符号点数
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return FrozenString<N> 切り出した文字列（バッファサイズは入力と同じ）
+ */
 template <size_t Start, size_t Count, size_t N>
 [[nodiscard]] auto consteval utf8_substr(FrozenString<N> const& str) noexcept -> FrozenString<N> {
   auto res = FrozenString<N>{};
@@ -927,17 +990,35 @@ template <size_t Start, size_t Count, size_t N>
   return res;
 }
 
+/**
+ * @brief UTF-8 文字列を符号点単位で部分切り出しする（文字列リテラル版）
+ */
 template <size_t Start, size_t Count, size_t N>
 [[nodiscard]] auto consteval utf8_substr(char const (&str)[N]) noexcept -> FrozenString<N> {
   return utf8_substr<Start, Count>(FrozenString{str});
 }
 
+/**
+ * @brief UTF-8 文字列を符号点単位で部分切り出しする（NTTP版）
+ *
+ * @tparam Start 開始符号点インデックス
+ * @tparam Count 切り出す符号点数
+ * @tparam Str 対象文字列（FrozenString NTTP）
+ * @return FrozenString<Str.length> 切り出した文字列
+ */
 template <size_t Start, size_t Count, auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
 [[nodiscard]] auto consteval utf8_substr() noexcept -> FrozenString<Str.length> {
   return utf8_substr<Start, Count>(Str);
 }
 
+/**
+ * @brief UTF-8 文字列を符号点単位で逆順にする
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return FrozenString<N> 逆順にした文字列
+ */
 template <size_t N>
 [[nodiscard]] auto consteval utf8_reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
   auto const codepoints = detail::utf8_codepoints(str);
@@ -959,17 +1040,32 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief UTF-8 文字列を符号点単位で逆順にする（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval utf8_reverse(char const (&str)[N]) noexcept -> FrozenString<N> {
   return utf8_reverse(FrozenString{str});
 }
 
+/**
+ * @brief UTF-8 文字列を符号点単位で逆順にする（NTTP版）
+ *
+ * @tparam Str 対象文字列（FrozenString NTTP）
+ * @return FrozenString<Str.length> 逆順にした文字列
+ */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
 [[nodiscard]] auto consteval utf8_reverse() noexcept -> FrozenString<Str.length> {
   return utf8_reverse(Str);
 }
 
+/**
+ * @brief Unicode 符号点を UTF-8 文字列に変換する
+ *
+ * @tparam Codepoint 変換する符号点（0〜0x10FFFF）
+ * @return FrozenString<5> UTF-8 エンコードした文字列（最大 4 バイト + 終端）
+ */
 template <auto Codepoint>
 [[nodiscard]] auto consteval codepoint_to_utf8() noexcept -> FrozenString<4 + 1> {
   auto out = std::array<char, 4>{};
@@ -1061,6 +1157,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 文字列を C エスケープシーケンスに変換する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval escape_c(char const (&str)[N]) noexcept -> FrozenString<4 * N + 1> {
   return escape_c(FrozenString{str});
@@ -1171,6 +1270,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief C エスケープシーケンスを元の文字列に変換する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval unescape_c(char const (&str)[N]) noexcept -> FrozenString<N> {
   return unescape_c(FrozenString{str});

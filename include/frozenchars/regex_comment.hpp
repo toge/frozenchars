@@ -76,11 +76,20 @@ auto constexpr remove_regex_comment(FrozenString<N> const& pattern) noexcept {
   return result;
 }
 
+/**
+ * @brief 拡張正規表現のコメントと空白を削除する（文字列リテラル版）
+ */
 template <size_t N>
 auto constexpr remove_regex_comment(char const (&pattern)[N]) noexcept {
   return remove_regex_comment(FrozenString{pattern});
 }
 
+/**
+ * @brief 拡張正規表現のコメントと空白を削除する（NTTP版）
+ *
+ * @tparam Pattern 拡張正規表現のパターン（FrozenString NTTP）
+ * @return auto 拡張ではない正規表現
+ */
 template <auto Pattern>
   requires detail::is_frozen_string_v<decltype(Pattern)>
 [[nodiscard]] auto consteval remove_regex_comment() noexcept {

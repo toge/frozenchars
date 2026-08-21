@@ -101,6 +101,9 @@ template <size_t N>
   return remove_leading_spaces_if<detail::is_space_char>(str, n);
 }
 
+/**
+ * @brief 各行の先頭の空白を指定個数分削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_leading_spaces(char const (&str)[N], size_t n = 0) noexcept {
   return remove_leading_spaces(FrozenString{str}, n);
@@ -145,6 +148,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 指定されたコメント開始文字列で始まる行を削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_comment_lines(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
   return remove_comment_lines(FrozenString{str}, comment_seq);
@@ -195,6 +201,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 各行のコメント（指定されたコメント開始文字列以降）を削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_comments(char const (&str)[N], std::string_view comment_seq = "#") noexcept {
   return remove_comments(FrozenString{str}, comment_seq);
@@ -250,6 +259,9 @@ template <size_t N>
   return remove_trailing_spaces_if<detail::is_space_char>(str, n);
 }
 
+/**
+ * @brief 各行の末尾の連続した半角スペースを削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_trailing_spaces(char const (&str)[N], size_t n = 0) noexcept {
   return remove_trailing_spaces(FrozenString{str}, n);
@@ -289,6 +301,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief すべての行末の空白を削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval trim_trailing_spaces(char const (&str)[N]) noexcept {
   return trim_trailing_spaces(FrozenString{str});
@@ -342,6 +357,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 指定した開始文字列から終了文字列までの範囲を繰り返し削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_range_comments(char const (&str)[N], std::string_view start_seq, std::string_view end_seq) noexcept {
   return remove_range_comments(FrozenString{str}, start_seq, end_seq);
@@ -387,6 +405,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief すべての行を結合する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval join_lines(char const (&str)[N], std::string_view sep = "") {
   return join_lines(FrozenString{str}, sep);
@@ -500,6 +521,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief すべての空行を削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_empty_lines(char const (&str)[N]) noexcept {
   return remove_empty_lines(FrozenString{str});
@@ -553,6 +577,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 先頭の空行を削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_leading_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
   return remove_leading_empty_lines(FrozenString{str}, n);
@@ -596,6 +623,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 末尾の空行を削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval remove_trailing_empty_lines(char const (&str)[N], size_t n = 0) noexcept {
   return remove_trailing_empty_lines(FrozenString{str}, n);
@@ -650,6 +680,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 連続した空行を1行にまとめる（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval collapse_empty_lines(char const (&str)[N]) noexcept {
   return collapse_empty_lines(FrozenString{str});
@@ -696,6 +729,9 @@ template <size_t N, size_t M>
   return res;
 }
 
+/**
+ * @brief 各行の先頭に文字列を追加する（文字列リテラル版）
+ */
 template <size_t N, size_t M>
 [[nodiscard]] auto consteval prefix_lines(char const (&str)[N], char const (&prefix)[M]) noexcept {
   return prefix_lines(FrozenString{str}, FrozenString{prefix});
@@ -737,6 +773,9 @@ template <size_t N, size_t M>
   return res;
 }
 
+/**
+ * @brief 各行の末尾に文字列を追加する（文字列リテラル版）
+ */
 template <size_t N, size_t M>
 [[nodiscard]] auto consteval postfix_lines(char const (&str)[N], char const (&postfix)[M]) noexcept {
   return postfix_lines(FrozenString{str}, FrozenString{postfix});
@@ -797,11 +836,17 @@ template <size_t N, size_t M>
   return surround_lines(str, both, both);
 }
 
+/**
+ * @brief 各行の先頭と末尾に文字列を追加する（文字列リテラル版）
+ */
 template <size_t N, size_t M1, size_t M2>
 [[nodiscard]] auto consteval surround_lines(char const (&str)[N], char const (&prefix)[M1], char const (&postfix)[M2]) noexcept {
   return surround_lines(FrozenString{str}, FrozenString{prefix}, FrozenString{postfix});
 }
 
+/**
+ * @brief 各行の先頭と末尾に同じ文字列を追加する（文字列リテラル版）
+ */
 template <size_t N, size_t M>
 [[nodiscard]] auto consteval surround_lines(char const (&str)[N], char const (&both)[M]) noexcept {
   return surround_lines(FrozenString{str}, FrozenString{both});

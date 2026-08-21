@@ -247,7 +247,7 @@ template <typename CharT>
   };
   static_assert(std::same_as<CharT, char16_t>);
   static constexpr auto groups_data = [] {
-    struct P { std::u16string_view a; std::u16string_view b; };
+    struct P { std::u16string_view a; std::u16string_view b; };  // 置換元(a)と置換先(b)のペア
     return std::array<P, 5>{P{u"\"" , u"'"},
                             P{u"':", u"!"},
                             P{u",'", u"~"},
@@ -258,7 +258,7 @@ template <typename CharT>
     if constexpr (std::same_as<CharT, char16_t>) return u16;
     else return {};
   };
-  struct Pair { std::basic_string_view<CharT> a; std::basic_string_view<CharT> b; };
+  struct Pair { std::basic_string_view<CharT> a; std::basic_string_view<CharT> b; };  // 置換元(a)と置換先(b)のペア
   Pair const groups[] = {
     {to_view(groups_data[0].a), to_view(groups_data[0].b)},
     {to_view(groups_data[1].a), to_view(groups_data[1].b)},

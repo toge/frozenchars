@@ -40,6 +40,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief パス文字列から親ディレクトリ部分を切り出す（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval dirname(char const (&path_str)[N]) noexcept {
   return dirname(FrozenString{path_str});
@@ -74,6 +77,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief パス文字列からベース名（末尾要素）を切り出す（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval basename(char const (&path_str)[N]) noexcept -> FrozenString<N> {
   return basename(FrozenString{path_str});
@@ -119,6 +125,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief パス文字列から拡張子を切り出す（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval extension(char const (&path_str)[N]) noexcept -> FrozenString<N> {
   return extension(FrozenString{path_str});
@@ -164,6 +173,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief パス文字列から拡張子を除いた主体部を取り出す（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval stem(char const (&path_str)[N]) noexcept -> FrozenString<N> {
   return stem(FrozenString{path_str});
@@ -258,6 +270,9 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief パス文字列を正規化する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval normalize(char const (&path_str)[N]) noexcept -> FrozenString<N + 1> {
   return normalize(FrozenString{path_str});

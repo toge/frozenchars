@@ -170,6 +170,9 @@ template <size_t Width, char Fill, size_t N>
   return res;
 }
 
+/**
+ * @brief 各行を指定幅に左パディングする（文字列リテラル版）
+ */
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_left(char const (&str)[N]) noexcept {
   return pad_left<Width, Fill>(FrozenString{str});
@@ -211,6 +214,9 @@ template <size_t Width, char Fill, size_t N>
   return res;
 }
 
+/**
+ * @brief 各行を指定幅に右パディングする（文字列リテラル版）
+ */
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_right(char const (&str)[N]) noexcept {
   return pad_right<Width, Fill>(FrozenString{str});
@@ -430,6 +436,13 @@ template <size_t N>
   return tolower(FrozenString{str});
 }
 
+/**
+ * @brief 指定文字を指定回数繰り返した文字列を生成する（NTTP版）
+ *
+ * @tparam Count 繰り返し回数
+ * @tparam Ch 繰り返す文字
+ * @return FrozenString<Count + 1> 生成した文字列
+ */
 template <size_t Count, char Ch>
 [[nodiscard]] auto consteval repeat_char() noexcept -> FrozenString<Count + 1> {
   auto res = FrozenString<Count + 1>{};
@@ -441,11 +454,17 @@ template <size_t Count, char Ch>
   return res;
 }
 
+/**
+ * @brief 文字列を指定最大長に省略する（接尾辞は既定 "..."）
+ */
 template <size_t MaxLen, size_t N>
 [[nodiscard]] auto consteval abbreviate(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
   return abbreviate<MaxLen, FrozenString<4>{"..."}>(str);
 }
 
+/**
+ * @brief 文字列を指定最大長に省略する（NTTP で接尾辞を指定）
+ */
 template <size_t MaxLen, auto Suffix, size_t N>
   requires detail::is_frozen_string_v<decltype(Suffix)>
 [[nodiscard]] auto consteval abbreviate(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
@@ -475,16 +494,29 @@ template <size_t MaxLen, auto Suffix, size_t N>
   return res;
 }
 
+/**
+ * @brief 文字列を指定最大長に省略する（文字列リテラル版、接尾辞は既定 "..."）
+ */
 template <size_t MaxLen, size_t N>
 [[nodiscard]] auto consteval abbreviate(char const (&str)[N]) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
   return abbreviate<MaxLen>(FrozenString{str});
 }
 
+/**
+ * @brief 文字列を指定最大長に省略する（文字列リテラル版、NTTP で接尾辞を指定）
+ */
 template <size_t MaxLen, auto Suffix, size_t N>
 [[nodiscard]] auto consteval abbreviate(char const (&str)[N]) noexcept -> FrozenString<std::max(N, MaxLen + 1)> {
   return abbreviate<MaxLen, Suffix>(FrozenString{str});
 }
 
+/**
+ * @brief 連続する空白を 1 文字の半角スペースに正規化する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return FrozenString<N> 正規化後の文字列
+ */
 template <size_t N>
 [[nodiscard]] auto consteval normalize_whitespace(FrozenString<N> const& str) noexcept -> FrozenString<N> {
   auto res = FrozenString<N>{};
@@ -510,16 +542,25 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 連続する空白を 1 文字の半角スペースに正規化する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval normalize_whitespace(char const (&str)[N]) noexcept -> FrozenString<N> {
   return normalize_whitespace(FrozenString{str});
 }
 
+/**
+ * @brief normalize_whitespace の別名（Python の str.split()+join 相当）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval squeeze(FrozenString<N> const& str) noexcept -> FrozenString<N> {
   return normalize_whitespace(str);
 }
 
+/**
+ * @brief 連続する空白を 1 文字の半角スペースに正規化する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval squeeze(char const (&str)[N]) noexcept -> FrozenString<N> {
   return squeeze(FrozenString{str});
@@ -650,6 +691,9 @@ template <FrozenString From, FrozenString To, size_t N>
   return res;
 }
 
+/**
+ * @brief 文字列置換を行う（文字列リテラル版、最初の 1 箇所のみ）
+ */
 template <FrozenString From, FrozenString To, size_t N>
 [[nodiscard]] auto consteval replace(char const (&str)[N]) noexcept {
   return replace<From, To>(FrozenString{str});
@@ -730,6 +774,9 @@ template <size_t Pos, std::ptrdiff_t Len, size_t N>
   return substr(FrozenString{str}, Pos, Len);
 }
 
+/**
+ * @brief 実行時引数で位置・長さを指定して部分文字列を切り出す（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval substr(char const (&str)[N], size_t pos, std::ptrdiff_t len) noexcept {
   return substr(FrozenString{str}, pos, len);
@@ -772,6 +819,9 @@ template <FrozenString From, FrozenString To, size_t N>
   return res;
 }
 
+/**
+ * @brief 文字列置換を行う（文字列リテラル版、全箇所）
+ */
 template <FrozenString From, FrozenString To, size_t N>
 [[nodiscard]] auto consteval replace_all(char const (&str)[N]) noexcept {
   return replace_all<From, To>(FrozenString{str});
@@ -1230,18 +1280,27 @@ template <char TrimChar = ' ', size_t N>
   return trim<TrimChar>(FrozenString{str});
 }
 
+/**
+ * @brief 先頭から指定文字を削除する（char ポインタ版）
+ */
 template <char TrimChar = ' ', typename Ptr>
   requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval ltrim(Ptr&& str) noexcept {
   return ltrim<TrimChar>(freeze(str));
 }
 
+/**
+ * @brief 末尾から指定文字を削除する（char ポインタ版）
+ */
 template <char TrimChar = ' ', typename Ptr>
   requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval rtrim(Ptr&& str) noexcept {
   return rtrim<TrimChar>(freeze(str));
 }
 
+/**
+ * @brief 先頭・末尾から指定文字を削除する（char ポインタ版）
+ */
 template <char TrimChar = ' ', typename Ptr>
   requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval trim(Ptr&& str) noexcept {
@@ -1353,18 +1412,27 @@ template <FrozenString Chars = detail::default_strip_chars, size_t N>
   return strip<Chars>(FrozenString{str});
 }
 
+/**
+ * @brief 先頭から指定文字集合に含まれる文字を削除する（char ポインタ版）
+ */
 template <FrozenString Chars = detail::default_strip_chars, typename Ptr>
   requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval lstrip(Ptr&& str) noexcept {
   return lstrip<Chars>(freeze(str));
 }
 
+/**
+ * @brief 末尾から指定文字集合に含まれる文字を削除する（char ポインタ版）
+ */
 template <FrozenString Chars = detail::default_strip_chars, typename Ptr>
   requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval rstrip(Ptr&& str) noexcept {
   return rstrip<Chars>(freeze(str));
 }
 
+/**
+ * @brief 先頭・末尾から指定文字集合に含まれる文字を削除する（char ポインタ版）
+ */
 template <FrozenString Chars = detail::default_strip_chars, typename Ptr>
   requires(std::same_as<std::remove_cvref_t<Ptr>, char const*> || std::same_as<std::remove_cvref_t<Ptr>, char*>)
 [[nodiscard]] auto consteval strip(Ptr&& str) noexcept {
@@ -1959,7 +2027,7 @@ template <size_t N>
   if (width == 0) {
     width = 1;
   }
-  constexpr auto OUT_CAP = (N > 0 ? N * 2 : 1);
+  constexpr auto OUT_CAP = (N > 0 ? N * 2 : 1);  // 最悪ケース: 全文字の間に改行が挿入され 2 倍になる
   auto           res     = FrozenString<OUT_CAP>{};
   auto           offset  = 0uz;
   auto           col     = 0uz;
@@ -2061,11 +2129,17 @@ template <FrozenString Sub, size_t N>
   return detail::find_impl(str, Sub);
 }
 
+/**
+ * @brief 部分文字列を検索する（文字列リテラル版）
+ */
 template <FrozenString Sub, size_t N>
 [[nodiscard]] auto consteval find(char const (&str)[N]) noexcept -> std::size_t {
   return find<Sub>(FrozenString{str});
 }
 
+/**
+ * @brief 部分文字列を検索する（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <auto Sub>
   requires detail::is_frozen_string_v<decltype(Sub)>
 [[nodiscard]] auto consteval find(auto const& str) noexcept -> std::size_t {
@@ -2085,11 +2159,17 @@ template <FrozenString Sub, size_t N>
   return detail::rfind_substring(str, Sub);
 }
 
+/**
+ * @brief 部分文字列を後方から検索する（文字列リテラル版）
+ */
 template <FrozenString Sub, size_t N>
 [[nodiscard]] auto consteval rfind(char const (&str)[N]) noexcept -> std::size_t {
   return rfind<Sub>(FrozenString{str});
 }
 
+/**
+ * @brief 部分文字列を後方から検索する（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <auto Sub>
   requires detail::is_frozen_string_v<decltype(Sub)>
 [[nodiscard]] auto consteval rfind(auto const& str) noexcept -> std::size_t {
@@ -2109,11 +2189,17 @@ template <FrozenString Chars, size_t N>
   return detail::find_first_of_impl(str, Chars);
 }
 
+/**
+ * @brief 指定文字集合のいずれかを前方から検索する（文字列リテラル版）
+ */
 template <FrozenString Chars, size_t N>
 [[nodiscard]] auto consteval find_first_of(char const (&str)[N]) noexcept -> std::size_t {
   return find_first_of<Chars>(FrozenString{str});
 }
 
+/**
+ * @brief 指定文字集合のいずれかを前方から検索する（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <auto Chars>
   requires detail::is_frozen_string_v<decltype(Chars)>
 [[nodiscard]] auto consteval find_first_of(auto const& str) noexcept -> std::size_t {
@@ -2133,11 +2219,17 @@ template <FrozenString Chars, size_t N>
   return detail::find_last_of_impl(str, Chars);
 }
 
+/**
+ * @brief 指定文字集合のいずれかを後方から検索する（文字列リテラル版）
+ */
 template <FrozenString Chars, size_t N>
 [[nodiscard]] auto consteval find_last_of(char const (&str)[N]) noexcept -> std::size_t {
   return find_last_of<Chars>(FrozenString{str});
 }
 
+/**
+ * @brief 指定文字集合のいずれかを後方から検索する（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <auto Chars>
   requires detail::is_frozen_string_v<decltype(Chars)>
 [[nodiscard]] auto consteval find_last_of(auto const& str) noexcept -> std::size_t {
@@ -2157,11 +2249,17 @@ template <FrozenString Sub, size_t N>
   return detail::count_substring_impl(str, Sub);
 }
 
+/**
+ * @brief 部分文字列の出現回数を数える（文字列リテラル版）
+ */
 template <FrozenString Sub, size_t N>
 [[nodiscard]] auto consteval count_substring(char const (&str)[N]) noexcept -> std::size_t {
   return count_substring<Sub>(FrozenString{str});
 }
 
+/**
+ * @brief 部分文字列の出現回数を数える（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <auto Sub>
   requires detail::is_frozen_string_v<decltype(Sub)>
 [[nodiscard]] auto consteval count_substring(auto const& str) noexcept -> std::size_t {
@@ -2180,11 +2278,17 @@ template <size_t N>
   return detail::reverse_impl(str);
 }
 
+/**
+ * @brief 文字列を逆順にする（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval reverse(char const (&str)[N]) noexcept -> FrozenString<N> {
   return reverse(FrozenString{str});
 }
 
+/**
+ * @brief 文字列を逆順にする（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval reverse(T const& v) noexcept {
@@ -2235,11 +2339,17 @@ template <size_t IndentWidth, char IndentChar = '\t', size_t N>
   return res;
 }
 
+/**
+ * @brief 各行にインデントを追加する（文字列リテラル版）
+ */
 template <size_t IndentWidth, char IndentChar = '\t', size_t N>
 [[nodiscard]] auto consteval indent(char const (&str)[N]) noexcept {
   return indent<IndentWidth, IndentChar>(FrozenString{str});
 }
 
+/**
+ * @brief 各行にインデントを追加する（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <size_t IndentWidth, char IndentChar = '\t', typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval indent(T const& v) noexcept {
@@ -2309,11 +2419,17 @@ template <size_t N>
   return res;
 }
 
+/**
+ * @brief 各行の共通インデントを削除する（文字列リテラル版）
+ */
 template <size_t N>
 [[nodiscard]] auto consteval dedent(char const (&str)[N]) noexcept -> FrozenString<N> {
   return dedent(FrozenString{str});
 }
 
+/**
+ * @brief 各行の共通インデントを削除する（freeze 可能な任意の型を受け付ける汎用版）
+ */
 template <typename T>
   requires(!Integral<std::remove_cvref_t<T>> && requires(T const& v) { freeze(v); })
 [[nodiscard]] auto consteval dedent(T const& v) noexcept {

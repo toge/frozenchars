@@ -23,6 +23,7 @@ inline constexpr auto replacement_characters_utf16 = [] {
   std::array<char16_t, 222> chars{};
   size_t idx = 0;
   auto is_unescaped = [](char16_t c) -> bool {
+    // URI エンコード対象外のマーク文字（RFC 3986 の unreserved marks）
     constexpr char16_t unescaped[] = {u'-', u'_', u'.', u'!', u'~', u'*', u'\'', u'(', u')'};
     for (auto x : unescaped) if (x == c) return true;
     return false;

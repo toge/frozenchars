@@ -41,6 +41,9 @@ template <typename T>
   return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
 }
 
+/**
+ * @brief 16進数整数を文字列に変換する（符号付き版）
+ */
 [[nodiscard]] auto constexpr to_hex_chars(long long value) noexcept {
   return to_hex_chars(static_cast<unsigned long long>(value));
 }
@@ -67,6 +70,9 @@ template <typename T>
   return std::pair{buffer, i};
 }
 
+/**
+ * @brief 2進数整数を文字列に変換する（符号付き版）
+ */
 [[nodiscard]] auto constexpr to_bin_chars(long long value) noexcept {
   return to_bin_chars(static_cast<unsigned long long>(value));
 }
@@ -93,6 +99,9 @@ template <typename T>
   return std::pair{buffer, i};
 }
 
+/**
+ * @brief 8進数整数を文字列に変換する（符号付き版）
+ */
 [[nodiscard]] auto constexpr to_oct_chars(long long value) noexcept {
   return to_oct_chars(static_cast<unsigned long long>(value));
 }

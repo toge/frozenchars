@@ -238,6 +238,14 @@ template <typename T, size_t N>
   }
 }
 
+/**
+ * @brief 文字列リテラルを数値へ変換する
+ *
+ * @tparam T 変換先の数値型（ParseNumberTarget を満たす型）
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return T 変換結果（不正な形式は例外）
+ */
 template <typename T, size_t N>
 [[nodiscard]] auto constexpr parse_number(char const (&str)[N]) -> T {
   return parse_number<T>(FrozenString{str});

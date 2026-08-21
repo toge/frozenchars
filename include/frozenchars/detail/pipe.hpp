@@ -9,6 +9,7 @@
 
 namespace frozenchars {
 
+/// @brief FrozenString の前方宣言（循環 include 回避）
 template <size_t N>
 struct FrozenString;
 
@@ -29,16 +30,27 @@ concept PipeAdaptor = std::derived_from<std::remove_cvref_t<T>, pipe_adaptor_bas
  */
 template <PipeAdaptor... Adaptors>
 struct composed_adaptor : pipe_adaptor_base {
-  std::tuple<Adaptors...> adaptors;
+  std::tuple<Adaptors...> adaptors;  ///< 合成されたアダプタ列（宣言順 = 適用順）
 
+  /**
+   * @brief アダプタ列から合成アダプタを構築する
+   * @param args 合成するアダプタ（左から右の順に適用される）
+   */
   consteval explicit composed_adaptor(Adaptors... args) : adaptors(std::move(args)...) {}
 
+  /**
+   * @brief FrozenString に全アダプタを左から順に適用する
+   * @tparam N 入力文字列のバッファ長
+   * @param str 対象文字列
+   * @return auto 変換後の文字列
+   */
   template <size_t N>
   [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const {
     return apply_impl<0>(str);
   }
 
 private:
+  /// @brief I 番目以降のアダプタを順に適用する（コンパイル時再帰）
   template <size_t I, size_t N>
   [[nodiscard]] consteval auto apply_impl(FrozenString<N> const& str) const {
     if constexpr (I == sizeof...(Adaptors)) {
@@ -69,6 +81,9 @@ template <size_t N, PipeAdaptor Adaptor>
   return rhs(lhs);
 }
 
+/**
+ * @brief string_view に対してアダプタを適用するパイプ演算子（実行時用）
+ */
 template <PipeAdaptor Adaptor>
 [[nodiscard]] constexpr auto operator|(std::string_view lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);

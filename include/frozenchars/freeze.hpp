@@ -229,11 +229,19 @@ template <Integral T>
   return res;
 }
 
+/**
+ * @brief 浮動小数点型を受け取って文字列に変換する（既定精度 2）
+ */
 template <FloatingPoint T>
 [[nodiscard]] auto consteval freeze(T const& arg) noexcept {
   return freeze(Precision(arg, 2)); // デフォルト精度は2
 }
 
+/**
+ * @brief string_view 変換可能な型を受け取って FrozenString に変換する
+ *
+ * 数値型・Hex・Precision 以外で std::string_view に変換できる型（std::string 等）を受け付ける。
+ */
 template <typename T>
   requires (std::is_convertible_v<T, std::string_view>
             && !Integral<std::remove_cvref_t<T>>
@@ -251,6 +259,9 @@ template <typename T>
 template <typename T>
 [[nodiscard]] auto consteval freeze(T const&) noexcept = delete;
 
+/**
+ * @brief FrozenString の配列はそのまま返す（コピーしない）
+ */
 template <size_t N, size_t Count>
 constexpr auto const& freeze(std::array<FrozenString<N>, Count> const& arr) noexcept {
   return arr;
