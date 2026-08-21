@@ -1936,13 +1936,13 @@ constexpr std::size_t find_long_bracket_close(char const *input, std::size_t fro
 } // namespace detail
 
 /// @brief Lua/Luau ソースをミニファイする（コンパイル時・実行時共用）
-constexpr std::size_t minify_lua(const char *input, char *output,
+constexpr std::size_t minify_lua(char const* input, char* output,
                                  std::size_t output_capacity,
                                  minify_lua_opt options = minify_lua_opt::none) noexcept;
 
 /// @brief Cypher クエリをミニファイする（コンパイル時・実行時共用）
-constexpr std::size_t minify_cypher(const char *input, char *output,
-                                   std::size_t output_capacity) noexcept {
+constexpr std::size_t minify_cypher(char const* input, char* output,
+                                    std::size_t output_capacity) noexcept {
   if (output_capacity == 0) {
     return 0;
   }
@@ -2170,7 +2170,7 @@ enum class minify_lua_state : unsigned char {
  * @param options ミニファイオプション
  * @return constexpr std::size_t 圧縮後の長さ
  */
-constexpr std::size_t minify_lua(const char *input, char *output,
+constexpr std::size_t minify_lua(char const* input, char* output,
                                  std::size_t output_capacity,
                                  minify_lua_opt options) noexcept {
   if (output_capacity == 0) {

@@ -3,7 +3,10 @@
 #include <print>
 #endif
 
-#include "frozenchars.hpp"
+#include "frozenchars/multimap.hpp"
+#include "frozenchars/ops.hpp"
+#include "frozenchars/trie_map.hpp"
+#include "frozenchars/url.hpp"
 #include "frozenchars/map.hpp"
 
 int main() {

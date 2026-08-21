@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/log.hpp"
+#include "frozenchars/url.hpp"
 
 /** @brief concat / repeat を使った複合文字列構築のテスト */
 

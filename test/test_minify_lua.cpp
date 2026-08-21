@@ -3,7 +3,7 @@
 
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
 #include "frozenchars/minify.hpp"
 
 using frozenchars::minify_lua;

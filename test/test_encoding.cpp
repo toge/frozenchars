@@ -1,6 +1,6 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief 16進数エンコード/デコード、HTML エンコード/デコード、UTF-8 長さ計算のテスト。 */
 

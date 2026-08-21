@@ -4,7 +4,7 @@
 #if __has_include(<ctll/fixed_string.hpp>)
 
 #include <ctre.hpp>
-#include "frozenchars.hpp"
+#include "frozenchars/string_ops.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;

@@ -6,7 +6,9 @@
 #include <type_traits>
 #include <variant>
 
-#include "frozenchars.hpp"
+#include "frozenchars/json/compress.hpp"
+#include "frozenchars/map.hpp"
+#include "frozenchars/type_parser.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;

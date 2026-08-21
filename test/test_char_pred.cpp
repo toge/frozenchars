@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/char_pred.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief 文字種判定述語（is_upper, is_lower, is_alpha 等）、HTML エンコード/デコード、word_wrap、UTF-8 長さ計算のテスト。 */
 

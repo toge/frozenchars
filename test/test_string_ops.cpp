@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/json/crush.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief FrozenString の検索・変換・分割などの文字列操作関数のテスト */
 

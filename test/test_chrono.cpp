@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/literals.hpp"
+#include "frozenchars/log.hpp"
 #include "frozenchars/chrono.hpp"
 
 using namespace frozenchars;

@@ -7,7 +7,11 @@
 #include <string_view>
 #include <utility>
 
-#include "frozenchars.hpp"
+#include "frozenchars/glaze_frozen_map.hpp"
+#include "frozenchars/json/compress.hpp"
+#include "frozenchars/literals.hpp"
+#include "frozenchars/multimap.hpp"
+#include "frozenchars/trie_map.hpp"
 
 #if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 14)
 #define MAYBE_CONSTEXPR constexpr

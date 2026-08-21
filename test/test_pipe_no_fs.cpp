@@ -1,5 +1,9 @@
 #include "catch2/catch_all.hpp"
-#include "frozenchars.hpp"
+#include "frozenchars/json/crush.hpp"
+#include "frozenchars/ops.hpp"
+#include "frozenchars/path.hpp"
+#include "frozenchars/type_parser.hpp"
+#include "frozenchars/url.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;

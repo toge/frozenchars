@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
 #include <cstring>
-#include "frozenchars.hpp"
+#include "frozenchars/frozen_format.hpp"
+#include "frozenchars/minify.hpp"
+#include "frozenchars/multiline.hpp"
 
 /** @brief frozen_format によるコンパイル時書式整形のテスト */
 

@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/frozen_regex.hpp"
+#include "frozenchars/type_parser.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;

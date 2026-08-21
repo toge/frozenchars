@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
-#include "frozenchars.hpp"
+#include "frozenchars/multimap.hpp"
+#include "frozenchars/ops.hpp"
+#include "frozenchars/trie_map.hpp"
 
 /** @brief ASCII エンコードを介した非 ASCII 文字列の NTTP 利用テスト。 */
 

@@ -2,7 +2,7 @@
 
 #include <regex>
 
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief 正規表現コメント除去（remove_regex_comment）のテスト。 */
 

@@ -1,4 +1,5 @@
-#include "frozenchars.hpp"
+#include "frozenchars/literals.hpp"
+#include "frozenchars/type_parser.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;

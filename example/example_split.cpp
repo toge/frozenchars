@@ -1,4 +1,4 @@
-#include "frozenchars.hpp"
+#include "frozenchars/split.hpp"
 #include <iostream>
 
 int main() {

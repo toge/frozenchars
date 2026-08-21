@@ -1,5 +1,5 @@
 #include "catch2/catch_all.hpp"
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief prefix_lines / postfix_lines / surround_lines による行囲み処理のテスト */
 

@@ -1,5 +1,6 @@
 #include "catch2/catch_all.hpp"
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
+#include "frozenchars/url.hpp"
 
 /** @brief URL エンコード/デコード、クエリ文字列生成のテスト。 */
 

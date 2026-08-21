@@ -1,5 +1,6 @@
 #include <cstdio>
-#include "frozenchars.hpp"
+#include "frozenchars/frozen_format.hpp"
+#include "frozenchars/literals.hpp"
 
 int main() {
   using namespace frozenchars;

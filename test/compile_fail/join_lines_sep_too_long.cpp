@@ -1,4 +1,5 @@
-#include "frozenchars.hpp"
+#include "frozenchars/literals.hpp"
+#include "frozenchars/multiline.hpp"
 using namespace frozenchars::literals;
 
 // セパレータが33文字（MAX_SEP_LEN=32超）

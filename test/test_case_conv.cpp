@@ -1,6 +1,6 @@
 #include "catch2/catch_all.hpp"
 
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief ケース変換（キャピタライズ、スネークケース、キャメルケース、パスカルケース）のテスト。 */
 

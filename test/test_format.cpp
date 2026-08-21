@@ -17,7 +17,8 @@
 #include <sstream>
 #include <string_view>
 
-#include "frozenchars.hpp"
+#include "frozenchars/format.hpp"
+#include "frozenchars/ops.hpp"
 
 /** @brief FrozenString と std::format / std::print / ostream との連携テスト */
 

@@ -3,7 +3,7 @@
 
 #include <cstdio>
 
-#include "frozenchars.hpp"
+#include "frozenchars/ops.hpp"
 
 int main()
 {
