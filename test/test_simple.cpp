@@ -268,6 +268,15 @@ TEST_CASE("strip helpers") {
   auto constexpr s12 = rstrip<",;">(",,a,b;c;;"_fs);
   static_assert(s12.sv() == ",,a,b;c");
   REQUIRE(s12.sv() == ",,a,b;c");
+
+  // 全文字が削除対象の場合は空になる
+  auto constexpr s13 = strip(" \t\n\r\f\v"_fs);
+  static_assert(s13.empty());
+  REQUIRE(s13.empty());
+
+  auto constexpr s14 = strip<",;">(",,,"_fs);
+  static_assert(s14.empty());
+  REQUIRE(s14.empty());
 }
 
 TEST_CASE("split_count") {
