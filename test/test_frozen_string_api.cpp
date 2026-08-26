@@ -2,6 +2,7 @@
 
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 
 #include "frozenchars/string.hpp"
@@ -84,6 +85,41 @@ TEST_CASE("FrozenString comparison operators") {
   static_assert("abc"_fs != "xyz");
   REQUIRE("abc"_fs == "abc");
   REQUIRE("abc"_fs != "xyz");
+}
+
+TEST_CASE("FrozenString operator+") {
+  // 戻り値型は N1+N2-1（終端 '\0' を二重に含めない）
+  static_assert(std::is_same_v<decltype("foo"_fs + "bar"_fs), FrozenString<7>>);
+
+  // FrozenString 同士
+  auto constexpr concat1 = "foo"_fs + "bar"_fs;
+  static_assert(concat1.sv() == "foobar");
+  static_assert(concat1.length == 6);
+  REQUIRE(concat1.sv() == "foobar");
+
+  // FrozenString + 文字列リテラル
+  auto constexpr concat2 = "foo"_fs + "bar";
+  static_assert(concat2.sv() == "foobar");
+  REQUIRE(concat2.sv() == "foobar");
+
+  // 文字列リテラル + FrozenString
+  auto constexpr concat3 = "foo" + "bar"_fs;
+  static_assert(concat3.sv() == "foobar");
+  REQUIRE(concat3.sv() == "foobar");
+
+  // 連結の連鎖
+  auto constexpr concat4 = "a"_fs + "b"_fs + "c"_fs;
+  static_assert(concat4.sv() == "abc");
+  REQUIRE(concat4.sv() == "abc");
+
+  // 空文字列との連結
+  auto constexpr concat5 = FrozenString<1>{} + "abc"_fs;
+  static_assert(concat5.sv() == "abc");
+  REQUIRE(concat5.sv() == "abc");
+
+  // ランタイムでも動作
+  auto const runtime = FrozenString{"hello"} + FrozenString{" world"};
+  REQUIRE(runtime.sv() == "hello world");
 }
 
 TEST_CASE("FrozenString std::hash") {
