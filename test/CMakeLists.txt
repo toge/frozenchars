@@ -133,92 +133,92 @@ target_compile_features(bench_frozen_regex PUBLIC cxx_std_23)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_map_duplicate_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_duplicate_keys.cpp
   EXPECTED_TEXT "frozen_map keys must be unique"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_map_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_empty_keys.cpp
   EXPECTED_TEXT "frozen_map requires at least one key"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_map_make_frozen_map_wrong_arity
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_wrong_arity.cpp
   EXPECTED_TEXT "make_frozen_map requires exactly one entry per key"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_map_make_frozen_map_bad_key
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_bad_key.cpp
   EXPECTED_TEXT "frozen_map entry key must be convertible to std::string_view"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_map_make_frozen_map_bad_value
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_bad_value.cpp
   EXPECTED_TEXT "frozen_map entry value must be constructible as mapped_type"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_set_duplicate_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_set_duplicate_keys.cpp
   EXPECTED_TEXT "frozen_set keys must be unique"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_set_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_set_empty_keys.cpp
   EXPECTED_TEXT "frozen_set requires at least one key"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_bimap_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_bimap_empty_keys.cpp
   EXPECTED_TEXT "frozen_bimap requires at least one key"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_bimap_duplicate_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_bimap_duplicate_keys.cpp
   EXPECTED_TEXT "frozen_bimap keys must be unique"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_multimap_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_multimap_empty_keys.cpp
   EXPECTED_TEXT "frozen_multimap requires at least one key"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME unescape_c_surrogate
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/unescape_c_surrogate.cpp
   EXPECTED_TEXT "surrogate or out of range"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME to_sv_missing_arg
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/to_sv_missing_arg.cpp
   EXPECTED_TEXT "format"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME to_sv_type_mismatch
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/to_sv_type_mismatch.cpp
   EXPECTED_TEXT "format"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME parse_to_tuple_void_pointer
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/parse_to_tuple_void_pointer.cpp
   EXPECTED_TEXT "Unknown type name"
@@ -226,48 +226,48 @@ assert_frozen_map_compile_fail(
 
 # ---- frozen_format compile-fail tests ----
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_format_too_few_args
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_too_few_args.cpp
   EXPECTED_TEXT "frozen_format: number of arguments does not match number of format fields"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_format_unmatched_brace
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_unmatched_brace.cpp
   EXPECTED_TEXT "frozen_format: unmatched '{' in format string"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_format_unmatched_brace2
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_unmatched_brace2.cpp
   EXPECTED_TEXT "frozen_format: unmatched '}' in format string"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_regex_quantifier
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_quantifier.cpp
   EXPECTED_TEXT "quantifiers not supported"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_regex_unbalanced_paren
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_unbalanced_paren.cpp
   EXPECTED_TEXT "unbalanced parenthesis"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_regex_empty_pattern
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_empty_pattern.cpp
   EXPECTED_TEXT "empty pattern"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME frozen_regex_max_strings_exceeded
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_regex_max_strings_exceeded.cpp
   EXPECTED_TEXT "exceeds MaxStrings"
@@ -276,42 +276,42 @@ assert_frozen_map_compile_fail(
 
 # ---- chrono compile-fail tests ----
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME chrono_parse_iso_date_bad_format
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_format.cpp
   EXPECTED_TEXT "chrono: invalid ISO 8601 date format"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME chrono_parse_iso_date_bad_month
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_month.cpp
   EXPECTED_TEXT "chrono: invalid month value"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME chrono_parse_iso_date_bad_day
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_day.cpp
   EXPECTED_TEXT "chrono: invalid day value"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME chrono_parse_iso_datetime_bad_format
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_datetime_bad_format.cpp
   EXPECTED_TEXT "chrono: invalid ISO 8601 datetime format"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME chrono_parse_date_macro_bad_format
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_date_macro_bad_format.cpp
   EXPECTED_TEXT "chrono: invalid __DATE__ format"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME chrono_parse_tz_offset_bad_format
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_tz_offset_bad_format.cpp
   EXPECTED_TEXT "chrono: invalid timezone offset format"
@@ -320,7 +320,7 @@ assert_frozen_map_compile_fail(
 
 # ---- constexpr_log compile-fail tests ----
 
-assert_frozen_map_compile_fail(
+assert_compile_fail(
   NAME dump_log_diagnostic
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/dump_log_diagnostic.cpp
   EXPECTED_TEXT "DUMPLOG_PROBE_MARKER first line"

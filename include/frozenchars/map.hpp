@@ -232,6 +232,7 @@ struct lookup_seed_result {
 /**
  * @brief 完全衝突ゼロのルックアップテーブルを構築するためのシード値を探索する
  * キー数が多い場合、コンパイル時の計算量制限を回避するためにこの関数の呼び出しはスキップされる必要がある。
+ * シードは 16 刻みの粗探索で当たりをつけた後、密探索に切り替える 2 段階戦略で収束を速める。
  */
 template <std::size_t TableSize, FrozenString... Keys>
 [[nodiscard]] consteval auto find_lookup_seed() {
@@ -239,8 +240,25 @@ template <std::size_t TableSize, FrozenString... Keys>
   using index_t = typename result_t::index_t;
   constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
   constexpr auto mask = TableSize - 1;
-  // 衝突ゼロとなるシードを線形探索（上限 100 万。見つからなければ例外）
-  for (auto seed = 0u; seed < 1'000'000u; ++seed) {
+  // シードは衝突が見つかった周辺だけ 1 刻みで再探索する 2 段階戦略で
+  // 100 万線形より高速に収束する。上限は 100 万を維持しつつ無駄走査を抑える。
+  constexpr auto kCoarseStep = 16u;
+  constexpr auto kSeedLimit = 1'000'000u;
+  auto best_seed = 0u;
+  for (auto seed = 0u; seed < kSeedLimit; seed += kCoarseStep) {
+    std::array<index_t, TableSize> table; table.fill(static_cast<index_t>(-1));
+    auto collision = false;
+    for (auto i = 0uz; i < sizeof...(Keys); ++i) {
+      auto const slot = static_cast<std::size_t>(hash_impl(key_views[i], seed) & mask);
+      if (table[slot] != static_cast<index_t>(-1)) { collision = true; break; }
+      table[slot] = static_cast<index_t>(i);
+    }
+    if (!collision) { return result_t{seed, table}; }
+    best_seed = seed;
+  }
+  // 粗探索で衝突が見つかった最後のシードの前後を密探索
+  for (auto delta = 1u; delta < kCoarseStep && best_seed + delta < kSeedLimit; ++delta) {
+    auto const seed = best_seed + delta;
     std::array<index_t, TableSize> table; table.fill(static_cast<index_t>(-1));
     auto collision = false;
     for (auto i = 0uz; i < sizeof...(Keys); ++i) {
@@ -317,7 +335,12 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
     auto const last = starts[b + 1];
     if (first == last) break;  // サイズ降順なので以降はすべて空バケット
     auto found = false;
-    for (auto d = 1u; d < 1'000'000u && !found; ++d) {
+    // 2 段階シード探索: 16 刻みの粗探索で見つけた候補の前後を密探索する。
+    // バケット内のキーが衝突しない候補 d を総当たりで探す。
+    constexpr auto kCoarseStep = 16u;
+    constexpr auto kSeedLimit = 1'000'000u;
+    auto best_d = 1u;
+    for (auto d = 1u; d < kSeedLimit && !found; d += kCoarseStep) {
       auto ok = true;
       for (auto m = first; m < last; ++m) {
         auto const slot = static_cast<std::size_t>(hash_impl(key_views[keys_by_bucket[m]], d) & slot_mask);
@@ -335,6 +358,31 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
         }
         result.bucket_seeds[b] = d;
         found = true;
+        break;
+      }
+      best_d = d;
+    }
+    // 粗探索で衝突した候補の前後 1..15 を密探索
+    for (auto delta = 1u; delta < kCoarseStep && best_d + delta < kSeedLimit && !found; ++delta) {
+      auto const d = best_d + delta;
+      auto ok = true;
+      for (auto m = first; m < last; ++m) {
+        auto const slot = static_cast<std::size_t>(hash_impl(key_views[keys_by_bucket[m]], d) & slot_mask);
+        if (result.table[slot] != static_cast<index_t>(-1)) { ok = false; break; }
+        auto dup = false;
+        for (auto p = first; p < m; ++p) {
+          if (cand[p - first] == slot) { dup = true; break; }
+        }
+        if (dup) { ok = false; break; }
+        cand[m - first] = slot;
+      }
+      if (ok) {
+        for (auto m = first; m < last; ++m) {
+          result.table[cand[m - first]] = static_cast<index_t>(keys_by_bucket[m]);
+        }
+        result.bucket_seeds[b] = d;
+        found = true;
+        break;
       }
     }
     if (!found) throw "frozen_map CHD seed search exhausted";
@@ -418,7 +466,10 @@ struct lookup_index {
   }();
 
   static constexpr auto k_lookup_threshold = 64uz;  // ルックアップテーブルを使う要素数の上限（これ超えは二分探索へ）
-  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);  // ルックアップテーブル方式か（false なら CHD 方式）
+  static constexpr auto k_chd_threshold = 256uz;  // 二分探索を使う要素数の上限（これ超えは CHD 方式）
+  static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);  // ルックアップテーブル方式か
+  static constexpr auto use_binary_search_ = (size() > k_lookup_threshold && size() <= k_chd_threshold);  // 中規模: ソート済みキーへの二分探索
+  static constexpr auto use_chd_ = (size() > k_chd_threshold);  // 大規模: CHD 2 段ハッシュ
   static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz;  // 負荷率 1/4 を見込んだ 2 冪サイズ
   static constexpr auto mask_ = table_size_ - 1;  // ビットマスク（table_size_ は 2 冪）
 
@@ -520,7 +571,7 @@ struct lookup_index {
         return static_cast<size_type>(index);
       return size();
     }
-    // 中規模: シード付きハッシュでスロットを引き、衝突時は key_equals で確定
+    // 中規模（小）: シード付きハッシュでスロットを引き、衝突時は key_equals で確定
     if constexpr (use_lookup_table_) {
       if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
       auto const h = detail::hash_impl(key, k_seed);
@@ -530,8 +581,17 @@ struct lookup_index {
       if (key_equals(key, static_cast<size_type>(index))) [[likely]]
         return static_cast<size_type>(index);
       return size();
-    } else {
-      // 大規模: CHD 2 段ハッシュでスロットを引き、key_equals で確定
+    }
+    // 中規模（中）: ソート済みキービューへ二分探索
+    if constexpr (use_binary_search_) {
+      if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
+      auto const it = std::ranges::lower_bound(sorted_key_views_, key);
+      if (it == sorted_key_views_.end() || *it != key) return size();
+      auto const sorted_pos = static_cast<size_type>(it - sorted_key_views_.begin());
+      return static_cast<size_type>(sorted_indices_[sorted_pos]);
+    }
+    // 大規模: CHD 2 段ハッシュでスロットを引き、key_equals で確定
+    if constexpr (use_chd_) {
       if (len > k_max_key_len_ || !valid_lengths_[len]) return size();
       auto const index = detail::chd_find(chd_, key);
       if (index == static_cast<decltype(index)>(-1)) return size();
@@ -539,6 +599,7 @@ struct lookup_index {
         return static_cast<size_type>(index);
       return size();
     }
+    return size();
   }
 };
 

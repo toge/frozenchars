@@ -98,81 +98,27 @@ struct format_spec {
 }
 
 /**
- * @brief フォーマット文字列中の置換フィールド数（{} の個数）を数える
+ * @brief フォーマット文字列の 1 走査でフィールド数・リテラル数・整合性を返す
  *
  * @param data フォーマット文字列
  * @param len 文字列長
- * @return size_t 置換対象のフィールド数（エスケープされた {{}} は除く）
+ * @return struct{size_t num_fields, size_t num_literal_chars} 解析結果
+ * @throw 対応が取れない '{' や '}' の場合 consteval throw
  */
-[[nodiscard]] consteval auto count_fields(char const* data, size_t len) noexcept -> size_t {
-  auto count = 0uz;
-  auto i = 0uz;
-  while (i < len) {
-    if (data[i] == '{') {
-      if (i + 1 < len && data[i + 1] == '{') {
-        i += 2;
-      } else {
-        ++count;
-        ++i;
-        while (i < len && data[i] != '}') ++i;
-        ++i;
-      }
-    } else if (data[i] == '}') {
-      i += (i + 1 < len && data[i + 1] == '}') ? 2 : 1;
-    } else {
-      ++i;
-    }
-  }
-  return count;
-}
-
-/**
- * @brief 出力されるリテラル文字数（置換フィールドを除く実文字数）を数える
- *
- * @param data フォーマット文字列
- * @param len 文字列長
- * @return size_t エスケープを展開したリテラル文字の個数
- */
-[[nodiscard]] consteval auto count_literal_chars(char const* data, size_t len) noexcept -> size_t {
-  auto count = 0uz;
-  auto i = 0uz;
-  while (i < len) {
-    if (data[i] == '{') {
-      if (i + 1 < len && data[i + 1] == '{') {
-        count += 1; i += 2;
-      } else {
-        ++i;
-        while (i < len && data[i] != '}') ++i;
-        ++i;
-      }
-    } else if (data[i] == '}') {
-      if (i + 1 < len && data[i + 1] == '}') {
-        count += 1; i += 2;
-      } else {
-        ++i;
-      }
-    } else {
-      count += 1; ++i;
-    }
-  }
-  return count;
-}
-
-/**
- * @brief フォーマット文字列の { } の対応を検証する
- *
- * @param data フォーマット文字列
- * @param len 文字列長
- *
- * @warning 対応が取れない '{' や '}'（エスケープでない）がある場合はコンパイル時に例外を投げる
- */
-consteval void validate_format(char const* data, size_t len) {
+struct format_scan_result {
+  size_t num_fields;
+  size_t num_literal_chars;
+};
+[[nodiscard]] consteval auto scan_format(char const* data, size_t len) -> format_scan_result {
+  size_t fields = 0;
+  size_t literal = 0;
   size_t i = 0;
   while (i < len) {
     if (data[i] == '{') {
       if (i + 1 < len && data[i + 1] == '{') {
-        i += 2;
+        literal += 1; i += 2;
       } else {
+        ++fields;
         ++i;
         while (i < len && data[i] != '}') ++i;
         if (i >= len) throw "frozen_format: unmatched '{' in format string";
@@ -180,14 +126,15 @@ consteval void validate_format(char const* data, size_t len) {
       }
     } else if (data[i] == '}') {
       if (i + 1 < len && data[i + 1] == '}') {
-        i += 2;
+        literal += 1; i += 2;
       } else {
         throw "frozen_format: unmatched '}' in format string";
       }
     } else {
-      ++i;
+      literal += 1; ++i;
     }
   }
+  return {fields, literal};
 }
 
 /**
@@ -596,9 +543,9 @@ namespace frozenchars {
 template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
 [[nodiscard]] consteval auto frozen_format(Args const&... args) noexcept {
   constexpr size_t len = Fmt.size();
-  detail::validate_format(Fmt.buffer.data(), len);
-  constexpr auto num_fields = detail::count_fields(Fmt.buffer.data(), len);
-  static_assert(num_fields == sizeof...(Args),
+  // 1 走査でフィールド数・リテラル数・整合性をまとめて検証
+  constexpr auto scan = detail::scan_format(Fmt.buffer.data(), len);
+  static_assert(scan.num_fields == sizeof...(Args),
     "frozen_format: number of arguments does not match number of format fields");
 
   auto tup = std::tie(args...);

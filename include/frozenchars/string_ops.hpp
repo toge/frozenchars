@@ -464,6 +464,9 @@ template <size_t MaxLen, size_t N>
 
 /**
  * @brief 文字列を指定最大長に省略する（NTTP で接尾辞を指定）
+ *
+ * 仕様: Suffix が指定されている場合は MaxLen の値に関わらず必ず付与する。
+ * MaxLen が Suffix.length 以下の場合は Suffix 単体を切り詰めて返す。
  */
 template <size_t MaxLen, auto Suffix, size_t N>
   requires detail::is_frozen_string_v<decltype(Suffix)>
@@ -473,19 +476,30 @@ template <size_t MaxLen, auto Suffix, size_t N>
   }
 
   auto res = FrozenString<MaxLen + 1>{};
-  if constexpr (Suffix.length > 0 && MaxLen >= 8) {
-    auto const prefix_len = MaxLen - Suffix.length;
-    for (auto i = 0uz; i < prefix_len; ++i) {
-      res.buffer[i] = str.buffer[i];
+  if constexpr (Suffix.length > 0) {
+    // Suffix を必ず末尾に付与する。MaxLen < Suffix.length の場合は Suffix の先頭 MaxLen 文字で置き換える。
+    if constexpr (MaxLen <= Suffix.length) {
+      for (auto i = 0uz; i < MaxLen; ++i) {
+        res.buffer[i] = Suffix.buffer[i];
+      }
+      res.buffer[MaxLen] = '\0';
+      res.length = MaxLen;
+      return res;
+    } else {
+      auto const prefix_len = MaxLen - Suffix.length;
+      for (auto i = 0uz; i < prefix_len; ++i) {
+        res.buffer[i] = str.buffer[i];
+      }
+      for (auto i = 0uz; i < Suffix.length; ++i) {
+        res.buffer[prefix_len + i] = Suffix.buffer[i];
+      }
+      res.buffer[MaxLen] = '\0';
+      res.length = MaxLen;
+      return res;
     }
-    for (auto i = 0uz; i < Suffix.length; ++i) {
-      res.buffer[prefix_len + i] = Suffix.buffer[i];
-    }
-    res.buffer[MaxLen] = '\0';
-    res.length = MaxLen;
-    return res;
   }
 
+  // Suffix なし: 単純に先頭 MaxLen 文字
   for (auto i = 0uz; i < MaxLen; ++i) {
     res.buffer[i] = str.buffer[i];
   }

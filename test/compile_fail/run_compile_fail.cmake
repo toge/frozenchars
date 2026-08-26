@@ -1,4 +1,4 @@
-function(assert_frozen_map_compile_fail)
+function(assert_compile_fail)
   cmake_parse_arguments(ARG "" "NAME;SOURCE;EXPECTED_TEXT" "EXPECTED_TEXTS" ${ARGN})
 
   file(SHA256 "${ARG_SOURCE}" TEST_HASH)
@@ -8,7 +8,7 @@ function(assert_frozen_map_compile_fail)
   file(MAKE_DIRECTORY "${TEST_SOURCE_DIR}")
   file(WRITE "${TEST_SOURCE_DIR}/CMakeLists.txt" "
 cmake_minimum_required(VERSION 3.25)
-project(frozen_map_compile_fail LANGUAGES CXX)
+project(${ARG_NAME}_compile_fail LANGUAGES CXX)
 add_library(compile_fail_case STATIC \"${ARG_SOURCE}\")
 target_include_directories(compile_fail_case PRIVATE \"\${FROZENCHARS_SOURCE_DIR}/include\")
 target_compile_features(compile_fail_case PUBLIC cxx_std_23)
@@ -18,7 +18,7 @@ target_compile_features(compile_fail_case PUBLIC cxx_std_23)
     COMPILE_RESULT
     "${TEST_BINARY_DIR}"
     "${TEST_SOURCE_DIR}"
-    frozen_map_compile_fail
+    ${ARG_NAME}_compile_fail
     compile_fail_case
     CMAKE_FLAGS "-DCMAKE_TRY_COMPILE_TARGET_TYPE=LIBRARY" "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}" "-DFROZENCHARS_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
     OUTPUT_VARIABLE COMPILE_OUTPUT

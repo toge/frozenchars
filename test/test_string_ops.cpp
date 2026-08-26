@@ -1,7 +1,9 @@
 #include "catch2/catch_all.hpp"
 
+#include "frozenchars/frozen_format.hpp"
 #include "frozenchars/json/crush.hpp"
 #include "frozenchars/ops.hpp"
+#include "frozenchars/trie_set.hpp"
 
 /** @brief FrozenString の検索・変換・分割などの文字列操作関数のテスト */
 
@@ -179,7 +181,10 @@ TEST_CASE("repeat_char and abbreviate", "[string_ops]") {
   STATIC_CHECK(repeat_char<3, 'x'>().sv() == "xxx");
   STATIC_CHECK(abbreviate<8>("Hello, World!"_fs).sv() == "Hello...");
   STATIC_CHECK(abbreviate<8, "..."_fs>("Hello, World!"_fs).sv() == "Hello...");
-  STATIC_CHECK(abbreviate<5>("abcdef"_fs).sv() == "abcde");
+  // MaxLen=5, デフォルト Suffix="..."(length=3) → プレフィックス 2 文字 + Suffix = "ab..."
+  STATIC_CHECK(abbreviate<5>("abcdef"_fs).sv() == "ab...");
+  // MaxLen < Suffix.length のケースは Suffix の先頭 MaxLen 文字を返す
+  STATIC_CHECK(abbreviate<2, "..."_fs>("abcdef"_fs).sv() == "..");
 }
 
 TEST_CASE("normalize_whitespace and squeeze", "[string_ops]") {
@@ -266,4 +271,45 @@ TEST_CASE("suggest nearest candidate for CLI typo", "[string_ops]") {
   STATIC_CHECK(suggest<"commit", "status">(std::string_view{"zzzzzzzz"}, 2) == std::nullopt);
   STATIC_CHECK(suggest<>("x", 5) == std::nullopt);  // 候補なし
   STATIC_CHECK(suggest<"cat", "bat">(std::string_view{"dat"}, 1) == "cat");  // 同距離は先頭優先
+}
+
+TEST_CASE("substr edge cases", "[string_ops]") {
+  // pos が length を超える場合は空文字
+  STATIC_CHECK(substr("abc"_fs, 10, 5).sv() == "");
+  // len = 0
+  STATIC_CHECK(substr("abc"_fs, 1, 0).sv() == "");
+  // 負の len: pos の左側から abs(len) 文字
+  STATIC_CHECK(substr("abcdef"_fs, 4, -2).sv() == "cd");
+  // anchor == length, len<0: 1 文字左を返す
+  STATIC_CHECK(substr("abc"_fs, 3, -1).sv() == "c");
+  // pos=0, len<0: requested_len=abs(len), actual_len=min(|len|, anchor=0)=0
+  STATIC_CHECK(substr("abc"_fs, 0, -1).sv() == "");
+}
+
+TEST_CASE("FrozenString embedded NUL contract", "[string_ops]") {
+  // 埋め込まれた NUL は length には反映されないが buffer にはそのまま入る
+  constexpr auto s = FrozenString<4>{"a\0b"};
+  STATIC_CHECK(s.length == 3);  // 契約: length = N-1
+  STATIC_CHECK(s.buffer[0] == 'a');
+  STATIC_CHECK(s.buffer[1] == '\0');
+  STATIC_CHECK(s.buffer[2] == 'b');
+  STATIC_CHECK(s.buffer[3] == '\0');
+}
+
+TEST_CASE("frozen_format zero fields and zero args", "[frozen_format]") {
+  // フィールド 0、引数 0: そのままリテラル
+  STATIC_CHECK(frozen_format<"no fields"_fs>().sv() == "no fields");
+}
+
+TEST_CASE("frozen_trie_index find LUT boundary", "[trie_index]") {
+  // 1 キーの最小ケース (LUT 不発、線形)
+  using small = frozen_trie_set<"a"_fs>;
+  STATIC_CHECK(small::contains("a"));
+  STATIC_CHECK_FALSE(small::contains("b"));
+  STATIC_CHECK(small::count("a") == 1);
+  // ルート直値（空キー以外）を持つノードで 1 文字ルックアップ
+  using multi = frozen_trie_set<"alpha"_fs, "alphabet"_fs, "bravo"_fs, "charlie"_fs, "delta"_fs, "echo"_fs, "foxtrot"_fs, "golf"_fs, "hotel"_fs>;
+  STATIC_CHECK(multi::contains("alpha"));
+  STATIC_CHECK(multi::contains("charlie"));
+  STATIC_CHECK_FALSE(multi::contains("zulu"));
 }

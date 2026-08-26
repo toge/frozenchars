@@ -31,6 +31,10 @@ struct FrozenString {
   /**
    * @brief 文字列リテラルからのコンストラクタ
    * @param str 文字列リテラル
+   *
+   * @note 契約: 入力 `str` の [0, N-1) には終端 '\\0' を含まないこと。
+   * 埋め込まれた '\\0' は長さ `length = N-1` には反映されず、buffer にそのままコピーされる。
+   * 比較は buffer 全体と length で行うため、埋め込み '\\0' を含むキー検索は想定外。
    */
   constexpr FrozenString(char const (&str)[N]) noexcept {
     for (size_t i = 0; i < N - 1; ++i) {

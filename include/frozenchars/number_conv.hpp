@@ -145,6 +145,10 @@ template <typename T, size_t N>
     // コンパイル時パス: uint64_t で整数部・小数部を蓄積して精度を向上させる。
     // float/double への変換は最後に1回だけ行う。
     auto constexpr pow10 = [](int n) -> T {
+      // コンパイル時ステップ枯渇を防ぐため、指数に上限を設ける。double の最大実用値は約 308。
+      if (n < 0 || n > 1024) {
+        throw std::out_of_range("parse_number: exponent too large for compile-time path");
+      }
       T result = 1;
       T base   = 10;
       while (n > 0) {

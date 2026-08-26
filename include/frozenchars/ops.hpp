@@ -210,6 +210,16 @@ struct to_pascal_case_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief snake_case / camelCase / PascalCase を kebab-case に変換するパイプアダプタ
+ */
+struct to_kebab_case_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::to_kebab_case(str);
+  }
+};
+
+/**
  * @brief 各行の先頭から述語 Pred を満たす文字を n 個除去するパイプアダプタ
  * @tparam Pred 文字判定述語（デフォルト: is_space_char）
  */
@@ -703,6 +713,7 @@ inline constexpr capitalize_adaptor        capitalize{};       ///< 先頭大文
 inline constexpr to_snake_case_adaptor     to_snake_case{};    ///< 大文字小文字区切り → snake_case
 inline constexpr to_camel_case_adaptor     to_camel_case{};    ///< snake_case → camelCase
 inline constexpr to_pascal_case_adaptor    to_pascal_case{};   ///< snake_case → PascalCase
+inline constexpr to_kebab_case_adaptor     to_kebab_case{};    ///< snake_case / camelCase / PascalCase → kebab-case
 inline constexpr join_lines_adaptor        join_lines{};       ///< 全行を連結（セパレータなし）
 template <FrozenString Sep>
 inline constexpr join_lines_nttp_adaptor<Sep>        join_lines_nttp{};         ///< NTTP セパレータで行連結

@@ -50,6 +50,7 @@
 - [to_snake_case（スネークケース変換）](#to_snake_case（スネクケス変換）)
 - [to_camel_case（キャメルケース変換）](#to_camel_case（キャメルケス変換）)
 - [to_pascal_case（パスカルケース変換）](#to_pascal_case（パスカルケス変換）)
+- [to_kebab_case（ケバブケース変換）](#to_kebab_case（ケバブケス変換）)
 - [url_encode（URLエンコード）](#url_encode（urlエンコド）)
 - [url_decode（URLデコード）](#url_decode（urlデコド）)
 - [base64_encode（Base64エンコード）](#base64_encode（base64エンコド）)
@@ -719,6 +720,27 @@ using namespace frozenchars::literals;
 auto constexpr p = to_pascal_case("hello_world"_fs);  // "HelloWorld"
 
 static_assert(p.sv() == "HelloWorld");
+```
+
+## `to_kebab_case`（ケバブケース変換）
+
+camelCase / PascalCase / snake_case の文字列を kebab-case に変換します。
+区切り文字は `-` に統一され、先頭と末尾の区切り文字は除去されます。
+
+```cpp
+#include "frozenchars/case_conv.hpp"
+#include "frozenchars/literals.hpp"
+
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+auto constexpr k1 = to_kebab_case("helloWorld"_fs);  // "hello-world"
+auto constexpr k2 = to_kebab_case("HelloWorld");     // "hello-world"
+auto constexpr k3 = to_kebab_case("hello_world"_fs); // "hello-world"
+
+static_assert(k1.sv() == "hello-world");
+static_assert(k2.sv() == "hello-world");
+static_assert(k3.sv() == "hello-world");
 ```
 
 ## `url_encode`（URLエンコード）
@@ -1399,6 +1421,13 @@ constexpr auto msg4 = frozen_format<"Pi = {:.5f}"_fs>(3.1415926535);
 constexpr auto msg5 = frozen_format<"{:+} {:+}"_fs>(1, -1);
 // msg5.sv() == "+1 -1"
 ```
+
+### `frozen_std_format`（`std::format` 委譲版）
+
+`frozen_std_format<"..."_fs>(args...)` は C++23 の `__cpp_lib_constexpr_format` 有効時に
+`std::format` を直接呼び出す薄いラッパです。`frozen_format` と同じくコンパイル時評価され、
+戻り値の型は `FrozenString<Capacity>`（容量は `frozen_format` と同じデフォルト 4096）です。
+`frozen_format` の独自仕様と `std::format` の差異が問題になる場合に利用してください。
 
 ### 対応フォーマット指定
 
