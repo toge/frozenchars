@@ -2487,6 +2487,50 @@ template <std::size_t Cap>
 }
 
 /**
+ * @brief 2 つの文字列の編集距離を上限付きで計算する（早期打ち切り版）
+ *
+ * 行の最小値が cutoff を超えた時点で cutoff+1 を返す。呼び出し側は
+ * 戻り値 > cutoff で枝刈り判定できる。
+ *
+ * @tparam Cap 1 行分のバッファ容量（max(長さa, 長さb) + 1 以上）
+ * @param a 一方の文字列
+ * @param b もう一方の文字列
+ * @param cutoff 許容する最大距離
+ * @return std::size_t 編集距離。cutoff 超過時は cutoff+1（cutoff が SIZE_MAX のときは SIZE_MAX）
+ */
+template <std::size_t Cap>
+[[nodiscard]] constexpr auto levenshtein_distance_impl_cutoff(
+    std::string_view const a, std::string_view const b, std::size_t const cutoff) noexcept -> std::size_t {
+  if (cutoff == std::numeric_limits<std::size_t>::max()) {
+    return levenshtein_distance_impl<Cap>(a, b);
+  }
+  auto const len_diff = a.size() > b.size() ? a.size() - b.size() : b.size() - a.size();
+  if (len_diff > cutoff) {
+    return cutoff + 1;
+  }
+  auto prev = std::array<std::size_t, Cap>{};
+  auto curr = std::array<std::size_t, Cap>{};
+  for (auto j = 0uz; j <= b.size(); ++j) {
+    prev[j] = j;
+  }
+  for (auto i = 1uz; i <= a.size(); ++i) {
+    curr[0] = i;
+    auto row_min = curr[0];
+    for (auto j = 1uz; j <= b.size(); ++j) {
+      auto const cost = (a[i - 1] == b[j - 1]) ? 0uz : 1uz;
+      curr[j] = std::min(curr[j - 1] + 1, std::min(prev[j] + 1, prev[j - 1] + cost));
+      row_min = std::min(row_min, curr[j]);
+    }
+    if (row_min > cutoff) {
+      return cutoff + 1;
+    }
+    std::swap(prev, curr);
+  }
+  auto const result = prev[b.size()];
+  return result > cutoff ? cutoff + 1 : result;
+}
+
+/**
  * @brief 複数の FrozenString に共通する最長共通接頭辞の長さを求める
  *
  * @tparam Strs 対象文字列（FrozenString NTTP）
@@ -2567,6 +2611,47 @@ template <std::size_t N, std::size_t M>
 }
 
 /**
+ * @brief 2 つの文字列の編集距離を上限付きで計算する（実行時 string_view 版・早期打ち切り）
+ *
+ * cutoff を超えたことが確定した時点で cutoff+1 を返す。
+ *
+ * @param a 一方の文字列
+ * @param b もう一方の文字列
+ * @param cutoff 許容する最大距離
+ * @return std::size_t 編集距離。cutoff 超過時は cutoff+1
+ */
+[[nodiscard]] constexpr auto levenshtein_distance(
+    std::string_view const a, std::string_view const b, std::size_t const cutoff) -> std::size_t {
+  if (cutoff == std::numeric_limits<std::size_t>::max()) {
+    return levenshtein_distance(a, b);
+  }
+  auto const len_diff = a.size() > b.size() ? a.size() - b.size() : b.size() - a.size();
+  if (len_diff > cutoff) {
+    return cutoff + 1;
+  }
+  std::vector<std::size_t> prev(b.size() + 1);
+  std::vector<std::size_t> curr(b.size() + 1);
+  for (auto j = 0uz; j <= b.size(); ++j) {
+    prev[j] = j;
+  }
+  for (auto i = 1uz; i <= a.size(); ++i) {
+    curr[0] = i;
+    auto row_min = curr[0];
+    for (auto j = 1uz; j <= b.size(); ++j) {
+      auto const cost = (a[i - 1] == b[j - 1]) ? 0uz : 1uz;
+      curr[j] = std::min(curr[j - 1] + 1, std::min(prev[j] + 1, prev[j - 1] + cost));
+      row_min = std::min(row_min, curr[j]);
+    }
+    if (row_min > cutoff) {
+      return cutoff + 1;
+    }
+    std::swap(prev, curr);
+  }
+  auto const result = prev[b.size()];
+  return result > cutoff ? cutoff + 1 : result;
+}
+
+/**
  * @brief FrozenString NTTP と実行時文字列の編集距離（レーベンシュタイン距離）を計算する（混合版）
  *
  * 片方がコンパイル時既知なので、DP の行バッファを静的な std::array で持てる（ヒープ確保なし）。
@@ -2588,6 +2673,28 @@ template <FrozenString A, std::size_t StackCap = detail::k_levenshtein_stack_cap
     return detail::levenshtein_distance_impl<A.size() + 1>(b, A.sv());
   } else {
     return levenshtein_distance(A.sv(), b);
+  }
+}
+
+/**
+ * @brief FrozenString NTTP と実行時文字列の編集距離を上限付きで計算する（混合版・早期打ち切り）
+ *
+ * cutoff を超えたことが確定した時点で cutoff+1 を返す。StackCap 以内なら
+ * スタック配列版、超過時はヒープ版へフォールバックする。
+ *
+ * @tparam A 一方の文字列（FrozenString NTTP）
+ * @tparam StackCap 行バッファをスタック配列で持つ上限
+ * @param b もう一方の文字列（実行時）
+ * @param cutoff 許容する最大距離
+ * @return std::size_t 編集距離。cutoff 超過時は cutoff+1
+ */
+template <FrozenString A, std::size_t StackCap = detail::k_levenshtein_stack_cap>
+[[nodiscard]] constexpr auto levenshtein_distance(
+    std::string_view const b, std::size_t const cutoff) noexcept(A.size() + 1 <= StackCap) -> std::size_t {
+  if constexpr (A.size() + 1 <= StackCap) {
+    return detail::levenshtein_distance_impl_cutoff<A.size() + 1>(b, A.sv(), cutoff);
+  } else {
+    return levenshtein_distance(A.sv(), b, cutoff);
   }
 }
 
@@ -2614,18 +2721,26 @@ template <FrozenString... Candidates>
   std::optional<std::string_view> best;
   std::optional<std::size_t> best_dist;
   auto consider = [&]<FrozenString Candidate>() {
+    if (best_dist && *best_dist == 0) {
+      return;  // 既に完全一致が見つかっている
+    }
     auto const candidate = std::string_view{Candidate.buffer.data(), Candidate.length};
+    auto const cutoff = best_dist ? std::min(max_distance, *best_dist - 1) : max_distance;
     auto const len_diff = input.size() > candidate.size() ? input.size() - candidate.size()
                                                           : candidate.size() - input.size();
-    if (len_diff > max_distance) {
-      return;  // 距離は |長さ差| 以上なので、この候補は絶対に閾値を超える
+    if (len_diff > cutoff) {
+      return;  // 距離は |長さ差| 以上なので、この候補は絶対に閾値/現bestを超える
     }
-    auto const dist = levenshtein_distance<Candidate>(input);
-    if (dist <= max_distance && (!best_dist || dist < *best_dist)) {
+    auto const dist = levenshtein_distance<Candidate>(input, cutoff);
+    if (dist > cutoff) {
+      return;  // 早期打ち切り: cutoff 超過
+    }
+    if (!best_dist || dist < *best_dist) {
       best_dist = dist;
       best = candidate;
     }
   };
+  (void)consider;
   (consider.template operator()<Candidates>(), ...);
   return best;
 }

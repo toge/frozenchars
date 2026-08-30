@@ -64,6 +64,7 @@
 - [levenshtein_distance / lcp（編集距離・最長共通接頭辞）](#levenshtein_distance-lcp（編集距離最長共通接頭辞）)
 - [文字種判定述語（is_alpha / is_digit / ...）](#文字種判定述語（is_alpha-is_digit-）)
 - [utf8_length（UTF-8 コードポイント数）](#utf8_length（utf-8-コドポイント数）)
+- [utf8_to_codepoints / codepoints_to_utf8 / is_valid_utf8（UTF-8 ↔ Unicode 符号点配列）](#utf8_to_codepoints-codepoints_to_utf8-is_valid_utf8（utf-8--unicode-符号点配列）)
 - [make_querystring（クエリ文字列生成）](#make_querystring（クエリ文字列生成）)
 - [マルチライン文字列の処理](#マルチライン文字列の処理)
 - [パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)
@@ -163,7 +164,7 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a
 |---|---|
 | `frozenchars/mod/core.hpp` | `FrozenString` 型・`_fs` リテラル・`freeze`・数値変換・`std::formatter` |
 | `frozenchars/mod/algorithms.hpp` | `concat` 等の基本演算・`case_conv`・`split`・`multiline`・`path`・`minify`・`type_parser` |
-| `frozenchars/mod/encoding.hpp` | `url_encode`・`make_querystring` |
+| `frozenchars/mod/encoding.hpp` | `url_encode`・`make_querystring`・`utf8_to_codepoints` 等 |
 | `frozenchars/mod/containers.hpp` | `frozen_map`・`frozen_set`・`trie_*` |
 | `frozenchars/mod/regex.hpp` | `frozen_regex`・`wildcard_match`・CTRE 連携 |
 | `frozenchars/mod/formatting.hpp` | `frozen_format` |
@@ -1267,6 +1268,98 @@ auto constexpr len4 = utf8_length("\xC3\xA9");            // 1（é）
 // NTTP版
 auto constexpr len5 = utf8_length<"Hello"_fs>();           // 5
 ```
+
+## `utf8_to_codepoints` / `codepoints_to_utf8` / `is_valid_utf8`（UTF-8 ↔ Unicode 符号点配列）
+
+UTF-8 文字列と Unicode 符号点（`char32_t`）配列を相互変換します。`constexpr`（`consteval` でも可）で評価され、`static_assert` で検証できます。
+
+- `utf8_to_codepoints(str)` : UTF-8 文字列を `std::array<char32_t, N>` に変換します。`N` は入力のバッファ長（終端含む）で、符号点数はバイト長以下なので必ず収まります。未使用要素は `U'\0'` で埋められます。
+- `utf8_to_codepoints(str, count)` : 同上に加え、有効な符号点数 `count` を返します。
+- `utf8_to_codepoints<Str>()` : NTTP版（`_fs` リテラルをテンプレート引数に渡す）。
+- `is_valid_utf8(str)` : 有効な UTF-8 かを判定します。オーバーロング・サロゲート・U+10FFFF 超え・不正継続バイト・途中で切れたシーケンスを不正とします。
+- `try_utf8_to_codepoints(str, count, ok)` : 変換と同時に `ok = is_valid_utf8(str)` を返します。不正でも配列はフェイルソフトで埋められますが `ok` は `false` になります。
+- `utf8_to_codepoints_strict<Str>()` : NTTP の厳密版。不正な UTF-8 が含まれるとコンパイルエラー（`static_assert`）になります。
+- `codepoints_to_utf8(arr, count)` : `std::array<char32_t, N>`（または `char32_t[N]`）の先頭 `count` 個を UTF-8 文字列 `FrozenString<N*4+1>` に変換します。
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+// 基本（FrozenString）
+constexpr auto s = "aあ😀"_fs;  // 1 + 3 + 4 バイト、3符号点
+constexpr auto arr = utf8_to_codepoints(s);
+static_assert(arr[0] == U'a' && arr[1] == U'\u3042' && arr[2] == U'\U0001F600');
+static_assert(arr[0] == U'a');
+static_assert(std::is_same_v<decltype(arr)::value_type, char32_t>);
+
+// 符号点数を取得
+constexpr size_t n = [] {
+  constexpr auto inner = "aあ😀"_fs;
+  size_t c = 0;
+  auto a = utf8_to_codepoints(inner, c);
+  (void)a;
+  return c;
+}();
+static_assert(n == 3);
+
+// 文字列リテラル版
+constexpr auto arr2 = utf8_to_codepoints("hi");
+static_assert(arr2[0] == U'h' && arr2[1] == U'i');
+
+// NTTP版
+constexpr auto arr3 = utf8_to_codepoints<"aあ"_fs>();
+static_assert(arr3[1] == U'\u3042');
+
+// 検証
+static_assert(is_valid_utf8("hello"_fs));
+static_assert(!is_valid_utf8("\xFF"_fs));
+static_assert(is_valid_utf8<""_fs>());
+static_assert(!is_valid_utf8<"\xC0\x80"_fs>());  // オーバーロング
+static_assert(!is_valid_utf8<"\xED\xA0\x80"_fs>());  // サロゲート
+static_assert(!is_valid_utf8<"\xF4\x90\x80\x80"_fs>());  // U+110000 超え
+
+// エラー検出（try）
+constexpr auto ok = [] {
+  size_t c = 0; bool ok = false;
+  auto a = try_utf8_to_codepoints("あ"_fs, c, ok);
+  return ok && c == 1 && a[0] == U'\u3042';
+}();
+static_assert(ok);
+constexpr auto bad = [] {
+  size_t c = 0; bool ok = true;
+  auto a = try_utf8_to_codepoints("\xFF"_fs, c, ok);
+  (void)a; (void)c;
+  return !ok;
+}();
+static_assert(bad);
+
+// 厳密版（不正ならコンパイルエラー）
+constexpr auto strict = utf8_to_codepoints_strict<"hello"_fs>();
+static_assert(strict[0] == U'h');
+// constexpr auto bad_strict = utf8_to_codepoints_strict<"\xFF"_fs>(); // コンパイルエラー
+
+// 逆変換（符号点配列 → UTF-8 文字列）
+constexpr std::array<char32_t, 3> src{U'a', U'\u3042', U'\U0001F600'};
+constexpr auto back = codepoints_to_utf8(src, 3);
+static_assert(back.sv() == "aあ😀");
+
+// C配列版
+constexpr char32_t cs[] = {U'a', U'\u3042'};
+constexpr auto back2 = codepoints_to_utf8(cs, 2);
+static_assert(back2.sv() == "aあ");
+
+// round-trip
+constexpr auto rt = [] {
+  constexpr auto inner = "aあ😀"_fs;
+  size_t c = 0;
+  auto a = utf8_to_codepoints(inner, c);
+  return codepoints_to_utf8(a, c);
+}();
+static_assert(rt.sv() == "aあ😀");
+```
+
+`is_valid_utf8` は `detail::valid_utf8_seq_length` を用いた厳密検証で、既存の `utf8_length` のフェイルソフトとは異なり不正を検出できます（`utf8_length` は不正バイトを 1 符号点として数えます）。
 
 ## `make_querystring`（クエリ文字列生成）
 

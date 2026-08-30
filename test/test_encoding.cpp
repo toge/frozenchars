@@ -105,3 +105,177 @@ TEST_CASE("encoding: unescape_c extended escapes", "[encoding]") {
   STATIC_CHECK(unescape_c("\\U00110000"_fs).sv() == "\\U00110000");
   STATIC_CHECK(unescape_c("\\u12"_fs).sv() == "\\u12");
 }
+
+TEST_CASE("encoding: is_valid_utf8", "[encoding]") {
+  STATIC_CHECK(is_valid_utf8(""_fs));
+  STATIC_CHECK(is_valid_utf8("hello"_fs));
+  STATIC_CHECK(is_valid_utf8("a\xC3\xA9"_fs));  // 2-byte é
+  STATIC_CHECK(is_valid_utf8("\xE3\x81\x82"_fs));  // 3-byte あ
+  STATIC_CHECK(is_valid_utf8("\xF0\x9F\x98\x80"_fs));  // 4-byte 😀
+  STATIC_CHECK(is_valid_utf8("aあ😀"_fs));
+  // 不正ケース
+  STATIC_CHECK(!is_valid_utf8("\xFF"_fs));
+  STATIC_CHECK(!is_valid_utf8("\x80"_fs));  // 単独継続バイト
+  STATIC_CHECK(!is_valid_utf8("\xC0\x80"_fs));  // オーバーロング
+  STATIC_CHECK(!is_valid_utf8("\xE0\x80\x80"_fs));  // オーバーロング 3-byte
+  STATIC_CHECK(!is_valid_utf8("\xED\xA0\x80"_fs));  // サロゲート
+  STATIC_CHECK(!is_valid_utf8("\xF4\x90\x80\x80"_fs));  // U+110000 超え
+  STATIC_CHECK(!is_valid_utf8("\xC2"_fs));  // 途中で切れた 2-byte
+  STATIC_CHECK(!is_valid_utf8("\xE3\x81"_fs));  // 途中で切れた 3-byte
+  STATIC_CHECK(!is_valid_utf8("\xF0\x9F\x98"_fs));  // 途中で切れた 4-byte
+  // 文字列リテラル版
+  STATIC_CHECK(is_valid_utf8("hello"));
+  STATIC_CHECK(!is_valid_utf8("\xFF"));
+  // NTTP版
+  STATIC_CHECK(is_valid_utf8<""_fs>());
+  STATIC_CHECK(is_valid_utf8<"hello"_fs>());
+  STATIC_CHECK(!is_valid_utf8<"\xFF"_fs>());
+  STATIC_CHECK(!is_valid_utf8<"\xC0\x80"_fs>());
+}
+
+TEST_CASE("encoding: utf8_to_codepoints", "[encoding]") {
+  // 空
+  {
+    constexpr auto arr = utf8_to_codepoints(""_fs);
+    (void)arr;
+    constexpr size_t n = [] {
+      size_t c = 0;
+      (void)utf8_to_codepoints(""_fs, c);
+      return c;
+    }();
+    STATIC_CHECK(n == 0);
+  }
+  // ASCII
+  {
+    constexpr auto arr = utf8_to_codepoints("ABC"_fs);
+    STATIC_CHECK(arr[0] == U'A' && arr[1] == U'B' && arr[2] == U'C');
+    constexpr size_t n = [] {
+      size_t c = 0;
+      auto a = utf8_to_codepoints("ABC"_fs, c);
+      (void)a;
+      return c;
+    }();
+    STATIC_CHECK(n == 3);
+  }
+  // 2/3/4-byte 混在
+  {
+    constexpr auto s = "aあ😀"_fs;  // 1 + 3 + 4 バイト、3符号点
+    constexpr auto arr = utf8_to_codepoints(s);
+    STATIC_CHECK(arr[0] == U'a');
+    STATIC_CHECK(arr[1] == U'\u3042');
+    STATIC_CHECK(arr[2] == U'\U0001F600');
+    constexpr size_t n = [] {
+      constexpr auto inner = "aあ😀"_fs;
+      size_t c = 0;
+      auto a = utf8_to_codepoints(inner, c);
+      (void)a;
+      return c;
+    }();
+    STATIC_CHECK(n == 3);
+    // 未使用要素は 0
+    STATIC_CHECK(arr[3] == U'\0');
+  }
+  // 文字列リテラル版
+  {
+    constexpr auto arr = utf8_to_codepoints("hi");
+    STATIC_CHECK(arr[0] == U'h' && arr[1] == U'i');
+  }
+  // NTTP版
+  {
+    constexpr auto arr = utf8_to_codepoints<"aあ"_fs>();
+    STATIC_CHECK(arr[0] == U'a' && arr[1] == U'\u3042');
+  }
+  // char32_t 型であること
+  {
+    constexpr auto arr = utf8_to_codepoints("A"_fs);
+    STATIC_CHECK(std::is_same_v<decltype(arr)::value_type, char32_t>);
+  }
+  // 不正バイトはフェイルソフト（1バイト=1符号点）
+  {
+    constexpr auto arr = utf8_to_codepoints("\xFF\x80"_fs);
+    // \xFF, \x80 がそれぞれ1符号点として扱われる
+    STATIC_CHECK(arr[0] == static_cast<char32_t>(0xFF));
+  }
+  // strict NTTP版（有効のみ）
+  {
+    constexpr auto arr = utf8_to_codepoints_strict<"hello"_fs>();
+    STATIC_CHECK(arr[0] == U'h');
+  }
+}
+
+TEST_CASE("encoding: try_utf8_to_codepoints", "[encoding]") {
+  // 有効
+  {
+    constexpr auto ok = [] {
+      size_t c = 0;
+      bool ok = false;
+      auto a = try_utf8_to_codepoints("あ"_fs, c, ok);
+      return ok && c == 1 && a[0] == U'\u3042';
+    }();
+    STATIC_CHECK(ok);
+  }
+  // 無効
+  {
+    constexpr auto bad = [] {
+      size_t c = 0;
+      bool ok = true;
+      auto a = try_utf8_to_codepoints("\xFF"_fs, c, ok);
+      (void)a;
+      (void)c;
+      return !ok;
+    }();
+    STATIC_CHECK(bad);
+  }
+  // 文字列リテラル版
+  {
+    size_t c = 0;
+    bool ok = false;
+    auto a = try_utf8_to_codepoints("hi", c, ok);
+    CHECK(ok);
+    CHECK(c == 2);
+    CHECK(a[0] == U'h');
+  }
+}
+
+TEST_CASE("encoding: codepoints_to_utf8", "[encoding]") {
+  // 空
+  {
+    constexpr std::array<char32_t, 1> arr{};
+    constexpr auto s = codepoints_to_utf8(arr, 0);
+    STATIC_CHECK(s.sv() == "");
+  }
+  // ASCII
+  {
+    constexpr std::array<char32_t, 3> arr{U'A', U'B', U'C'};
+    constexpr auto s = codepoints_to_utf8(arr, 3);
+    STATIC_CHECK(s.sv() == "ABC");
+  }
+  // 2/3/4-byte 混在
+  {
+    constexpr std::array<char32_t, 3> arr{U'a', U'\u3042', U'\U0001F600'};
+    constexpr auto s = codepoints_to_utf8(arr, 3);
+    STATIC_CHECK(s.sv() == "aあ😀");
+  }
+  // C配列版
+  {
+    constexpr char32_t cs[] = {U'a', U'\u3042'};
+    constexpr auto s = codepoints_to_utf8(cs, 2);
+    STATIC_CHECK(s.sv() == "aあ");
+  }
+  // round-trip
+  {
+    constexpr auto rt = [] {
+      constexpr auto inner = "aあ😀"_fs;
+      size_t c = 0;
+      auto arr = utf8_to_codepoints(inner, c);
+      return codepoints_to_utf8(arr, c);
+    }();
+    STATIC_CHECK(rt.sv() == "aあ😀");
+  }
+  // 部分カウント
+  {
+    constexpr std::array<char32_t, 5> arr{U'h', U'e', U'l', U'l', U'o'};
+    constexpr auto s = codepoints_to_utf8(arr, 2);
+    STATIC_CHECK(s.sv() == "he");
+  }
+}

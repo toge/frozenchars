@@ -1061,6 +1061,236 @@ template <auto Str>
 }
 
 /**
+ * @brief UTF-8 文字列が有効なエンコーディングか判定する
+ *
+ * オーバーロング・サロゲート・U+10FFFF 超え・不正継続バイト・途中で途切れたシーケンスを
+ * 不正と判定する。空文字列は有効。
+ *
+ * @tparam N 文字列の長さ（終端文字 '\0' を含む）
+ * @param str 検査対象の文字列
+ * @return bool 有効なら true
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto is_valid_utf8(FrozenString<N> const& str) noexcept -> bool {
+  auto const sv = str.sv();
+  auto i = 0uz;
+  while (i < sv.size()) {
+    auto const c = static_cast<unsigned char>(sv[i]);
+    if (c < 0x80) {
+      ++i;
+      continue;
+    }
+    auto const len = detail::valid_utf8_seq_length(sv, i);
+    if (len == 0) {
+      return false;
+    }
+    i += len;
+  }
+  return true;
+}
+
+/**
+ * @brief 文字列リテラルが有効な UTF-8 か判定する
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto is_valid_utf8(char const (&str)[N]) noexcept -> bool {
+  return is_valid_utf8(FrozenString{str});
+}
+
+/**
+ * @brief UTF-8 文字列が有効か判定する（NTTP版）
+ *
+ * @tparam Str 検査対象の文字列（FrozenString NTTP）
+ * @return bool 有効なら true
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] constexpr auto is_valid_utf8() noexcept -> bool {
+  return is_valid_utf8(Str);
+}
+
+// ponytail: detail::utf8_codepoints の公開昇格（char32_t, consteval, strict対応）
+
+/**
+ * @brief UTF-8 文字列を Unicode 符号点配列に変換する
+ *
+ * UTF-8 バイト列を走査し、各符号点を `char32_t` に復号して配列に格納する。
+ * 不正なバイト列は `detail::utf8_decode_at` のフェイルソフト則（1バイトを1符号点として扱う）
+ * に従う。厳密に検証したい場合は `is_valid_utf8` または `try_utf8_to_codepoints` を併用する。
+ *
+ * @tparam N 入力バッファ長（終端含む、配列サイズにも使用。符号点数はバイト長以下なので必ず収まる）
+ * @param str 対象文字列
+ * @return std::array<char32_t, N> 符号点配列（未使用要素は U+0000）
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto utf8_to_codepoints(FrozenString<N> const& str) noexcept -> std::array<char32_t, N> {
+  auto codepoints = std::array<char32_t, N>{};
+  auto count = 0uz;
+  auto i = 0uz;
+  while (i < str.length) {
+    size_t consumed = 0;
+    std::uint32_t cp = 0;
+    (void)detail::utf8_decode_at(str.sv(), i, consumed, cp);
+    codepoints[count++] = static_cast<char32_t>(cp);
+    i += consumed;
+  }
+  return codepoints;
+}
+
+/**
+ * @brief UTF-8 文字列を Unicode 符号点配列に変換する（符号点数も取得する版）
+ *
+ * @tparam N 入力バッファ長（終端含む）
+ * @param str 対象文字列
+ * @param count 変換した符号点数（出力）
+ * @return std::array<char32_t, N> 符号点配列（count 以降は U+0000）
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto utf8_to_codepoints(FrozenString<N> const& str, size_t& count) noexcept
+    -> std::array<char32_t, N> {
+  auto codepoints = std::array<char32_t, N>{};
+  count = 0;
+  auto i = 0uz;
+  while (i < str.length) {
+    size_t consumed = 0;
+    std::uint32_t cp = 0;
+    (void)detail::utf8_decode_at(str.sv(), i, consumed, cp);
+    codepoints[count++] = static_cast<char32_t>(cp);
+    i += consumed;
+  }
+  return codepoints;
+}
+
+/**
+ * @brief 文字列リテラルを Unicode 符号点配列に変換する
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto utf8_to_codepoints(char const (&str)[N]) noexcept -> std::array<char32_t, N> {
+  return utf8_to_codepoints(FrozenString{str});
+}
+
+/**
+ * @brief 文字列リテラルを Unicode 符号点配列に変換する（符号点数も取得する版）
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto utf8_to_codepoints(char const (&str)[N], size_t& count) noexcept
+    -> std::array<char32_t, N> {
+  return utf8_to_codepoints(FrozenString{str}, count);
+}
+
+/**
+ * @brief UTF-8 文字列を Unicode 符号点配列に変換する（NTTP版）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 符号点配列（サイズは Str のバッファ長）
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] constexpr auto utf8_to_codepoints() noexcept {
+  return utf8_to_codepoints(Str);
+}
+
+/**
+ * @brief UTF-8 文字列を Unicode 符号点配列に変換する（エラー検出付き）
+ *
+ * `is_valid_utf8` で事前検証し、結果を `ok` に格納する。不正な場合でも
+ * フェイルソフト則で配列は埋められるが `ok` は false になる。厳密に失敗させたい
+ * 場合は戻り値ではなく `ok` を確認するか、NTTP 版 `utf8_to_codepoints_strict` を使う。
+ *
+ * @tparam N 入力バッファ長（終端含む）
+ * @param str 対象文字列
+ * @param count 変換した符号点数（出力）
+ * @param ok 有効な UTF-8 なら true（出力）
+ * @return std::array<char32_t, N> 符号点配列
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto try_utf8_to_codepoints(
+    FrozenString<N> const& str, size_t& count, bool& ok) noexcept -> std::array<char32_t, N> {
+  ok = is_valid_utf8(str);
+  return utf8_to_codepoints(str, count);
+}
+
+/**
+ * @brief 文字列リテラルを Unicode 符号点配列に変換する（エラー検出付き）
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto try_utf8_to_codepoints(char const (&str)[N], size_t& count, bool& ok) noexcept
+    -> std::array<char32_t, N> {
+  return try_utf8_to_codepoints(FrozenString{str}, count, ok);
+}
+
+/**
+ * @brief UTF-8 文字列を Unicode 符号点配列に変換する（厳密版・NTTP）
+ *
+ * 不正な UTF-8（オーバーロング・サロゲート・U+10FFFF 超え等）が含まれる場合は
+ * コンパイルエラーになる。
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 符号点配列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval utf8_to_codepoints_strict() noexcept {
+  static_assert(is_valid_utf8<Str>(), "frozenchars: utf8_to_codepoints_strict: invalid UTF-8");
+  return utf8_to_codepoints(Str);
+}
+
+/**
+ * @brief Unicode 符号点配列を UTF-8 文字列に変換する
+ *
+ * 各符号点を UTF-8 バイト列にエンコードして連結する。入力は 0〜0x10FFFF の
+ * 有効な符号点であることを想定する（サロゲートや範囲外はそのままエンコードされる）。
+ *
+ * @tparam N 配列の要素数（符号点数上限）
+ * @param arr 変換元の符号点配列
+ * @param count 配列内で有効な符号点数
+ * @return FrozenString<N * 4 + 1> UTF-8 エンコードした文字列（最大 4*count バイト + 終端）
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto codepoints_to_utf8(std::array<char32_t, N> const& arr, size_t count) noexcept
+    -> FrozenString<N * 4 + 1> {
+  auto res = FrozenString<N * 4 + 1>{};
+  auto offset = 0uz;
+  for (auto i = 0uz; i < count && i < N; ++i) {
+    auto out = std::array<char, 4>{};
+    size_t len = 0;
+    detail::utf8_encode_codepoint(static_cast<std::uint32_t>(arr[i]), out, len);
+    for (auto j = 0uz; j < len; ++j) {
+      res.buffer[offset++] = out[j];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief Unicode 符号点配列を UTF-8 文字列に変換する（C配列版）
+ *
+ * @tparam N 配列の要素数
+ * @param arr 変換元の符号点配列
+ * @param count 有効な符号点数
+ * @return FrozenString<N * 4 + 1> UTF-8 文字列
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto codepoints_to_utf8(char32_t const (&arr)[N], size_t count) noexcept
+    -> FrozenString<N * 4 + 1> {
+  auto res = FrozenString<N * 4 + 1>{};
+  auto offset = 0uz;
+  for (auto i = 0uz; i < count && i < N; ++i) {
+    auto out = std::array<char, 4>{};
+    size_t len = 0;
+    detail::utf8_encode_codepoint(static_cast<std::uint32_t>(arr[i]), out, len);
+    for (auto j = 0uz; j < len; ++j) {
+      res.buffer[offset++] = out[j];
+    }
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
  * @brief Unicode 符号点を UTF-8 文字列に変換する
  *
  * @tparam Codepoint 変換する符号点（0〜0x10FFFF）
