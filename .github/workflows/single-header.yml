@@ -1,0 +1,73 @@
+name: Single Header
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "include/**"
+      - "tools/amalgamate.py"
+      - ".github/workflows/single-header.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "include/**"
+      - "tools/amalgamate.py"
+      - ".github/workflows/single-header.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify single header is up to date
+        run: python3 tools/amalgamate.py --check
+      - name: Upload single header artifact (PR preview)
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-headers-pr
+          path: single_include/*.hpp
+          if-no-files-found: error
+
+  generate:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # auto-commit が push する際に履歴が必要
+          fetch-depth: 0
+
+      - name: Generate single headers
+        run: python3 tools/amalgamate.py
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- single_include/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- single_include/
+          fi
+
+      - name: Commit and push if changed
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add single_include/frozenchars.hpp single_include/frozenchars_json.hpp
+          git commit -m "chore: regenerate single header [skip ci]"
+          git push
+
+      - name: Upload single header artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-headers
+          path: single_include/*.hpp
+          if-no-files-found: error

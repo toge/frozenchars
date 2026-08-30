@@ -2292,6 +2292,38 @@ cmake --install build --prefix ./install
 > 現時点で vcpkg の公式レジストリには未登録です。将来的にポートを提供する予定です。
 > それまでは上記の `cmake --install` によるインストール、またはサブディレクトリ／`FetchContent` での取り込みをご利用ください。
 
+## 単一ヘッダ（Wandbox / Compiler Explorer 用）
+
+Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `single_include/` に用意しています。
+
+| ファイル | 内容 | サイズ目安 |
+|---|---|---|
+| `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 615KB / 17k行 |
+| `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 667KB / 18k行 |
+
+glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
+
+### 生成方法
+
+```bash
+python3 tools/amalgamate.py              # 両方を再生成
+python3 tools/amalgamate.py --check      # 生成結果とコミット済みファイルの一致を検証（CI 用）
+python3 tools/amalgamate.py --stdout > /tmp/frozenchars.hpp  # 標準出力へ
+```
+
+> **CI 自動生成**: `main` への push で `include/` に変更があると、GitHub Actions (`.github/workflows/single-header.yml`) が自動で `single_include/` を再生成し、差分があれば `chore: regenerate single header [skip ci]` として自動コミットします。PR では `--check` による検証のみ行われます。
+
+### 使い方（Wandbox）
+
+1. `single_include/frozenchars.hpp` の全文をコピーして Wandbox のエディタに貼り付け、ファイル名を `frozenchars.hpp` にする（または `#include` を貼り付け内容に置換）
+2. あるいは Godbolt/Compiler Explorer では `-I` で配置して `#include "frozenchars.hpp"` のまま利用
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars::literals;
+auto constexpr msg = frozenchars::concat("answer="_fs, 42); // msg.sv() == "answer=42"
+```
+
 ## ライセンス
 
 MIT License
