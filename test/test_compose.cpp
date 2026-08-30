@@ -1,7 +1,6 @@
 #include "catch2/catch_all.hpp"
 #include "frozenchars/ops.hpp"
 #include "frozenchars/path.hpp"
-#include "frozenchars/type_parser.hpp"
 
 /** @brief compose によるパイプアダプタ合成のテスト */
 

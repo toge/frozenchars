@@ -11,7 +11,6 @@
 
 #include "frozenchars/map.hpp"
 #include "frozenchars/ops.hpp"
-#include "frozenchars/type_parser.hpp"
 #include "frozenchars/minify.hpp"
 
 using frozenchars::minify_cypher;

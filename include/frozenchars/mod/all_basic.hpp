@@ -14,6 +14,5 @@
 #include "frozenchars/mod/regex.hpp"
 #include "frozenchars/mod/formatting.hpp"
 #include "frozenchars/mod/chrono.hpp"
-#include "frozenchars/mod/color.hpp"
 #include "frozenchars/mod/ops.hpp"
 #include "frozenchars/mod/log.hpp"

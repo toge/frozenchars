@@ -7,7 +7,6 @@
 #include "frozenchars/ops.hpp"
 #include "frozenchars/path.hpp"
 #include "frozenchars/split.hpp"
-#include "frozenchars/type_parser.hpp"
 #include "frozenchars/url.hpp"
 
 /** @brief FrozenString の基本操作（リテラル、結合、トリム、分割、置換、パディング、ケース変換、URL/Base64 エンコード等）の結合テスト。 */

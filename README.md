@@ -69,7 +69,6 @@
 - [マルチライン文字列の処理](#マルチライン文字列の処理)
 - [パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)
 - [frozen_format（コンパイル時フォーマット）](#frozen_format（コンパイル時フォーマット）)
-- [parse_hex_rgb / parse_hex_rgba（hex color → RGB/RGBAタプル）](#parse_hex_rgb-parse_hex_rgba（hex-color-→-rgbrgbaタプル）)
 - [freeze 対応型一覧](#freeze-対応型一覧)
   - [早見表（入力型 → 生成される最大文字数）](#早見表（入力型-→-生成される最大文字数）)
   - [サンプル入力 → 出力（ミニ表）](#サンプル入力-→-出力（ミニ表）)
@@ -92,10 +91,6 @@
   - [frozen_multimap（重複キー許容マップ）](#frozen_multimap（重複キー許容マップ）)
   - [frozen_trie_map（圧縮トライ マップ）](#frozen_trie_map（圧縮トライ-マップ）)
   - [frozen_map / frozen_trie_map / STL コンテナの選び方](#frozen_map--frozen_trie_map--stl-コンテナの選び方)
-  - [parse_to_tuple（型列文字列 → std::tuple<...>）](#parse_to_tuple（型列文字列-→-stdtuple）)
-    - [parse_to_variant（型列文字列 → std::variant<...>）](#parse_to_variant（型列文字列-→-stdvariant）)
-    - [型エイリアス](#型エイリアス)
-    - [ポインタ/参照型](#ポインタ参照型)
 - [よくある質問 (FAQ)](#よくある質問-faq)
 - [wildcard_match（ワイルドカードマッチング）](#wildcard_match（ワイルドカドマッチング）)
   - [frozen_regex / CTRE / wildcard_match / wildcards の選び方](#frozen_regex--ctre--wildcard_match--wildcards-の選び方)
@@ -163,15 +158,14 @@ g++ -std=c++23 -O2 -Wall -Wextra -pedantic -I include example/example.cpp && ./a
 | モジュール | 含まれる主な機能 |
 |---|---|
 | `frozenchars/mod/core.hpp` | `FrozenString` 型・`_fs` リテラル・`freeze`・数値変換・`std::formatter` |
-| `frozenchars/mod/algorithms.hpp` | `concat` 等の基本演算・`case_conv`・`split`・`multiline`・`path`・`minify`・`type_parser` |
+| `frozenchars/mod/algorithms.hpp` | `concat` 等の基本演算・`case_conv`・`split`・`multiline`・`path`・`minify` |
 | `frozenchars/mod/encoding.hpp` | `url_encode`・`make_querystring`・`utf8_to_codepoints` 等 |
 | `frozenchars/mod/containers.hpp` | `frozen_map`・`frozen_set`・`trie_*` |
 | `frozenchars/mod/regex.hpp` | `frozen_regex`・`wildcard_match`・CTRE 連携 |
 | `frozenchars/mod/formatting.hpp` | `frozen_format` |
 | `frozenchars/mod/chrono.hpp` | 日付・時刻の相互変換 |
-| `frozenchars/mod/color.hpp` | ANSI カラー出力 |
 | `frozenchars/mod/ops.hpp` | `ops` 名前空間のパイプ演算子アダプタ |
-| `frozenchars/mod/all_basic.hpp` | 上記 9 個を集約（glaze / json を除く） |
+| `frozenchars/mod/all_basic.hpp` | 上記 8 個を集約（glaze / json を除く） |
 
 ```cpp
 // 例: 文字列操作だけ使いたい場合
@@ -277,7 +271,6 @@ auto constexpr r = "  Hello, World!  "_fs
 | `example/example.cpp` | 連結・繰り返し・書式など基本操作 | `g++ -std=c++23 -I include example/example.cpp && ./a.out` |
 | `example/example_split.cpp` | 文字列分割の応用 | `g++ -std=c++23 -I include example/example_split.cpp && ./a.out` |
 | `example/example_frozen_map_use_cases.cpp` | コンパイル時マップの利用例 | `g++ -std=c++23 -I include example/example_frozen_map_use_cases.cpp && ./a.out` |
-| `example/example_parse_to_tuple_use_cases.cpp` | 型列パース→タプルの利用例 | `g++ -std=c++23 -I include example/example_parse_to_tuple_use_cases.cpp && ./a.out` |
 
 ## `repeat`（繰り返し）
 
@@ -1112,7 +1105,6 @@ auto constexpr v = "a<br>b"_fs | fops::br_to_nl | fops::nl_to_br;
 static_assert(v.sv() == "a<br>b");
 ```
 
-
 ## `word_wrap`（ワードラップ）
 
 文字列を指定された幅で折り返します。スペース区切りで単語を認識し、指定幅を超える前に改行を挿入します。
@@ -1483,7 +1475,6 @@ auto constexpr v = "  abcdef  " | fops::trim | fops::toupper | fops::substr(0, 3
 
 `_fs` リテラルを省略できるため、`#include "frozenchars.hpp"` だけで即座にパイプ処理を記述できます。
 
-
 ## `frozen_format`（コンパイル時フォーマット）
 
 `frozen_format<"format string"_fs>(args...)` は `std::format` 互換の構文でコンパイル時に文字列を生成します。
@@ -1541,159 +1532,6 @@ constexpr auto msg5 = frozen_format<"{:+} {:+}"_fs>(1, -1);
 | `{{` / `}}` | `frozen_format<"{{}}"_fs>()` → `{}` | エスケープ |
 
 コンパイル時にフォーマット文字列の整合性も検証されます（フィールド数不一致・括弧不一致はコンパイルエラー）。
-
-
-## `parse_hex_rgb` / `parse_hex_rgba`（hex color → RGB/RGBAタプル）
-
-`parse_hex_rgb(...)` は RGB 色文字列を、
-`parse_hex_rgba(...)` は RGBA 色文字列を、
-それぞれ `std::tuple` に変換します。
-
-- `parse_hex_rgb(...)` は **`#RGB` / `#RRGGBB`**
-- `parse_hex_rgba(...)` は **`#RGBA` / `#RRGGBBAA`**
-- `to_bgr(...)` は `(r, g, b)` を `(b, g, r)` に並び替えます
-- `to_bgra(...)` は `(r, g, b, a)` を `(b, g, r, a)` に並び替えます
-- `to_abgr(...)` は `(r, g, b, a)` を `(a, b, g, r)` に並び替えます
-- 短縮形は CSS と同じく各 nibble を複製します
-  - `#532` → `#553322`
-  - `#5a3c` → `#55aa33cc`
-- 返り値はそれぞれ `(r, g, b)`、`(r, g, b, a)` の順
-- 不正な入力は、ランタイムでは `std::invalid_argument`、定数評価ではエラーになります
-
-```cpp
-#include "frozenchars.hpp"
-#include <tuple>
-
-using namespace frozenchars;
-
-auto constexpr rgb = parse_hex_rgb("#335577");
-auto constexpr short_rgb = parse_hex_rgb("#532");
-auto constexpr rgba = parse_hex_rgba("#5a3c");
-auto constexpr bgr = to_bgr(rgb);
-auto constexpr bgra = to_bgra(rgba);
-auto constexpr abgr = to_abgr(rgba);
-
-auto constexpr [r, g, b] = rgb;
-auto constexpr [sr, sg, sb] = short_rgb;
-auto constexpr [rr, rg, rb, ra] = rgba;
-auto constexpr [blue, green, red] = bgr;
-auto constexpr [bb, bg, br, ba] = bgra;
-auto constexpr [aa, ab, ag, ar] = abgr;
-
-static_assert(r == 0x33);
-static_assert(g == 0x55);
-static_assert(b == 0x77);
-static_assert(sr == 0x55);
-static_assert(sg == 0x33);
-static_assert(sb == 0x22);
-static_assert(rr == 0x55);
-static_assert(rg == 0xaa);
-static_assert(rb == 0x33);
-static_assert(ra == 0xcc);
-static_assert(blue == 0x77);
-static_assert(green == 0x55);
-static_assert(red == 0x33);
-static_assert(bb == 0x33);
-static_assert(bg == 0xaa);
-static_assert(br == 0x55);
-static_assert(ba == 0xcc);
-static_assert(aa == 0xcc);
-static_assert(ab == 0x33);
-static_assert(ag == 0xaa);
-static_assert(ar == 0x55);
-```
-
-集成体や任意のクラスへの初期化にも使えます。
-
-```cpp
-#include "frozenchars.hpp"
-#include <tuple>
-
-using namespace frozenchars;
-
-struct AggregateColor {
-  std::uint8_t r;
-  std::uint8_t g;
-  std::uint8_t b;
-};
-
-struct AggregateColorA {
-  std::uint8_t r;
-  std::uint8_t g;
-  std::uint8_t b;
-  std::uint8_t a;
-};
-
-struct AggregateColorBgr {
-  std::uint8_t b;
-  std::uint8_t g;
-  std::uint8_t r;
-};
-
-struct LibraryColor {
-  std::uint8_t r;
-  std::uint8_t g;
-  std::uint8_t b;
-
-  constexpr LibraryColor(std::uint8_t red, std::uint8_t green, std::uint8_t blue)
-  : r(red), g(green), b(blue)
-  {}
-};
-
-struct LibraryColorA {
-  std::uint8_t r;
-  std::uint8_t g;
-  std::uint8_t b;
-  std::uint8_t a;
-
-  constexpr LibraryColorA(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha)
-  : r(red), g(green), b(blue), a(alpha)
-  {}
-};
-
-struct LibraryColorAbgr {
-  std::uint8_t a;
-  std::uint8_t b;
-  std::uint8_t g;
-  std::uint8_t r;
-
-  constexpr LibraryColorAbgr(std::uint8_t alpha, std::uint8_t blue, std::uint8_t green, std::uint8_t red)
-  : a(alpha), b(blue), g(green), r(red)
-  {}
-};
-
-auto constexpr aggregate = std::apply(
-  [](auto... channels) constexpr {
-    return AggregateColor{channels...};
-  },
-  parse_hex_rgb("#123")
-);
-
-auto constexpr aggregate_a = std::apply(
-  [](auto... channels) constexpr {
-    return AggregateColorA{channels...};
-  },
-  parse_hex_rgba("#1234")
-);
-
-auto constexpr aggregate_bgr = std::apply(
-  [](auto... channels) constexpr {
-    return AggregateColorBgr{channels...};
-  },
-  to_bgr(parse_hex_rgb("#abcdef"))
-);
-
-auto constexpr color = std::make_from_tuple<LibraryColor>(parse_hex_rgb("#abcdef"));
-auto constexpr color_a = std::make_from_tuple<LibraryColorA>(parse_hex_rgba("#abcdef99"));
-auto constexpr color_abgr = std::make_from_tuple<LibraryColorAbgr>(to_abgr(parse_hex_rgba("#12345678")));
-
-static_assert(aggregate.r == 0x11);
-static_assert(color.g == 0xcd);
-static_assert(aggregate_a.a == 0x44);
-static_assert(color_a.a == 0x99);
-static_assert(aggregate_bgr.b == 0xef);
-static_assert(color_abgr.a == 0x78);
-```
 
 ## `freeze` 対応型一覧
 
@@ -2131,101 +1969,6 @@ cmake --build build --target bench_map_comparison
 ./build/test/bench_map_comparison 1000000
 ```
 
-### `parse_to_tuple`（型列文字列 → `std::tuple<...>`）
-
-`parse_to_tuple<Str>()` は、固定文字列で書いた型リストをパースし、
-対応する `std::tuple<...>` 型を保持する `type_identity` を返します。
-実際の型は `typename decltype(parse_to_tuple<...>())::type` で取り出します。
-
-- `,` で型を区切ります
-- `?` を末尾に付けると `std::optional<T>` になります
-- `[ ... ]` でネストした `std::tuple<...>` を書けます
-- `[ ... ]?` は `std::optional<std::tuple<...>>` になります
-- 空要素（例: `"int,,string"`）は `void` として扱われます
-- `"void"` と明示的に書いた場合も `void` になります
-- 空白は無視されます
-- `void?` は `std::optional<void>` になるため非対応です
-
-対応している主な型名:
-
-- `bool`, `char`, `int`, `uint` / `unsigned`, `long`, `ulong`, `float`, `double`
-- `string` / `str`, `string_view` / `sv`, `void`, `size_t` / `sz`
-- `int8_t` / `int8`, `int16_t` / `int16`, `int32_t` / `int32`, `int64_t` / `int64`
-- `uint8_t` / `uint8`, `uint16_t` / `uint16`, `uint32_t` / `uint32`, `uint64_t` / `uint64`
-
-```cpp
-#include "frozenchars.hpp"
-#include <type_traits>
-
-using namespace frozenchars;
-using namespace frozenchars::literals;
-
-using T1 = typename decltype(parse_to_tuple<"int, string?, bool"_fs>())::type;
-static_assert(std::is_same_v<T1, std::tuple<int, std::optional<std::string>, bool>>);
-
-using T2 = typename decltype(parse_to_tuple<"[int, bool?], void, sv"_fs>())::type;
-static_assert(std::is_same_v<T2, std::tuple<std::tuple<int, std::optional<bool>>, void, std::string_view>>);
-
-using T3 = typename decltype(parse_to_tuple<"int,,[char, double]?"_fs>())::type;
-static_assert(std::is_same_v<T3, std::tuple<int, void, std::optional<std::tuple<char, double>>>>);
-```
-
-`parse_to_tuple` 自体は型計算用のヘルパーなので、実行時に `std::tuple` オブジェクトを返す関数ではありません。
-未知の型名や不正な構文は、ランタイムではなくコンパイル時エラーになります。
-
-#### `parse_to_variant`（型列文字列 → `std::variant<...>`）
-
-`parse_to_variant<Str>()` は、固定文字列で書いた型リストをパースし、
-対応する `std::variant<...>` 型を保持する `type_identity` を返します。
-
-```cpp
-using V1 = typename decltype(parse_to_variant<"int, string, bool"_fs>())::type;
-static_assert(std::is_same_v<V1, std::variant<int, std::string, bool>>);
-
-// _t エイリアスを使った簡潔な書き方
-using V2 = parse_to_variant_t<"int, string, bool"_fs>;
-static_assert(std::is_same_v<V2, std::variant<int, std::string, bool>>);
-```
-
-- `void` 型は `std::monostate` にマッピングされます
-- `parse_to_tuple` と同じ構文が使えます（optional, ネスト, サフィックス）
-
-#### 型エイリアス
-
-冗長な `typename decltype(...)::type` パターンを省略するエイリアス:
-
-```cpp
-// parse_to_tuple の型エイリアス
-template <auto Str>
-using parse_to_tuple_t = typename decltype(parse_to_tuple<Str>())::type;
-
-// parse_to_variant の型エイリアス
-template <auto Str>
-using parse_to_variant_t = typename decltype(parse_to_variant<Str>())::type;
-
-// type_mapping の値エイリアス
-template <auto S>
-inline constexpr auto type_mapping_v = type_mapping<S>::type;
-```
-
-#### ポインタ/参照型
-
-サフィックスでポインタ型・参照型を指定できます:
-
-| 構文 | 型 |
-|------|-----|
-| `"int*"_fs` | `int*` |
-| `"int&"_fs` | `int&` |
-| `"int&&"_fs` | `int&&` |
-
-```cpp
-using T = parse_to_tuple_t<"int*, string&, bool&&"_fs>;
-static_assert(std::is_same_v<T, std::tuple<int*, std::string&, bool&&>>);
-```
-
-- `void*`, `void&` は未対応（コンパイルエラー）
-
-
 ## よくある質問 (FAQ)
 
 ### Q. `consteval` ですが、実行時にも使えますか？
@@ -2365,7 +2108,6 @@ auto constexpr r2 = "#header\na=1\n#end"_fs | remove_comments();
 // r2.sv() == "a=1"
 ```
 
-
 ## `chrono`（日付・時刻のコンパイル時相互変換）
 
 `frozenchars/chrono.hpp` は ISO 8601 日付・時刻文字列と `std::chrono` 型の間のコンパイル時相互変換を提供します。
@@ -2447,7 +2189,6 @@ static_assert(parsed == ymd);
 > ⚠ `compilation_timestamp()` は `__DATE__` / `__TIME__` マクロに依存するため、日単位の精度です。
 > 秒精度のタイムスタンプが必要な場合は `parse_iso_datetime` で明示的に文字列を渡してください。
 
-
 ## `log`（コンパイル時ログ）
 
 `frozenchars/log.hpp`（`frozenchars/mod/log.hpp`）は、constexpr / consteval 評価中の
@@ -2521,7 +2262,6 @@ consteval auto make_ts_log() {
 constexpr auto g_log = make_log();
 auto d = dump<g_log>();   // コンパイルエラーになり、診断にログ全文が出る
 ```
-
 
 ## テスト
 

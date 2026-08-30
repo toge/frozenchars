@@ -218,12 +218,6 @@ assert_compile_fail(
   EXPECTED_TEXT "format"
 )
 
-assert_compile_fail(
-  NAME parse_to_tuple_void_pointer
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/parse_to_tuple_void_pointer.cpp
-  EXPECTED_TEXT "Unknown type name"
-)
-
 # ---- frozen_format compile-fail tests ----
 
 assert_compile_fail(
