@@ -1,3 +1,21 @@
+# freestanding 向けスモークは常時ビルド可能（hosted 依存なし）
+add_executable(smoke_mod_core smoke_mod_core.cpp)
+target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
+target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
+add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
+
+add_executable(smoke_freestanding ../tests/test_basic.cpp)
+target_link_libraries(smoke_freestanding PRIVATE frozenchars::frozenchars)
+target_compile_features(smoke_freestanding PUBLIC cxx_std_23)
+target_compile_definitions(smoke_freestanding PRIVATE FROZENCHARS_FREESTANDING=1)
+add_test(NAME smoke_freestanding COMMAND smoke_freestanding)
+
+if(ENABLE_FREESTANDING)
+  # freestanding ビルドでは hosted なテスト/ベンチ/サンプルはスキップ
+  # all_test は <ostream> operator<< に依存する test_format.cpp がコンパイル不可のため除外
+  return()
+endif()
+
 find_package(Catch2 REQUIRED CONFIG)
 find_package(ctre REQUIRED CONFIG)
 
@@ -60,19 +78,6 @@ if(EMSCRIPTEN)
 endif()
 
 add_test(NAME all_test COMMAND all_test -r junit)
-
-# コアモジュール単独スモーク: glaze/json/regex/SIMD を引き込まずにビルド・実行できることを確認
-add_executable(smoke_mod_core smoke_mod_core.cpp)
-target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
-target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
-add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
-
-# freestanding スモーク: FROZENCHARS_FREESTANDING で I/O 非依存ビルドを検証
-add_executable(smoke_freestanding ../tests/test_basic.cpp)
-target_link_libraries(smoke_freestanding PRIVATE frozenchars::frozenchars)
-target_compile_features(smoke_freestanding PUBLIC cxx_std_23)
-target_compile_definitions(smoke_freestanding PRIVATE FROZENCHARS_FREESTANDING=1)
-add_test(NAME smoke_freestanding COMMAND smoke_freestanding)
 
 add_subdirectory(../example example_examples)
 

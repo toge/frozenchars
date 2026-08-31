@@ -1,7 +1,14 @@
 #pragma once
 
+#include "frozenchars/config.hpp"
+
 #include <array>
+#if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
+#define FROZENCHARS_DETAIL_HAS_CHARCONV 1
+#else
+#define FROZENCHARS_DETAIL_HAS_CHARCONV 0
+#endif
 #include <limits>
 #include <ranges>
 #include <utility>
@@ -19,11 +26,35 @@ template <typename T>
   requires std::same_as<T, long long> || std::same_as<T, unsigned long long>
 [[nodiscard]] auto constexpr to_dec_chars(T v) noexcept {
   auto buffer = std::array<char, 21>{};
+#if FROZENCHARS_DETAIL_HAS_CHARCONV
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), v);
   if (ec != std::errc{}) {
     return std::pair{buffer, 0uz};
   }
   return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
+#else
+  if (v == 0) {
+    buffer[0] = '0';
+    return std::pair{buffer, 1uz};
+  }
+  bool neg = false;
+  unsigned long long uv;
+  if constexpr (std::is_signed_v<T>) {
+    if (v < 0) { neg = true; uv = static_cast<unsigned long long>(-(v)); }
+    else uv = static_cast<unsigned long long>(v);
+  } else {
+    uv = static_cast<unsigned long long>(v);
+  }
+  auto i = 0uz;
+  auto tmp = uv;
+  while (tmp > 0) { ++i; tmp /= 10; }
+  auto len = i + (neg ? 1 : 0);
+  auto pos = len;
+  tmp = uv;
+  while (tmp > 0) { buffer[--pos] = static_cast<char>('0' + (tmp % 10)); tmp /= 10; }
+  if (neg) buffer[0] = '-';
+  return std::pair{buffer, len};
+#endif
 }
 
 /**
@@ -34,11 +65,23 @@ template <typename T>
  */
 [[nodiscard]] auto constexpr to_hex_chars(unsigned long long value) noexcept {
   auto buffer = std::array<char, 17>{};
+#if FROZENCHARS_DETAIL_HAS_CHARCONV
   auto const [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value, 16);
   if (ec != std::errc{}) {
     return std::pair{buffer, 0uz};
   }
   return std::pair{buffer, static_cast<std::size_t>(end - buffer.data())};
+#else
+  if (value == 0) { buffer[0] = '0'; return std::pair{buffer, 1uz}; }
+  auto i = 0uz;
+  auto tmp = value;
+  while (tmp > 0) { ++i; tmp >>= 4; }
+  auto len = i;
+  auto pos = len;
+  tmp = value;
+  while (tmp > 0) { auto d = tmp & 0xF; buffer[--pos] = d < 10 ? static_cast<char>('0' + d) : static_cast<char>('a' + (d - 10)); tmp >>= 4; }
+  return std::pair{buffer, len};
+#endif
 }
 
 /**

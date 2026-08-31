@@ -332,3 +332,61 @@ jobs:
         with:
           name: coverage-info
           path: coverage.info
+
+  linux-freestanding:
+    runs-on: ubuntu-latest
+    container: fedora:44
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: dnf install -y gcc-c++ cmake ninja-build git curl zip unzip tar
+
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/vcpkg
+            build/vcpkg_installed
+          key: ${{ runner.os }}-freestanding-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-freestanding-vcpkg-
+
+      - name: Install vcpkg
+        run: |
+          if [ ! -d ~/vcpkg ]; then
+            git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+            ~/vcpkg/bootstrap-vcpkg.sh
+          fi
+
+      - name: Configure (freestanding)
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DENABLE_FREESTANDING=ON
+
+      - name: Build (freestanding)
+        run: cmake --build build
+
+      - name: Test (freestanding)
+        run: ctest --test-dir build -V
+
+      - name: Verify single headers compile (hosted & freestanding)
+        run: |
+          g++ -std=c++23 -I include -DFROZENCHARS_FREESTANDING=1 -c tests/test_basic.cpp -o /tmp/test_basic_fs.o
+          g++ -std=c++23 -I include -c tests/test_basic.cpp -o /tmp/test_basic_hosted.o
+          g++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs.o <<'EOF'
+          #include "frozenchars_freestanding.hpp"
+          int main(){return 0;}
+          EOF
+          g++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_hosted.o <<'EOF'
+          #include "frozenchars.hpp"
+          int main(){return 0;}
+          EOF
+          # hosted ヘッダを freestanding フラグ付きでもビルドできること
+          g++ -std=c++23 -I single_include -DFROZENCHARS_FREESTANDING=1 -c -x c++ - -o /tmp/single_hosted_fsflag.o <<'EOF'
+          #include "frozenchars.hpp"
+          int main(){return 0;}
+          EOF
+          python3 tools/amalgamate.py --check

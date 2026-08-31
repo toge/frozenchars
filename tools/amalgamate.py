@@ -2,7 +2,7 @@
 """
 frozenchars 単一ヘッダ生成スクリプト (stdlib のみ)
 
-  python3 tools/amalgamate.py                # single_include/frozenchars.hpp (all_basic)
+  python3 tools/amalgamate.py                # single_include/frozenchars.hpp (+ _json.hpp + _freestanding.hpp)
   python3 tools/amalgamate.py --with-json    # 上記 + single_include/frozenchars_json.hpp
   python3 tools/amalgamate.py --check        # 生成結果と既存ファイルの差分検証
   python3 tools/amalgamate.py --stdout       # 標準出力へ
@@ -40,6 +40,23 @@ def read_license() -> str:
     lines = ["// " + line if line else "//" for line in txt.splitlines()]
     return "\n".join(lines)
   return "// MIT License — see LICENSE in repository"
+
+
+def inject_freestanding_define(text: str) -> str:
+  """
+  通常ヘッダのテキストに FROZENCHARS_FREESTANDING 定義を注入して
+  freestanding 単一ヘッダを作る。利用者が追加の -DFROZENCHARS_FREESTANDING を
+  付けなくても freestanding モードで使えるようにする。
+  # ponytail: 既存の amalgamate 出力を書き換えるだけ。別エントリの再アマルガム不要
+  """
+  marker = "#pragma once\n"
+  if marker in text:
+    return text.replace(
+      marker,
+      marker + "\n#ifndef FROZENCHARS_FREESTANDING\n#define FROZENCHARS_FREESTANDING 1\n#endif\n",
+      1,
+    )
+  return "#ifndef FROZENCHARS_FREESTANDING\n#define FROZENCHARS_FREESTANDING 1\n#endif\n" + text
 
 
 def amalgamate(entry_rel: str) -> str:
@@ -255,10 +272,21 @@ def main() -> int:
   # デフォルト: all_basic
   std_txt = amalgamate("frozenchars/mod/all_basic.hpp")
   json_txt, _ = generate_with_json()
+  freestanding_txt = inject_freestanding_define(std_txt)
+  # preamble の Source 行だけ freestanding 用に差し替え（Generated 時刻は据え置き）
+  freestanding_txt = freestanding_txt.replace(
+    "Source: frozenchars/mod/all_basic.hpp",
+    "Source: frozenchars/mod/all_basic.hpp (freestanding)",
+  ).replace(
+    "python3 tools/amalgamate.py",
+    "python3 tools/amalgamate.py (freestanding)",
+    1,
+  )
 
   outputs = [
     (ROOT / "single_include/frozenchars.hpp", std_txt),
     (ROOT / "single_include/frozenchars_json.hpp", json_txt),
+    (ROOT / "single_include/frozenchars_freestanding.hpp", freestanding_txt),
   ]
   # --with-json なしでも両方生成するのがデフォルト（怠惰: 1回で両方揃う）
   # 明示的に --with-json のみ要求された場合は両方、そうでなければ標準のみに絞るかは
