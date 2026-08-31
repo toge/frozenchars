@@ -1,6 +1,5 @@
 #pragma once
 
-#include <charconv>
 #include <cstdint>
 #include <stdexcept>
 #include <string_view>
@@ -23,7 +22,6 @@ enum class json_type : uint8_t { null, boolean, number, string, array, object };
 struct json_value {
   json_type type = json_type::null;         ///< この値の種別
   bool bool_val = false;                    ///< boolean 型のときの真偽値
-  int64_t num_val = 0;                      ///< number 型のときの整数値
   std::string_view str_val{};               ///< string/number 型のときの元文字列ビュー
   std::vector<json_value> arr{};            ///< array/object 型のときの子要素
   std::vector<std::string_view> keys{};     ///< object 型のときのキー（arr と同一インデックスで対応）
@@ -87,9 +85,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
   }
   auto const num_str = std::string_view(s.data() + start, p - start);
-  int64_t val = 0;
-  std::from_chars(num_str.data(), num_str.data() + num_str.size(), val);
-  return json_value{json_type::number, false, val, num_str, {}, {}};
+  return json_value{json_type::number, false, num_str, {}, {}};
 }
 
 /**
@@ -104,7 +100,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
   ++p;
   skip_ws(s, p);
   std::vector<json_value> arr;
-  if (p < s.size() && s[p] == ']') { ++p; return {json_type::array, false, 0, {}, std::move(arr), {}}; }
+  if (p < s.size() && s[p] == ']') { ++p; return {json_type::array, false, {}, std::move(arr), {}}; }
   while (true) {
     skip_ws(s, p);
     arr.push_back(parse_value(s, p));
@@ -113,7 +109,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     if (p < s.size() && s[p] == ']') { ++p; break; }
     throw std::runtime_error("expected ',' or ']'");
   }
-  return {json_type::array, false, 0, {}, std::move(arr), {}};
+  return {json_type::array, false, {}, std::move(arr), {}};
 }
 
 /**
@@ -129,7 +125,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
   skip_ws(s, p);
   std::vector<std::string_view> keys;
   std::vector<json_value> vals;
-  if (p < s.size() && s[p] == '}') { ++p; return {json_type::object, false, 0, {}, std::move(vals), std::move(keys)}; }
+  if (p < s.size() && s[p] == '}') { ++p; return {json_type::object, false, {}, std::move(vals), std::move(keys)}; }
   while (true) {
     skip_ws(s, p);
     auto const key = parse_string(s, p);
@@ -144,7 +140,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     if (p < s.size() && s[p] == '}') { ++p; break; }
     throw std::runtime_error("expected ',' or '}'");
   }
-  return {json_type::object, false, 0, {}, std::move(vals), std::move(keys)};
+  return {json_type::object, false, {}, std::move(vals), std::move(keys)};
 }
 
 /**
@@ -163,16 +159,16 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
   if (c == '[') return parse_array(s, p);
   if (c == '"') {
     auto const str = parse_string(s, p);
-    return {json_type::string, false, 0, str, {}, {}};
+    return {json_type::string, false, str, {}, {}};
   }
   auto starts_with = [&](size_t pos, std::string_view pat) -> bool {
     if (pat.size() > s.size() - pos) return false;
     for (size_t i = 0; i < pat.size(); ++i) if (s[pos + i] != pat[i]) return false;
     return true;
   };
-  if (c == 't' && starts_with(p, "true"))  { p += 4; return {json_type::boolean, true, 0, {}, {}, {}}; }
-  if (c == 'f' && starts_with(p, "false")) { p += 5; return {json_type::boolean, false, 0, {}, {}, {}}; }
-  if (c == 'n' && starts_with(p, "null"))  { p += 4; return {json_type::null, false, 0, {}, {}, {}}; }
+  if (c == 't' && starts_with(p, "true"))  { p += 4; return {json_type::boolean, true, {}, {}, {}}; }
+  if (c == 'f' && starts_with(p, "false")) { p += 5; return {json_type::boolean, false, {}, {}, {}}; }
+  if (c == 'n' && starts_with(p, "null"))  { p += 4; return {json_type::null, false, {}, {}, {}}; }
   if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
   throw std::runtime_error("unexpected character");
 }

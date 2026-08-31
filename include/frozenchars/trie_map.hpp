@@ -35,19 +35,6 @@ public:
   using const_reference = std::pair<std::string_view, T const&>;
 
   /**
-   * @brief operator-> のプロキシ型（参照ペアのポインタ演算をエミュレート）
-   */
-  template <typename Ref>
-  struct arrow_proxy {
-    Ref ref_v;
-    std::string_view& key;
-    T& value;
-    constexpr arrow_proxy(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-    constexpr auto operator->() noexcept -> arrow_proxy* { return this; }
-    constexpr auto operator->() const noexcept -> const arrow_proxy* { return this; }
-  };
-
-  /**
    * @brief frozen_trie_map の内部イテレータ実装
    * @tparam Owner 所有者型（const 修飾で const/非 const を切り替え）
    * @tparam Ref 参照型

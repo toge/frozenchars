@@ -231,8 +231,7 @@ public:
   static constexpr auto char_class_tables = data.char_class_tables;
   static constexpr auto first_branch = data.first_branch;
   static constexpr auto branch_end = data.branch_end;
-  static constexpr auto branch_next = data.next_branch;
-  static constexpr auto next_branch = branch_next;
+  static constexpr auto next_branch = data.next_branch;
   static constexpr auto fixed_prefix_length = data.fixed_prefix_length;
 };
 

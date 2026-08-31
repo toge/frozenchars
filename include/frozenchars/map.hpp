@@ -55,24 +55,7 @@ namespace detail {
  */
 template <typename Self, typename T>
 [[nodiscard]] constexpr auto&& forward_like_dispatch(T&& x) noexcept {
-#if defined(__cpp_lib_forward_like)
   return std::forward_like<Self>(std::forward<T>(x));
-#else
-  constexpr bool is_adding_const = std::is_const_v<std::remove_reference_t<Self>>;
-  if constexpr (std::is_lvalue_reference_v<Self&&>) {
-    if constexpr (is_adding_const) {
-      return std::as_const(x);
-    } else {
-      return static_cast<T&>(x);
-    }
-  } else {
-    if constexpr (is_adding_const) {
-      return std::move(std::as_const(x));
-    } else {
-      return std::move(x);
-    }
-  }
-#endif
 }
 
 /**
@@ -694,17 +677,6 @@ public:
   using reference = std::pair<std::string_view, T&>;
   using const_reference = std::pair<std::string_view, T const&>;
 
-  // operator-> の戻り値用プロキシ（キー・値へのメンバアクセスを提供）
-  template <typename Ref>
-  struct arrow_proxy {
-    Ref ref_v;
-    std::string_view& key;
-    decltype(std::declval<Ref>().second)& value;
-    constexpr arrow_proxy(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-    constexpr auto operator->() noexcept -> arrow_proxy* { return this; }
-    constexpr auto operator->() const noexcept -> const arrow_proxy* { return this; }
-  };
-
   /**
    * @brief frozen_map のイテレータ基底（ランダムアクセス、キーはビューで固定）
    *
@@ -771,12 +743,6 @@ public:
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});
-  }
-  /**
-   * @brief 非等値比較（operator== の否定）
-   */
-  [[nodiscard]] friend constexpr auto operator!=(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
-    return !(lhs == rhs);
   }
   /**
    * @brief 辞書順にソートされたキー配列を取得する

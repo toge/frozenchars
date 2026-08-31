@@ -728,8 +728,8 @@ inline constexpr base64_encode_adaptor               base64_encode{};           
 inline constexpr base64_decode_adaptor               base64_decode{};           ///< Base64 デコード
 inline constexpr hex_encode_adaptor                  hex_encode{};              ///< 16進数エンコード
 inline constexpr hex_decode_adaptor                  hex_decode{};              ///< 16進数デコード
-inline constexpr hex_encode_adaptor                  to_ascii{};                ///< hex_encode の別名
-inline constexpr hex_decode_adaptor                  from_ascii{};              ///< hex_decode の別名
+inline constexpr auto&                               to_ascii = hex_encode;     ///< hex_encode の別名
+inline constexpr auto&                               from_ascii = hex_decode;   ///< hex_decode の別名
 inline constexpr html_encode_adaptor                 html_encode{};             ///< HTML エンティティエンコード
 inline constexpr html_decode_adaptor                 html_decode{};             ///< HTML エンティティデコード
 inline constexpr minify_html_adaptor                 minify_html{};             ///< HTML ミニファイ

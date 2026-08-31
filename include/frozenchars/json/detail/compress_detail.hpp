@@ -55,23 +55,6 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
 }
 
 /**
- * @brief 64ビット符号付き整数を10進文字列に変換する
- *
- * @param v 変換する値
- * @return std::string 10進表現。0 のときは "0"、負値は先頭に '-'
- */
-[[nodiscard]] constexpr auto int64_to_string(int64_t v) -> std::string {
-  if (v == 0) return "0";
-  std::string r;
-  bool neg = v < 0;
-  if (neg) v = -v;
-  while (v > 0) { r.push_back(static_cast<char>('0' + v % 10)); v /= 10; }
-  if (neg) r.push_back('-');
-  std::reverse(r.begin(), r.end());
-  return r;
-}
-
-/**
  * @brief JSON 値を圧縮用の中間文字列表現に変換する
  *
  * @param val 変換する値

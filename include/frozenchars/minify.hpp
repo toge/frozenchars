@@ -6,6 +6,8 @@
 #include <array>
 #include <cstddef>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 
 // デバッグ有効化マクロ: importmap の処理をランタイムでトレースする場合は 1 にする
 #ifndef FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
@@ -38,18 +40,6 @@ enum class minify_markup_opt : uint8_t {
 //  - この機能はデフォルトで有効であり、従来のオプション preserve_script とは別に
 //    script の type 属性を解析して自動判定します。
 
-inline constexpr auto operator|(minify_markup_opt a, minify_markup_opt b) noexcept {
-  return static_cast<minify_markup_opt>(std::to_underlying(a) | std::to_underlying(b));
-}
-
-inline constexpr auto operator&(minify_markup_opt a, minify_markup_opt b) noexcept {
-  return static_cast<minify_markup_opt>(std::to_underlying(a) & std::to_underlying(b));
-}
-
-inline constexpr auto has_flag(minify_markup_opt value, minify_markup_opt flag) noexcept {
-  return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
-}
-
 // ─── SQL minify オプション ──────────────────────────────────────────────────
 
 /**
@@ -62,18 +52,6 @@ enum class minify_sql_opt : uint8_t {
   simplify_join  = 1 << 2, ///< INNER JOIN → JOIN に簡略化する
 };
 
-inline constexpr auto operator|(minify_sql_opt a, minify_sql_opt b) noexcept {
-  return static_cast<minify_sql_opt>(std::to_underlying(a) | std::to_underlying(b));
-}
-
-inline constexpr auto operator&(minify_sql_opt a, minify_sql_opt b) noexcept {
-  return static_cast<minify_sql_opt>(std::to_underlying(a) & std::to_underlying(b));
-}
-
-inline constexpr auto has_flag(minify_sql_opt value, minify_sql_opt flag) noexcept -> bool {
-  return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
-}
-
 // ─── Lua/Luau minify オプション ─────────────────────────────────────────────
 
 /**
@@ -84,15 +62,22 @@ enum class minify_lua_opt : uint8_t {
   keep_directives = 1 << 0, ///< Luau 型ディレクティブ (--!strict 等) を保持する
 };
 
-inline constexpr auto operator|(minify_lua_opt a, minify_lua_opt b) noexcept {
-  return static_cast<minify_lua_opt>(std::to_underlying(a) | std::to_underlying(b));
+// minify オプション共通のビット演算（3 enum で重複していた 9 関数を 3 テンプレートに集約）
+template <typename T>
+  requires std::is_same_v<T, minify_markup_opt> || std::is_same_v<T, minify_sql_opt> || std::is_same_v<T, minify_lua_opt>
+inline constexpr auto operator|(T a, T b) noexcept {
+  return static_cast<T>(std::to_underlying(a) | std::to_underlying(b));
 }
 
-inline constexpr auto operator&(minify_lua_opt a, minify_lua_opt b) noexcept {
-  return static_cast<minify_lua_opt>(std::to_underlying(a) & std::to_underlying(b));
+template <typename T>
+  requires std::is_same_v<T, minify_markup_opt> || std::is_same_v<T, minify_sql_opt> || std::is_same_v<T, minify_lua_opt>
+inline constexpr auto operator&(T a, T b) noexcept {
+  return static_cast<T>(std::to_underlying(a) & std::to_underlying(b));
 }
 
-inline constexpr auto has_flag(minify_lua_opt value, minify_lua_opt flag) noexcept -> bool {
+template <typename T>
+  requires std::is_same_v<T, minify_markup_opt> || std::is_same_v<T, minify_sql_opt> || std::is_same_v<T, minify_lua_opt>
+inline constexpr auto has_flag(T value, T flag) noexcept -> bool {
   return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
 }
 
@@ -556,16 +541,6 @@ constexpr auto at_close_script(char const* buf, size_t len, size_t i) noexcept -
   return ((buf[p] | 0x20) == 's' && (buf[p + 1] | 0x20) == 'c'
        && (buf[p + 2] | 0x20) == 'r' && (buf[p + 3] | 0x20) == 'i'
        && (buf[p + 4] | 0x20) == 'p' && (buf[p + 5] | 0x20) == 't');
-}
-
-/// @brief 位置 i が </style> の開始か判定する
-constexpr auto at_close_style(char const* buf, size_t len, size_t i) noexcept -> bool {
-  if (i + 7 >= len) return false;
-  if (buf[i] != '<' || buf[i + 1] != '/') return false;
-  auto const p = i + 2;
-  return ((buf[p] | 0x20) == 's' && (buf[p + 1] | 0x20) == 't'
-       && (buf[p + 2] | 0x20) == 'y' && (buf[p + 3] | 0x20) == 'l'
-       && (buf[p + 4] | 0x20) == 'e');
 }
 
 /// @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装（バッファベース）

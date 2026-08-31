@@ -861,29 +861,7 @@ template <FrozenString From, FrozenString To, size_t N>
 template <auto Str, auto From, auto To>
   requires(detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(From)> && detail::is_frozen_string_v<decltype(To)>)
 [[nodiscard]] consteval auto replace_all() noexcept -> FrozenString<detail::replace_all_exact_size<Str, From, To>()> {
-  constexpr auto NEW_SIZE = detail::replace_all_exact_size<Str, From, To>();
-  auto           res      = FrozenString<NEW_SIZE>{};
-  auto           offset   = 0uz;
-  auto           pos      = 0uz;
-  while (pos < Str.length) {
-    auto const found = detail::find_impl(Str, From, pos);
-    if (found == std::string_view::npos) {
-      while (pos < Str.length) {
-        res.buffer[offset++] = Str.buffer[pos++];
-      }
-      break;
-    }
-    while (pos < found) {
-      res.buffer[offset++] = Str.buffer[pos++];
-    }
-    for (auto i = 0uz; i < To.length; ++i) {
-      res.buffer[offset++] = To.buffer[i];
-    }
-    pos = found + From.length;
-  }
-  res.buffer[offset] = '\0';
-  res.length         = offset;
-  return res;
+  return shrink_to_fit<replace_all<From, To>(Str)>();
 }
 
 /**

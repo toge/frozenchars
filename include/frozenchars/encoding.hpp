@@ -102,28 +102,6 @@ constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed
 }
 
 /**
- * @brief 文字列を符号点列に変換する
- *
- * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
- * @param str 対象文字列
- * @return std::array<std::uint32_t, MaxN> 符号点配列（length 以降は 0）
- */
-template <size_t MaxN>
-constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::array<std::uint32_t, MaxN> {
-  auto codepoints = std::array<std::uint32_t, MaxN>{};
-  auto count = 0uz;
-  auto i = 0uz;
-  while (i < str.length) {
-    size_t consumed = 0;
-    std::uint32_t codepoint = 0;
-    (void)utf8_decode_at(str.sv(), i, consumed, codepoint);
-    codepoints[count++] = codepoint;
-    i += consumed;
-  }
-  return codepoints;
-}
-
-/**
  * @brief 文字列を符号点列に変換する（符号点数も取得する版）
  *
  * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
@@ -144,6 +122,19 @@ constexpr auto utf8_codepoints(FrozenString<MaxN> const& str, size_t& count) noe
     i += consumed;
   }
   return codepoints;
+}
+
+/**
+ * @brief 文字列を符号点列に変換する
+ *
+ * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
+ * @param str 対象文字列
+ * @return std::array<std::uint32_t, MaxN> 符号点配列（length 以降は 0）
+ */
+template <size_t MaxN>
+constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::array<std::uint32_t, MaxN> {
+  auto count = 0uz;
+  return utf8_codepoints(str, count);
 }
 
 /**
@@ -1021,10 +1012,8 @@ template <size_t Start, size_t Count, auto Str>
  */
 template <size_t N>
 [[nodiscard]] auto consteval utf8_reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
-  auto const codepoints = detail::utf8_codepoints(str);
   auto count = 0uz;
-  auto const all = detail::utf8_codepoints(str, count);
-  (void)all;
+  auto const codepoints = detail::utf8_codepoints(str, count);
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   for (auto i = count; i-- > 0;) {
@@ -1122,21 +1111,6 @@ template <auto Str>
  * @param str 対象文字列
  * @return std::array<char32_t, N> 符号点配列（未使用要素は U+0000）
  */
-template <size_t N>
-[[nodiscard]] constexpr auto utf8_to_codepoints(FrozenString<N> const& str) noexcept -> std::array<char32_t, N> {
-  auto codepoints = std::array<char32_t, N>{};
-  auto count = 0uz;
-  auto i = 0uz;
-  while (i < str.length) {
-    size_t consumed = 0;
-    std::uint32_t cp = 0;
-    (void)detail::utf8_decode_at(str.sv(), i, consumed, cp);
-    codepoints[count++] = static_cast<char32_t>(cp);
-    i += consumed;
-  }
-  return codepoints;
-}
-
 /**
  * @brief UTF-8 文字列を Unicode 符号点配列に変換する（符号点数も取得する版）
  *
@@ -1159,6 +1133,12 @@ template <size_t N>
     i += consumed;
   }
   return codepoints;
+}
+
+template <size_t N>
+[[nodiscard]] constexpr auto utf8_to_codepoints(FrozenString<N> const& str) noexcept -> std::array<char32_t, N> {
+  auto count = 0uz;
+  return utf8_to_codepoints(str, count);
 }
 
 /**
