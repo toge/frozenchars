@@ -41,3 +41,5 @@ static_assert(D.sv() == "prefix_suffix");
 constexpr auto E = frozenchars::freeze("frozen");
 static_assert(E.sv() == "frozen");
 static_assert(E.size() == 6);
+
+int main() { return 0; }

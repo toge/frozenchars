@@ -5,7 +5,7 @@
 ## プロジェクト概要
 
 - ヘッダオンリー C++ ライブラリ。`FrozenString<N>`（`N=終端 '\0' を含むバッファ長`）が核。`consteval` 主体だが、ランタイムでも動くものは `constexpr`。
-- 公開ターゲットは `frozenchars::frozenchars`（CMake `INTERFACE`）。利用時は必要なモジュールのみ include（例: `#include "frozenchars/mod/core.hpp"`）。`frozenchars.hpp` 傘ヘッダは非推奨。
+- 公開ターゲットは `frozenchars::frozenchars`（CMake `INTERFACE`）。利用時は必要なモジュールのみ include（例: `#include "frozenchars/mod/core.hpp"`）も可能。`frozenchars.hpp` は glaze / json を除く全機能を含む便利ヘッダ（非推奨ではない）。
 - 現在は `cxx_std_23` 固定（`CMakeLists.txt:41`）。C++26 フォールバックは未実装（将来追加予定）。
 - CI は `.github/workflows/ci.yml` に存在（Fedora 44/43/41、GCC 16/15/14）。
 - README は 1000行超の和文ドキュメント（`README.md`、現時点で 1300 行超）。

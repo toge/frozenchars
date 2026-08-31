@@ -67,6 +67,13 @@ target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
 add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
 
+# freestanding スモーク: FROZENCHARS_FREESTANDING で I/O 非依存ビルドを検証
+add_executable(smoke_freestanding ../tests/test_basic.cpp)
+target_link_libraries(smoke_freestanding PRIVATE frozenchars::frozenchars)
+target_compile_features(smoke_freestanding PUBLIC cxx_std_23)
+target_compile_definitions(smoke_freestanding PRIVATE FROZENCHARS_FREESTANDING=1)
+add_test(NAME smoke_freestanding COMMAND smoke_freestanding)
+
 add_subdirectory(../example example_examples)
 
 add_executable(bench_frozen_map bench_frozen_map.cpp)

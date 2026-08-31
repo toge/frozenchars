@@ -10,16 +10,6 @@
 - コンパイル時の文字列処理を前提にした応用機能もいくつか用意しています
 - HTML エンティティ変換、ワードラップ、UTF-8 コードポイント数計算などの実用関数も提供しています。
 
-文字列連結・繰り返し・数値フォーマットをなるべくコンパイル時に行うための型とヘルパー関数を提供する、ヘッダオンリーの C++ ライブラリです。
-
-## 特徴
-
-- 内部ではstd::arrayで固定長バッファを持つ `FrozenString` クラスを定義し、文字列リテラルや数値などからコンパイル時に文字列を生成できます。
-- 操作関数のほとんどをconstevalで定義しており、コンパイル時に評価されます。
-- 文字列操作をチェーンできるパイプ演算子も提供しています。
-- コンパイル時の文字列処理を前提にした応用機能もいくつか用意しています。
-- HTML エンティティ変換、ワードラップ、UTF-8 コードポイント数計算などの実用関数も提供しています。
-
 ## 目次
 
 - [特徴](#特徴)
@@ -111,7 +101,7 @@ auto constexpr msg = frozenchars::concat("answer=", 42, ", hex=0x", frozenchars:
 // msg.sv() == "answer=42, hex=0xff"
 ```
 
-> **注意**: `frozenchars.hpp` は非推奨です。コンパイル負荷削減のため、個別のモジュールヘッダ（`frozenchars/mod/core.hpp` 等）の利用を推奨します。詳しくは[モジュール別インクルード（推奨）](#モジュール別インクルード推奨)を参照してください。非推奨メッセージを抑制したい場合は `FROZENCHARS_USE_UMBRELLA` を定義してください。
+`frozenchars.hpp` は glaze / json を除く全機能を含む便利ヘッダです。コンパイル負荷を抑えたい場合は個別のモジュールヘッダ（`frozenchars/mod/core.hpp` 等）の利用も可能です。詳しくは[モジュール別インクルード（推奨）](#モジュール別インクルード推奨)を参照してください。
 
 ### 最小コンパイル例（1コマンド）
 
@@ -190,21 +180,10 @@ glaze 連携と JSON 圧縮はデフォルトでは読み込まれません。�
 #include "frozenchars/json/crush.hpp"         // JSON クラッシュ圧縮（crush / uncrush）
 ```
 
-### 傘ヘッダの非推奨化
+### 傘ヘッダについて
 
-`#include "frozenchars.hpp"` は後方互換のため残されていますが非推奨です。
-インクルード時に次のメッセージが出力されます。
-
-```
-frozenchars.hpp is deprecated; prefer granular includes like frozenchars/mod/core.hpp
-```
-
-CI や無言ビルドでメッセージを抑制したい場合は、コンパイル時に
-`FROZENCHARS_USE_UMBRELLA` を定義してください。
-
-```bash
-g++ -std=c++23 -DFROZENCHARS_USE_UMBRELLA -I include main.cpp
-```
+`#include "frozenchars.hpp"` は glaze / json を除く全機能をまとめた便利ヘッダです。
+コンパイル負荷が気になる場合はモジュール別インクルードを利用してください。
 
 ## 基本概念
 

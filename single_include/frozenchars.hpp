@@ -26,7 +26,7 @@
 // Source: frozenchars/mod/all_basic.hpp
 // Do not edit manually. Re-generate with: python3 tools/amalgamate.py
 // Repository: https://github.com/anomalyco/frozenchars
-// Generated: 2026-08-30T22:27:53.726932 UTC
+// Generated: 2026-08-31T19:12:00.134841 UTC
 
 // ---- amalgamated body (system includes are kept inline to preserve #if guards) ----
 
@@ -292,6 +292,20 @@ constexpr bool is_space(char c) noexcept {
 // ---- end frozenchars/char_pred.hpp ----
 // ---- begin frozenchars/string.hpp ----
 
+// ---- begin frozenchars/config.hpp ----
+
+/**
+ * @file frozenchars/config.hpp
+ * @brief ビルドモード設定。
+ *
+ * FROZENCHARS_FREESTANDING が定義されると、I/O ヘッダ (<ostream> 等) に依存する
+ * 機能が無効化される。wasm32-unknown-unknown (freestanding) では自動的に有効になる。
+ * 手動で `-DFROZENCHARS_FREESTANDING` を指定しても有効にできる。
+ */
+#if !defined(FROZENCHARS_FREESTANDING) && defined(__wasm__) && !defined(__wasi__)
+#  define FROZENCHARS_FREESTANDING 1
+#endif
+// ---- end frozenchars/config.hpp ----
 // ---- begin frozenchars/detail/pipe.hpp ----
 
 #include <concepts>
@@ -396,9 +410,11 @@ template <size_t N, PipeAdaptor Adaptor>
 
 #include <array>
 #include <cstddef>
-#include <ostream>
+#ifndef FROZENCHARS_FREESTANDING
+#  include <ostream>
+#  include <stdexcept>
+#endif
 #include <span>
-#include <stdexcept>
 #include <string_view>
 
 namespace frozenchars {
@@ -488,7 +504,9 @@ struct FrozenString {
    * @brief 先頭要素を返す (length > 0 を事前条件とする)
    */
   [[nodiscard]] constexpr auto front() const -> char {
+#ifndef FROZENCHARS_FREESTANDING
     if (empty()) throw std::out_of_range{"FrozenString::front() called on empty string"};
+#endif
     return buffer[0];
   }
 
@@ -496,7 +514,9 @@ struct FrozenString {
    * @brief 末尾要素を返す
    */
   [[nodiscard]] constexpr auto back() const -> char {
+#ifndef FROZENCHARS_FREESTANDING
     if (empty()) throw std::out_of_range{"FrozenString::back() called on empty string"};
+#endif
     return buffer[length - 1];
   }
 
@@ -505,7 +525,9 @@ struct FrozenString {
    * @param i インデックス
    */
   [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
+#ifndef FROZENCHARS_FREESTANDING
     if (i >= length) throw std::out_of_range{"FrozenString::operator[] index out of range"};
+#endif
     return buffer[i];
   }
 
@@ -634,12 +656,14 @@ constexpr auto operator+(char const (&lhs)[N1], FrozenString<N2> const& rhs) noe
 }
 
 /**
- * @brief ostream 出力
+ * @brief ostream 出力 (hosted のみ)
  */
+#ifndef FROZENCHARS_FREESTANDING
 template <size_t N>
 std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
   return os << str.sv();
 }
+#endif
 
 namespace detail {
 
@@ -2854,15 +2878,24 @@ template <size_t N>
 /**
  * @brief 文字列内のすべての指定した部分文字列を置換した文字列を生成する
  *
- * @tparam From 置換前の文字列
+ * @tparam From 置換前の文字列（空文字列は不可）
  * @tparam To 置換後の文字列
  * @tparam N 処理対象の文字列の長さ (終端文字'\0'を含む)
  * @param str 処理対象の文字列
  * @return auto 生成した文字列
  */
 template <FrozenString From, FrozenString To, size_t N>
-[[nodiscard]] consteval auto replace_all(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N * 4, 2048uz)> {
-  constexpr auto MAX_REPLACE_SIZE = std::max(N * 4, 2048uz);
+[[nodiscard]] consteval auto replace_all(FrozenString<N> const& str) noexcept {
+  static_assert(From.length > 0, "replace_all: From cannot be an empty string");
+  // 入力長 S = N-1。マッチ k 個の出力 = S + k*(To.length - From.length)。
+  // To.length > From.length: k 最大時に出力最大。
+  // To.length < From.length: k = 0（マッチなし）時に出力最大 = S。
+  // 両ケースを max で統一する。
+  constexpr auto S                 = (N > 1uz) ? N - 1uz : 0uz;
+  constexpr auto MAX_MATCHES       = S / From.length;
+  constexpr auto MAX_OUT_ALL_MATCH = MAX_MATCHES * To.length + S % From.length;
+  constexpr auto MAX_OUT           = std::max(S, MAX_OUT_ALL_MATCH);
+  constexpr auto MAX_REPLACE_SIZE  = std::max(MAX_OUT + 1uz, 1uz);
   auto           res              = FrozenString<MAX_REPLACE_SIZE>{};
 
   auto offset = 0uz;
@@ -2907,29 +2940,7 @@ template <FrozenString From, FrozenString To, size_t N>
 template <auto Str, auto From, auto To>
   requires(detail::is_frozen_string_v<decltype(Str)> && detail::is_frozen_string_v<decltype(From)> && detail::is_frozen_string_v<decltype(To)>)
 [[nodiscard]] consteval auto replace_all() noexcept -> FrozenString<detail::replace_all_exact_size<Str, From, To>()> {
-  constexpr auto NEW_SIZE = detail::replace_all_exact_size<Str, From, To>();
-  auto           res      = FrozenString<NEW_SIZE>{};
-  auto           offset   = 0uz;
-  auto           pos      = 0uz;
-  while (pos < Str.length) {
-    auto const found = detail::find_impl(Str, From, pos);
-    if (found == std::string_view::npos) {
-      while (pos < Str.length) {
-        res.buffer[offset++] = Str.buffer[pos++];
-      }
-      break;
-    }
-    while (pos < found) {
-      res.buffer[offset++] = Str.buffer[pos++];
-    }
-    for (auto i = 0uz; i < To.length; ++i) {
-      res.buffer[offset++] = To.buffer[i];
-    }
-    pos = found + From.length;
-  }
-  res.buffer[offset] = '\0';
-  res.length         = offset;
-  return res;
+  return shrink_to_fit<replace_all<From, To>(Str)>();
 }
 
 /**
@@ -6662,14 +6673,8 @@ template <auto Pattern>
 #include <array>
 #include <cstddef>
 #include <string_view>
-
-// デバッグ有効化マクロ: importmap の処理をランタイムでトレースする場合は 1 にする
-#ifndef FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
-#define FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP 0
-#endif
-#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
-#include <cstdio>
-#endif
+#include <type_traits>
+#include <utility>
 
 
 namespace frozenchars {
@@ -6692,18 +6697,6 @@ enum class minify_markup_opt : uint8_t {
 //  - この機能はデフォルトで有効であり、従来のオプション preserve_script とは別に
 //    script の type 属性を解析して自動判定します。
 
-inline constexpr auto operator|(minify_markup_opt a, minify_markup_opt b) noexcept {
-  return static_cast<minify_markup_opt>(std::to_underlying(a) | std::to_underlying(b));
-}
-
-inline constexpr auto operator&(minify_markup_opt a, minify_markup_opt b) noexcept {
-  return static_cast<minify_markup_opt>(std::to_underlying(a) & std::to_underlying(b));
-}
-
-inline constexpr auto has_flag(minify_markup_opt value, minify_markup_opt flag) noexcept {
-  return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
-}
-
 // ─── SQL minify オプション ──────────────────────────────────────────────────
 
 /**
@@ -6716,18 +6709,6 @@ enum class minify_sql_opt : uint8_t {
   simplify_join  = 1 << 2, ///< INNER JOIN → JOIN に簡略化する
 };
 
-inline constexpr auto operator|(minify_sql_opt a, minify_sql_opt b) noexcept {
-  return static_cast<minify_sql_opt>(std::to_underlying(a) | std::to_underlying(b));
-}
-
-inline constexpr auto operator&(minify_sql_opt a, minify_sql_opt b) noexcept {
-  return static_cast<minify_sql_opt>(std::to_underlying(a) & std::to_underlying(b));
-}
-
-inline constexpr auto has_flag(minify_sql_opt value, minify_sql_opt flag) noexcept -> bool {
-  return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
-}
-
 // ─── Lua/Luau minify オプション ─────────────────────────────────────────────
 
 /**
@@ -6738,15 +6719,22 @@ enum class minify_lua_opt : uint8_t {
   keep_directives = 1 << 0, ///< Luau 型ディレクティブ (--!strict 等) を保持する
 };
 
-inline constexpr auto operator|(minify_lua_opt a, minify_lua_opt b) noexcept {
-  return static_cast<minify_lua_opt>(std::to_underlying(a) | std::to_underlying(b));
+// minify オプション共通のビット演算（3 enum で重複していた 9 関数を 3 テンプレートに集約）
+template <typename T>
+  requires std::is_same_v<T, minify_markup_opt> || std::is_same_v<T, minify_sql_opt> || std::is_same_v<T, minify_lua_opt>
+inline constexpr auto operator|(T a, T b) noexcept {
+  return static_cast<T>(std::to_underlying(a) | std::to_underlying(b));
 }
 
-inline constexpr auto operator&(minify_lua_opt a, minify_lua_opt b) noexcept {
-  return static_cast<minify_lua_opt>(std::to_underlying(a) & std::to_underlying(b));
+template <typename T>
+  requires std::is_same_v<T, minify_markup_opt> || std::is_same_v<T, minify_sql_opt> || std::is_same_v<T, minify_lua_opt>
+inline constexpr auto operator&(T a, T b) noexcept {
+  return static_cast<T>(std::to_underlying(a) & std::to_underlying(b));
 }
 
-inline constexpr auto has_flag(minify_lua_opt value, minify_lua_opt flag) noexcept -> bool {
+template <typename T>
+  requires std::is_same_v<T, minify_markup_opt> || std::is_same_v<T, minify_sql_opt> || std::is_same_v<T, minify_lua_opt>
+inline constexpr auto has_flag(T value, T flag) noexcept -> bool {
   return (std::to_underlying(value) & std::to_underlying(flag)) != 0;
 }
 
@@ -7212,16 +7200,6 @@ constexpr auto at_close_script(char const* buf, size_t len, size_t i) noexcept -
        && (buf[p + 4] | 0x20) == 'p' && (buf[p + 5] | 0x20) == 't');
 }
 
-/// @brief 位置 i が </style> の開始か判定する
-constexpr auto at_close_style(char const* buf, size_t len, size_t i) noexcept -> bool {
-  if (i + 7 >= len) return false;
-  if (buf[i] != '<' || buf[i + 1] != '/') return false;
-  auto const p = i + 2;
-  return ((buf[p] | 0x20) == 's' && (buf[p + 1] | 0x20) == 't'
-       && (buf[p + 2] | 0x20) == 'y' && (buf[p + 3] | 0x20) == 'l'
-       && (buf[p + 4] | 0x20) == 'e');
-}
-
 /// @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装（バッファベース）
 ///
 /// 文字列リテラル内の文字は保持し、タグ周辺の不要空白とコメント（<!-- ... -->）を除去します。
@@ -7307,24 +7285,14 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
 
     // importmap (JSON) の場合はスクリプト内を JSON 風に minify して一括コピーする
     if (in_script && script_mode == 1u) {
-#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
-      std::fprintf(stderr, "[minify] importmap branch enter i=%zu len=%zu\n", i, len);
-      size_t dbg_steps = 0;
-#endif
       // closing </script> の位置を見つける
       auto j = i;
       while (j < len && !at_close_script(input, len, j)) ++j;
-#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
-      std::fprintf(stderr, "[minify] importmap found close at j=%zu\n", j);
-#endif
       // input[i..j) を JSON 風に minify
       auto in_str = false;
       auto escaped = false;
       auto p = i;
       while (p < j) {
-#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
-        if ((++dbg_steps & 0xffffu) == 0u) std::fprintf(stderr, "[minify] importmap step=%zu p=%zu j=%zu\n", dbg_steps, p, j);
-#endif
         auto const ch = input[p];
         if (in_str) {
           if (offset < output_capacity) output[offset++] = ch;
@@ -7365,9 +7333,6 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
         if (offset < output_capacity) output[offset++] = ch;
         ++p;
       }
-#if FROZENCHARS_MINIFY_HDR_DEBUG_IMPORTMAP
-      std::fprintf(stderr, "[minify] importmap finished steps=%zu out_offset=%zu\n", dbg_steps, offset);
-#endif
       // i を閉じタグ直前に進める（ループ先頭で閉じタグ処理される）
       i = j;
       continue;
@@ -9180,28 +9145,6 @@ constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed
 }
 
 /**
- * @brief 文字列を符号点列に変換する
- *
- * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
- * @param str 対象文字列
- * @return std::array<std::uint32_t, MaxN> 符号点配列（length 以降は 0）
- */
-template <size_t MaxN>
-constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::array<std::uint32_t, MaxN> {
-  auto codepoints = std::array<std::uint32_t, MaxN>{};
-  auto count = 0uz;
-  auto i = 0uz;
-  while (i < str.length) {
-    size_t consumed = 0;
-    std::uint32_t codepoint = 0;
-    (void)utf8_decode_at(str.sv(), i, consumed, codepoint);
-    codepoints[count++] = codepoint;
-    i += consumed;
-  }
-  return codepoints;
-}
-
-/**
  * @brief 文字列を符号点列に変換する（符号点数も取得する版）
  *
  * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
@@ -9222,6 +9165,19 @@ constexpr auto utf8_codepoints(FrozenString<MaxN> const& str, size_t& count) noe
     i += consumed;
   }
   return codepoints;
+}
+
+/**
+ * @brief 文字列を符号点列に変換する
+ *
+ * @tparam MaxN 入力バッファ長（終端含む、配列サイズにも使用）
+ * @param str 対象文字列
+ * @return std::array<std::uint32_t, MaxN> 符号点配列（length 以降は 0）
+ */
+template <size_t MaxN>
+constexpr auto utf8_codepoints(FrozenString<MaxN> const& str) noexcept -> std::array<std::uint32_t, MaxN> {
+  auto count = 0uz;
+  return utf8_codepoints(str, count);
 }
 
 /**
@@ -10099,10 +10055,8 @@ template <size_t Start, size_t Count, auto Str>
  */
 template <size_t N>
 [[nodiscard]] auto consteval utf8_reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
-  auto const codepoints = detail::utf8_codepoints(str);
   auto count = 0uz;
-  auto const all = detail::utf8_codepoints(str, count);
-  (void)all;
+  auto const codepoints = detail::utf8_codepoints(str, count);
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   for (auto i = count; i-- > 0;) {
@@ -10200,21 +10154,6 @@ template <auto Str>
  * @param str 対象文字列
  * @return std::array<char32_t, N> 符号点配列（未使用要素は U+0000）
  */
-template <size_t N>
-[[nodiscard]] constexpr auto utf8_to_codepoints(FrozenString<N> const& str) noexcept -> std::array<char32_t, N> {
-  auto codepoints = std::array<char32_t, N>{};
-  auto count = 0uz;
-  auto i = 0uz;
-  while (i < str.length) {
-    size_t consumed = 0;
-    std::uint32_t cp = 0;
-    (void)detail::utf8_decode_at(str.sv(), i, consumed, cp);
-    codepoints[count++] = static_cast<char32_t>(cp);
-    i += consumed;
-  }
-  return codepoints;
-}
-
 /**
  * @brief UTF-8 文字列を Unicode 符号点配列に変換する（符号点数も取得する版）
  *
@@ -10237,6 +10176,12 @@ template <size_t N>
     i += consumed;
   }
   return codepoints;
+}
+
+template <size_t N>
+[[nodiscard]] constexpr auto utf8_to_codepoints(FrozenString<N> const& str) noexcept -> std::array<char32_t, N> {
+  auto count = 0uz;
+  return utf8_to_codepoints(str, count);
 }
 
 /**
@@ -10782,24 +10727,7 @@ namespace detail {
  */
 template <typename Self, typename T>
 [[nodiscard]] constexpr auto&& forward_like_dispatch(T&& x) noexcept {
-#if defined(__cpp_lib_forward_like)
   return std::forward_like<Self>(std::forward<T>(x));
-#else
-  constexpr bool is_adding_const = std::is_const_v<std::remove_reference_t<Self>>;
-  if constexpr (std::is_lvalue_reference_v<Self&&>) {
-    if constexpr (is_adding_const) {
-      return std::as_const(x);
-    } else {
-      return static_cast<T&>(x);
-    }
-  } else {
-    if constexpr (is_adding_const) {
-      return std::move(std::as_const(x));
-    } else {
-      return std::move(x);
-    }
-  }
-#endif
 }
 
 /**
@@ -11421,17 +11349,6 @@ public:
   using reference = std::pair<std::string_view, T&>;
   using const_reference = std::pair<std::string_view, T const&>;
 
-  // operator-> の戻り値用プロキシ（キー・値へのメンバアクセスを提供）
-  template <typename Ref>
-  struct arrow_proxy {
-    Ref ref_v;
-    std::string_view& key;
-    decltype(std::declval<Ref>().second)& value;
-    constexpr arrow_proxy(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-    constexpr auto operator->() noexcept -> arrow_proxy* { return this; }
-    constexpr auto operator->() const noexcept -> const arrow_proxy* { return this; }
-  };
-
   /**
    * @brief frozen_map のイテレータ基底（ランダムアクセス、キーはビューで固定）
    *
@@ -11498,12 +11415,6 @@ public:
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});
-  }
-  /**
-   * @brief 非等値比較（operator== の否定）
-   */
-  [[nodiscard]] friend constexpr auto operator!=(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
-    return !(lhs == rhs);
   }
   /**
    * @brief 辞書順にソートされたキー配列を取得する
@@ -12949,19 +12860,6 @@ public:
   using const_reference = std::pair<std::string_view, T const&>;
 
   /**
-   * @brief operator-> のプロキシ型（参照ペアのポインタ演算をエミュレート）
-   */
-  template <typename Ref>
-  struct arrow_proxy {
-    Ref ref_v;
-    std::string_view& key;
-    T& value;
-    constexpr arrow_proxy(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-    constexpr auto operator->() noexcept -> arrow_proxy* { return this; }
-    constexpr auto operator->() const noexcept -> const arrow_proxy* { return this; }
-  };
-
-  /**
    * @brief frozen_trie_map の内部イテレータ実装
    * @tparam Owner 所有者型（const 修飾で const/非 const を切り替え）
    * @tparam Ref 参照型
@@ -13986,8 +13884,7 @@ public:
   static constexpr auto char_class_tables = data.char_class_tables;
   static constexpr auto first_branch = data.first_branch;
   static constexpr auto branch_end = data.branch_end;
-  static constexpr auto branch_next = data.next_branch;
-  static constexpr auto next_branch = branch_next;
+  static constexpr auto next_branch = data.next_branch;
   static constexpr auto fixed_prefix_length = data.fixed_prefix_length;
 };
 
@@ -16641,8 +16538,8 @@ inline constexpr base64_encode_adaptor               base64_encode{};           
 inline constexpr base64_decode_adaptor               base64_decode{};           ///< Base64 デコード
 inline constexpr hex_encode_adaptor                  hex_encode{};              ///< 16進数エンコード
 inline constexpr hex_decode_adaptor                  hex_decode{};              ///< 16進数デコード
-inline constexpr hex_encode_adaptor                  to_ascii{};                ///< hex_encode の別名
-inline constexpr hex_decode_adaptor                  from_ascii{};              ///< hex_decode の別名
+inline constexpr auto&                               to_ascii = hex_encode;     ///< hex_encode の別名
+inline constexpr auto&                               from_ascii = hex_decode;   ///< hex_decode の別名
 inline constexpr html_encode_adaptor                 html_encode{};             ///< HTML エンティティエンコード
 inline constexpr html_decode_adaptor                 html_decode{};             ///< HTML エンティティデコード
 inline constexpr minify_html_adaptor                 minify_html{};             ///< HTML ミニファイ
