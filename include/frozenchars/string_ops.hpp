@@ -799,15 +799,24 @@ template <size_t N>
 /**
  * @brief 文字列内のすべての指定した部分文字列を置換した文字列を生成する
  *
- * @tparam From 置換前の文字列
+ * @tparam From 置換前の文字列（空文字列は不可）
  * @tparam To 置換後の文字列
  * @tparam N 処理対象の文字列の長さ (終端文字'\0'を含む)
  * @param str 処理対象の文字列
  * @return auto 生成した文字列
  */
 template <FrozenString From, FrozenString To, size_t N>
-[[nodiscard]] consteval auto replace_all(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N * 4, 2048uz)> {
-  constexpr auto MAX_REPLACE_SIZE = std::max(N * 4, 2048uz);
+[[nodiscard]] consteval auto replace_all(FrozenString<N> const& str) noexcept {
+  static_assert(From.length > 0, "replace_all: From cannot be an empty string");
+  // 入力長 S = N-1。マッチ k 個の出力 = S + k*(To.length - From.length)。
+  // To.length > From.length: k 最大時に出力最大。
+  // To.length < From.length: k = 0（マッチなし）時に出力最大 = S。
+  // 両ケースを max で統一する。
+  constexpr auto S                 = (N > 1uz) ? N - 1uz : 0uz;
+  constexpr auto MAX_MATCHES       = S / From.length;
+  constexpr auto MAX_OUT_ALL_MATCH = MAX_MATCHES * To.length + S % From.length;
+  constexpr auto MAX_OUT           = std::max(S, MAX_OUT_ALL_MATCH);
+  constexpr auto MAX_REPLACE_SIZE  = std::max(MAX_OUT + 1uz, 1uz);
   auto           res              = FrozenString<MAX_REPLACE_SIZE>{};
 
   auto offset = 0uz;
