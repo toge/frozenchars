@@ -26,7 +26,7 @@
 // Source: frozenchars/mod/all_basic.hpp + frozenchars/json/crush.hpp + frozenchars/json/compress.hpp
 // Do not edit manually. Re-generate with: python3 tools/amalgamate.py --with-json
 // Repository: https://github.com/anomalyco/frozenchars
-// Generated: 2026-08-31T20:28:05.906541 UTC
+// Generated: 2026-08-31T20:36:02.987108 UTC
 
 // ---- amalgamated body (system includes are kept inline to preserve #if guards) ----
 // ==== entry: frozenchars/mod/all_basic.hpp ====
@@ -303,7 +303,7 @@ constexpr bool is_space(char c) noexcept {
  * 機能が無効化される。wasm32-unknown-unknown (freestanding) では自動的に有効になる。
  * 手動で `-DFROZENCHARS_FREESTANDING` を指定しても有効にできる。
  */
-#if !defined(FROZENCHARS_FREESTANDING) && defined(__wasm__) && !defined(__wasi__)
+#if !defined(FROZENCHARS_FREESTANDING) && defined(__wasm__) && !defined(__wasi__) && !defined(__EMSCRIPTEN__)
 #  define FROZENCHARS_FREESTANDING 1
 #endif
 // ---- end frozenchars/config.hpp ----
