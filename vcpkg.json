@@ -1,6 +1,10 @@
 {
   "dependencies": [
-    "catch2",
-    "ctre"
+    {
+      "name": "catch2",
+      "platform": "!wasm32"
+    },
+    "ctre",
+    "glaze"
   ]
 }

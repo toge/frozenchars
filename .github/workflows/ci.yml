@@ -360,13 +360,30 @@ jobs:
           /opt/wasi-sdk/bin/clang --version
           /opt/wasi-sdk/bin/clang++ --version
 
-      - name: Build freestanding with wasi-sdk (wasm32-wasip1)
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/vcpkg
+            build/vcpkg_installed
+          key: ${{ runner.os }}-wasi-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-wasi-vcpkg-
+
+      - name: Install vcpkg
+        run: |
+          if [ ! -d ~/vcpkg ]; then
+            git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+            ~/vcpkg/bootstrap-vcpkg.sh
+          fi
+
+      - name: Build WASI minimal with vcpkg + wasi-sdk (wasm32-wasip1, no single header)
         run: |
           cmake -B build -S . -G Ninja \
-            -DCMAKE_SYSTEM_NAME=WASI \
-            -DCMAKE_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot \
-            -DCMAKE_C_COMPILER=/opt/wasi-sdk/bin/clang \
-            -DCMAKE_CXX_COMPILER=/opt/wasi-sdk/bin/clang++ \
+            -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 \
+            -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets \
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake \
             -DENABLE_WASI_MINIMAL=ON
           cmake --build build
           file build/test/smoke_freestanding | grep -q WebAssembly
