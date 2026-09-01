@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef FROZENCHARS_FREESTANDING
-#define FROZENCHARS_FREESTANDING 1
+#ifndef FROZENCHARS_WASI_MINIMAL
+#define FROZENCHARS_WASI_MINIMAL 1
 #endif
 
 // MIT License
@@ -30,7 +30,7 @@
 // Source: frozenchars/mod/all_basic.hpp (freestanding)
 // Do not edit manually. Re-generate with: python3 tools/amalgamate.py (freestanding)
 // Repository: https://github.com/anomalyco/frozenchars
-// Generated: 2026-08-31T20:36:19.726230 UTC
+// Generated: 2026-09-01T15:04:21.916626 UTC
 
 // ---- amalgamated body (system includes are kept inline to preserve #if guards) ----
 
@@ -302,12 +302,21 @@ constexpr bool is_space(char c) noexcept {
  * @file frozenchars/config.hpp
  * @brief ビルドモード設定。
  *
- * FROZENCHARS_FREESTANDING が定義されると、I/O ヘッダ (<ostream> 等) に依存する
- * 機能が無効化される。wasm32-unknown-unknown (freestanding) では自動的に有効になる。
- * 手動で `-DFROZENCHARS_FREESTANDING` を指定しても有効にできる。
+ * FROZENCHARS_WASI_MINIMAL が定義されると、I/O ヘッダ (<ostream> 等) に依存する
+ * 機能が無効化される。wasm32-unknown-unknown (bare-metal freestanding) では
+ * 自動的に有効になる。wasm32-wasip1 / wasm32-emscripten は WASI/hosted とみなす
+ * ため自動では有効にならず、WASI 上で freestanding サブセットを検証する場合は
+ * 手動で `-DFROZENCHARS_WASI_MINIMAL` を指定する。本ライブラリの freestanding
+ * 対応は wasi-sdk sysroot を用いた wasm32-wasip1 でのビルドを想定（wasm3 等で
+ * 実行可能）。真の bare-metal (wasm32-unknown-unknown の -nostdlib) では
+ * <string>/<vector>/<map> 等の hosted ヘッダ自体が存在しないため、コア
+ * サブセット (string/literals/split 等) に絞る必要がある。
+ *
+ * 例: clang++ --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot
+ *       -DFROZENCHARS_WASI_MINIMAL=1 -I include -c src.cpp -o src.o
  */
-#if !defined(FROZENCHARS_FREESTANDING) && defined(__wasm__) && !defined(__wasi__) && !defined(__EMSCRIPTEN__)
-#  define FROZENCHARS_FREESTANDING 1
+#if !defined(FROZENCHARS_WASI_MINIMAL) && defined(__wasm__) && !defined(__wasi__) && !defined(__EMSCRIPTEN__)
+#  define FROZENCHARS_WASI_MINIMAL 1
 #endif
 // ---- end frozenchars/config.hpp ----
 // ---- begin frozenchars/detail/pipe.hpp ----
@@ -414,7 +423,7 @@ template <size_t N, PipeAdaptor Adaptor>
 
 #include <array>
 #include <cstddef>
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
 #  include <ostream>
 #  include <stdexcept>
 #endif
@@ -508,7 +517,7 @@ struct FrozenString {
    * @brief 先頭要素を返す (length > 0 を事前条件とする)
    */
   [[nodiscard]] constexpr auto front() const -> char {
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
     if (empty()) throw std::out_of_range{"FrozenString::front() called on empty string"};
 #endif
     return buffer[0];
@@ -518,7 +527,7 @@ struct FrozenString {
    * @brief 末尾要素を返す
    */
   [[nodiscard]] constexpr auto back() const -> char {
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
     if (empty()) throw std::out_of_range{"FrozenString::back() called on empty string"};
 #endif
     return buffer[length - 1];
@@ -529,7 +538,7 @@ struct FrozenString {
    * @param i インデックス
    */
   [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
     if (i >= length) throw std::out_of_range{"FrozenString::operator[] index out of range"};
 #endif
     return buffer[i];
@@ -662,7 +671,7 @@ constexpr auto operator+(char const (&lhs)[N1], FrozenString<N2> const& rhs) noe
 /**
  * @brief ostream 出力 (hosted のみ)
  */
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
 template <size_t N>
 std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
   return os << str.sv();

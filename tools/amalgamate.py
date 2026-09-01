@@ -44,8 +44,8 @@ def read_license() -> str:
 
 def inject_freestanding_define(text: str) -> str:
   """
-  通常ヘッダのテキストに FROZENCHARS_FREESTANDING 定義を注入して
-  freestanding 単一ヘッダを作る。利用者が追加の -DFROZENCHARS_FREESTANDING を
+  通常ヘッダのテキストに FROZENCHARS_WASI_MINIMAL 定義を注入して
+  freestanding 単一ヘッダを作る。利用者が追加の -DFROZENCHARS_WASI_MINIMAL を
   付けなくても freestanding モードで使えるようにする。
   # ponytail: 既存の amalgamate 出力を書き換えるだけ。別エントリの再アマルガム不要
   """
@@ -53,10 +53,10 @@ def inject_freestanding_define(text: str) -> str:
   if marker in text:
     return text.replace(
       marker,
-      marker + "\n#ifndef FROZENCHARS_FREESTANDING\n#define FROZENCHARS_FREESTANDING 1\n#endif\n",
+      marker + "\n#ifndef FROZENCHARS_WASI_MINIMAL\n#define FROZENCHARS_WASI_MINIMAL 1\n#endif\n",
       1,
     )
-  return "#ifndef FROZENCHARS_FREESTANDING\n#define FROZENCHARS_FREESTANDING 1\n#endif\n" + text
+  return "#ifndef FROZENCHARS_WASI_MINIMAL\n#define FROZENCHARS_WASI_MINIMAL 1\n#endif\n" + text
 
 
 def amalgamate(entry_rel: str) -> str:

@@ -6,7 +6,7 @@
 
 #include <array>
 #include <cstddef>
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
 #  include <ostream>
 #  include <stdexcept>
 #endif
@@ -100,7 +100,7 @@ struct FrozenString {
    * @brief 先頭要素を返す (length > 0 を事前条件とする)
    */
   [[nodiscard]] constexpr auto front() const -> char {
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
     if (empty()) throw std::out_of_range{"FrozenString::front() called on empty string"};
 #endif
     return buffer[0];
@@ -110,7 +110,7 @@ struct FrozenString {
    * @brief 末尾要素を返す
    */
   [[nodiscard]] constexpr auto back() const -> char {
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
     if (empty()) throw std::out_of_range{"FrozenString::back() called on empty string"};
 #endif
     return buffer[length - 1];
@@ -121,7 +121,7 @@ struct FrozenString {
    * @param i インデックス
    */
   [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
     if (i >= length) throw std::out_of_range{"FrozenString::operator[] index out of range"};
 #endif
     return buffer[i];
@@ -254,7 +254,7 @@ constexpr auto operator+(char const (&lhs)[N1], FrozenString<N2> const& rhs) noe
 /**
  * @brief ostream 出力 (hosted のみ)
  */
-#ifndef FROZENCHARS_FREESTANDING
+#ifndef FROZENCHARS_WASI_MINIMAL
 template <size_t N>
 std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
   return os << str.sv();

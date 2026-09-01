@@ -5,10 +5,10 @@ set(FROZENCHARS_VERSION "0.5.0")
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
 option(FROZENCHARS_BUILD_TEST "Enable tests" ON)
-option(ENABLE_FREESTANDING "Enable freestanding mode" OFF)
+option(ENABLE_WASI_MINIMAL "Enable freestanding (no <ostream>) mode - wasi-sdk wasm32-wasip1 assumed" OFF)
 
-if(ENABLE_FREESTANDING)
-  add_compile_definitions(FROZENCHARS_FREESTANDING=1)
+if(ENABLE_WASI_MINIMAL)
+  add_compile_definitions(FROZENCHARS_WASI_MINIMAL=1)
 endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

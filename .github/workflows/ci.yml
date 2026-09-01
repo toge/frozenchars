@@ -333,7 +333,7 @@ jobs:
           name: coverage-info
           path: coverage.info
 
-  linux-freestanding:
+  linux-wasi-minimal:
     runs-on: ubuntu-latest
     container: fedora:44
 
@@ -341,52 +341,52 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: dnf install -y gcc-c++ cmake ninja-build git curl zip unzip tar
+        run: dnf install -y cmake ninja-build git curl zip unzip tar python3 gcc-c++
 
-      - name: Restore vcpkg cache
+      - name: Cache wasi-sdk
         uses: actions/cache@v4
         with:
-          path: |
-            ~/vcpkg
-            build/vcpkg_installed
-          key: ${{ runner.os }}-freestanding-vcpkg-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-freestanding-vcpkg-
+          path: /opt/wasi-sdk
+          key: wasi-sdk-34.0
 
-      - name: Install vcpkg
+      - name: Install wasi-sdk
         run: |
-          if [ ! -d ~/vcpkg ]; then
-            git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-            ~/vcpkg/bootstrap-vcpkg.sh
+          if [ ! -d /opt/wasi-sdk/bin/clang ]; then
+            curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz \
+              -o /tmp/wasi-sdk.tar.gz
+            mkdir -p /opt/wasi-sdk
+            tar -xzf /tmp/wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
           fi
+          /opt/wasi-sdk/bin/clang --version
+          /opt/wasi-sdk/bin/clang++ --version
 
-      - name: Configure (freestanding)
+      - name: Build freestanding with wasi-sdk (wasm32-wasip1)
         run: |
           cmake -B build -S . -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
-            -DENABLE_FREESTANDING=ON
+            -DCMAKE_SYSTEM_NAME=WASI \
+            -DCMAKE_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot \
+            -DCMAKE_C_COMPILER=/opt/wasi-sdk/bin/clang \
+            -DCMAKE_CXX_COMPILER=/opt/wasi-sdk/bin/clang++ \
+            -DENABLE_WASI_MINIMAL=ON
+          cmake --build build
+          file build/test/smoke_freestanding | grep -q WebAssembly
+          file build/test/smoke_mod_core | grep -q WebAssembly
 
-      - name: Build (freestanding)
-        run: cmake --build build
-
-      - name: Test (freestanding)
-        run: ctest --test-dir build -V
-
-      - name: Verify single headers compile (hosted & freestanding)
+      - name: Verify single headers compile (hosted & WASI minimal wasm)
         run: |
-          g++ -std=c++23 -I include -DFROZENCHARS_FREESTANDING=1 -c tests/test_basic.cpp -o /tmp/test_basic_fs.o
-          g++ -std=c++23 -I include -c tests/test_basic.cpp -o /tmp/test_basic_hosted.o
-          g++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs.o <<'EOF'
+          /opt/wasi-sdk/bin/clang++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c tests/test_basic.cpp -o /tmp/test_basic_fs_wasm.o
+          file /tmp/test_basic_fs_wasm.o | grep -q WebAssembly
+          /opt/wasi-sdk/bin/clang++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs_wasm.o <<'EOF'
           #include "frozenchars_freestanding.hpp"
           int main(){return 0;}
           EOF
-          g++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_hosted.o <<'EOF'
+          file /tmp/single_fs_wasm.o | grep -q WebAssembly
+          # hosted ヘッダを WASI minimal フラグ付きでも wasm でビルドできること
+          /opt/wasi-sdk/bin/clang++ -std=c++23 -I single_include -DFROZENCHARS_WASI_MINIMAL=1 -c -x c++ - -o /tmp/single_hosted_fsflag_wasm.o <<'EOF'
           #include "frozenchars.hpp"
           int main(){return 0;}
           EOF
-          # hosted ヘッダを freestanding フラグ付きでもビルドできること
-          g++ -std=c++23 -I single_include -DFROZENCHARS_FREESTANDING=1 -c -x c++ - -o /tmp/single_hosted_fsflag.o <<'EOF'
-          #include "frozenchars.hpp"
-          int main(){return 0;}
-          EOF
+          file /tmp/single_hosted_fsflag_wasm.o | grep -q WebAssembly
+          # ホストでの WASI minimal 互換も維持
+          g++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c tests/test_basic.cpp -o /tmp/test_basic_fs.o
           python3 tools/amalgamate.py --check

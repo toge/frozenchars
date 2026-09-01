@@ -7,10 +7,10 @@ add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
 add_executable(smoke_freestanding ../tests/test_basic.cpp)
 target_link_libraries(smoke_freestanding PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_freestanding PUBLIC cxx_std_23)
-target_compile_definitions(smoke_freestanding PRIVATE FROZENCHARS_FREESTANDING=1)
+target_compile_definitions(smoke_freestanding PRIVATE FROZENCHARS_WASI_MINIMAL=1)
 add_test(NAME smoke_freestanding COMMAND smoke_freestanding)
 
-if(ENABLE_FREESTANDING)
+if(ENABLE_WASI_MINIMAL)
   # freestanding ビルドでは hosted なテスト/ベンチ/サンプルはスキップ
   # all_test は <ostream> operator<< に依存する test_format.cpp がコンパイル不可のため除外
   return()

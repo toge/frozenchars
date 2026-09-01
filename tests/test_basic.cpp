@@ -1,6 +1,6 @@
 /**
  * @file tests/test_basic.cpp
- * @brief FROZENCHARS_FREESTANDING モードのコア機能検証。
+ * @brief FROZENCHARS_WASI_MINIMAL モードのコア機能検証。
  *
  * I/O ヘッダ非依存のコア API のみを使用し、wasm32-unknown-unknown などの
  * フリースタンディング環境でコンパイルできることを確認する。

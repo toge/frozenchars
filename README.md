@@ -22,7 +22,7 @@
   - [_fs リテラル](#_fs-リテラル)
   - [パイプ演算子](#パイプ演算子)
 - [要件](#要件)
-- [FREESTANDING環境対応](#freestanding環境対応)
+- [WASI / FREESTANDING環境対応](#wasi--freestanding環境対応)
 - [サンプルコード](#サンプルコド)
 - [repeat（繰り返し）](#repeat（繰り返し）)
 - [right / center（幅寄せ）](#right-center（幅寄せ）)
@@ -242,33 +242,61 @@ auto constexpr r = "  Hello, World!  "_fs
 - テスト環境: Fedora 41 / 43 / 44（CI で検証）
 - ヘッダオンリー — ビルド済みバイナリ不要
 
-## FREESTANDING環境対応
+## WASI / FREESTANDING環境対応
 
-組み込み・カーネル・`wasm32-unknown-unknown` などの FREESTANDING 環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。I/O に依存する一部機能のみが無効化されます。
+`wasm32-wasip1`（旧 `wasm32-wasi`）や組み込み・カーネルなどの FREESTANDING 環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。I/O に依存する一部機能のみが無効化されます。真の bare-metal (`wasm32-unknown-unknown` の `--freestanding -nostdlib`) では `<string>` / `<vector>` / `<map>` 等の hosted ヘッダ自体が存在しないため、本ライブラリの FREESTANDING 対応は `wasm32-wasip1` + `wasi-sdk` sysroot を想定した WASI 対応として提供します（`wasm3` 等の WASI ランタイムで実行可能）。
 
 ### 有効化方法
 
 | 方法 | 手順 |
 |---|---|
-| コンパイラフラグ | `-DFROZENCHARS_FREESTANDING` を付与（`g++ -DFROZENCHARS_FREESTANDING -I include ...`） |
-| CMake | `-DENABLE_FREESTANDING=ON`（`CMakeLists.txt:8`、`include/frozenchars/config.hpp:11`） |
-| 単一ヘッダ | `single_include/frozenchars_freestanding.hpp` を使う（先頭で `FROZENCHARS_FREESTANDING` が定義済み、`tools/amalgamate.py:47`） |
+| コンパイラフラグ | `-DFROZENCHARS_WASI_MINIMAL` を付与（`g++ -DFROZENCHARS_WASI_MINIMAL -I include ...`） |
+| CMake | `-DENABLE_WASI_MINIMAL=ON`（`CMakeLists.txt:8`、`include/frozenchars/config.hpp:11`） |
+| 単一ヘッダ | `single_include/frozenchars_freestanding.hpp` を使う（先頭で `FROZENCHARS_WASI_MINIMAL` が定義済み、`tools/amalgamate.py:47`） |
 
-`wasm32-unknown-unknown`（`__wasm__ && !__wasi__ && !__EMSCRIPTEN__`）では `include/frozenchars/config.hpp:11` により自動で有効になります。`wasm32-emscripten` / `wasm32-wasi` は対象外（hosted とみなす）。それ以外の FREESTANDING 環境（`__STDC_HOSTED__ == 0`）では自動では有効にならず、明示的なフラグが必要です。
+`wasm32-unknown-unknown`（`__wasm__ && !__wasi__ && !__EMSCRIPTEN__`）では `include/frozenchars/config.hpp:11` により自動で有効になります。`wasm32-wasip1` / `wasm32-emscripten` は WASI/hosted とみなすため自動では有効にならず、WASI 上で WASI_MINIMAL サブセットを検証したい場合は明示的に `-DFROZENCHARS_WASI_MINIMAL` を付与してください。それ以外の `__STDC_HOSTED__ == 0` 環境でも明示的なフラグが必要です。clang での WASI ビルド例は `include/frozenchars/config.hpp:5` のコメントを参照。
 
 ### 無効化される機能
 
-`FROZENCHARS_FREESTANDING` 定義時に限り、以下が無効化されます（`include/frozenchars/string.hpp:9`）:
+`FROZENCHARS_WASI_MINIMAL` 定義時に限り、以下が無効化されます（`include/frozenchars/string.hpp:9`）:
 
-| 機能 | hosted | FREESTANDING | 代替 |
+| 機能 | hosted | WASI_MINIMAL | 代替 |
 |---|---|---|---|
 | `operator<<(std::ostream&, FrozenString)` | 利用可 | 無効（`<ostream>` を include しない） | `.sv()` で `std::string_view` を取り出し自前出力 |
 | `FrozenString::front()` / `back()` / `operator[]` の範囲外チェック | `std::out_of_range` を throw | チェック自体を除去（空/範囲外は未定義動作） | 呼び出し側で `empty()` / `size()` を事前確認 |
 | `<stdexcept>` / `<ostream>` の include | あり | なし | — |
 
-数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、FREESTANDING でも手動実装へフォールバックするため機能自体は維持されます（例外型のみ hosted では `std::invalid_argument` / `std::out_of_range`、FREESTANDING では文字列リテラル `throw "msg"`）。
+数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、WASI_MINIMAL でも手動実装へフォールバックするため機能自体は維持されます（例外型のみ hosted では `std::invalid_argument` / `std::out_of_range`、WASI_MINIMAL では文字列リテラル `throw "msg"`）。
 
-`frozen_map` / `frozen_set` / `frozen_trie_map` など `<stdexcept>` を直接 include するコンテナ系は、`-DFROZENCHARS_FREESTANDING` だけではヘッダ依存が残ります。通常の GCC/Clang + libstdc++（`--freestanding` でもヘッダが提供される環境）ではそのままビルドできますが、ヘッダ自体が存在しない真の bare-metal では別途スタブが必要です。CI の `linux-freestanding` ジョブ（`.github/workflows/ci.yml:336`）は `ENABLE_FREESTANDING=ON` で全テストをビルド・実行して回帰を検出しています。
+`frozen_map` / `frozen_set` / `frozen_trie_map` など `<stdexcept>` を直接 include するコンテナ系は、`-DFROZENCHARS_WASI_MINIMAL` だけではヘッダ依存が残ります。通常の GCC/Clang + libstdc++（`--freestanding` でもヘッダが提供される環境）や `wasm32-wasip1` + `wasi-sdk` ではそのままビルドできますが、ヘッダ自体が存在しない真の bare-metal (`wasm32-unknown-unknown` の `-nostdlib`) では別途スタブが必要です。CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml:336`）は `wasi-sdk` の `wasm32-wasip1` で `ENABLE_WASI_MINIMAL=ON` の wasm 生成を検証しています。真の bare-metal を狙う場合は `vector` / `string` / `map` を使わないコアサブセット（`string/literals/split/bimap/set` 等）に絞ってください。
+
+### vcpkg + cmake で wasm32-wasip1 をビルドする
+
+`wasi-sdk`のsysrootを`vcpkg`経由で使う場合はtripletを定義してchainloadします。`catch2`は`signal.h`のWASI未対応で`wasip1`ではビルド失敗するため、サンプル/スモークのビルドまでに留めるのが現実的です。
+
+```bash
+# wasi-sdk 34 を ~/vm/wasi-sdk または /opt/wasi-sdk に展開済みとする
+# triplet を作成 (リポジトリの triplets/ に置くと --overlay-triplets 無しで使える)
+mkdir -p triplets
+cat > triplets/wasm32-wasip1.cmake <<'EOF'
+set(VCPKG_TARGET_ARCHITECTURE wasm32)
+set(VCPKG_CRT_LINKAGE static)
+set(VCPKG_LIBRARY_LINKAGE static)
+set(VCPKG_CMAKE_SYSTEM_NAME WASI)
+set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "$ENV{HOME}/vm/wasi-sdk/share/cmake/wasi-sdk-p1.cmake")
+EOF
+
+# vcpkg + cmake
+cmake -B build-wasi -S . -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=$HOME/vm/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 \
+  -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets \
+  -DENABLE_WASI_MINIMAL=ON
+cmake --build build-wasi
+file build-wasi/test/smoke_* # WebAssembly
+```
+
+`--overlay-triplets`を使わず`$VCPKG_ROOT/triplets/community/wasm32-wasip1.cmake`に置いても同様です。
 
 ## サンプルコード
 
@@ -2308,7 +2336,7 @@ Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `sin
 |---|---|---|
 | `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 615KB / 17k行 |
 | `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 667KB / 18k行 |
-| `single_include/frozenchars_freestanding.hpp` | `frozenchars.hpp` 相当を FREESTANDING 用に再生成（先頭で `FROZENCHARS_FREESTANDING` 定義済み） | 約 615KB / 17k行 |
+| `single_include/frozenchars_freestanding.hpp` | `frozenchars.hpp` 相当を FREESTANDING 用に再生成（先頭で `FROZENCHARS_WASI_MINIMAL` 定義済み） | 約 615KB / 17k行 |
 
 glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
 
