@@ -22,6 +22,7 @@
   - [_fs リテラル](#_fs-リテラル)
   - [パイプ演算子](#パイプ演算子)
 - [要件](#要件)
+- [FREESTANDING環境対応](#freestanding環境対応)
 - [サンプルコード](#サンプルコド)
 - [repeat（繰り返し）](#repeat（繰り返し）)
 - [right / center（幅寄せ）](#right-center（幅寄せ）)
@@ -240,6 +241,34 @@ auto constexpr r = "  Hello, World!  "_fs
 - 対応コンパイラ: GCC 14 / 15 / 16 以降
 - テスト環境: Fedora 41 / 43 / 44（CI で検証）
 - ヘッダオンリー — ビルド済みバイナリ不要
+
+## FREESTANDING環境対応
+
+組み込み・カーネル・`wasm32-unknown-unknown` などの FREESTANDING 環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。I/O に依存する一部機能のみが無効化されます。
+
+### 有効化方法
+
+| 方法 | 手順 |
+|---|---|
+| コンパイラフラグ | `-DFROZENCHARS_FREESTANDING` を付与（`g++ -DFROZENCHARS_FREESTANDING -I include ...`） |
+| CMake | `-DENABLE_FREESTANDING=ON`（`CMakeLists.txt:8`、`include/frozenchars/config.hpp:11`） |
+| 単一ヘッダ | `single_include/frozenchars_freestanding.hpp` を使う（先頭で `FROZENCHARS_FREESTANDING` が定義済み、`tools/amalgamate.py:47`） |
+
+`wasm32-unknown-unknown`（`__wasm__ && !__wasi__ && !__EMSCRIPTEN__`）では `include/frozenchars/config.hpp:11` により自動で有効になります。`wasm32-emscripten` / `wasm32-wasi` は対象外（hosted とみなす）。それ以外の FREESTANDING 環境（`__STDC_HOSTED__ == 0`）では自動では有効にならず、明示的なフラグが必要です。
+
+### 無効化される機能
+
+`FROZENCHARS_FREESTANDING` 定義時に限り、以下が無効化されます（`include/frozenchars/string.hpp:9`）:
+
+| 機能 | hosted | FREESTANDING | 代替 |
+|---|---|---|---|
+| `operator<<(std::ostream&, FrozenString)` | 利用可 | 無効（`<ostream>` を include しない） | `.sv()` で `std::string_view` を取り出し自前出力 |
+| `FrozenString::front()` / `back()` / `operator[]` の範囲外チェック | `std::out_of_range` を throw | チェック自体を除去（空/範囲外は未定義動作） | 呼び出し側で `empty()` / `size()` を事前確認 |
+| `<stdexcept>` / `<ostream>` の include | あり | なし | — |
+
+数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、FREESTANDING でも手動実装へフォールバックするため機能自体は維持されます（例外型のみ hosted では `std::invalid_argument` / `std::out_of_range`、FREESTANDING では文字列リテラル `throw "msg"`）。
+
+`frozen_map` / `frozen_set` / `frozen_trie_map` など `<stdexcept>` を直接 include するコンテナ系は、`-DFROZENCHARS_FREESTANDING` だけではヘッダ依存が残ります。通常の GCC/Clang + libstdc++（`--freestanding` でもヘッダが提供される環境）ではそのままビルドできますが、ヘッダ自体が存在しない真の bare-metal では別途スタブが必要です。CI の `linux-freestanding` ジョブ（`.github/workflows/ci.yml:336`）は `ENABLE_FREESTANDING=ON` で全テストをビルド・実行して回帰を検出しています。
 
 ## サンプルコード
 
@@ -2279,6 +2308,7 @@ Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `sin
 |---|---|---|
 | `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 615KB / 17k行 |
 | `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 667KB / 18k行 |
+| `single_include/frozenchars_freestanding.hpp` | `frozenchars.hpp` 相当を FREESTANDING 用に再生成（先頭で `FROZENCHARS_FREESTANDING` 定義済み） | 約 615KB / 17k行 |
 
 glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
 
