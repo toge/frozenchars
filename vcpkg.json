@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "catch2",
-      "platform": "!wasm32"
+      "platform": "emscripten | !wasm32"
     },
     "ctre",
     "glaze"
