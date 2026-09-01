@@ -341,7 +341,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: dnf install -y cmake ninja-build git curl zip unzip tar python3 gcc-c++
+        run: dnf install -y cmake ninja-build git curl zip unzip tar python3 gcc-c++ file
 
       - name: Cache wasi-sdk
         uses: actions/cache@v4
