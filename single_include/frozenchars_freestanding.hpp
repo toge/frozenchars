@@ -30,7 +30,7 @@
 // Source: frozenchars/mod/all_basic.hpp (freestanding)
 // Do not edit manually. Re-generate with: python3 tools/amalgamate.py (freestanding)
 // Repository: https://github.com/anomalyco/frozenchars
-// Generated: 2026-09-01T15:04:21.916626 UTC
+// Generated: 2026-09-01T15:33:54.423035 UTC
 
 // ---- amalgamated body (system includes are kept inline to preserve #if guards) ----
 
