@@ -20,7 +20,7 @@ namespace {
 
 /** @brief 最適化防止用シンク変数。
     @details volatile 宣言によりコンパイラのループ最適化を抑制する。*/
-volatile std::size_t g_sink = 0;
+std::size_t g_sink = 0;
 
 /** @brief frozenchars の wildcard_match 結果を検証する。
     @tparam PAT ワイルドカードパターン (NTTP)

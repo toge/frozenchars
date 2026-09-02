@@ -19,7 +19,7 @@ using namespace frozenchars::literals;
 namespace {
 
 /** @brief 最適化防止用の揮発性シンク変数。ベンチマーク結果の書き込み先として使う。 */
-volatile std::size_t g_sink = 0;
+std::size_t g_sink = 0;
 
 } // namespace
 

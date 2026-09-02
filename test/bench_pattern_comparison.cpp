@@ -20,7 +20,7 @@ using namespace frozenchars::literals;
 namespace {
 
 /** @brief 最適化防止用シンク変数。*/
-volatile std::size_t g_sink = 0;
+std::size_t g_sink = 0;
 
 } // namespace
 

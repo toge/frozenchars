@@ -15,7 +15,7 @@ using namespace frozenchars::literals;
 namespace {
 
 /** @brief 最適化防止用の volatile sink 変数。 */
-volatile std::size_t g_sink = 0;
+std::size_t g_sink = 0;
 
 /** @brief frozen_regex::contains の結果が期待通りかを検証する。不一致時は標準エラーに出力する。
     @param RR       frozen_regex 型
