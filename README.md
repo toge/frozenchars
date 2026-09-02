@@ -22,7 +22,7 @@
   - [_fs リテラル](#_fs-リテラル)
   - [パイプ演算子](#パイプ演算子)
 - [要件](#要件)
-- [WASI / FREESTANDING環境対応](#wasi--freestanding環境対応)
+- [WASI環境対応](#wasi環境対応)
 - [サンプルコード](#サンプルコド)
 - [repeat（繰り返し）](#repeat（繰り返し）)
 - [right / center（幅寄せ）](#right-center（幅寄せ）)
@@ -230,8 +230,7 @@ auto constexpr r = "  Hello, World!  "_fs
 // r.sv() == "       HELLO, WORLD!"
 ```
 
-左辺は `FrozenString` だけでなく `const char[N]` 文字列リテラルも直接受け付けます
-（`_fs` リテラルは省略可能）。
+左辺は `FrozenString` だけでなく `const char[N]` 文字列リテラルも直接受け付けます（`_fs` リテラルは省略可能）。
 
 詳細は「[パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)」を参照してください。
 
@@ -242,34 +241,39 @@ auto constexpr r = "  Hello, World!  "_fs
 - テスト環境: Fedora 41 / 43 / 44（CI で検証）
 - ヘッダオンリー — ビルド済みバイナリ不要
 
-## WASI / FREESTANDING環境対応
+## WASI環境対応
 
-`wasm32-wasip1`（旧 `wasm32-wasi`）や組み込み・カーネルなどの FREESTANDING 環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。I/O に依存する一部機能のみが無効化されます。真の bare-metal (`wasm32-unknown-unknown` の `--freestanding -nostdlib`) では `<string>` / `<vector>` / `<map>` 等の hosted ヘッダ自体が存在しないため、本ライブラリの FREESTANDING 対応は `wasm32-wasip1` + `wasi-sdk` sysroot を想定した WASI 対応として提供します（`wasm3` 等の WASI ランタイムで実行可能）。
+`wasm32-wasip1`（旧 `wasm32-wasi`）環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。例外を利用する一部機能のみが無効化されます。
+frozencharsは `<string>` / `<vector>` / `<map>` 等の hosted ヘッダを必要とするため、真の bare-metal (`wasm32-unknown-unknown` の `--freestanding -nostdlib`) は非対応です。
+本ライブラリの WASI 対応は `wasm32-wasip1` + `wasi-sdk` sysroot を想定して提供します（`wasm3`, `wasmedge` 等の WASI ランタイムで実行可能）。
+wasm32-wasip2 環境の対応は現時点では未検証です。
 
 ### 有効化方法
 
-| 方法 | 手順 |
-|---|---|
-| コンパイラフラグ | `-DFROZENCHARS_WASI_MINIMAL` を付与（`g++ -DFROZENCHARS_WASI_MINIMAL -I include ...`） |
-| CMake | `-DENABLE_WASI_MINIMAL=ON`（`CMakeLists.txt:8`、`include/frozenchars/config.hpp:11`） |
-| 単一ヘッダ | `single_include/frozenchars_freestanding.hpp` を使う（先頭で `FROZENCHARS_WASI_MINIMAL` が定義済み、`tools/amalgamate.py:47`） |
+| 方法             | 手順                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| コンパイラフラグ | `-DFROZENCHARS_WASI_MINIMAL` を付与（`g++ -DFROZENCHARS_WASI_MINIMAL -I include ...`）                                         |
+| CMake            | `-DENABLE_WASI_MINIMAL=ON`（`CMakeLists.txt:8`、`include/frozenchars/config.hpp:11`）                                          |
+| 単一ヘッダ       | `single_include/frozenchars_wasi_minimal.hpp` を使う（先頭で `FROZENCHARS_WASI_MINIMAL` が定義済み、`tools/amalgamate.py:47`） |
 
-`wasm32-unknown-unknown`（`__wasm__ && !__wasi__ && !__EMSCRIPTEN__`）では `include/frozenchars/config.hpp:11` により自動で有効になります。`wasm32-wasip1` / `wasm32-emscripten` は WASI/hosted とみなすため自動では有効にならず、WASI 上で WASI_MINIMAL サブセットを検証したい場合は明示的に `-DFROZENCHARS_WASI_MINIMAL` を付与してください。それ以外の `__STDC_HOSTED__ == 0` 環境でも明示的なフラグが必要です。clang での WASI ビルド例は `include/frozenchars/config.hpp:5` のコメントを参照。
+`wasm32-wasip1` / `wasm32-emscripten` は WASI/hosted とみなすため自動では有効にならず、WASI 上で WASI_MINIMAL サブセットを検証したい場合は明示的に `-DFROZENCHARS_WASI_MINIMAL` を付与してください。
+それ以外の `__STDC_HOSTED__ == 0` 環境でも明示的なフラグが必要です。clang での WASI ビルド例は `include/frozenchars/config.hpp` のコメントを参照してください。
 
 ### 例外なしモードの挙動
 
 `FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出は `FROZENCHARS_THROW` マクロ（`include/frozenchars/config.hpp`）経由で `std::abort()` に置き換わります。`<stdexcept>` は include されず、`-fno-exceptions` でビルドできます。
 
-| 状況 | hosted | WASI_MINIMAL |
-|---|---|---|
-| コンパイル時評価での不正入力（`parse_number("x")`、`frozen_regex<"(">` 等） | コンパイルエラー | コンパイルエラー（変わらず） |
-| 実行時の不正入力（`frozen_map::at` 未検出、`parse_number` 実行時パス等） | `std::out_of_range` / `std::invalid_argument` 等を throw | `std::abort()` |
-| `FrozenString::front()` / `back()` / `operator[]` の範囲外 | `std::out_of_range` を throw | `std::abort()` |
-| `json::validate_json` の不正 JSON | `false` を返す | `std::abort()`（例外で復帰できないため） |
+| 状況                                                                        | hosted                                                   | WASI_MINIMAL                             |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------- |
+| コンパイル時評価での不正入力（`parse_number("x")`、`frozen_regex<"(">` 等） | コンパイルエラー                                         | コンパイルエラー（変わらず）             |
+| 実行時の不正入力（`frozen_map::at` 未検出、`parse_number` 実行時パス等）    | `std::out_of_range` / `std::invalid_argument` 等を throw | `std::abort()`                           |
+| `FrozenString::front()` / `back()` / `operator[]` の範囲外                  | `std::out_of_range` を throw                             | `std::abort()`                           |
+| `json::validate_json` の不正 JSON                                           | `false` を返す                                           | `std::abort()`（例外で復帰できないため） |
 
 数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、無い環境では手動実装へフォールバックします。
 
-`frozen_map` / `frozen_set` / `frozen_trie_map` など `<string>` / `<vector>` を使うコンテナ系は、`wasm32-wasip1` + `wasi-sdk` ではそのままビルドできますが、ヘッダ自体が存在しない真の bare-metal (`wasm32-unknown-unknown` の `-nostdlib`) では別途スタブが必要です。CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml`）は `wasi-sdk` の `wasm32-wasip1` で `ENABLE_WASI_MINIMAL=ON` の wasm 生成を、`smoke_freestanding` テストは hosted で `-fno-exceptions` ビルドを検証しています。真の bare-metal を狙う場合は `vector` / `string` / `map` を使わないコアサブセット（`string/literals/split/bimap/set` 等）に絞ってください。
+`frozen_map` / `frozen_set` / `frozen_trie_map` など `<string>` / `<vector>` を使うコンテナ系は、`wasm32-wasip1` + `wasi-sdk` ではそのままビルドできます。
+CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml`）は `wasi-sdk` の `wasm32-wasip1` で `ENABLE_WASI_MINIMAL=ON` の wasm 生成を、`smoke_wasi_minimal` テストは hosted で `-fno-exceptions` ビルドを検証しています。
 
 ### vcpkg + cmake で wasm32-wasip1 をビルドする
 
@@ -303,11 +307,11 @@ file build-wasi/test/smoke_* # WebAssembly
 
 リポジトリには以下のサンプルファイルが用意されています。まずは `example/example.cpp` を動かしてみてください。
 
-| ファイル | 内容 | 実行コマンド |
-|---|---|---|
-| `example/example.cpp` | 連結・繰り返し・書式など基本操作 | `g++ -std=c++23 -I include example/example.cpp && ./a.out` |
-| `example/example_split.cpp` | 文字列分割の応用 | `g++ -std=c++23 -I include example/example_split.cpp && ./a.out` |
-| `example/example_frozen_map_use_cases.cpp` | コンパイル時マップの利用例 | `g++ -std=c++23 -I include example/example_frozen_map_use_cases.cpp && ./a.out` |
+| ファイル                                   | 内容                             | 実行コマンド                                                                    |
+| ------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------- |
+| `example/example.cpp`                      | 連結・繰り返し・書式など基本操作 | `g++ -std=c++23 -I include example/example.cpp && ./a.out`                      |
+| `example/example_split.cpp`                | 文字列分割の応用                 | `g++ -std=c++23 -I include example/example_split.cpp && ./a.out`                |
+| `example/example_frozen_map_use_cases.cpp` | コンパイル時マップの利用例       | `g++ -std=c++23 -I include example/example_frozen_map_use_cases.cpp && ./a.out` |
 
 ## `repeat`（繰り返し）
 
@@ -2339,7 +2343,7 @@ Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `sin
 |---|---|---|
 | `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 615KB / 17k行 |
 | `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 667KB / 18k行 |
-| `single_include/frozenchars_freestanding.hpp` | `frozenchars.hpp` 相当を FREESTANDING 用に再生成（先頭で `FROZENCHARS_WASI_MINIMAL` 定義済み） | 約 615KB / 17k行 |
+| `single_include/frozenchars_wasi_minimal.hpp` | `frozenchars.hpp` 相当を WASI Minimal 用に再生成（先頭で `FROZENCHARS_WASI_MINIMAL` 定義済み） | 約 615KB / 17k行 |
 
 glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
 

@@ -73,7 +73,7 @@ template <typename T, size_t N>
     }
 
 #if FROZENCHARS_HAS_CHARCONV == 0
-    // charconv が無い環境（真の freestanding）では手動パース
+    // charconv が無い環境では手動パース
     {
       unsigned long long acc = 0;
       for (size_t i = start; i < sv.size(); ++i) {

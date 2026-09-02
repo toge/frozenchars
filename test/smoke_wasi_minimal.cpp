@@ -1,5 +1,5 @@
 /**
- * @file test/smoke_freestanding.cpp
+ * @file test/smoke_wasi_minimal.cpp
  * @brief FROZENCHARS_WASI_MINIMAL モードの検証。
  *
  * -fno-exceptions 付きでビルドされる。FROZENCHARS_THROW を使う全モジュール

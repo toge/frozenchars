@@ -386,15 +386,15 @@ jobs:
             -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake \
             -DENABLE_WASI_MINIMAL=ON
           cmake --build build
-          file build/test/smoke_freestanding | grep -q WebAssembly
+          file build/test/smoke_wasi_minimal | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
 
       - name: Verify single headers compile (hosted & WASI minimal wasm)
         run: |
-          /opt/wasi-sdk/bin/clang++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c test/smoke_freestanding.cpp -o /tmp/test_basic_fs_wasm.o
+          /opt/wasi-sdk/bin/clang++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c test/smoke_wasi_minimal.cpp -o /tmp/test_basic_fs_wasm.o
           file /tmp/test_basic_fs_wasm.o | grep -q WebAssembly
           /opt/wasi-sdk/bin/clang++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs_wasm.o <<'EOF'
-          #include "frozenchars_freestanding.hpp"
+          #include "frozenchars_wasi_minimal.hpp"
           int main(){return 0;}
           EOF
           file /tmp/single_fs_wasm.o | grep -q WebAssembly
@@ -405,5 +405,5 @@ jobs:
           EOF
           file /tmp/single_hosted_fsflag_wasm.o | grep -q WebAssembly
           # ホストでの WASI minimal 互換も維持
-          g++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c test/smoke_freestanding.cpp -o /tmp/test_basic_fs.o
+          g++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c test/smoke_wasi_minimal.cpp -o /tmp/test_basic_fs.o
           python3 tools/amalgamate.py --check
