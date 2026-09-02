@@ -6,8 +6,8 @@
 
 #include <array>
 #include <cstddef>
+#include <ostream>
 #ifndef FROZENCHARS_WASI_MINIMAL
-#  include <ostream>
 #  include <stdexcept>
 #endif
 #include <span>
@@ -252,14 +252,12 @@ constexpr auto operator+(char const (&lhs)[N1], FrozenString<N2> const& rhs) noe
 }
 
 /**
- * @brief ostream 出力 (hosted のみ)
+ * @brief ostream 出力
  */
-#ifndef FROZENCHARS_WASI_MINIMAL
 template <size_t N>
 std::ostream& operator<<(std::ostream& os, FrozenString<N> const& str) {
   return os << str.sv();
 }
-#endif
 
 namespace detail {
 

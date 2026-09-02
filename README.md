@@ -262,9 +262,10 @@ auto constexpr r = "  Hello, World!  "_fs
 
 | 機能 | hosted | WASI_MINIMAL | 代替 |
 |---|---|---|---|
-| `operator<<(std::ostream&, FrozenString)` | 利用可 | 無効（`<ostream>` を include しない） | `.sv()` で `std::string_view` を取り出し自前出力 |
 | `FrozenString::front()` / `back()` / `operator[]` の範囲外チェック | `std::out_of_range` を throw | チェック自体を除去（空/範囲外は未定義動作） | 呼び出し側で `empty()` / `size()` を事前確認 |
-| `<stdexcept>` / `<ostream>` の include | あり | なし | — |
+| `<stdexcept>` の include | あり | なし（例外無効化のため） | — |
+
+`<iostream>` (`operator<<`) は `wasm32-wasip1/wasip2` では WASI 経由で利用可能なため無効化しません。
 
 数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、WASI_MINIMAL でも手動実装へフォールバックするため機能自体は維持されます（例外型のみ hosted では `std::invalid_argument` / `std::out_of_range`、WASI_MINIMAL では文字列リテラル `throw "msg"`）。
 
