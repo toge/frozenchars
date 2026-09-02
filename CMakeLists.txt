@@ -5,7 +5,7 @@ set(FROZENCHARS_VERSION "0.5.0")
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
 option(FROZENCHARS_BUILD_TEST "Enable tests" ON)
-option(ENABLE_WASI_MINIMAL "Enable freestanding (no <ostream>) mode - wasi-sdk wasm32-wasip1 assumed" OFF)
+option(ENABLE_WASI_MINIMAL "Enable WASI minimal (no exceptions) mode - wasi-sdk wasm32-wasip1 assumed" OFF)
 
 if(ENABLE_WASI_MINIMAL)
   add_compile_definitions(FROZENCHARS_WASI_MINIMAL=1)
