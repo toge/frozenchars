@@ -5,6 +5,7 @@
       "platform": "emscripten | !wasm32"
     },
     "ctre",
-    "glaze"
+    "glaze",
+    "nanobench"
   ]
 }

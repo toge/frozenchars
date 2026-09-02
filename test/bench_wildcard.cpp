@@ -2,14 +2,13 @@
 
 #include "wildcards.hpp"
 
-#include <chrono>
+#include <nanobench.h>
 #include <cstdint>
 #include <cstdlib>
-#include <iomanip>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
 using namespace frozenchars;
 
@@ -19,186 +18,9 @@ using namespace frozenchars;
 
 namespace {
 
-/** @brief ベンチマーク結果を格納する構造体。
-    @details テスト名, 反復回数, 総経過時間 (ms), 1反復あたりの時間 (ns) を保持する。*/
-struct bench_result {
-  std::string_view name{};
-  std::uint64_t iterations{};
-  double total_ms{};
-  double ns_per_iter{};
-};
-
 /** @brief 最適化防止用シンク変数。
     @details volatile 宣言によりコンパイラのループ最適化を抑制する。*/
 volatile std::size_t g_sink = 0;
-
-/** @brief frozenchars の wildcard_match を実行し計測する。
-    @tparam PAT ワイルドカードパターン (NTTP)
-    @param text マッチ対象文字列
-    @param name 結果表示ラベル
-    @param iterations 反復回数
-    @return 計測結果 */
-template <FrozenString PAT>
-auto run_frozenchars(std::string_view text, std::string_view name,
-                     std::uint64_t iterations) -> bench_result {
-  // ウォームアップ
-  for (auto i = std::uint64_t{0}; i < 500; ++i) {
-    g_sink += static_cast<std::size_t>(wildcard_match<PAT>(text));
-  }
-
-  auto const begin = std::chrono::steady_clock::now();
-  for (auto i = std::uint64_t{0}; i < iterations; ++i) {
-    g_sink += static_cast<std::size_t>(wildcard_match<PAT>(text));
-  }
-  auto const end = std::chrono::steady_clock::now();
-
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  auto const elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0;
-  auto const ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
-
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = elapsed_ms,
-    .ns_per_iter = ns_per_iter,
-  };
-}
-
-/** @brief frozenchars の wildcard_find を実行し計測する。
-    @tparam PAT ワイルドカードパターン (NTTP)
-    @param text 検索対象文字列
-    @param name 結果表示ラベル
-    @param iterations 反復回数
-    @return 計測結果 */
-template <FrozenString PAT>
-auto run_find_case(std::string_view text, std::string_view name,
-                   std::uint64_t iterations) -> bench_result {
-  for (auto i = std::uint64_t{0}; i < 500; ++i) {
-    auto const result = wildcard_find<PAT>(text);
-    g_sink += result ? result->size() : 0;
-  }
-
-  auto const begin = std::chrono::steady_clock::now();
-  for (auto i = std::uint64_t{0}; i < iterations; ++i) {
-    auto const result = wildcard_find<PAT>(text);
-    g_sink += result ? result->size() : 0;
-  }
-  auto const end = std::chrono::steady_clock::now();
-
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  auto const elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0;
-  auto const ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
-
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = elapsed_ms,
-    .ns_per_iter = ns_per_iter,
-  };
-}
-
-/** @brief frozenchars の wildcard_find_all を実行し計測する。
-    @tparam PAT ワイルドカードパターン (NTTP)
-    @param text 検索対象文字列
-    @param name 結果表示ラベル
-    @param iterations 反復回数
-    @return 計測結果 */
-template <FrozenString PAT>
-auto run_find_all_case(std::string_view text, std::string_view name,
-                       std::uint64_t iterations) -> bench_result {
-  for (auto i = std::uint64_t{0}; i < 500; ++i) {
-    auto matched_size = std::size_t{0};
-    for (auto const sv : wildcard_find_all<PAT>(text)) {
-      matched_size += sv.size();
-    }
-    g_sink += matched_size;
-  }
-
-  auto const begin = std::chrono::steady_clock::now();
-  for (auto i = std::uint64_t{0}; i < iterations; ++i) {
-    auto matched_size = std::size_t{0};
-    for (auto const sv : wildcard_find_all<PAT>(text)) {
-      matched_size += sv.size();
-    }
-    g_sink += matched_size;
-  }
-  auto const end = std::chrono::steady_clock::now();
-
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  auto const elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0;
-  auto const ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
-
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = elapsed_ms,
-    .ns_per_iter = ns_per_iter,
-  };
-}
-
-/** @brief wildcards ライブラリのマッチ関数を実行し計測する。
-    @param text マッチ対象文字列
-    @param pattern ワイルドカードパターン文字列
-    @param name 結果表示ラベル
-    @param iterations 反復回数
-    @return 計測結果 */
-auto run_wildcards(std::string_view text, std::string_view pattern, std::string_view name,
-                   std::uint64_t iterations) -> bench_result {
-  // ウォームアップ
-  for (auto i = std::uint64_t{0}; i < 500; ++i) {
-    g_sink += static_cast<std::size_t>(wildcards::match(
-      std::string{text}, std::string{pattern}
-    ));
-  }
-
-  auto const begin = std::chrono::steady_clock::now();
-  for (auto i = std::uint64_t{0}; i < iterations; ++i) {
-    g_sink += static_cast<std::size_t>(wildcards::match(
-      std::string{text}, std::string{pattern}
-    ));
-  }
-  auto const end = std::chrono::steady_clock::now();
-
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  auto const elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0;
-  auto const ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
-
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = elapsed_ms,
-    .ns_per_iter = ns_per_iter,
-  };
-}
-
-/** @brief ベンチマーク結果をテーブル形式で標準出力に表示する。
-    @param results 表示する結果の配列 */
-auto print_results(std::vector<bench_result> const& results) -> void {
-  std::cout << "\n[wildcard benchmark]\n";
-  std::cout << "steady_clock.is_steady = " << std::chrono::steady_clock::is_steady << "\n\n";
-
-  std::cout << std::left
-            << std::setw(36) << "case"
-            << std::right
-            << std::setw(12) << "iters"
-            << std::setw(14) << "total[ms]"
-            << std::setw(14) << "ns/iter"
-            << "\n";
-
-  std::cout << std::string(36 + 12 + 14 + 14, '-') << "\n";
-
-  for (auto const& r : results) {
-    std::cout << std::left
-              << std::setw(36) << r.name
-              << std::right
-              << std::setw(12) << r.iterations
-              << std::setw(14) << std::fixed << std::setprecision(3) << r.total_ms
-              << std::setw(14) << std::fixed << std::setprecision(1) << r.ns_per_iter
-              << "\n";
-  }
-
-  std::cout << "\n[sink] " << g_sink << '\n';
-}
 
 /** @brief frozenchars の wildcard_match 結果を検証する。
     @tparam PAT ワイルドカードパターン (NTTP)
@@ -309,13 +131,6 @@ int main(int argc, char** argv) {
   }
 
   // テストパターンとテキストの準備
-  struct bench_case {
-    std::string_view name;
-    std::string_view pattern_str;   // wildcards ライブラリ用パターン
-    std::string_view text;
-    bool expected;
-  };
-
   std::string long_text = "a";
   for (auto i = 0; i < 100; ++i) long_text += "x";
   long_text += "b";
@@ -327,9 +142,6 @@ int main(int argc, char** argv) {
   std::string long_text_500 = "a";
   for (auto i = 0; i < 500; ++i) long_text_500 += "x";
   long_text_500 += "b";
-
-  std::string set_text_wildcards = "file.cpp";
-  std::string set_text_no = "file.cc";
 
   std::string file_pattern = "*.[hc](pp|)";
   std::string file_cpp = "main.cpp";
@@ -414,51 +226,58 @@ int main(int argc, char** argv) {
   std::cout << "All verifications passed.\n";
 
   // ベンチマーク実行
-  auto results = std::vector<bench_result>{};
-  results.reserve(40);
+  ankerl::nanobench::Bench bench;
+  bench.title("wildcard benchmark").unit("op").warmup(100).minEpochIterations(iterations);
 
   // frozenchars のケース
-  results.push_back(run_frozenchars<pat_a_star_b>(long_text, "fc: a*b (100c, match)", iterations));
-  results.push_back(run_frozenchars<pat_a_star_b>(long_no_match, "fc: a*b (100c, nomatch)", iterations));
-  results.push_back(run_frozenchars<pat_a_star_b>(long_text_500, "fc: a*b (500c, match)", iterations));
-  results.push_back(run_frozenchars<pat_a_q_b>("axb", "fc: a?b (match)", iterations));
-  results.push_back(run_frozenchars<pat_a_q_b>("ab", "fc: a?b (nomatch)", iterations));
-  results.push_back(run_frozenchars<pat_set_abc_de>("cde", "fc: [abc]de (match)", iterations));
-  results.push_back(run_frozenchars<pat_set_abc_de>("xde", "fc: [abc]de (nomatch)", iterations));
-  results.push_back(run_frozenchars<pat_nset_abc_de>("xde", "fc: [!abc]de (match)", iterations));
-  results.push_back(run_frozenchars<pat_source_file>(file_cpp, "fc: *.[hc](pp|) .cpp", iterations));
-  results.push_back(run_frozenchars<pat_source_file>(file_cc, "fc: *.[hc](pp|) .cc", iterations));
-  results.push_back(run_frozenchars<pat_hello_world>("hello", "fc: (hello|world) match", iterations));
-  results.push_back(run_frozenchars<pat_hello_world>("earth", "fc: (hello|world) nomatch", iterations));
-  results.push_back(run_frozenchars<pat_prefix_alt>("prefix_ab_suffix", "fc: alt+literal match", iterations));
-  results.push_back(run_frozenchars<pat_prefix_alt>("prefix_ef_suffix", "fc: alt+literal nomatch", iterations));
-  results.push_back(run_frozenchars<pat_star>("anything", "fc: * (match)", iterations));
-  results.push_back(run_frozenchars<pat_star>("", "fc: * (empty)", iterations));
-  results.push_back(run_frozenchars<pat_empty>("", "fc: empty (match)", iterations));
-  results.push_back(run_frozenchars<pat_empty>("a", "fc: empty (nomatch)", iterations));
-  results.push_back(run_find_case<pat_a_star_b>(long_text, "fc-find: a*b", iterations));
-  results.push_back(run_find_all_case<pat_a_star>("aaa", "fc-find-all: a*", iterations));
+  bench.run("fc: a*b (100c, match)", [&]{ auto r = wildcard_match<pat_a_star_b>(long_text); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: a*b (100c, nomatch)", [&]{ auto r = wildcard_match<pat_a_star_b>(long_no_match); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: a*b (500c, match)", [&]{ auto r = wildcard_match<pat_a_star_b>(long_text_500); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: a?b (match)", [&]{ auto r = wildcard_match<pat_a_q_b>("axb"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: a?b (nomatch)", [&]{ auto r = wildcard_match<pat_a_q_b>("ab"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: [abc]de (match)", [&]{ auto r = wildcard_match<pat_set_abc_de>("cde"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: [abc]de (nomatch)", [&]{ auto r = wildcard_match<pat_set_abc_de>("xde"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: [!abc]de (match)", [&]{ auto r = wildcard_match<pat_nset_abc_de>("xde"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: *.[hc](pp|) .cpp", [&]{ auto r = wildcard_match<pat_source_file>(file_cpp); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: *.[hc](pp|) .cc", [&]{ auto r = wildcard_match<pat_source_file>(file_cc); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: (hello|world) match", [&]{ auto r = wildcard_match<pat_hello_world>("hello"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: (hello|world) nomatch", [&]{ auto r = wildcard_match<pat_hello_world>("earth"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: alt+literal match", [&]{ auto r = wildcard_match<pat_prefix_alt>("prefix_ab_suffix"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: alt+literal nomatch", [&]{ auto r = wildcard_match<pat_prefix_alt>("prefix_ef_suffix"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: * (match)", [&]{ auto r = wildcard_match<pat_star>("anything"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: * (empty)", [&]{ auto r = wildcard_match<pat_star>(""); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: empty (match)", [&]{ auto r = wildcard_match<pat_empty>(""); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc: empty (nomatch)", [&]{ auto r = wildcard_match<pat_empty>("a"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += static_cast<std::size_t>(r); });
+  bench.run("fc-find: a*b", [&]{ auto result = wildcard_find<pat_a_star_b>(long_text); ankerl::nanobench::doNotOptimizeAway(result); g_sink += result ? result->size() : 0; });
+  bench.run("fc-find-all: a*", [&]{
+    std::size_t matched_size = 0;
+    for (auto const sv : wildcard_find_all<pat_a_star>("aaa")) {
+      matched_size += sv.size();
+    }
+    ankerl::nanobench::doNotOptimizeAway(matched_size);
+    g_sink += matched_size;
+  });
 
   // wildcards ライブラリのケース
-  results.push_back(run_wildcards(long_text, "a*b", "wc: a*b (100c, match)", iterations));
-  results.push_back(run_wildcards(long_no_match, "a*b", "wc: a*b (100c, nomatch)", iterations));
-  results.push_back(run_wildcards(long_text_500, "a*b", "wc: a*b (500c, match)", iterations));
-  results.push_back(run_wildcards("axb", "a?b", "wc: a?b (match)", iterations));
-  results.push_back(run_wildcards("ab", "a?b", "wc: a?b (nomatch)", iterations));
-  results.push_back(run_wildcards("cde", "[abc]de", "wc: [abc]de (match)", iterations));
-  results.push_back(run_wildcards("xde", "[abc]de", "wc: [abc]de (nomatch)", iterations));
-  results.push_back(run_wildcards("xde", "[!abc]de", "wc: [!abc]de (match)", iterations));
-  results.push_back(run_wildcards(file_cpp, file_pattern, "wc: *.[hc](pp|) .cpp", iterations));
-  results.push_back(run_wildcards(file_cc, file_pattern, "wc: *.[hc](pp|) .cc", iterations));
-  results.push_back(run_wildcards("hello", "(hello|world)", "wc: (hello|world) match", iterations));
-  results.push_back(run_wildcards("earth", "(hello|world)", "wc: (hello|world) nomatch", iterations));
-  results.push_back(run_wildcards("prefix_ab_suffix", "prefix_(ab|cde)_suffix", "wc: alt+literal match", iterations));
-  results.push_back(run_wildcards("prefix_ef_suffix", "prefix_(ab|cde)_suffix", "wc: alt+literal nomatch", iterations));
-  results.push_back(run_wildcards("anything", "*", "wc: * (match)", iterations));
-  results.push_back(run_wildcards("", "*", "wc: * (empty)", iterations));
-  results.push_back(run_wildcards("", "", "wc: empty (match)", iterations));
-  results.push_back(run_wildcards("a", "", "wc: empty (nomatch)", iterations));
+  bench.run("wc: a*b (100c, match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{long_text}, std::string{"a*b"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: a*b (100c, nomatch)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{long_no_match}, std::string{"a*b"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: a*b (500c, match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{long_text_500}, std::string{"a*b"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: a?b (match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"axb"}, std::string{"a?b"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: a?b (nomatch)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"ab"}, std::string{"a?b"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: [abc]de (match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"cde"}, std::string{"[abc]de"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: [abc]de (nomatch)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"xde"}, std::string{"[abc]de"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: [!abc]de (match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"xde"}, std::string{"[!abc]de"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: *.[hc](pp|) .cpp", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{file_cpp}, std::string{file_pattern})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: *.[hc](pp|) .cc", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{file_cc}, std::string{file_pattern})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: (hello|world) match", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"hello"}, std::string{"(hello|world)"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: (hello|world) nomatch", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"earth"}, std::string{"(hello|world)"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: alt+literal match", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"prefix_ab_suffix"}, std::string{"prefix_(ab|cde)_suffix"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: alt+literal nomatch", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"prefix_ef_suffix"}, std::string{"prefix_(ab|cde)_suffix"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: * (match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"anything"}, std::string{"*"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: * (empty)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{""}, std::string{"*"})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: empty (match)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{""}, std::string{""})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("wc: empty (nomatch)", [&]{ auto r = static_cast<std::size_t>(wildcards::match(std::string{"a"}, std::string{""})); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
 
-  print_results(results);
+  ankerl::nanobench::doNotOptimizeAway(g_sink);
   return 0;
 }

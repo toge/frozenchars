@@ -2,16 +2,13 @@
 #include "frozenchars/map.hpp"
 #include "frozenchars/trie_map.hpp"
 
-#include <chrono>
+#include <nanobench.h>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
-#include <iomanip>
-#include <iostream>
 #include <map>
-#include <string>
 #include <string_view>
 #include <unordered_map>
-#include <vector>
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -22,56 +19,8 @@ using namespace frozenchars::literals;
 
 namespace {
 
-/** @brief ベンチマーク結果を格納する構造体。*/
-struct bench_result {
-  std::string_view name{};
-  std::uint64_t iterations{};
-  double total_ms{};
-  double ns_per_iter{};
-};
-
 /** @brief 最適化防止用シンク変数。*/
 volatile std::size_t g_sink = 0;
-
-/** @brief 任意の関数を複数回実行し実行時間を計測する。
-    @tparam Func 計測対象の関数型
-    @param name 結果表示ラベル
-    @param fn 計測対象関数
-    @param iterations 反復回数
-    @return 計測結果 */
-template <typename Func>
-auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
-  for (std::uint64_t i = 0; i < 500; ++i) fn();
-  auto const begin = std::chrono::steady_clock::now();
-  for (std::uint64_t i = 0; i < iterations; ++i) fn();
-  auto const end = std::chrono::steady_clock::now();
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = static_cast<double>(elapsed_ns) / 1'000'000.0,
-    .ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations),
-  };
-}
-
-/** @brief ベンチマーク結果をテーブル形式で標準出力に表示する。
-    @param label セクションラベル
-    @param results 表示する結果の配列 */
-auto print_results(std::string_view label, std::vector<bench_result> const& results) -> void {
-  std::cout << "\n[" << label << "]\n\n";
-  std::cout << std::left << std::setw(44) << "case"
-            << std::right << std::setw(12) << "iters"
-            << std::setw(14) << "total[ms]"
-            << std::setw(14) << "ns/iter" << "\n";
-  std::cout << std::string(44 + 12 + 14 + 14, '-') << "\n";
-  for (auto const& r : results) {
-    std::cout << std::left << std::setw(44) << r.name
-              << std::right << std::setw(12) << r.iterations
-              << std::setw(14) << std::fixed << std::setprecision(3) << r.total_ms
-              << std::setw(14) << std::fixed << std::setprecision(1) << r.ns_per_iter << "\n";
-  }
-  std::cout << "\n";
-}
 
 } // namespace
 
@@ -224,54 +173,55 @@ int main(int argc, char** argv) {
     {"method", 6}, {"path", 7}, {"query", 8}, {"body", 9}, {"status", 10}
   };
 
-  auto frozen_results = std::vector<bench_result>{};
-  auto trie_results = std::vector<bench_result>{};
-  auto stdmap_results = std::vector<bench_result>{};
-  auto stdunordered_results = std::vector<bench_result>{};
-  frozen_results.reserve(20);
-  trie_results.reserve(20);
-  stdmap_results.reserve(20);
-  stdunordered_results.reserve(20);
-
-  auto iters = iterations;
-
   // ---- frozen_map ----
-  frozen_results.push_back(measure("P1 short(3) find", [&]{ g_sink += p1_frozen.find("a") != p1_frozen.end(); }, iters));
-  frozen_results.push_back(measure("P2 http(5) find", [&]{ g_sink += p2_frozen.find("POST") != p2_frozen.end(); }, iters));
-  frozen_results.push_back(measure("P3 prefix(4) find", [&]{ g_sink += p3_frozen.find("timeout_ms") != p3_frozen.end(); }, iters));
-  frozen_results.push_back(measure("P4 nato(20) find", [&]{ g_sink += p4_frozen.find("golf") != p4_frozen.end(); }, iters));
-  frozen_results.push_back(measure("P5 longkey(5) find", [&]{ g_sink += p5_frozen.find("authentication_token_secret_key") != p5_frozen.end(); }, iters));
-  frozen_results.push_back(measure("P6 samelen(10) find", [&]{ g_sink += p6_frozen.find("configuration_key_fiv") != p6_frozen.end(); }, iters));
+  {
+    ankerl::nanobench::Bench bench;
+    bench.title("frozen_map").unit("op").warmup(100).minEpochIterations(iterations);
+    bench.run("P1 short(3) find", [&]{ auto r = p1_frozen.find("a") != p1_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P2 http(5) find", [&]{ auto r = p2_frozen.find("POST") != p2_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P3 prefix(4) find", [&]{ auto r = p3_frozen.find("timeout_ms") != p3_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P4 nato(20) find", [&]{ auto r = p4_frozen.find("golf") != p4_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P5 longkey(5) find", [&]{ auto r = p5_frozen.find("authentication_token_secret_key") != p5_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P6 samelen(10) find", [&]{ auto r = p6_frozen.find("configuration_key_fiv") != p6_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    (void)p7_frozen; (void)p7_stdmap; (void)p7_stdunordered;
+  }
 
   // ---- frozen_trie_map ----
-  trie_results.push_back(measure("P1 short(3) find", [&]{ g_sink += p1_trie.find("a") != p1_trie.end(); }, iters));
-  trie_results.push_back(measure("P2 http(5) find", [&]{ g_sink += p2_trie.find("POST") != p2_trie.end(); }, iters));
-  trie_results.push_back(measure("P3 prefix(4) find", [&]{ g_sink += p3_trie.find("timeout_ms") != p3_trie.end(); }, iters));
-  trie_results.push_back(measure("P4 nato(20) find", [&]{ g_sink += p4_trie.find("golf") != p4_trie.end(); }, iters));
-  trie_results.push_back(measure("P5 longkey(5) find", [&]{ g_sink += p5_trie.find("authentication_token_secret_key") != p5_trie.end(); }, iters));
-  trie_results.push_back(measure("P6 samelen(10) find", [&]{ g_sink += p6_trie.find("configuration_key_fiv") != p6_trie.end(); }, iters));
+  {
+    ankerl::nanobench::Bench bench;
+    bench.title("frozen_trie_map").unit("op").warmup(100).minEpochIterations(iterations);
+    bench.run("P1 short(3) find", [&]{ auto r = p1_trie.find("a") != p1_trie.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P2 http(5) find", [&]{ auto r = p2_trie.find("POST") != p2_trie.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P3 prefix(4) find", [&]{ auto r = p3_trie.find("timeout_ms") != p3_trie.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P4 nato(20) find", [&]{ auto r = p4_trie.find("golf") != p4_trie.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P5 longkey(5) find", [&]{ auto r = p5_trie.find("authentication_token_secret_key") != p5_trie.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P6 samelen(10) find", [&]{ auto r = p6_trie.find("configuration_key_fiv") != p6_trie.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  }
 
   // ---- std::map ----
-  stdmap_results.push_back(measure("P1 short(3) find", [&]{ g_sink += p1_stdmap.find("a") != p1_stdmap.end(); }, iters));
-  stdmap_results.push_back(measure("P2 http(5) find", [&]{ g_sink += p2_stdmap.find("POST") != p2_stdmap.end(); }, iters));
-  stdmap_results.push_back(measure("P3 prefix(4) find", [&]{ g_sink += p3_stdmap.find("timeout_ms") != p3_stdmap.end(); }, iters));
-  stdmap_results.push_back(measure("P4 nato(20) find", [&]{ g_sink += p4_stdmap.find("golf") != p4_stdmap.end(); }, iters));
-  stdmap_results.push_back(measure("P5 longkey(5) find", [&]{ g_sink += p5_stdmap.find("authentication_token_secret_key") != p5_stdmap.end(); }, iters));
-  stdmap_results.push_back(measure("P6 samelen(10) find", [&]{ g_sink += p6_stdmap.find("configuration_key_fiv") != p6_stdmap.end(); }, iters));
+  {
+    ankerl::nanobench::Bench bench;
+    bench.title("std::map").unit("op").warmup(100).minEpochIterations(iterations);
+    bench.run("P1 short(3) find", [&]{ auto r = p1_stdmap.find("a") != p1_stdmap.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P2 http(5) find", [&]{ auto r = p2_stdmap.find("POST") != p2_stdmap.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P3 prefix(4) find", [&]{ auto r = p3_stdmap.find("timeout_ms") != p3_stdmap.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P4 nato(20) find", [&]{ auto r = p4_stdmap.find("golf") != p4_stdmap.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P5 longkey(5) find", [&]{ auto r = p5_stdmap.find("authentication_token_secret_key") != p5_stdmap.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P6 samelen(10) find", [&]{ auto r = p6_stdmap.find("configuration_key_fiv") != p6_stdmap.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  }
 
   // ---- std::unordered_map ----
-  stdunordered_results.push_back(measure("P1 short(3) find", [&]{ g_sink += p1_stdunordered.find("a") != p1_stdunordered.end(); }, iters));
-  stdunordered_results.push_back(measure("P2 http(5) find", [&]{ g_sink += p2_stdunordered.find("POST") != p2_stdunordered.end(); }, iters));
-  stdunordered_results.push_back(measure("P3 prefix(4) find", [&]{ g_sink += p3_stdunordered.find("timeout_ms") != p3_stdunordered.end(); }, iters));
-  stdunordered_results.push_back(measure("P4 nato(20) find", [&]{ g_sink += p4_stdunordered.find("golf") != p4_stdunordered.end(); }, iters));
-  stdunordered_results.push_back(measure("P5 longkey(5) find", [&]{ g_sink += p5_stdunordered.find("authentication_token_secret_key") != p5_stdunordered.end(); }, iters));
-  stdunordered_results.push_back(measure("P6 samelen(10) find", [&]{ g_sink += p6_stdunordered.find("configuration_key_fiv") != p6_stdunordered.end(); }, iters));
+  {
+    ankerl::nanobench::Bench bench;
+    bench.title("std::unordered_map").unit("op").warmup(100).minEpochIterations(iterations);
+    bench.run("P1 short(3) find", [&]{ auto r = p1_stdunordered.find("a") != p1_stdunordered.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P2 http(5) find", [&]{ auto r = p2_stdunordered.find("POST") != p2_stdunordered.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P3 prefix(4) find", [&]{ auto r = p3_stdunordered.find("timeout_ms") != p3_stdunordered.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P4 nato(20) find", [&]{ auto r = p4_stdunordered.find("golf") != p4_stdunordered.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P5 longkey(5) find", [&]{ auto r = p5_stdunordered.find("authentication_token_secret_key") != p5_stdunordered.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+    bench.run("P6 samelen(10) find", [&]{ auto r = p6_stdunordered.find("configuration_key_fiv") != p6_stdunordered.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  }
 
-  print_results("frozen_map", frozen_results);
-  print_results("frozen_trie_map", trie_results);
-  print_results("std::map", stdmap_results);
-  print_results("std::unordered_map", stdunordered_results);
-
-  std::cout << "[sink] " << g_sink << '\n';
+  ankerl::nanobench::doNotOptimizeAway(g_sink);
   return 0;
 }

@@ -1,14 +1,10 @@
 #include "frozenchars/literals.hpp"
 #include "frozenchars/set.hpp"
 
-#include <chrono>
+#include <nanobench.h>
 #include <cstdint>
 #include <cstdlib>
-#include <iomanip>
-#include <iostream>
-#include <string>
 #include <string_view>
-#include <vector>
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -21,49 +17,8 @@ using namespace frozenchars::literals;
 
 namespace {
 
-/** @brief ベンチマーク1件の計測結果を保持する構造体。名前・反復回数・経過時間・1反復あたりの時間を持つ。 */
-struct bench_result {
-  std::string_view name{};
-  std::uint64_t iterations{};
-  double total_ms{};
-  double ns_per_iter{};
-};
-
 /** @brief 最適化防止用の揮発性シンク変数。ベンチマーク結果の書き込み先として使う。 */
 volatile std::size_t g_sink = 0;
-
-/** @brief 指定された関数を iterations 回実行し、経過時間を bench_result として返す。 */
-template <typename Func>
-auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
-  for (std::uint64_t i = 0; i < 500; ++i) fn();
-  auto const begin = std::chrono::steady_clock::now();
-  for (std::uint64_t i = 0; i < iterations; ++i) fn();
-  auto const end = std::chrono::steady_clock::now();
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = static_cast<double>(elapsed_ns) / 1'000'000.0,
-    .ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations),
-  };
-}
-
-/** @brief ベンチマーク結果の一覧を整形して標準出力に表示する。 */
-auto print_results(std::vector<bench_result> const& results) -> void {
-  std::cout << "\n[frozen_set benchmark]\n\n";
-  std::cout << std::left << std::setw(44) << "case"
-            << std::right << std::setw(12) << "iters"
-            << std::setw(14) << "total[ms]"
-            << std::setw(14) << "ns/iter" << "\n";
-  std::cout << std::string(44 + 12 + 14 + 14, '-') << "\n";
-  for (auto const& r : results) {
-    std::cout << std::left << std::setw(44) << r.name
-              << std::right << std::setw(12) << r.iterations
-              << std::setw(14) << std::fixed << std::setprecision(3) << r.total_ms
-              << std::setw(14) << std::fixed << std::setprecision(1) << r.ns_per_iter << "\n";
-  }
-  std::cout << "\n[sink] " << g_sink << '\n';
-}
 
 } // namespace
 
@@ -162,68 +117,67 @@ int main(int argc, char** argv) {
     "configuration_key_sev"_fs, "configuration_key_eig"_fs,
     "configuration_key_nin"_fs, "configuration_key_ten"_fs>{};
 
-  auto results = std::vector<bench_result>{};
-  results.reserve(40);
+  ankerl::nanobench::Bench bench;
+  bench.title("frozen_set").unit("op").warmup(100).minEpochIterations(iterations);
 
-  auto iters = iterations;
+  bench.run("small(3) contains hit",    [&]{ auto r = small_set.contains("aa"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("small(3) contains miss",   [&]{ auto r = small_set.contains("xx"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("small(3) find hit",        [&]{ auto it = small_set.find("aa"); ankerl::nanobench::doNotOptimizeAway(it != small_set.end()); g_sink += (it != small_set.end()); });
+  bench.run("small(3) find miss",       [&]{ auto it = small_set.find("xx"); ankerl::nanobench::doNotOptimizeAway(it != small_set.end()); g_sink += (it != small_set.end()); });
 
-  results.push_back(measure("small(3) contains hit",    [&]{ g_sink += small_set.contains("aa"); }, iters));
-  results.push_back(measure("small(3) contains miss",   [&]{ g_sink += small_set.contains("xx"); }, iters));
-  results.push_back(measure("small(3) find hit",        [&]{ auto it = small_set.find("aa"); g_sink += (it != small_set.end()); }, iters));
-  results.push_back(measure("small(3) find miss",       [&]{ auto it = small_set.find("xx"); g_sink += (it != small_set.end()); }, iters));
+  bench.run("med(10) contains hit",     [&]{ auto r = medium_set.contains("method"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("med(10) contains miss",    [&]{ auto r = medium_set.contains("nothere"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("med(10) find hit first",   [&]{ auto it = medium_set.find("timeout"); ankerl::nanobench::doNotOptimizeAway(it != medium_set.end()); g_sink += (it != medium_set.end()); });
+  bench.run("med(10) find hit last",    [&]{ auto it = medium_set.find("status"); ankerl::nanobench::doNotOptimizeAway(it != medium_set.end()); g_sink += (it != medium_set.end()); });
+  bench.run("med(10) find miss lenOK",  [&]{ auto it = medium_set.find("timeoutx"); ankerl::nanobench::doNotOptimizeAway(it != medium_set.end()); g_sink += (it != medium_set.end()); });
+  bench.run("med(10) find miss lenBad", [&]{ auto it = medium_set.find("x"); ankerl::nanobench::doNotOptimizeAway(it != medium_set.end()); g_sink += (it != medium_set.end()); });
+  bench.run("med(10) count hit",        [&]{ auto r = medium_set.count("method"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
 
-  results.push_back(measure("med(10) contains hit",     [&]{ g_sink += medium_set.contains("method"); }, iters));
-  results.push_back(measure("med(10) contains miss",    [&]{ g_sink += medium_set.contains("nothere"); }, iters));
-  results.push_back(measure("med(10) find hit first",   [&]{ auto it = medium_set.find("timeout"); g_sink += (it != medium_set.end()); }, iters));
-  results.push_back(measure("med(10) find hit last",    [&]{ auto it = medium_set.find("status"); g_sink += (it != medium_set.end()); }, iters));
-  results.push_back(measure("med(10) find miss lenOK",  [&]{ auto it = medium_set.find("timeoutx"); g_sink += (it != medium_set.end()); }, iters));
-  results.push_back(measure("med(10) find miss lenBad", [&]{ auto it = medium_set.find("x"); g_sink += (it != medium_set.end()); }, iters));
-  results.push_back(measure("med(10) count hit",        [&]{ g_sink += medium_set.count("method"); }, iters));
-
-  results.push_back(measure("large(20) contains hit",    [&]{ g_sink += large_set.contains("golf"); }, iters));
-  results.push_back(measure("large(20) contains miss",   [&]{ g_sink += large_set.contains("zulu"); }, iters));
-  results.push_back(measure("large(20) find hit",        [&]{ auto it = large_set.find("golf"); g_sink += (it != large_set.end()); }, iters));
+  bench.run("large(20) contains hit",    [&]{ auto r = large_set.contains("golf"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("large(20) contains miss",   [&]{ auto r = large_set.contains("zulu"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("large(20) find hit",        [&]{ auto it = large_set.find("golf"); ankerl::nanobench::doNotOptimizeAway(it != large_set.end()); g_sink += (it != large_set.end()); });
 
   // XL（≦64 ルックアップテーブルパス）
-  results.push_back(measure("xl(50) contains hit first", [&]{ g_sink += xl_set.contains("k01"); }, iters));
-  results.push_back(measure("xl(50) contains hit last",  [&]{ g_sink += xl_set.contains("k50"); }, iters));
-  results.push_back(measure("xl(50) contains miss",      [&]{ g_sink += xl_set.contains("k99"); }, iters));
-  results.push_back(measure("xl(50) find hit",           [&]{ auto it = xl_set.find("k25"); g_sink += (it != xl_set.end()); }, iters));
+  bench.run("xl(50) contains hit first", [&]{ auto r = xl_set.contains("k01"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xl(50) contains hit last",  [&]{ auto r = xl_set.contains("k50"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xl(50) contains miss",      [&]{ auto r = xl_set.contains("k99"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xl(50) find hit",           [&]{ auto it = xl_set.find("k25"); ankerl::nanobench::doNotOptimizeAway(it != xl_set.end()); g_sink += (it != xl_set.end()); });
 
   // XXL（>64パス: 現状線形、今後二分探索に）
-  results.push_back(measure("xxl(65) contains hit first", [&]{ g_sink += xxl65_set.contains("k00"); }, iters));
-  results.push_back(measure("xxl(65) contains hit last",  [&]{ g_sink += xxl65_set.contains("k64"); }, iters));
-  results.push_back(measure("xxl(65) contains hit mid",   [&]{ g_sink += xxl65_set.contains("k32"); }, iters));
-  results.push_back(measure("xxl(65) contains miss",      [&]{ g_sink += xxl65_set.contains("k99"); }, iters));
-  results.push_back(measure("xxl(65) find hit",           [&]{ auto it = xxl65_set.find("k32"); g_sink += (it != xxl65_set.end()); }, iters));
+  bench.run("xxl(65) contains hit first", [&]{ auto r = xxl65_set.contains("k00"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(65) contains hit last",  [&]{ auto r = xxl65_set.contains("k64"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(65) contains hit mid",   [&]{ auto r = xxl65_set.contains("k32"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(65) contains miss",      [&]{ auto r = xxl65_set.contains("k99"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(65) find hit",           [&]{ auto it = xxl65_set.find("k32"); ankerl::nanobench::doNotOptimizeAway(it != xxl65_set.end()); g_sink += (it != xxl65_set.end()); });
 
-  results.push_back(measure("xxl(128) contains hit first", [&]{ g_sink += xxl128_set.contains("k000"); }, iters));
-  results.push_back(measure("xxl(128) contains hit last",  [&]{ g_sink += xxl128_set.contains("k127"); }, iters));
-  results.push_back(measure("xxl(128) contains miss",      [&]{ g_sink += xxl128_set.contains("k999"); }, iters));
-  results.push_back(measure("xxl(128) find hit",           [&]{ auto it = xxl128_set.find("k064"); g_sink += (it != xxl128_set.end()); }, iters));
+  bench.run("xxl(128) contains hit first", [&]{ auto r = xxl128_set.contains("k000"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(128) contains hit last",  [&]{ auto r = xxl128_set.contains("k127"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(128) contains miss",      [&]{ auto r = xxl128_set.contains("k999"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("xxl(128) find hit",           [&]{ auto it = xxl128_set.find("k064"); ankerl::nanobench::doNotOptimizeAway(it != xxl128_set.end()); g_sink += (it != xxl128_set.end()); });
 
   // 長キー（>16バイト）: 短キー最適化オフ、CRC 8バイトパス
-  results.push_back(measure("longkey(5) contains hit", [&]{ g_sink += longkey_set.contains("authentication_token_secret_key"); }, iters));
-  results.push_back(measure("longkey(5) contains miss", [&]{ g_sink += longkey_set.contains("nonexistent_key_that_is_long_enough"); }, iters));
-  results.push_back(measure("longkey(5) find hit",     [&]{ auto it = longkey_set.find("authentication_token_secret_key"); g_sink += (it != longkey_set.end()); }, iters));
+  bench.run("longkey(5) contains hit", [&]{ auto r = longkey_set.contains("authentication_token_secret_key"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("longkey(5) contains miss", [&]{ auto r = longkey_set.contains("nonexistent_key_that_is_long_enough"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("longkey(5) find hit",     [&]{ auto it = longkey_set.find("authentication_token_secret_key"); ankerl::nanobench::doNotOptimizeAway(it != longkey_set.end()); g_sink += (it != longkey_set.end()); });
 
   // 同長（detail::hash_impl 経由でハッシュパス強制）
-  results.push_back(measure("samelen(10) contains hit", [&]{ g_sink += samelen_set.contains("configuration_key_fiv"); }, iters));
-  results.push_back(measure("samelen(10) contains miss", [&]{ g_sink += samelen_set.contains("configuration_key_xxx"); }, iters));
-  results.push_back(measure("samelen(10) find hit",     [&]{ auto it = samelen_set.find("configuration_key_fiv"); g_sink += (it != samelen_set.end()); }, iters));
+  bench.run("samelen(10) contains hit", [&]{ auto r = samelen_set.contains("configuration_key_fiv"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("samelen(10) contains miss", [&]{ auto r = samelen_set.contains("configuration_key_xxx"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("samelen(10) find hit",     [&]{ auto it = samelen_set.find("configuration_key_fiv"); ankerl::nanobench::doNotOptimizeAway(it != samelen_set.end()); g_sink += (it != samelen_set.end()); });
 
   // ラウンドロビン: 中セットキーを巡回
   {
     constexpr std::string_view keys[] = {"timeout","retry","backoff","endpoint","headers",
                                          "method","path","query","body","status"};
     std::size_t idx = 0;
-    results.push_back(measure("med(10) find round-robin", [&]{
+    bench.run("med(10) find round-robin", [&]{
       auto it = medium_set.find(keys[idx % 10]);
+      ankerl::nanobench::doNotOptimizeAway(it != medium_set.end());
       g_sink += (it != medium_set.end());
       ++idx;
-    }, iters));
+    });
   }
 
-  print_results(results);
+  ankerl::nanobench::doNotOptimizeAway(g_sink);
   return 0;
 }

@@ -2,14 +2,11 @@
 #include "frozenchars/frozen_regex.hpp"
 #include <ctre.hpp>
 
-#include <chrono>
+#include <nanobench.h>
 #include <cstdint>
 #include <cstdlib>
-#include <iomanip>
 #include <iostream>
-#include <string>
 #include <string_view>
-#include <vector>
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -17,52 +14,8 @@ using namespace frozenchars::literals;
 /** @brief frozen_regex と CTRE の実行時パフォーマンス比較ベンチマーク。500K イテレーションで contains/matches を計測する。 */
 namespace {
 
-/** @brief ベンチマーク結果を格納する構造体。 */
-struct bench_result {
-  std::string_view name{};
-  std::uint64_t iterations{};
-  double total_ms{};
-  double ns_per_iter{};
-};
-
 /** @brief 最適化防止用の volatile sink 変数。 */
 volatile std::size_t g_sink = 0;
-
-/** @brief 指定された関数を iterations 回実行し、実行時間を bench_result として返す。
-    @param name 計測ケースの名前
-    @param fn   計測対象の関数
-    @param iterations 繰り返し回数 */
-template <typename Func>
-auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
-  for (std::uint64_t i = 0; i < 500; ++i) fn();
-  auto const begin = std::chrono::steady_clock::now();
-  for (std::uint64_t i = 0; i < iterations; ++i) fn();
-  auto const end = std::chrono::steady_clock::now();
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = static_cast<double>(elapsed_ns) / 1'000'000.0,
-    .ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations),
-  };
-}
-
-/** @brief ベンチマーク結果の一覧を標準出力に表示する。 */
-auto print_results(std::vector<bench_result> const& results) -> void {
-  std::cout << "\n[frozen_regex vs CTRE benchmark]\n\n";
-  std::cout << std::left << std::setw(50) << "case"
-            << std::right << std::setw(12) << "iters"
-            << std::setw(14) << "total[ms]"
-            << std::setw(14) << "ns/iter" << "\n";
-  std::cout << std::string(50 + 12 + 14 + 14, '-') << "\n";
-  for (auto const& r : results) {
-    std::cout << std::left << std::setw(50) << r.name
-              << std::right << std::setw(12) << r.iterations
-              << std::setw(14) << std::fixed << std::setprecision(3) << r.total_ms
-              << std::setw(14) << std::fixed << std::setprecision(1) << r.ns_per_iter << "\n";
-  }
-  std::cout << "\n[sink] " << g_sink << '\n';
-}
 
 /** @brief frozen_regex::contains の結果が期待通りかを検証する。不一致時は標準エラーに出力する。
     @param RR       frozen_regex 型
@@ -179,59 +132,57 @@ int main(int argc, char** argv) {
   std::cout << "All verifications passed.\n";
 
   // ---- ベンチマーク実行 ----
-  auto results = std::vector<bench_result>{};
-  results.reserve(48);
-
-  auto iters = iterations;
+  ankerl::nanobench::Bench bench;
+  bench.title("frozen_regex vs CTRE benchmark").unit("op").warmup(100).minEpochIterations(iterations);
 
   // frozen_regex contains()
-  results.push_back(measure("fr: lit('endpoint') hit",         [&]{ g_sink += R_literal::contains("endpoint"); }, iters));
-  results.push_back(measure("fr: lit('endpoint') miss",        [&]{ g_sink += R_literal::contains("other"); }, iters));
-  results.push_back(measure("fr: small(4) 'GET' hit",         [&]{ g_sink += R_small_alt::contains("GET"); }, iters));
-  results.push_back(measure("fr: small(4) 'DELETE' hit",      [&]{ g_sink += R_small_alt::contains("DELETE"); }, iters));
-  results.push_back(measure("fr: small(4) miss",              [&]{ g_sink += R_small_alt::contains("PATCH"); }, iters));
-  results.push_back(measure("fr: med(8) 'OPTIONS' hit",       [&]{ g_sink += R_med_alt::contains("OPTIONS"); }, iters));
-  results.push_back(measure("fr: med(8) miss",                [&]{ g_sink += R_med_alt::contains("CONNECT"); }, iters));
-  results.push_back(measure("fr: large(20) 'k01' hit",        [&]{ g_sink += R_large_alt::contains("k01"); }, iters));
-  results.push_back(measure("fr: large(20) 'k20' hit",        [&]{ g_sink += R_large_alt::contains("k20"); }, iters));
-  results.push_back(measure("fr: large(20) miss",             [&]{ g_sink += R_large_alt::contains("k99"); }, iters));
-  results.push_back(measure("fr: path(4) '/api/v1/...' hit",  [&]{ g_sink += R_path_alt::contains("/api/v1/users"); }, iters));
-  results.push_back(measure("fr: path(4) miss",               [&]{ g_sink += R_path_alt::contains("/api/v1/other"); }, iters));
-  results.push_back(measure("fr: cls[abc](3) 'a' hit",        [&]{ g_sink += R_cls::contains("a"); }, iters));
-  results.push_back(measure("fr: cls[abc](3) miss",           [&]{ g_sink += R_cls::contains("d"); }, iters));
-  results.push_back(measure("fr: cls[a-m](13) 'a' hit",       [&]{ g_sink += R_cls_wide::contains("a"); }, iters));
-  results.push_back(measure("fr: cls[a-m](13) miss",          [&]{ g_sink += R_cls_wide::contains("z"); }, iters));
-  results.push_back(measure("fr: dot(63) 'a' hit",            [&]{ g_sink += R_dot::contains("a"); }, iters));
+  bench.run("fr: lit('endpoint') hit",         [&]{ auto r = R_literal::contains("endpoint"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: lit('endpoint') miss",        [&]{ auto r = R_literal::contains("other"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: small(4) 'GET' hit",         [&]{ auto r = R_small_alt::contains("GET"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: small(4) 'DELETE' hit",      [&]{ auto r = R_small_alt::contains("DELETE"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: small(4) miss",              [&]{ auto r = R_small_alt::contains("PATCH"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: med(8) 'OPTIONS' hit",       [&]{ auto r = R_med_alt::contains("OPTIONS"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: med(8) miss",                [&]{ auto r = R_med_alt::contains("CONNECT"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: large(20) 'k01' hit",        [&]{ auto r = R_large_alt::contains("k01"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: large(20) 'k20' hit",        [&]{ auto r = R_large_alt::contains("k20"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: large(20) miss",             [&]{ auto r = R_large_alt::contains("k99"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: path(4) '/api/v1/...' hit",  [&]{ auto r = R_path_alt::contains("/api/v1/users"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: path(4) miss",               [&]{ auto r = R_path_alt::contains("/api/v1/other"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: cls[abc](3) 'a' hit",        [&]{ auto r = R_cls::contains("a"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: cls[abc](3) miss",           [&]{ auto r = R_cls::contains("d"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: cls[a-m](13) 'a' hit",       [&]{ auto r = R_cls_wide::contains("a"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: cls[a-m](13) miss",          [&]{ auto r = R_cls_wide::contains("z"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("fr: dot(63) 'a' hit",            [&]{ auto r = R_dot::contains("a"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
 
   // frozen_regex enumerate() / keys()
-  results.push_back(measure("fr: enumerate() small(4)",       [&]{ auto s = R_small_alt::enumerate(); g_sink += s.size(); }, iters));
-  results.push_back(measure("fr: enumerate() large(20)",      [&]{ auto s = R_large_alt::enumerate(); g_sink += s.size(); }, iters));
-  results.push_back(measure("fr: keys() med(8)",              [&]{ auto s = R_med_alt::keys(); g_sink += s.size(); }, iters));
+  bench.run("fr: enumerate() small(4)",       [&]{ auto s = R_small_alt::enumerate(); ankerl::nanobench::doNotOptimizeAway(s); g_sink += s.size(); });
+  bench.run("fr: enumerate() large(20)",      [&]{ auto s = R_large_alt::enumerate(); ankerl::nanobench::doNotOptimizeAway(s); g_sink += s.size(); });
+  bench.run("fr: keys() med(8)",              [&]{ auto s = R_med_alt::keys(); ankerl::nanobench::doNotOptimizeAway(s); g_sink += s.size(); });
 
   // frozen_regex to_frozen_map + lookup
   constexpr auto m_small = R_small_alt::template to_frozen_map<int, 1, 2, 3, 4>();
-  results.push_back(measure("fr: to_map+at 'GET' hit",       [&]{ g_sink += m_small.at("GET"); }, iters));
-  results.push_back(measure("fr: to_map+find miss",           [&]{ auto it = m_small.find("PATCH"); g_sink += (it != m_small.end()); }, iters));
+  bench.run("fr: to_map+at 'GET' hit",       [&]{ auto v = m_small.at("GET"); ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
+  bench.run("fr: to_map+find miss",           [&]{ auto it = m_small.find("PATCH"); ankerl::nanobench::doNotOptimizeAway(it != m_small.end()); g_sink += (it != m_small.end()); });
 
   // ---- CTRE match() ----
-  results.push_back(measure("ctre: lit('endpoint') hit",      [&]{ g_sink += static_cast<bool>(ctre::match<ctre_literal>("endpoint")); }, iters));
-  results.push_back(measure("ctre: lit('endpoint') miss",     [&]{ g_sink += static_cast<bool>(ctre::match<ctre_literal>("other")); }, iters));
-  results.push_back(measure("ctre: small(4) 'GET' hit",       [&]{ g_sink += static_cast<bool>(ctre::match<ctre_small_alt>("GET")); }, iters));
-  results.push_back(measure("ctre: small(4) 'DELETE' hit",    [&]{ g_sink += static_cast<bool>(ctre::match<ctre_small_alt>("DELETE")); }, iters));
-  results.push_back(measure("ctre: small(4) miss",            [&]{ g_sink += static_cast<bool>(ctre::match<ctre_small_alt>("PATCH")); }, iters));
-  results.push_back(measure("ctre: med(8) 'OPTIONS' hit",     [&]{ g_sink += static_cast<bool>(ctre::match<ctre_med_alt>("OPTIONS")); }, iters));
-  results.push_back(measure("ctre: med(8) miss",              [&]{ g_sink += static_cast<bool>(ctre::match<ctre_med_alt>("CONNECT")); }, iters));
-  results.push_back(measure("ctre: large(20) 'k01' hit",      [&]{ g_sink += static_cast<bool>(ctre::match<ctre_large_alt>("k01")); }, iters));
-  results.push_back(measure("ctre: large(20) 'k20' hit",      [&]{ g_sink += static_cast<bool>(ctre::match<ctre_large_alt>("k20")); }, iters));
-  results.push_back(measure("ctre: large(20) miss",           [&]{ g_sink += static_cast<bool>(ctre::match<ctre_large_alt>("k99")); }, iters));
-  results.push_back(measure("ctre: path(4) '/api/v1/...' hit",[&]{ g_sink += static_cast<bool>(ctre::match<ctre_path_alt>("/api/v1/users")); }, iters));
-  results.push_back(measure("ctre: path(4) miss",             [&]{ g_sink += static_cast<bool>(ctre::match<ctre_path_alt>("/api/v1/other")); }, iters));
-  results.push_back(measure("ctre: cls[abc](3) 'a' hit",      [&]{ g_sink += static_cast<bool>(ctre::match<ctre_cls>("a")); }, iters));
-  results.push_back(measure("ctre: cls[abc](3) miss",         [&]{ g_sink += static_cast<bool>(ctre::match<ctre_cls>("d")); }, iters));
-  results.push_back(measure("ctre: cls[a-m](13) 'a' hit",     [&]{ g_sink += static_cast<bool>(ctre::match<ctre_cls_wide>("a")); }, iters));
-  results.push_back(measure("ctre: cls[a-m](13) miss",        [&]{ g_sink += static_cast<bool>(ctre::match<ctre_cls_wide>("z")); }, iters));
-  results.push_back(measure("ctre: dot '.' 'a' hit",          [&]{ g_sink += static_cast<bool>(ctre::match<ctre_dot>("a")); }, iters));
+  bench.run("ctre: lit('endpoint') hit",      [&]{ auto r = static_cast<bool>(ctre::match<ctre_literal>("endpoint")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: lit('endpoint') miss",     [&]{ auto r = static_cast<bool>(ctre::match<ctre_literal>("other")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: small(4) 'GET' hit",       [&]{ auto r = static_cast<bool>(ctre::match<ctre_small_alt>("GET")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: small(4) 'DELETE' hit",    [&]{ auto r = static_cast<bool>(ctre::match<ctre_small_alt>("DELETE")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: small(4) miss",            [&]{ auto r = static_cast<bool>(ctre::match<ctre_small_alt>("PATCH")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: med(8) 'OPTIONS' hit",     [&]{ auto r = static_cast<bool>(ctre::match<ctre_med_alt>("OPTIONS")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: med(8) miss",              [&]{ auto r = static_cast<bool>(ctre::match<ctre_med_alt>("CONNECT")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: large(20) 'k01' hit",      [&]{ auto r = static_cast<bool>(ctre::match<ctre_large_alt>("k01")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: large(20) 'k20' hit",      [&]{ auto r = static_cast<bool>(ctre::match<ctre_large_alt>("k20")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: large(20) miss",           [&]{ auto r = static_cast<bool>(ctre::match<ctre_large_alt>("k99")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: path(4) '/api/v1/...' hit",[&]{ auto r = static_cast<bool>(ctre::match<ctre_path_alt>("/api/v1/users")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: path(4) miss",             [&]{ auto r = static_cast<bool>(ctre::match<ctre_path_alt>("/api/v1/other")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: cls[abc](3) 'a' hit",      [&]{ auto r = static_cast<bool>(ctre::match<ctre_cls>("a")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: cls[abc](3) miss",         [&]{ auto r = static_cast<bool>(ctre::match<ctre_cls>("d")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: cls[a-m](13) 'a' hit",     [&]{ auto r = static_cast<bool>(ctre::match<ctre_cls_wide>("a")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: cls[a-m](13) miss",        [&]{ auto r = static_cast<bool>(ctre::match<ctre_cls_wide>("z")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("ctre: dot '.' 'a' hit",          [&]{ auto r = static_cast<bool>(ctre::match<ctre_dot>("a")); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
 
-  print_results(results);
+  ankerl::nanobench::doNotOptimizeAway(g_sink);
   return 0;
 }

@@ -2306,12 +2306,20 @@ constexpr auto g_log = make_log();
 auto d = dump<g_log>();   // コンパイルエラーになり、診断にログ全文が出る
 ```
 
-## テスト
+## ベンチマーク
 
-このリポジトリでは以下でビルド・テストできます。
+`test/bench_*.cpp` のベンチマークは [ankerl::nanobench](https://github.com/martinus/nanobench) を利用しています（`vcpkg.json` の `nanobench` 依存、`test/CMakeLists.txt` の `nanobench::nanobench` リンク）。
+計測は `Bench::title` / `unit` / `warmup` / `minEpochIterations` / `run` と `doNotOptimizeAway` で行います。
 
-- `build.sh`
-- `test.sh`
+```bash
+# ビルド
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=$HOME/vm/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build --target bench_frozen_map bench_frozen_set bench_frozen_trie bench_map_comparison bench_pattern_comparison bench_wildcard bench_frozen_regex
+
+# 実行（例）
+./build/test/bench_frozen_map
+./build/test/bench_frozen_map 1000000  # minEpochIterations を指定
+```
 
 ## インストール / パッケージ生成
 

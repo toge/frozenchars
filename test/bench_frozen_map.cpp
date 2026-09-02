@@ -1,14 +1,11 @@
 #include "frozenchars/literals.hpp"
 #include "frozenchars/map.hpp"
 
-#include <chrono>
+#include <nanobench.h>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
-#include <iomanip>
-#include <iostream>
-#include <string>
 #include <string_view>
-#include <vector>
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -21,49 +18,8 @@ using namespace frozenchars::literals;
 
 namespace {
 
-/** @brief ベンチマーク1件の計測結果を保持する構造体。名前・反復回数・経過時間・1反復あたりの時間を持つ。 */
-struct bench_result {
-  std::string_view name{};
-  std::uint64_t iterations{};
-  double total_ms{};
-  double ns_per_iter{};
-};
-
 /** @brief 最適化防止用の揮発性シンク変数。ベンチマーク結果の書き込み先として使う。 */
 volatile std::size_t g_sink = 0;
-
-/** @brief 指定された関数を iterations 回実行し、経過時間を bench_result として返す。 */
-template <typename Func>
-auto measure(std::string_view name, Func&& fn, std::uint64_t iterations) -> bench_result {
-  for (std::uint64_t i = 0; i < 500; ++i) fn();
-  auto const begin = std::chrono::steady_clock::now();
-  for (std::uint64_t i = 0; i < iterations; ++i) fn();
-  auto const end = std::chrono::steady_clock::now();
-  auto const elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-  return bench_result{
-    .name = name,
-    .iterations = iterations,
-    .total_ms = static_cast<double>(elapsed_ns) / 1'000'000.0,
-    .ns_per_iter = static_cast<double>(elapsed_ns) / static_cast<double>(iterations),
-  };
-}
-
-/** @brief ベンチマーク結果の一覧を整形して標準出力に表示する。 */
-auto print_results(std::vector<bench_result> const& results) -> void {
-  std::cout << "\n[frozen_map benchmark]\n\n";
-  std::cout << std::left << std::setw(44) << "case"
-            << std::right << std::setw(12) << "iters"
-            << std::setw(14) << "total[ms]"
-            << std::setw(14) << "ns/iter" << "\n";
-  std::cout << std::string(44 + 12 + 14 + 14, '-') << "\n";
-  for (auto const& r : results) {
-    std::cout << std::left << std::setw(44) << r.name
-              << std::right << std::setw(12) << r.iterations
-              << std::setw(14) << std::fixed << std::setprecision(3) << r.total_ms
-              << std::setw(14) << std::fixed << std::setprecision(1) << r.ns_per_iter << "\n";
-  }
-  std::cout << "\n[sink] " << g_sink << '\n';
-}
 
 } // namespace
 
@@ -112,29 +68,28 @@ int main(int argc, char** argv) {
                          41,42,43,44,45,46,47,48,49,50}
   };
 
-  auto results = std::vector<bench_result>{};
-  results.reserve(40);
+  ankerl::nanobench::Bench bench;
+  bench.title("frozen_map").unit("op").warmup(100).minEpochIterations(iterations);
 
-  auto iters = iterations;
-  results.push_back(measure("small(3) find hit", [&]{ auto it = small_map.find("aa"); g_sink += (it != small_map.end()); }, iters));
-  results.push_back(measure("small(3) find miss", [&]{ auto it = small_map.find("xx"); g_sink += (it != small_map.end()); }, iters));
-  results.push_back(measure("small(3) at hit", [&]{ g_sink += small_map.at("bbbbbb"); }, iters));
+  bench.run("small(3) find hit", [&]{ auto it = small_map.find("aa"); ankerl::nanobench::doNotOptimizeAway(it != small_map.end()); g_sink += (it != small_map.end()); });
+  bench.run("small(3) find miss", [&]{ auto it = small_map.find("xx"); ankerl::nanobench::doNotOptimizeAway(it != small_map.end()); g_sink += (it != small_map.end()); });
+  bench.run("small(3) at hit", [&]{ auto v = small_map.at("bbbbbb"); ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
 
-  results.push_back(measure("med(10) find hit first", [&]{ auto it = medium_map.find("timeout"); g_sink += (it != medium_map.end()); }, iters));
-  results.push_back(measure("med(10) find hit last", [&]{ auto it = medium_map.find("status"); g_sink += (it != medium_map.end()); }, iters));
-  results.push_back(measure("med(10) find miss lenOK", [&]{ auto it = medium_map.find("timeoutx"); g_sink += (it != medium_map.end()); }, iters));
-  results.push_back(measure("med(10) find miss lenBad", [&]{ auto it = medium_map.find("x"); g_sink += (it != medium_map.end()); }, iters));
-  results.push_back(measure("med(10) contains hit", [&]{ g_sink += medium_map.contains("method"); }, iters));
-  results.push_back(measure("med(10) contains miss", [&]{ g_sink += medium_map.contains("nothere"); }, iters));
-  results.push_back(measure("med(10) get hit", [&]{ auto v = medium_map.get("method"); if (v) g_sink += v->get(); }, iters));
-  results.push_back(measure("med(10) get miss", [&]{ auto v = medium_map.get("nothere"); if (v) g_sink += v->get(); }, iters));
+  bench.run("med(10) find hit first", [&]{ auto it = medium_map.find("timeout"); ankerl::nanobench::doNotOptimizeAway(it != medium_map.end()); g_sink += (it != medium_map.end()); });
+  bench.run("med(10) find hit last", [&]{ auto it = medium_map.find("status"); ankerl::nanobench::doNotOptimizeAway(it != medium_map.end()); g_sink += (it != medium_map.end()); });
+  bench.run("med(10) find miss lenOK", [&]{ auto it = medium_map.find("timeoutx"); ankerl::nanobench::doNotOptimizeAway(it != medium_map.end()); g_sink += (it != medium_map.end()); });
+  bench.run("med(10) find miss lenBad", [&]{ auto it = medium_map.find("x"); ankerl::nanobench::doNotOptimizeAway(it != medium_map.end()); g_sink += (it != medium_map.end()); });
+  bench.run("med(10) contains hit", [&]{ auto r = medium_map.contains("method"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("med(10) contains miss", [&]{ auto r = medium_map.contains("nothere"); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
+  bench.run("med(10) get hit", [&]{ auto v = medium_map.get("method"); ankerl::nanobench::doNotOptimizeAway(v); if (v) g_sink += v->get(); });
+  bench.run("med(10) get miss", [&]{ auto v = medium_map.get("nothere"); ankerl::nanobench::doNotOptimizeAway(v); if (v) g_sink += v->get(); });
 
-  results.push_back(measure("large(20) find hit", [&]{ auto it = large_map.find("golf"); g_sink += (it != large_map.end()); }, iters));
-  results.push_back(measure("large(20) find miss", [&]{ auto it = large_map.find("zulu"); g_sink += (it != large_map.end()); }, iters));
+  bench.run("large(20) find hit", [&]{ auto it = large_map.find("golf"); ankerl::nanobench::doNotOptimizeAway(it != large_map.end()); g_sink += (it != large_map.end()); });
+  bench.run("large(20) find miss", [&]{ auto it = large_map.find("zulu"); ankerl::nanobench::doNotOptimizeAway(it != large_map.end()); g_sink += (it != large_map.end()); });
 
-  results.push_back(measure("xl(50) find hit first", [&]{ auto it = xl_map.find("k01"); g_sink += (it != xl_map.end()); }, iters));
-  results.push_back(measure("xl(50) find hit last", [&]{ auto it = xl_map.find("k50"); g_sink += (it != xl_map.end()); }, iters));
-  results.push_back(measure("xl(50) find miss", [&]{ auto it = xl_map.find("k99"); g_sink += (it != xl_map.end()); }, iters));
+  bench.run("xl(50) find hit first", [&]{ auto it = xl_map.find("k01"); ankerl::nanobench::doNotOptimizeAway(it != xl_map.end()); g_sink += (it != xl_map.end()); });
+  bench.run("xl(50) find hit last", [&]{ auto it = xl_map.find("k50"); ankerl::nanobench::doNotOptimizeAway(it != xl_map.end()); g_sink += (it != xl_map.end()); });
+  bench.run("xl(50) find miss", [&]{ auto it = xl_map.find("k99"); ankerl::nanobench::doNotOptimizeAway(it != xl_map.end()); g_sink += (it != xl_map.end()); });
 
   // 長キーマップ（5キー、25-40文字）: CRC 8バイトパスの動作確認
   constexpr auto longkey_map = frozen_map<int,
@@ -143,8 +98,8 @@ int main(int argc, char** argv) {
     "response_body_encoding_format"_fs>{
     std::array<int, 5>{100, 200, 300, 400, 500}
   };
-  results.push_back(measure("longkey(5) find hit", [&]{ auto it = longkey_map.find("authentication_token_secret_key"); g_sink += (it != longkey_map.end()); }, iters));
-  results.push_back(measure("longkey(5) find miss", [&]{ auto it = longkey_map.find("nonexistent_key_that_is_long_enough"); g_sink += (it != longkey_map.end()); }, iters));
+  bench.run("longkey(5) find hit", [&]{ auto it = longkey_map.find("authentication_token_secret_key"); ankerl::nanobench::doNotOptimizeAway(it != longkey_map.end()); g_sink += (it != longkey_map.end()); });
+  bench.run("longkey(5) find miss", [&]{ auto it = longkey_map.find("nonexistent_key_that_is_long_enough"); ankerl::nanobench::doNotOptimizeAway(it != longkey_map.end()); g_sink += (it != longkey_map.end()); });
 
   // 同長キー（10キー、全21文字）: ハッシュパスを強制（all_lengths_unique_ = false）
   constexpr auto samelen_map = frozen_map<int,
@@ -155,8 +110,8 @@ int main(int argc, char** argv) {
     "configuration_key_nin"_fs, "configuration_key_ten"_fs>{
     std::array<int, 10>{1,2,3,4,5,6,7,8,9,10}
   };
-  results.push_back(measure("samelen(10) find hit", [&]{ auto it = samelen_map.find("configuration_key_fiv"); g_sink += (it != samelen_map.end()); }, iters));
-  results.push_back(measure("samelen(10) find miss", [&]{ auto it = samelen_map.find("configuration_key_xxx"); g_sink += (it != samelen_map.end()); }, iters));
+  bench.run("samelen(10) find hit", [&]{ auto it = samelen_map.find("configuration_key_fiv"); ankerl::nanobench::doNotOptimizeAway(it != samelen_map.end()); g_sink += (it != samelen_map.end()); });
+  bench.run("samelen(10) find miss", [&]{ auto it = samelen_map.find("configuration_key_xxx"); ankerl::nanobench::doNotOptimizeAway(it != samelen_map.end()); g_sink += (it != samelen_map.end()); });
 
   // ---- XXLマップ: 100キー（k_lookup_threshold 超 → CHD 2 段ハッシュパス）----
   constexpr auto xxl_map = frozen_map<int,
@@ -186,22 +141,23 @@ int main(int argc, char** argv) {
       return v;
     }()
   };
-  results.push_back(measure("xxl(100) find hit first", [&]{ auto it = xxl_map.find("key001"); g_sink += (it != xxl_map.end()); }, iters));
-  results.push_back(measure("xxl(100) find hit last", [&]{ auto it = xxl_map.find("key100"); g_sink += (it != xxl_map.end()); }, iters));
-  results.push_back(measure("xxl(100) find miss lenOK", [&]{ auto it = xxl_map.find("key999"); g_sink += (it != xxl_map.end()); }, iters));
-  results.push_back(measure("xxl(100) find miss lenBad", [&]{ auto it = xxl_map.find("nope"); g_sink += (it != xxl_map.end()); }, iters));
+  bench.run("xxl(100) find hit first", [&]{ auto it = xxl_map.find("key001"); ankerl::nanobench::doNotOptimizeAway(it != xxl_map.end()); g_sink += (it != xxl_map.end()); });
+  bench.run("xxl(100) find hit last", [&]{ auto it = xxl_map.find("key100"); ankerl::nanobench::doNotOptimizeAway(it != xxl_map.end()); g_sink += (it != xxl_map.end()); });
+  bench.run("xxl(100) find miss lenOK", [&]{ auto it = xxl_map.find("key999"); ankerl::nanobench::doNotOptimizeAway(it != xxl_map.end()); g_sink += (it != xxl_map.end()); });
+  bench.run("xxl(100) find miss lenBad", [&]{ auto it = xxl_map.find("nope"); ankerl::nanobench::doNotOptimizeAway(it != xxl_map.end()); g_sink += (it != xxl_map.end()); });
 
   {
     constexpr std::string_view keys[] = {"timeout","retry","backoff","endpoint","headers",
                                          "method","path","query","body","status"};
     std::size_t idx = 0;
-    results.push_back(measure("med(10) find round-robin", [&]{
+    bench.run("med(10) find round-robin", [&]{
       auto it = medium_map.find(keys[idx % 10]);
+      ankerl::nanobench::doNotOptimizeAway(it != medium_map.end());
       g_sink += (it != medium_map.end());
       ++idx;
-    }, iters));
+    });
   }
 
-  print_results(results);
+  ankerl::nanobench::doNotOptimizeAway(g_sink);
   return 0;
 }

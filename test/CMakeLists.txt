@@ -20,6 +20,7 @@ endif()
 
 find_package(Catch2 REQUIRED CONFIG)
 find_package(ctre REQUIRED CONFIG)
+find_package(nanobench CONFIG REQUIRED)
 
 file(GLOB test_src test_*.cpp)
 
@@ -84,23 +85,23 @@ add_test(NAME all_test COMMAND all_test -r junit)
 add_subdirectory(../example example_examples)
 
 add_executable(bench_frozen_map bench_frozen_map.cpp)
-target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars)
+target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars nanobench::nanobench)
 target_compile_features(bench_frozen_map PUBLIC cxx_std_23)
 
 add_executable(bench_frozen_set bench_frozen_set.cpp)
-target_link_libraries(bench_frozen_set PRIVATE frozenchars::frozenchars)
+target_link_libraries(bench_frozen_set PRIVATE frozenchars::frozenchars nanobench::nanobench)
 target_compile_features(bench_frozen_set PUBLIC cxx_std_23)
 
 add_executable(bench_frozen_trie bench_frozen_trie.cpp)
-target_link_libraries(bench_frozen_trie PRIVATE frozenchars::frozenchars)
+target_link_libraries(bench_frozen_trie PRIVATE frozenchars::frozenchars nanobench::nanobench)
 target_compile_features(bench_frozen_trie PUBLIC cxx_std_23)
 
 add_executable(bench_map_comparison bench_map_comparison.cpp)
-target_link_libraries(bench_map_comparison PRIVATE frozenchars::frozenchars)
+target_link_libraries(bench_map_comparison PRIVATE frozenchars::frozenchars nanobench::nanobench)
 target_compile_features(bench_map_comparison PUBLIC cxx_std_23)
 
 add_executable(bench_pattern_comparison bench_pattern_comparison.cpp)
-target_link_libraries(bench_pattern_comparison PRIVATE frozenchars::frozenchars wildcards ctre::ctre)
+target_link_libraries(bench_pattern_comparison PRIVATE frozenchars::frozenchars wildcards ctre::ctre nanobench::nanobench)
 target_compile_features(bench_pattern_comparison PUBLIC cxx_std_23)
 
 # wildcards ベンチマーク依存: 構成時に取得
@@ -138,11 +139,11 @@ add_library(wildcards INTERFACE)
 target_include_directories(wildcards INTERFACE ${wildcards_SOURCE_DIR}/single_include)
 
 add_executable(bench_wildcard bench_wildcard.cpp)
-target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards)
+target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards nanobench::nanobench)
 target_compile_features(bench_wildcard PUBLIC cxx_std_23)
 
 add_executable(bench_frozen_regex bench_frozen_regex.cpp)
-target_link_libraries(bench_frozen_regex PRIVATE frozenchars::frozenchars ctre::ctre)
+target_link_libraries(bench_frozen_regex PRIVATE frozenchars::frozenchars ctre::ctre nanobench::nanobench)
 target_compile_features(bench_frozen_regex PUBLIC cxx_std_23)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
