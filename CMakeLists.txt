@@ -4,7 +4,7 @@ set(FROZENCHARS_VERSION "0.7.1")
 
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
-option(FROZENCHARS_BUILD_TEST "Enable tests" ON)
+option(BUILD_TEST "Enable tests" ON)
 option(ENABLE_WASI_MINIMAL "Enable WASI minimal (no exceptions) mode - wasi-sdk wasm32-wasip1 assumed" OFF)
 
 if(ENABLE_WASI_MINIMAL)
@@ -85,7 +85,7 @@ install(EXPORT frozencharsTargets
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
 )
 
-if(FROZENCHARS_BUILD_TEST)
+if(BUILD_TEST)
     enable_testing()
     add_subdirectory(test)
 endif()
