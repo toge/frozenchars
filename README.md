@@ -246,7 +246,8 @@ auto constexpr r = "  Hello, World!  "_fs
 `wasm32-wasip1`（旧 `wasm32-wasi`）環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。例外を利用する一部機能のみが無効化されます。
 frozencharsは `<string>` / `<vector>` / `<map>` 等の hosted ヘッダを必要とするため、真の bare-metal (`wasm32-unknown-unknown` の `--freestanding -nostdlib`) は非対応です。
 本ライブラリの WASI 対応は `wasm32-wasip1` + `wasi-sdk` sysroot を想定して提供します（`wasm3`, `wasmedge` 等の WASI ランタイムで実行可能）。
-wasm32-wasip2 環境の対応は現時点では未検証です。
+
+`wasm32-wasip2` 環境の対応は現時点では未検証です。wasi-sdk が正式対応したら検証予定です。
 
 ### 有効化方法
 
