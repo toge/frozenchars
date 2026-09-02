@@ -121,14 +121,14 @@ struct format_scan_result {
         ++fields;
         ++i;
         while (i < len && data[i] != '}') ++i;
-        if (i >= len) throw "frozen_format: unmatched '{' in format string";
+        if (i >= len) FROZENCHARS_THROW("frozen_format: unmatched '{' in format string");
         ++i;
       }
     } else if (data[i] == '}') {
       if (i + 1 < len && data[i + 1] == '}') {
         literal += 1; i += 2;
       } else {
-        throw "frozen_format: unmatched '}' in format string";
+        FROZENCHARS_THROW("frozen_format: unmatched '}' in format string");
       }
     } else {
       literal += 1; ++i;

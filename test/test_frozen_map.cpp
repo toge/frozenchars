@@ -163,10 +163,18 @@ static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
   { cmap.count("timeout") } -> std::same_as<IntPerfectMap::size_type>;
 });
 
-TEST_CASE("frozen_map iterators model forward_iterator", "[frozen_map]") {
+TEST_CASE("frozen_map iterators model random_access_iterator", "[frozen_map]") {
   using Map = frozen_map<int, "timeout"_fs, "retry"_fs>;
   static_assert(std::forward_iterator<Map::iterator>);
   static_assert(std::forward_iterator<Map::const_iterator>);
+  static_assert(std::random_access_iterator<Map::iterator>);
+  static_assert(std::random_access_iterator<Map::const_iterator>);
+  auto map = Map{std::array<int, 2>{30, 5}};
+  REQUIRE(map.begin()[1].first == "retry");
+  REQUIRE(map.begin()[1].second == 5);
+  map.begin()[1].second = 7;
+  REQUIRE(map.cbegin()[1].second == 7);
+  REQUIRE((map.end() - 2)[0].first == "timeout");
 }
 
 TEST_CASE("frozen_map default-constructed iterators compare equal by type", "[frozen_map]") {

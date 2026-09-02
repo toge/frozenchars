@@ -8,7 +8,6 @@
 #include <optional>
 #include <ranges>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -93,56 +92,21 @@ public:
   using const_reference = std::pair<std::string_view, T const&>;
 
   /**
-   * @brief frozen_multimap のイテレータ基底（ランダムアクセス、ソート順で走査）
+   * @brief イテレータ用の要素取り出し（ソート順のキー + ソート位置→宣言順で引いた値）
    *
-   * @tparam Owner 所有側の frozen_multimap 型
+   * @tparam Owner 所有側の frozen_multimap 型（const 修飾込み）
    * @tparam Ref 参照の値型（pair-like）
    */
   template <typename Owner, typename Ref>
-  class iterator_base {
-  public:
-    using iterator_category = std::random_access_iterator_tag;
-    using value_type = frozen_multimap::value_type;
-    using difference_type = std::ptrdiff_t;
-
-    // operator-> の戻り値用プロキシ（キー・値へのメンバアクセスを提供）
-    struct arrow_proxy {
-      Ref ref_v;
-      std::string_view& key;
-      decltype(std::declval<Ref>().second)& value;
-      constexpr arrow_proxy(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-      constexpr auto operator->() noexcept -> arrow_proxy* { return this; }
-      constexpr auto operator->() const noexcept -> const arrow_proxy* { return this; }
-    };
-    using pointer = arrow_proxy;
-    using reference = Ref;
-
-    constexpr iterator_base() noexcept = default;
-    constexpr iterator_base(Owner* owner, size_type index) noexcept : owner_{owner}, index_{index} {}
-    constexpr auto operator*() const noexcept -> reference {
-      return reference{detail::multimap_index<Keys...>::sorted_key_views_[index_],
-                       owner_->values_[detail::multimap_index<Keys...>::sorted_indices_[index_]]};
+  struct entry_access {
+    Owner* owner{};
+    constexpr auto operator()(size_type i) const noexcept -> Ref {
+      return Ref{lookup_::sorted_key_views_[i], owner->values_[lookup_::sorted_indices_[i]]};
     }
-    constexpr auto operator->() const noexcept -> pointer { return pointer{operator*()}; }
-    constexpr auto operator++() noexcept -> iterator_base& { ++index_; return *this; }
-    constexpr auto operator++(int) noexcept -> iterator_base { auto tmp = *this; ++index_; return tmp; }
-    constexpr auto operator--() noexcept -> iterator_base& { --index_; return *this; }
-    constexpr auto operator--(int) noexcept -> iterator_base { auto tmp = *this; --index_; return tmp; }
-    constexpr auto operator+=(difference_type n) noexcept -> iterator_base& { index_ += n; return *this; }
-    constexpr auto operator-=(difference_type n) noexcept -> iterator_base& { index_ -= n; return *this; }
-    friend constexpr auto operator+(iterator_base a, difference_type n) noexcept -> iterator_base { return a += n; }
-    friend constexpr auto operator+(difference_type n, iterator_base a) noexcept -> iterator_base { return a += n; }
-    friend constexpr auto operator-(iterator_base a, difference_type n) noexcept -> iterator_base { return a -= n; }
-    friend constexpr auto operator-(iterator_base a, iterator_base b) noexcept -> difference_type { return static_cast<difference_type>(a.index_) - static_cast<difference_type>(b.index_); }
-    friend constexpr bool operator==(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ == b.index_; }
-    friend constexpr auto operator<=>(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ <=> b.index_; }
-  private:
-    Owner* owner_{nullptr};
-    size_type index_{0};
   };
 
-  using iterator = iterator_base<frozen_multimap, reference>;
-  using const_iterator = iterator_base<frozen_multimap const, const_reference>;
+  using iterator = detail::indexed_iterator<value_type, entry_access<frozen_multimap, reference>>;
+  using const_iterator = detail::indexed_iterator<value_type, entry_access<frozen_multimap const, const_reference>>;
 
   /** @brief キーの総数を返す（重複を含む） */
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
@@ -197,7 +161,7 @@ public:
    */
   [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator {
     auto const pos = lookup_::first_pos(key);
-    return pos < size() && lookup_::sorted_key_views_[pos] == key ? iterator{this, pos} : end();
+    return pos < size() && lookup_::sorted_key_views_[pos] == key ? iterator{{this}, pos} : end();
   }
   /**
    * @brief キーに対応する最初の要素を探索する（const 版）
@@ -207,7 +171,7 @@ public:
    */
   [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator {
     auto const pos = lookup_::first_pos(key);
-    return pos < size() && lookup_::sorted_key_views_[pos] == key ? const_iterator{this, pos} : end();
+    return pos < size() && lookup_::sorted_key_views_[pos] == key ? const_iterator{{this}, pos} : end();
   }
   /**
    * @brief キーに対応する要素範囲 [first, last) を返す
@@ -219,7 +183,7 @@ public:
     auto const first = lookup_::first_pos(key);
     auto const last = lookup_::last_pos(key);
     if (first < size() && lookup_::sorted_key_views_[first] == key) {
-      return {iterator{this, first}, iterator{this, last}};
+      return {iterator{{this}, first}, iterator{{this}, last}};
     }
     return {end(), end()};
   }
@@ -234,7 +198,7 @@ public:
     auto const first = lookup_::first_pos(key);
     auto const last = lookup_::last_pos(key);
     if (first < size() && lookup_::sorted_key_views_[first] == key) {
-      return {const_iterator{this, first}, const_iterator{this, last}};
+      return {const_iterator{{this}, first}, const_iterator{{this}, last}};
     }
     return {end(), end()};
   }
@@ -252,8 +216,8 @@ public:
     if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
       return values_[lookup_::sorted_indices_[pos]];
     }
-    throw std::out_of_range(
-      std::string{"frozen_multimap key not found: "} + std::string{key});
+    FROZENCHARS_THROW(std::out_of_range(
+      std::string{"frozen_multimap key not found: "} + std::string{key}));
   }
   /**
    * @brief キーに対応する最初の値への参照を取得する（const 版、未検出は例外）
@@ -267,17 +231,17 @@ public:
     if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
       return values_[lookup_::sorted_indices_[pos]];
     }
-    throw std::out_of_range(
-      std::string{"frozen_multimap key not found: "} + std::string{key});
+    FROZENCHARS_THROW(std::out_of_range(
+      std::string{"frozen_multimap key not found: "} + std::string{key}));
   }
   /// @brief 先頭イテレータを返す（ソート順）
-  constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
+  constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
   /// @brief 末尾イテレータを返す
-  constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
+  constexpr auto end() noexcept -> iterator { return iterator{{this}, size()}; }
   /// @brief 先頭イテレータを返す（const 版）
-  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
+  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{{this}, 0}; }
   /// @brief 末尾イテレータを返す（const 版）
-  constexpr auto end() const noexcept -> const_iterator { return const_iterator{this, size()}; }
+  constexpr auto end() const noexcept -> const_iterator { return const_iterator{{this}, size()}; }
   /// @brief 先頭イテレータを返す（const_iterator）
   constexpr auto cbegin() const noexcept -> const_iterator { return begin(); }
   /// @brief 末尾イテレータを返す（const_iterator）
@@ -316,7 +280,7 @@ private:
 
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) throw std::invalid_argument("frozen_multimap size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size()));
+    if (values.size() != size()) FROZENCHARS_THROW(std::invalid_argument("frozen_multimap size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー一致の未使用宣言順スロットへ順次配置（重複キーは宣言順に割り当て、欠落キーは例外）
@@ -335,7 +299,7 @@ private:
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        throw std::invalid_argument("missing key");
+        FROZENCHARS_THROW(std::invalid_argument("missing key"));
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {

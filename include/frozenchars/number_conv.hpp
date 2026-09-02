@@ -12,9 +12,6 @@
 #else
 #define FROZENCHARS_HAS_CHARCONV 0
 #endif
-#if __STDC_HOSTED__ == 1
-#include <stdexcept>
-#endif
 #include <limits>
 
 #include "string.hpp"
@@ -33,11 +30,7 @@ template <typename T, size_t N>
 [[nodiscard]] auto constexpr parse_number(FrozenString<N> const& str) -> T {
   auto const sv = str.sv();
   if (sv.empty()) {
-    #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("empty string");
-#else
-    throw "empty string";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("empty string"));
   }
 
   size_t start = 0;
@@ -50,22 +43,14 @@ template <typename T, size_t N>
   }
 
   if (start >= sv.size()) {
-    #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("no digits");
-#else
-    throw "no digits";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("no digits"));
   }
 
   // 整数型の場合は std::from_chars を使用して変換する
   if constexpr (std::integral<T>) {
     if constexpr (std::unsigned_integral<T>) {
       if (neg) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("negative value for unsigned type");
-#else
-    throw "negative value for unsigned type";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("negative value for unsigned type"));
       }
     }
 
@@ -84,11 +69,7 @@ template <typename T, size_t N>
     }
 
     if (start >= sv.size() && base != 10) {
-      #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("missing digits after prefix");
-#else
-    throw "missing digits after prefix";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("missing digits after prefix"));
     }
 
 #if FROZENCHARS_HAS_CHARCONV == 0
@@ -104,25 +85,13 @@ template <typename T, size_t N>
         else if (base == 2 && (c == '0' || c == '1')) digit = c - '0';
         else if (base == 8 && c >= '0' && c <= '7') digit = c - '0';
         else {
-#if __STDC_HOSTED__ == 1
-          throw std::invalid_argument("invalid digit");
-#else
-          throw "invalid digit";
-#endif
+          FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
         }
         if (digit < 0 || digit >= base) {
-#if __STDC_HOSTED__ == 1
-          throw std::invalid_argument("invalid digit");
-#else
-          throw "invalid digit";
-#endif
+          FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
         }
         if (acc > (std::numeric_limits<unsigned long long>::max() - static_cast<unsigned long long>(digit)) / static_cast<unsigned long long>(base)) {
-#if __STDC_HOSTED__ == 1
-          throw std::out_of_range("overflow");
-#else
-          throw "overflow";
-#endif
+          FROZENCHARS_THROW(std::out_of_range("overflow"));
         }
         acc = acc * static_cast<unsigned long long>(base) + static_cast<unsigned long long>(digit);
       }
@@ -130,31 +99,19 @@ template <typename T, size_t N>
         return static_cast<T>(acc);
       } else if constexpr (std::unsigned_integral<T>) {
         if (acc > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-#if __STDC_HOSTED__ == 1
-          throw std::out_of_range("overflow");
-#else
-          throw "overflow";
-#endif
+          FROZENCHARS_THROW(std::out_of_range("overflow"));
         }
         return static_cast<T>(acc);
       } else {
         if (!neg) {
           if (acc > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-#if __STDC_HOSTED__ == 1
-            throw std::out_of_range("overflow");
-#else
-            throw "overflow";
-#endif
+            FROZENCHARS_THROW(std::out_of_range("overflow"));
           }
           return static_cast<T>(acc);
         } else {
           auto max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
           if (acc > max_abs) {
-#if __STDC_HOSTED__ == 1
-            throw std::out_of_range("underflow");
-#else
-            throw "underflow";
-#endif
+            FROZENCHARS_THROW(std::out_of_range("underflow"));
           }
           if (acc == max_abs) return std::numeric_limits<T>::min();
           return static_cast<T>(-static_cast<long long>(acc));
@@ -166,91 +123,47 @@ template <typename T, size_t N>
       T res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid digit");
-#else
-    throw "invalid digit";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
       }
       if (ec == std::errc::result_out_of_range) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("overflow");
-#else
-    throw "overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("overflow"));
       }
       if (ptr != sv.data() + sv.size()) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid digit");
-#else
-    throw "invalid digit";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
       }
       return res;
     } else if constexpr (std::unsigned_integral<T>) {
       unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid digit");
-#else
-    throw "invalid digit";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
       }
       if (ec == std::errc::result_out_of_range) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("overflow");
-#else
-    throw "overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("overflow"));
       }
       if (ptr != sv.data() + sv.size()) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid digit");
-#else
-    throw "invalid digit";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
       }
       if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("overflow");
-#else
-    throw "overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("overflow"));
       }
       return static_cast<T>(res);
     } else {
       unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid digit");
-#else
-    throw "invalid digit";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
       }
       if (ec == std::errc::result_out_of_range) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("overflow");
-#else
-    throw "overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("overflow"));
       }
       if (ptr != sv.data() + sv.size()) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid digit");
-#else
-    throw "invalid digit";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
       }
       if (neg) {
         auto const max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
         if (res > max_abs) {
-          #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("underflow");
-#else
-    throw "underflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("underflow"));
         }
         if (res == max_abs) {
           return std::numeric_limits<T>::min();
@@ -258,11 +171,7 @@ template <typename T, size_t N>
         return static_cast<T>(-static_cast<long long>(res));
       } else {
         if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-          #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("overflow");
-#else
-    throw "overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("overflow"));
         }
         return static_cast<T>(res);
       }
@@ -280,18 +189,10 @@ template <typename T, size_t N>
       T           result{};
       auto const [ptr, ec] = std::from_chars(first, last, result);
       if (ec == std::errc::invalid_argument || ptr != last) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid float");
-#else
-    throw "invalid float";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid float"));
       }
       if (ec == std::errc::result_out_of_range) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("float overflow");
-#else
-    throw "float overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("float overflow"));
       }
       return result;
     }
@@ -302,11 +203,7 @@ template <typename T, size_t N>
     auto constexpr pow10 = [](int n) -> T {
       // コンパイル時ステップ枯渇を防ぐため、指数に上限を設ける。double の最大実用値は約 308。
       if (n < 0 || n > 1024) {
-        #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("parse_number: exponent too large for compile-time path");
-#else
-    throw "parse_number: exponent too large for compile-time path";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("parse_number: exponent too large for compile-time path"));
       }
       T result = 1;
       T base   = 10;
@@ -375,22 +272,14 @@ template <typename T, size_t N>
         has_exp_digits = true;
       }
       if (!has_exp_digits) {
-        #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid exponent");
-#else
-    throw "invalid exponent";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid exponent"));
       }
       if (eneg) {
         exp = -exp;
       }
     }
     if (!has_digits || i < sv.size()) {
-      #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("invalid float");
-#else
-    throw "invalid float";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("invalid float"));
     }
     T final_res = neg ? -res : res;
     if (exp != 0) {
@@ -401,19 +290,11 @@ template <typename T, size_t N>
       }
     }
     if (final_res == std::numeric_limits<T>::infinity() || final_res == -std::numeric_limits<T>::infinity()) {
-      #if __STDC_HOSTED__ == 1
-    throw std::out_of_range("float overflow");
-#else
-    throw "float overflow";
-#endif
+    FROZENCHARS_THROW(std::out_of_range("float overflow"));
     }
     return final_res;
   } else {
-    #if __STDC_HOSTED__ == 1
-    throw std::invalid_argument("unsupported type");
-#else
-    throw "unsupported type";
-#endif
+    FROZENCHARS_THROW(std::invalid_argument("unsupported type"));
   }
 }
 

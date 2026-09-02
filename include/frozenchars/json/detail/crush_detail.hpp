@@ -1,5 +1,7 @@
 #pragma once
 
+#include "frozenchars/config.hpp"
+
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -12,7 +14,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -66,7 +67,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   // 2バイトシーケンス
   if ((lead & 0xE0) == 0xC0) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
-    if ((c1 & 0xC0) != 0x80) throw std::runtime_error("invalid UTF-8");
+    if ((c1 & 0xC0) != 0x80) FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
     index += 2;
     return (static_cast<char32_t>(lead & 0x1F) << 6) | static_cast<char32_t>(c1 & 0x3F);
   }
@@ -74,7 +75,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   if ((lead & 0xF0) == 0xE0) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) throw std::runtime_error("invalid UTF-8");
+    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
     index += 3;
     return (static_cast<char32_t>(lead & 0x0F) << 12) |
            (static_cast<char32_t>(c1 & 0x3F) << 6) |
@@ -86,14 +87,14 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     auto const c3 = static_cast<uint8_t>(input[index + 3]);
     if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
-      throw std::runtime_error("invalid UTF-8");
+      FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
     index += 4;
     return (static_cast<char32_t>(lead & 0x07) << 18) |
            (static_cast<char32_t>(c1 & 0x3F) << 12) |
            (static_cast<char32_t>(c2 & 0x3F) << 6) |
            static_cast<char32_t>(c3 & 0x3F);
   }
-  throw std::runtime_error("invalid UTF-8");
+  FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
 };
 
 /**
@@ -154,7 +155,7 @@ inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) -> std
     // 上位サロゲートなら次の下位サロゲートと合成してコードポイントを復元
     if (v >= 0xD800 && v <= 0xDBFF) {
       if (i + 1 >= input.size() || input[i + 1] < 0xDC00 || input[i + 1] > 0xDFFF)
-        throw std::runtime_error("invalid UTF-16");
+        FROZENCHARS_THROW(std::runtime_error("invalid UTF-16"));
       auto const cp = 0x10000 + ((static_cast<char32_t>(v - 0xD800) << 10) | (input[i + 1] - 0xDC00));
       append_utf8(cp);
       ++i;

@@ -4,8 +4,10 @@
  * @file frozenchars/config.hpp
  * @brief ビルドモード設定。
  *
- * FROZENCHARS_WASI_MINIMAL が定義されると、例外送出を伴う範囲チェック
- * (front/back/operator[] の out_of_range) が無効化される。wasm32-unknown-unknown
+ * FROZENCHARS_WASI_MINIMAL が定義されると、ライブラリ内の全ての例外送出
+ * (FROZENCHARS_THROW) が std::abort() に置き換わり、-fno-exceptions でも
+ * ビルドできる「例外なしモード」になる。コンパイル時評価での不正入力は
+ * 従来どおりコンパイルエラーになる。wasm32-unknown-unknown
  * (bare-metal freestanding) では自動的に有効になる。wasm32-wasip1 /
  * wasm32-emscripten は WASI/hosted とみなすため自動では有効にならず、WASI 上で
  * 最小構成を検証する場合は手動で `-DFROZENCHARS_WASI_MINIMAL` を指定する。
@@ -16,8 +18,27 @@
  * コアサブセット (string/literals/split 等) に絞る必要がある。
  *
  * 例: clang++ --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot
- *       -DFROZENCHARS_WASI_MINIMAL=1 -I include -c src.cpp -o src.o
+ *       -fno-exceptions -DFROZENCHARS_WASI_MINIMAL=1 -I include -c src.cpp -o src.o
  */
 #if !defined(FROZENCHARS_WASI_MINIMAL) && defined(__wasm__) && !defined(__wasi__) && !defined(__EMSCRIPTEN__)
 #  define FROZENCHARS_WASI_MINIMAL 1
+#endif
+
+/**
+ * @brief 例外送出の統一マクロ。
+ *
+ * hosted (既定) では `throw expr` に展開する。FROZENCHARS_WASI_MINIMAL 定義時は
+ * expr を評価せず `detail::fail()` を呼ぶ。fail() は非 constexpr のため
+ * コンパイル時評価では従来どおりコンパイルエラーになり、実行時は std::abort() する。
+ * これにより -fno-exceptions でもライブラリ全体がビルドできる。
+ */
+#ifndef FROZENCHARS_WASI_MINIMAL
+#  include <stdexcept>
+#  define FROZENCHARS_THROW(expr) throw expr
+#else
+#  include <cstdlib>
+namespace frozenchars::detail {
+[[noreturn]] inline void fail() noexcept { std::abort(); }
+} // namespace frozenchars::detail
+#  define FROZENCHARS_THROW(expr) ::frozenchars::detail::fail()
 #endif

@@ -55,10 +55,10 @@ int main() {
   }
 
   {
-    // ケース4: タグ内部の空白は透過コピーで保持される
+    // ケース4: タグ内部の空白は透過コピーで保持され、前後の空白はインラインテキストとして 1 個残る
     constexpr auto in  = "a {{ x }} b"_fs;
     constexpr auto got = minify_html(in);
-    constexpr auto want = "a{{ x }} b"_fs;
+    constexpr auto want = "a {{ x }} b"_fs;
     static_assert(got.sv() == want.sv());
     all_ok &= expect("ケース4: タグ内部の空白保持", got.sv(), want.sv());
   }

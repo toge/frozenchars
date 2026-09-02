@@ -10,7 +10,6 @@
 #include <iterator>
 #include <map>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -21,6 +20,8 @@
 #include <span>
 
 #include "string.hpp"
+#include "detail/indexed_iterator.hpp"
+#include "detail/unique_keys.hpp"
 
 #if defined(__SSE4_2__)
 #include <nmmintrin.h>
@@ -173,29 +174,6 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
 }
 
 /**
- * @brief キー群に重複（同一文字列）がないかをコンパイル時に判定する
- *
- * @tparam Keys キー列（FrozenString NTTP）
- * @return bool 重複があれば true
- */
-template <FrozenString... Keys>
-[[nodiscard]] consteval auto has_duplicate_keys() -> bool {
-  if constexpr (sizeof...(Keys) <= 1) {
-    return false;
-  } else {
-    constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
-    auto sorted = key_views;
-    std::ranges::sort(sorted);
-    for (auto i = 1uz; i < sorted.size(); ++i) {
-      if (sorted[i - 1] == sorted[i]) {
-        return true;
-      }
-    }
-    return false;
-  }
-}
-
-/**
  * @brief テーブルサイズに応じた適切なインデックス型を選択する
  */
 template <std::size_t TableSize>
@@ -251,7 +229,7 @@ template <std::size_t TableSize, FrozenString... Keys>
     }
     if (!collision) { return result_t{seed, table}; }
   }
-  throw "frozen_map seed search exhausted";
+  FROZENCHARS_THROW("frozen_map seed search exhausted");
 }
 
 /**
@@ -368,7 +346,7 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
         break;
       }
     }
-    if (!found) throw "frozen_map CHD seed search exhausted";
+    if (!found) FROZENCHARS_THROW("frozen_map CHD seed search exhausted");
   }
   return result;
 }
@@ -678,53 +656,19 @@ public:
   using const_reference = std::pair<std::string_view, T const&>;
 
   /**
-   * @brief frozen_map のイテレータ基底（ランダムアクセス、キーはビューで固定）
+   * @brief イテレータ用の要素取り出し（宣言順のキー + 所有側の値配列）
    *
-   * @tparam Owner 所有側の frozen_map 型
+   * @tparam Owner 所有側の frozen_map 型（const 修飾込み）
    * @tparam Ref 参照の値型（pair-like）
    */
   template <typename Owner, typename Ref>
-  class iterator_base {
-  public:
-    using iterator_category = std::random_access_iterator_tag;
-    using value_type = frozen_map::value_type;
-    using difference_type = std::ptrdiff_t;
-
-    // operator-> の戻り値用プロキシ（キー・値へのメンバアクセスを提供）
-    struct arrow_proxy_impl {
-        Ref ref_v;
-        std::string_view& key;
-        decltype(std::declval<Ref>().second)& value;
-        constexpr arrow_proxy_impl(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-        constexpr auto operator->() noexcept -> arrow_proxy_impl* { return this; }
-        constexpr auto operator->() const noexcept -> const arrow_proxy_impl* { return this; }
-    };
-    using arrow_proxy = arrow_proxy_impl;
-    using pointer = arrow_proxy;
-    using reference = Ref;
-
-    constexpr iterator_base() noexcept = default;
-    constexpr iterator_base(Owner* owner, size_type index) noexcept : owner_{owner}, index_{index} {}
-    constexpr auto operator*() const noexcept -> reference { return reference{detail::lookup_index<Keys...>::key_views_[index_], owner_->values_[index_]}; }
-    constexpr auto operator->() const noexcept -> pointer { return pointer{operator*()}; }
-    constexpr auto operator++() noexcept -> iterator_base& { ++index_; return *this; }
-    constexpr auto operator++(int) noexcept -> iterator_base { auto tmp = *this; ++index_; return tmp; }
-    constexpr auto operator--() noexcept -> iterator_base& { --index_; return *this; }
-    constexpr auto operator--(int) noexcept -> iterator_base { auto tmp = *this; --index_; return tmp; }
-    constexpr auto operator+=(difference_type n) noexcept -> iterator_base& { index_ += n; return *this; }
-    constexpr auto operator-=(difference_type n) noexcept -> iterator_base& { index_ -= n; return *this; }
-    friend constexpr auto operator+(iterator_base a, difference_type n) noexcept -> iterator_base { return a += n; }
-    friend constexpr auto operator+(difference_type n, iterator_base a) noexcept -> iterator_base { return a += n; }
-    friend constexpr auto operator-(iterator_base a, difference_type n) noexcept -> iterator_base { return a -= n; }
-    friend constexpr auto operator-(iterator_base a, iterator_base b) noexcept -> difference_type { return static_cast<difference_type>(a.index_) - static_cast<difference_type>(b.index_); }
-    friend constexpr bool operator==(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ == b.index_; }
-    friend constexpr auto operator<=>(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ <=> b.index_; }
-  private:
-    Owner* owner_{nullptr}; size_type index_{0};
+  struct entry_access {
+    Owner* owner{};
+    constexpr auto operator()(size_type i) const noexcept -> Ref { return Ref{lookup_::key_views_[i], owner->values_[i]}; }
   };
 
-  using iterator = iterator_base<frozen_map, reference>;
-  using const_iterator = iterator_base<frozen_map const, const_reference>;
+  using iterator = detail::indexed_iterator<value_type, entry_access<frozen_map, reference>>;
+  using const_iterator = detail::indexed_iterator<value_type, entry_access<frozen_map const, const_reference>>;
 
   static_assert(sizeof...(Keys) > 0, "frozen_map requires at least one key");
   static_assert(!detail::has_duplicate_keys<Keys...>(), "frozen_map keys must be unique");
@@ -765,7 +709,7 @@ public:
    */
   [[nodiscard]] constexpr auto find(std::string_view key) noexcept -> iterator {
     auto const i = lookup_::find_index_raw(key);
-    return i != size() ? iterator{this, i} : end();
+    return i != size() ? iterator{{this}, i} : end();
   }
   /**
    * @brief キーに対応する要素を探索する（const 版）
@@ -775,7 +719,7 @@ public:
    */
   [[nodiscard]] constexpr auto find(std::string_view key) const noexcept -> const_iterator {
     auto const i = lookup_::find_index_raw(key);
-    return i != size() ? const_iterator{this, i} : end();
+    return i != size() ? const_iterator{{this}, i} : end();
   }
   /**
    * @brief キーが存在するかを個数で返す（0 または 1）
@@ -787,13 +731,13 @@ public:
     return lookup_::find_index_raw(key) != size() ? 1uz : 0uz;
   }
   /// @brief 先頭イテレータを返す
-  constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
+  constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
   /// @brief 末尾イテレータを返す
-  constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
+  constexpr auto end() noexcept -> iterator { return iterator{{this}, size()}; }
   /// @brief 先頭イテレータを返す（const 版）
-  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
+  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{{this}, 0}; }
   /// @brief 末尾イテレータを返す（const 版）
-  constexpr auto end() const noexcept -> const_iterator { return const_iterator{this, size()}; }
+  constexpr auto end() const noexcept -> const_iterator { return const_iterator{{this}, size()}; }
   /// @brief 先頭イテレータを返す（const_iterator）
   constexpr auto cbegin() const noexcept -> const_iterator { return begin(); }
   /// @brief 末尾イテレータを返す（const_iterator）
@@ -844,8 +788,8 @@ public:
   [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
     auto const i = lookup_::find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
-    throw std::out_of_range(
-      std::string{"frozen_map key not found: "} + std::string{key});
+    FROZENCHARS_THROW(std::out_of_range(
+      std::string{"frozen_map key not found: "} + std::string{key}));
   }
   /**
    * @brief キーに対応する値への参照を取得する（const 版、未検出は例外）
@@ -857,8 +801,8 @@ public:
   [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
     auto const i = lookup_::find_index_raw(key);
     if (i != size()) [[likely]] return values_[i];
-    throw std::out_of_range(
-      std::string{"frozen_map key not found: "} + std::string{key});
+    FROZENCHARS_THROW(std::out_of_range(
+      std::string{"frozen_map key not found: "} + std::string{key}));
   }
   /**
    * @brief キーに対応する値を optional で取得する（未検出は nullopt）
@@ -930,7 +874,7 @@ private:
   }
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) throw std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size()));
+    if (values.size() != size()) FROZENCHARS_THROW(std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー順の値配列へ並べ替え（欠落キーは例外）
@@ -939,16 +883,16 @@ private:
     for (auto& entry : entries) {
       auto const index = lookup_::find_index_raw(entry.key);
       if (index == size()) {
-        throw std::invalid_argument("frozen_map unknown key");
+        FROZENCHARS_THROW(std::invalid_argument("frozen_map unknown key"));
       }
       if (values[index].has_value()) {
-        throw std::invalid_argument("frozen_map duplicate key");
+        FROZENCHARS_THROW(std::invalid_argument("frozen_map duplicate key"));
       }
       values[index].emplace(std::move(entry.value));
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        throw std::invalid_argument("missing key");
+        FROZENCHARS_THROW(std::invalid_argument("missing key"));
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {

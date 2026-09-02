@@ -205,6 +205,19 @@ template <typename Alloc>
 }
 
 /**
+ * @brief 文字 1 個を長さ 1 の文字列に変換する
+ *
+ * `char` は Integral を満たすが、`concat("x", 'a')` で "x97" になるのを防ぐため
+ * 非テンプレートのこのオーバーロードが優先される。
+ */
+[[nodiscard]] auto consteval freeze(char const arg) noexcept -> FrozenString<2> {
+  auto res = FrozenString<2>{};
+  res.buffer[0] = arg;
+  res.length    = 1;
+  return res;
+}
+
+/**
  * @brief 整数型を受け取って10進数表現の文字列に変換する
  *
  * @tparam T 整数型

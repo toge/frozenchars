@@ -4,10 +4,12 @@ target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
 add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
 
-add_executable(smoke_freestanding ../tests/test_basic.cpp)
+add_executable(smoke_freestanding smoke_freestanding.cpp)
 target_link_libraries(smoke_freestanding PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_freestanding PUBLIC cxx_std_23)
 target_compile_definitions(smoke_freestanding PRIVATE FROZENCHARS_WASI_MINIMAL=1)
+# WASI_MINIMAL の契約 (例外なしでビルド可能) を hosted でも検証する
+target_compile_options(smoke_freestanding PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-exceptions>)
 add_test(NAME smoke_freestanding COMMAND smoke_freestanding)
 
 if(ENABLE_WASI_MINIMAL)

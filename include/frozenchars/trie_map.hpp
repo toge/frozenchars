@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <iterator>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -13,6 +12,7 @@
 
 #include "string.hpp"
 #include "trie_index.hpp"
+#include "detail/indexed_iterator.hpp"
 
 namespace frozenchars {
 
@@ -35,61 +35,19 @@ public:
   using const_reference = std::pair<std::string_view, T const&>;
 
   /**
-   * @brief frozen_trie_map の内部イテレータ実装
-   * @tparam Owner 所有者型（const 修飾で const/非 const を切り替え）
-   * @tparam Ref 参照型
+   * @brief イテレータ用の要素取り出し（宣言順のキー + 所有側の値配列）
+   *
+   * @tparam Owner 所有側の frozen_trie_map 型（const 修飾込み）
+   * @tparam Ref 参照の値型（pair-like）
    */
   template <typename Owner, typename Ref>
-  class iterator_base {
-  public:
-    using iterator_category = std::random_access_iterator_tag;
-    using value_type = frozen_trie_map::value_type;
-    using difference_type = std::ptrdiff_t;
-
-    struct arrow_proxy_impl {
-      Ref ref_v;
-      std::string_view& key;
-      decltype(std::declval<Ref>().second)& value;
-      constexpr arrow_proxy_impl(Ref r) : ref_v(r), key(ref_v.first), value(ref_v.second) {}
-      constexpr auto operator->() noexcept -> arrow_proxy_impl* { return this; }
-      constexpr auto operator->() const noexcept -> const arrow_proxy_impl* { return this; }
-    };
-    using arrow_proxy = arrow_proxy_impl;
-    using pointer = arrow_proxy;
-    using reference = Ref;
-
-    constexpr iterator_base() noexcept = default;
-    /**
-     * @param owner 所属コンテナへのポインタ
-     * @param index キーインデックス
-     */
-    constexpr iterator_base(Owner* owner, size_type index) noexcept : owner_{owner}, index_{index} {}
-    constexpr auto operator*() const noexcept -> reference {
-      return reference{frozen_trie_index<Keys...>::k_key_views_[index_], owner_->values_[index_]};
-    }
-    constexpr auto operator->() const noexcept -> pointer { return pointer{operator*()}; }
-    constexpr auto operator++() noexcept -> iterator_base& { ++index_; return *this; }
-    constexpr auto operator++(int) noexcept -> iterator_base { auto tmp = *this; ++index_; return tmp; }
-    constexpr auto operator--() noexcept -> iterator_base& { --index_; return *this; }
-    constexpr auto operator--(int) noexcept -> iterator_base { auto tmp = *this; --index_; return tmp; }
-    constexpr auto operator+=(difference_type n) noexcept -> iterator_base& { index_ += n; return *this; }
-    constexpr auto operator-=(difference_type n) noexcept -> iterator_base& { index_ -= n; return *this; }
-    friend constexpr auto operator+(iterator_base a, difference_type n) noexcept -> iterator_base { return a += n; }
-    friend constexpr auto operator+(difference_type n, iterator_base a) noexcept -> iterator_base { return a += n; }
-    friend constexpr auto operator-(iterator_base a, difference_type n) noexcept -> iterator_base { return a -= n; }
-    friend constexpr auto operator-(iterator_base a, iterator_base b) noexcept -> difference_type {
-      return static_cast<difference_type>(a.index_) - static_cast<difference_type>(b.index_);
-    }
-    friend constexpr bool operator==(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ == b.index_; }
-    friend constexpr auto operator<=>(iterator_base const& a, iterator_base const& b) noexcept { return a.index_ <=> b.index_; }
-
-  private:
-    Owner* owner_{nullptr};  ///< 所属コンテナへのポインタ
-    size_type index_{0};     ///< 現在のキーインデックス
+  struct entry_access {
+    Owner* owner{};
+    constexpr auto operator()(size_type i) const noexcept -> Ref { return Ref{lookup_::k_key_views_[i], owner->values_[i]}; }
   };
 
-  using iterator = iterator_base<frozen_trie_map, reference>;
-  using const_iterator = iterator_base<frozen_trie_map const, const_reference>;
+  using iterator = detail::indexed_iterator<value_type, entry_access<frozen_trie_map, reference>>;
+  using const_iterator = detail::indexed_iterator<value_type, entry_access<frozen_trie_map const, const_reference>>;
 
   /** @brief キーの総数を返す */
   static constexpr auto size() noexcept -> size_type { return sizeof...(Keys); }
@@ -115,12 +73,12 @@ public:
    */
   constexpr auto find(std::string_view key) noexcept -> iterator {
     auto const i = lookup_::find(key);
-    return i != size() ? iterator{this, i} : end();
+    return i != size() ? iterator{{this}, i} : end();
   }
   /** @copydoc find */
   constexpr auto find(std::string_view key) const noexcept -> const_iterator {
     auto const i = lookup_::find(key);
-    return i != size() ? const_iterator{this, i} : end();
+    return i != size() ? const_iterator{{this}, i} : end();
   }
   /**
    * @brief キーの存在確認
@@ -144,21 +102,21 @@ public:
   constexpr auto at(std::string_view key) -> T& {
     auto const i = lookup_::find(key);
     if (i != size()) [[likely]] return values_[i];
-    throw std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key});
+    FROZENCHARS_THROW(std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key}));
   }
   /** @copydoc at */
   constexpr auto at(std::string_view key) const -> T const& {
     auto const i = lookup_::find(key);
     if (i != size()) [[likely]] return values_[i];
-    throw std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key});
+    FROZENCHARS_THROW(std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key}));
   }
   constexpr auto operator[](std::string_view key) -> T& { return at(key); }
   constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
 
-  constexpr auto begin() noexcept -> iterator { return iterator{this, 0}; }
-  constexpr auto end() noexcept -> iterator { return iterator{this, size()}; }
-  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{this, 0}; }
-  constexpr auto end() const noexcept -> const_iterator { return const_iterator{this, size()}; }
+  constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
+  constexpr auto end() noexcept -> iterator { return iterator{{this}, size()}; }
+  constexpr auto begin() const noexcept -> const_iterator { return const_iterator{{this}, 0}; }
+  constexpr auto end() const noexcept -> const_iterator { return const_iterator{{this}, size()}; }
   constexpr auto cbegin() const noexcept -> const_iterator { return begin(); }
   constexpr auto cend() const noexcept -> const_iterator { return end(); }
 

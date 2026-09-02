@@ -199,7 +199,7 @@ glaze 連携と JSON 圧縮はデフォルトでは読み込まれません。�
 
 ### `consteval`（常にコンパイル時）
 
-このライブラリの操作関数のほとんどは C++23 の `consteval` で定義されています。
+このライブラリの操作関数のほとんどは C++20 の `consteval` で定義されています。
 `consteval` 関数は必ずコンパイル時に評価されるため、
 ランタイムでのオーバーヘッドがゼロであることが保証されます。
 実行時の文字列（`std::string` など）を引数に取ることはできません。
@@ -256,20 +256,20 @@ auto constexpr r = "  Hello, World!  "_fs
 
 `wasm32-unknown-unknown`（`__wasm__ && !__wasi__ && !__EMSCRIPTEN__`）では `include/frozenchars/config.hpp:11` により自動で有効になります。`wasm32-wasip1` / `wasm32-emscripten` は WASI/hosted とみなすため自動では有効にならず、WASI 上で WASI_MINIMAL サブセットを検証したい場合は明示的に `-DFROZENCHARS_WASI_MINIMAL` を付与してください。それ以外の `__STDC_HOSTED__ == 0` 環境でも明示的なフラグが必要です。clang での WASI ビルド例は `include/frozenchars/config.hpp:5` のコメントを参照。
 
-### 無効化される機能
+### 例外なしモードの挙動
 
-`FROZENCHARS_WASI_MINIMAL` 定義時に限り、以下が無効化されます（`include/frozenchars/string.hpp:9`）:
+`FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出は `FROZENCHARS_THROW` マクロ（`include/frozenchars/config.hpp`）経由で `std::abort()` に置き換わります。`<stdexcept>` は include されず、`-fno-exceptions` でビルドできます。
 
-| 機能 | hosted | WASI_MINIMAL | 代替 |
-|---|---|---|---|
-| `FrozenString::front()` / `back()` / `operator[]` の範囲外チェック | `std::out_of_range` を throw | チェック自体を除去（空/範囲外は未定義動作） | 呼び出し側で `empty()` / `size()` を事前確認 |
-| `<stdexcept>` の include | あり | なし（例外無効化のため） | — |
+| 状況 | hosted | WASI_MINIMAL |
+|---|---|---|
+| コンパイル時評価での不正入力（`parse_number("x")`、`frozen_regex<"(">` 等） | コンパイルエラー | コンパイルエラー（変わらず） |
+| 実行時の不正入力（`frozen_map::at` 未検出、`parse_number` 実行時パス等） | `std::out_of_range` / `std::invalid_argument` 等を throw | `std::abort()` |
+| `FrozenString::front()` / `back()` / `operator[]` の範囲外 | `std::out_of_range` を throw | `std::abort()` |
+| `json::validate_json` の不正 JSON | `false` を返す | `std::abort()`（例外で復帰できないため） |
 
-`<iostream>` (`operator<<`) は `wasm32-wasip1/wasip2` では WASI 経由で利用可能なため無効化しません。
+数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、無い環境では手動実装へフォールバックします。
 
-数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、WASI_MINIMAL でも手動実装へフォールバックするため機能自体は維持されます（例外型のみ hosted では `std::invalid_argument` / `std::out_of_range`、WASI_MINIMAL では文字列リテラル `throw "msg"`）。
-
-`frozen_map` / `frozen_set` / `frozen_trie_map` など `<stdexcept>` を直接 include するコンテナ系は、`-DFROZENCHARS_WASI_MINIMAL` だけではヘッダ依存が残ります。通常の GCC/Clang + libstdc++（`--freestanding` でもヘッダが提供される環境）や `wasm32-wasip1` + `wasi-sdk` ではそのままビルドできますが、ヘッダ自体が存在しない真の bare-metal (`wasm32-unknown-unknown` の `-nostdlib`) では別途スタブが必要です。CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml:336`）は `wasi-sdk` の `wasm32-wasip1` で `ENABLE_WASI_MINIMAL=ON` の wasm 生成を検証しています。真の bare-metal を狙う場合は `vector` / `string` / `map` を使わないコアサブセット（`string/literals/split/bimap/set` 等）に絞ってください。
+`frozen_map` / `frozen_set` / `frozen_trie_map` など `<string>` / `<vector>` を使うコンテナ系は、`wasm32-wasip1` + `wasi-sdk` ではそのままビルドできますが、ヘッダ自体が存在しない真の bare-metal (`wasm32-unknown-unknown` の `-nostdlib`) では別途スタブが必要です。CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml`）は `wasi-sdk` の `wasm32-wasip1` で `ENABLE_WASI_MINIMAL=ON` の wasm 生成を、`smoke_freestanding` テストは hosted で `-fno-exceptions` ビルドを検証しています。真の bare-metal を狙う場合は `vector` / `string` / `map` を使わないコアサブセット（`string/literals/split/bimap/set` 等）に絞ってください。
 
 ### vcpkg + cmake で wasm32-wasip1 をビルドする
 
@@ -910,7 +910,9 @@ HTML / XML / JSON / YAML / SQL / Cypher の各ソースをコンパイル時に�
 
 - `minify_html(str, options = ...)` / `minify_xml(...)` : HTML/XML のマークアップを縮小します
    - `minify_markup_opt::remove_quotes` を立てると、`class="x"` のような属性値クォートが安全に取り除ける場合に削除されます（HTML のデフォルトで有効、XML では属性値のクォートは常に保持します）
-   - `minify_markup_opt::remove_end_tags` を立てると、HTML の `</li>` / `</p>` / `</thead>` など省略可能な終了タグが削除されます
+   - `minify_markup_opt::remove_end_tags` を立てると、HTML の `</li>` / `</p>` / `</thead>` など省略可能な終了タグが削除されます（`</p>` は直後がブロック要素・親の終了・入力終端のときだけ省略します。インライン要素やテキストが続く場合は DOM が変わるため残します）
+   - 空白の扱い: ブロック要素・未知のタグ（XML 含む）に隣接する空白は削除し、`<b>` / `<span>` / `<a>` などインライン要素とテキストの間の空白は単語区切りとして 1 個残します。`<pre>` / `<textarea>` の内容は変更しません
+   - `{{name}}` のようなテンプレート変数はインラインテキスト扱い、`{{#sec}}` / `{{/sec}}` / `{{!c}}` / `{{>p}}` は構造タグとして前後の空白を削除します
    - オプションは `|` で複数指定できます。デフォルトでは `remove_end_tags` が有効です
    - `<style>` タグ内の CSS も自動的に minify します（コメント除去、空白詰め、`;` と `}` や `{` `:` `;` の前後の空白除去）
 - `minify_json(str)` : JSON の文字列リテラル外から空白と `//` / `/* */` コメントを削除します
@@ -939,7 +941,7 @@ auto constexpr html = minify_html(
   "  <span>  hi  </span>\n"
   "  <!-- ignore -->\n"
   "</div>"_fs);
-static_assert(html.sv() == "<div class=x><span>hi</span></div>");
+static_assert(html.sv() == "<div class=x><span> hi </span></div>"); // インライン要素内の空白は 1 個残る
 
 // HTML: オプションを無効化（デフォルト動作を維持したいケース）
 auto constexpr html_keep = minify_html(

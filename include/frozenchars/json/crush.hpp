@@ -49,7 +49,7 @@ template <FrozenString Input>
  */
 [[nodiscard]] consteval auto uncrush_to_string(std::string_view const input) -> std::string {
   if (input.empty() || input.back() != '_') {
-    throw std::runtime_error("uncrush: missing trailing '_'");
+    FROZENCHARS_THROW(std::runtime_error("uncrush: missing trailing '_'"));
   }
   auto const body_utf8 = input.substr(0, input.size() - 1);
   auto u16 = frozenchars::json::detail::utf8_to_utf16(body_utf8);
@@ -70,7 +70,7 @@ template <FrozenString Input>
   for (auto const rc : split) {
     auto const p = data.rfind(rc);
     if (p == std::u16string::npos) {
-      throw std::runtime_error("uncrush: replacement char not found");
+      FROZENCHARS_THROW(std::runtime_error("uncrush: replacement char not found"));
     }
     auto const original = data.substr(p + 1);
     data.resize(p);

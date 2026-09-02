@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <string>
 #include <ranges>
 
@@ -64,6 +65,7 @@ TEST_CASE("frozen_set iterator traversal", "[frozen_set]") {
 
 TEST_CASE("frozen_set iterator random access", "[frozen_set]") {
   using Set = frozen_set<"a"_fs, "b"_fs, "c"_fs>;
+  static_assert(std::random_access_iterator<Set::iterator>);
   auto const s = Set{};
   auto const v0 = s.begin()[0];
   auto const v1 = s.begin()[1];

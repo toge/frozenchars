@@ -6,15 +6,34 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **例外なしモードを実装**: `FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出が `FROZENCHARS_THROW` マクロ経由で `std::abort()` になり、`-fno-exceptions` でビルドできるようになった。従来は `FrozenString::front()/back()/operator[]` の 3 箇所しか無効化されていなかった。
+- `minify_html`: インライン要素（`<b>` / `<span>` / `<a>` 等）とテキストの間の空白を 1 個残すようになった（従来は削除して単語が連結していた）。`{{name}}` はインラインテキスト扱い、`{{#sec}}` / `{{/sec}}` は構造タグ扱い。
+- `minify_html`: `</p>` の省略を、直後がブロック要素・親の終了・入力終端のときに限定した（インライン要素やテキストが続くと DOM が変わるため）。
+- `tools/amalgamate.py`: 出力を決定的にした（生成時刻を削除）。単一ヘッダのリポジトリ URL を修正。
+- `CMakeLists.txt` のバージョンを git タグと一致する 0.7.0 に更新。
+
+### Fixed
+
+- `freeze(char)` / `concat(..., 'a')` が文字をコードポイント（`"97"`）に変換していた。
+- `wildcard_match`: `[!...]` 否定クラスが英数字以外にマッチしなかった（frozen_regex 委譲の補集合が `DotChars` 限定のため）。`{` `}` `+` `^` `$` を含む `*` なしパターンがコンパイルエラーになっていた。
+- `wildcard_match`: サフィックス早期判定が中間部と同じ文字を二重に使い、`[ab]x*x` が `"ax"` にマッチしていた。
+- `minify_sql` / `minify_lua`: `a - -b` を `a--b`（行コメント）に融合していた。`minify_lua` は `1 .. y` を不正な数値リテラル `1..y` にしていた。
+- `minify_html`: テキスト中の `'` / `"` で引用符状態に入り、以降の空白・コメント・タグが未処理で素通しになっていた。
+- `minify_html`: `<pre>` / `<textarea>` の内容の空白を畳んでいた。
+
+- `json::crush` の辞書領域が後続の置換で破壊される問題を修正（データ領域限定の置換に変更）。
+- `json::crush` が置換を行わない（圧縮が機能しない）問題を修正。
+
 ### Added
 
 - `json::decompress` / `json::uncrush`: コンパイル時 JSON 圧縮（`compress` / `crush`）の復元 API。
 - `json::compress` の出力を有効な JSON に変更。数値の原文（小数・指数）と型情報を保持。
 
-### Fixed
+## [0.2.0] – [0.7.0]
 
-- `json::crush` の辞書領域が後続の置換で破壊される問題を修正（データ領域限定の置換に変更）。
-- `json::crush` が置換を行わない（圧縮が機能しない）問題を修正。
+タグのみ付与され、本ファイルへの記載がありません。差分は各タグ間の `git log` を参照してください。
 
 ## [0.1.0]
 
@@ -41,5 +60,7 @@
 
 - 一部機能に既知の不具合が残存しています（詳細は Issue を参照）。
 
-[Unreleased]: https://github.com/toge/frozenchars/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/toge/frozenchars/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/toge/frozenchars/compare/v0.2.0...v0.7.0
+[0.2.0]: https://github.com/toge/frozenchars/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/toge/frozenchars/releases/tag/v0.1.0

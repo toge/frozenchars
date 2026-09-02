@@ -190,3 +190,13 @@ TEST_CASE("minify_lua - size() は実長を返しバッファ末尾はゼロ", "
   REQUIRE(c.size() == 19);
   REQUIRE(buffer_trailing_zero(c));
 }
+
+TEST_CASE("minify_lua - トークン融合を防ぐ空白は維持する", "[minifier]")
+{
+  // `- -` を詰めると `--` コメントになってしまう
+  static_assert(minify_lua("x = a - -b").sv() == "x=a- -b");
+  // 数値直後の `..` を詰めると不正な数値リテラル `1..y` になる
+  static_assert(minify_lua("x = 1 .. y").sv() == "x=1 ..y");
+  static_assert(minify_lua("x = a .. b").sv() == "x=a..b");
+  REQUIRE(minify_lua("x = a - -b").sv() == "x=a- -b");
+}

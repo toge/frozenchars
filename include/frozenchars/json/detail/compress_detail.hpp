@@ -1,5 +1,7 @@
 #pragma once
 
+#include "frozenchars/config.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -7,7 +9,6 @@
 #include <vector>
 
 #include <cstdint>
-#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -52,14 +53,14 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  * @throw std::runtime_error 先頭が '"' でない、または終端クォートが無い場合
  */
 [[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) -> std::string_view {
-  if (p >= s.size() || s[p] != '"') throw std::runtime_error("expected '\"'");
+  if (p >= s.size() || s[p] != '"') FROZENCHARS_THROW(std::runtime_error("expected '\"'"));
   auto const start = p;
   ++p;
   while (p < s.size() && s[p] != '"') {
     if (s[p] == '\\') ++p;
     ++p;
   }
-  if (p >= s.size()) throw std::runtime_error("unterminated string");
+  if (p >= s.size()) FROZENCHARS_THROW(std::runtime_error("unterminated string"));
   ++p;
   return std::string_view(s.data() + start, p - start);
 }
@@ -113,7 +114,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     skip_ws(s, p);
     if (p < s.size() && s[p] == ',') { ++p; continue; }
     if (p < s.size() && s[p] == ']') { ++p; break; }
-    throw std::runtime_error("expected ',' or ']'");
+    FROZENCHARS_THROW(std::runtime_error("expected ',' or ']'"));
   }
   return {json_type::array, false, {}, std::move(arr), {}};
 }
@@ -136,7 +137,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     skip_ws(s, p);
     auto const key = parse_string(s, p);
     skip_ws(s, p);
-    if (p >= s.size() || s[p] != ':') throw std::runtime_error("expected ':'");
+    if (p >= s.size() || s[p] != ':') FROZENCHARS_THROW(std::runtime_error("expected ':'"));
     ++p;
     skip_ws(s, p);
     keys.push_back(key);
@@ -144,7 +145,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
     skip_ws(s, p);
     if (p < s.size() && s[p] == ',') { ++p; continue; }
     if (p < s.size() && s[p] == '}') { ++p; break; }
-    throw std::runtime_error("expected ',' or '}'");
+    FROZENCHARS_THROW(std::runtime_error("expected ',' or '}'"));
   }
   return {json_type::object, false, {}, std::move(vals), std::move(keys)};
 }
@@ -159,7 +160,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  */
 [[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) -> json_value {
   skip_ws(s, p);
-  if (p >= s.size()) throw std::runtime_error("unexpected EOF");
+  if (p >= s.size()) FROZENCHARS_THROW(std::runtime_error("unexpected EOF"));
   auto const c = s[p];
   if (c == '{') return parse_object(s, p);
   if (c == '[') return parse_array(s, p);
@@ -176,7 +177,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
   if (c == 'f' && starts_with(p, "false")) { p += 5; return {json_type::boolean, false, {}, {}, {}}; }
   if (c == 'n' && starts_with(p, "null"))  { p += 4; return {json_type::null, false, {}, {}, {}}; }
   if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
-  throw std::runtime_error("unexpected character");
+  FROZENCHARS_THROW(std::runtime_error("unexpected character"));
 }
 
 /**
@@ -190,7 +191,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
   size_t p = 0;
   auto val = parse_value(s, p);
   skip_ws(s, p);
-  if (p != s.size()) throw std::runtime_error("trailing content");
+  if (p != s.size()) FROZENCHARS_THROW(std::runtime_error("trailing content"));
   return val;
 }
 
@@ -201,14 +202,19 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  * @return bool 全体を過不足なくパースできれば true、例外や余分な内容があれば false
  */
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
+  // ponytail: WASI_MINIMAL では例外で復帰できないため不正 JSON は abort する
+#ifndef FROZENCHARS_WASI_MINIMAL
   try {
+#endif
     size_t p = 0;
     (void)parse_value(s, p);
     skip_ws(s, p);
     return p == s.size();
+#ifndef FROZENCHARS_WASI_MINIMAL
   } catch (...) {
     return false;
   }
+#endif
 }
 
 } // namespace frozenchars::json::detail
@@ -254,7 +260,7 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
     } else if (c >= 'a' && c <= 'z') {
       value += static_cast<uint64_t>(c - 'a' + 36);
     } else {
-      throw std::runtime_error("from_base62: invalid character");
+      FROZENCHARS_THROW(std::runtime_error("from_base62: invalid character"));
     }
   }
   return value;

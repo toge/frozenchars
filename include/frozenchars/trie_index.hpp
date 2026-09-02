@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -15,6 +14,7 @@
 #endif
 
 #include "string.hpp"
+#include "detail/unique_keys.hpp"
 
 namespace frozenchars {
 
@@ -48,26 +48,6 @@ struct trie_storage {
   std::array<char, LabelSize> labels{};
   std::array<std::uint8_t, ChildCount> children{};
 };
-
-/**
- * @brief キー群に重複があるか判定する
- * @tparam Keys FrozenString キー群
- * @return 重複があれば true
- */
-template <FrozenString... Keys>
-[[nodiscard]] consteval auto has_dup_trie_keys() -> bool {
-  if constexpr (sizeof...(Keys) <= 1) {
-    return false;
-  } else {
-    constexpr std::array views{ std::string_view{Keys.buffer.data(), Keys.length}... };
-    auto sorted = views;
-    std::ranges::sort(sorted);
-    for (auto i = 1uz; i < sorted.size(); ++i) {
-      if (sorted[i - 1] == sorted[i]) return true;
-    }
-    return false;
-  }
-}
 
 /// @brief trie構築用のキーと値のペア
 struct kv_pair {
@@ -107,7 +87,7 @@ struct kv_pair {
 template <FrozenString... Keys>
 struct frozen_trie_index {
   static_assert(sizeof...(Keys) > 0, "frozen_trie_index requires at least one key");
-  static_assert(!detail::has_dup_trie_keys<Keys...>(),
+  static_assert(!detail::has_duplicate_keys<Keys...>(),
                 "frozen_trie_index keys must be unique");
   static_assert(sizeof...(Keys) <= 127,
                 "frozen_trie_index supports at most 127 keys (int8_t value_index)");

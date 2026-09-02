@@ -7,9 +7,6 @@
 #include <array>
 #include <cstddef>
 #include <ostream>
-#ifndef FROZENCHARS_WASI_MINIMAL
-#  include <stdexcept>
-#endif
 #include <span>
 #include <string_view>
 
@@ -100,9 +97,7 @@ struct FrozenString {
    * @brief 先頭要素を返す (length > 0 を事前条件とする)
    */
   [[nodiscard]] constexpr auto front() const -> char {
-#ifndef FROZENCHARS_WASI_MINIMAL
-    if (empty()) throw std::out_of_range{"FrozenString::front() called on empty string"};
-#endif
+    if (empty()) FROZENCHARS_THROW(std::out_of_range{"FrozenString::front() called on empty string"});
     return buffer[0];
   }
 
@@ -110,9 +105,7 @@ struct FrozenString {
    * @brief 末尾要素を返す
    */
   [[nodiscard]] constexpr auto back() const -> char {
-#ifndef FROZENCHARS_WASI_MINIMAL
-    if (empty()) throw std::out_of_range{"FrozenString::back() called on empty string"};
-#endif
+    if (empty()) FROZENCHARS_THROW(std::out_of_range{"FrozenString::back() called on empty string"});
     return buffer[length - 1];
   }
 
@@ -121,9 +114,7 @@ struct FrozenString {
    * @param i インデックス
    */
   [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
-#ifndef FROZENCHARS_WASI_MINIMAL
-    if (i >= length) throw std::out_of_range{"FrozenString::operator[] index out of range"};
-#endif
+    if (i >= length) FROZENCHARS_THROW(std::out_of_range{"FrozenString::operator[] index out of range"});
     return buffer[i];
   }
 

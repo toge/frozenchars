@@ -59,10 +59,10 @@ struct parser {
 
   /// @brief エントリポイント: パターン全体をパースして AST を返す
   static consteval auto parse(std::string_view pattern) -> ast {
-    if (pattern.empty()) throw "frozen_regex: empty pattern";
+    if (pattern.empty()) FROZENCHARS_THROW("frozen_regex: empty pattern");
     parser p{pattern, {}};
     auto const root = p.parse_alt();
-    if (!p.eof()) throw "frozen_regex: unbalanced bracket";
+    if (!p.eof()) FROZENCHARS_THROW("frozen_regex: unbalanced bracket");
     p.tree.root_index = root;
     return p.tree;
   }
@@ -74,7 +74,7 @@ struct parser {
 
   /// @brief 現在の先頭文字を覗く（消費しない）
   [[nodiscard]] consteval auto peek() const -> char {
-    if (eof()) throw "frozen_regex: unexpected end of pattern";
+    if (eof()) FROZENCHARS_THROW("frozen_regex: unexpected end of pattern");
     return src.front();
   }
 
@@ -86,8 +86,8 @@ struct parser {
   }
 
   /// @brief 文法エラー（consteval throw でコンパイルエラー）
-  [[noreturn]] consteval auto error(char const* msg) -> void {
-    throw msg;
+  [[noreturn]] consteval auto error([[maybe_unused]] char const* msg) -> void {
+    FROZENCHARS_THROW(msg);
   }
 
   /// @brief ノードを追加してインデックスを返す
@@ -116,7 +116,7 @@ struct parser {
     while (!eof() && peek() != '|' && peek() != ')') {
       children.push_back(parse_atom());
     }
-    if (children.empty()) throw "frozen_regex: empty alternative";
+    if (children.empty()) FROZENCHARS_THROW("frozen_regex: empty alternative");
     if (children.size() == 1) return children[0];
     node concat_node{node_kind::concat, '\0', {}, false, std::move(children)};
     return add_node(std::move(concat_node));
@@ -131,13 +131,13 @@ struct parser {
     if (c == '\\') return parse_escape_atom();
     // 量指定子は非対応
     if (c == '+' || c == '*' || c == '?') {
-      throw "frozen_regex: quantifiers not supported";
+      FROZENCHARS_THROW("frozen_regex: quantifiers not supported");
     }
     if (c == '{') {
-      throw "frozen_regex: quantifiers not supported";
+      FROZENCHARS_THROW("frozen_regex: quantifiers not supported");
     }
     // 先読み・後読きは非対応（peek で (?= 等を検出）
-    if (c == ')') throw "frozen_regex: unbalanced parenthesis";
+    if (c == ')') FROZENCHARS_THROW("frozen_regex: unbalanced parenthesis");
     // 通常リテラル
     consume();
     return add_node(node{node_kind::literal, c, {}, false, {}});
@@ -148,10 +148,10 @@ struct parser {
     consume();  ///< '(' を消費
     // (?= 等の先読み・後読みを検出
     if (!eof() && peek() == '?') {
-      throw "frozen_regex: lookahead/lookbehind not supported";
+      FROZENCHARS_THROW("frozen_regex: lookahead/lookbehind not supported");
     }
     auto const inner = parse_alt();
-    if (eof() || peek() != ')') throw "frozen_regex: unbalanced parenthesis";
+    if (eof() || peek() != ')') FROZENCHARS_THROW("frozen_regex: unbalanced parenthesis");
     consume();  ///< ')' を消費
     return add_node(node{node_kind::group, '\0', {}, false, {inner}});
   }
@@ -169,17 +169,17 @@ struct parser {
       auto const c1 = parse_class_char();
       if (!eof() && peek() == '-') {
         consume();
-        if (eof() || peek() == ']') throw "frozen_regex: dangling '-' in character class";
+        if (eof() || peek() == ']') FROZENCHARS_THROW("frozen_regex: dangling '-' in character class");
         auto const c2 = parse_class_char();
-        if (c1 > c2) throw "frozen_regex: invalid character range";
+        if (c1 > c2) FROZENCHARS_THROW("frozen_regex: invalid character range");
         for (auto ch = c1; ch <= c2; ++ch) chars.push_back(ch);
       } else {
         chars.push_back(c1);
       }
     }
-    if (eof()) throw "frozen_regex: unbalanced bracket";
+    if (eof()) FROZENCHARS_THROW("frozen_regex: unbalanced bracket");
     consume();  ///< ']' を消費
-    if (chars.empty()) throw "frozen_regex: empty character class";
+    if (chars.empty()) FROZENCHARS_THROW("frozen_regex: empty character class");
     node n{node_kind::char_class, '\0', std::move(chars), negate, {}};
     return add_node(std::move(n));
   }
@@ -188,7 +188,7 @@ struct parser {
   consteval auto parse_class_char() -> char {
     auto const c = peek();
     if (c == '\\') return parse_escape();
-    if (c == ']') throw "frozen_regex: unbalanced bracket";
+    if (c == ']') FROZENCHARS_THROW("frozen_regex: unbalanced bracket");
     consume();
     return c;
   }
@@ -208,14 +208,14 @@ struct parser {
   /// @brief エスケープ1文字を消費して返す
   consteval auto parse_escape() -> char {
     consume();  ///< '\\' を消費
-    if (eof()) throw "frozen_regex: dangling backslash";
+    if (eof()) FROZENCHARS_THROW("frozen_regex: dangling backslash");
     auto const c = consume();
     switch (c) {
       case '\\': case '.': case '[': case ']':
       case '(': case ')': case '|': case '-': case '^':
         return c;
       default:
-        throw "frozen_regex: unsupported escape sequence";
+        FROZENCHARS_THROW("frozen_regex: unsupported escape sequence");
     }
   }
 
@@ -277,7 +277,7 @@ struct enumerator {
       return merge_alt(std::move(child_results));
     }
     }
-    throw "frozen_regex: unreachable";
+    FROZENCHARS_THROW("frozen_regex: unreachable");
   }
 
   /// @brief CONCAT の直積: 単位元 "" から各子の文字列を順に結合
@@ -311,7 +311,7 @@ struct enumerator {
 
   /// @brief 列挙数が MaxStrings を超えたら throw
   consteval auto check_overflow(std::size_t current) const -> void {
-    if (current > MaxStrings) throw "frozen_regex: enumeration exceeds MaxStrings";
+    if (current > MaxStrings) FROZENCHARS_THROW("frozen_regex: enumeration exceeds MaxStrings");
   }
 
   /// @brief 否定クラスの差集合: dot_chars から exclude を引く
@@ -329,7 +329,7 @@ struct enumerator {
   static consteval auto finalize(std::vector<std::string> strs) -> enumerate_result {
     std::ranges::sort(strs);
     strs.erase(std::unique(strs.begin(), strs.end()), strs.end());
-    if (strs.size() > MaxStrings) throw "frozen_regex: enumeration exceeds MaxStrings";
+    if (strs.size() > MaxStrings) FROZENCHARS_THROW("frozen_regex: enumeration exceeds MaxStrings");
     std::size_t maxlen = 0;
     for (auto const& s : strs) maxlen = std::max(maxlen, s.size());
     return enumerate_result{std::move(strs), maxlen};

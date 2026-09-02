@@ -12,6 +12,7 @@
 
 #include "string.hpp"
 #include "map.hpp"
+#include "detail/indexed_iterator.hpp"
 
 namespace frozenchars {
 
@@ -32,45 +33,18 @@ public:
   using difference_type = std::ptrdiff_t;
 
   /**
+   * @brief イテレータ用のキー取り出し（宣言順、static 配列のみ参照するため状態なし）
+   */
+  struct key_access {
+    constexpr auto operator()(size_type i) const noexcept -> std::string_view const& { return lookup_::key_views_[i]; }
+  };
+
+  /**
    * @brief キー集合を走査するランダムアクセスイテレータ
    * @details operator* で std::string_view（キー）を返す。
    *          frozen_set はすべて static constexpr で保持するため、owner ポインタを持たず添字のみで動作する。
    */
-  class iterator {
-  public:
-    using value_type        = std::string_view;
-    using reference         = const std::string_view&;
-    using pointer           = const std::string_view*;
-    using difference_type   = std::ptrdiff_t;
-    using iterator_category = std::random_access_iterator_tag;
-
-    constexpr iterator() noexcept = default;
-    constexpr explicit iterator(size_type index) noexcept : index_{index} {}
-
-    constexpr auto operator*()  const noexcept -> reference { return detail::lookup_index<Keys...>::key_views_[index_]; }
-    constexpr auto operator->() const noexcept -> pointer   { return &detail::lookup_index<Keys...>::key_views_[index_]; }
-    constexpr auto operator[](difference_type n) const noexcept -> reference { return detail::lookup_index<Keys...>::key_views_[index_ + n]; }
-
-    constexpr auto operator++()    noexcept -> iterator& { ++index_; return *this; }
-    constexpr auto operator++(int) noexcept -> iterator  { auto t = *this; ++index_; return t; }
-    constexpr auto operator--()    noexcept -> iterator& { --index_; return *this; }
-    constexpr auto operator--(int) noexcept -> iterator  { auto t = *this; --index_; return t; }
-    constexpr auto operator+=(difference_type n) noexcept -> iterator& { index_ += n; return *this; }
-    constexpr auto operator-=(difference_type n) noexcept -> iterator& { index_ -= n; return *this; }
-
-    friend constexpr auto operator+(iterator it, difference_type n) noexcept -> iterator { return it += n; }
-    friend constexpr auto operator+(difference_type n, iterator it) noexcept -> iterator { return it += n; }
-    friend constexpr auto operator-(iterator it, difference_type n) noexcept -> iterator { return it -= n; }
-    friend constexpr auto operator-(iterator a, iterator b) noexcept -> difference_type {
-      return static_cast<difference_type>(a.index_) - static_cast<difference_type>(b.index_);
-    }
-
-    friend constexpr bool operator==(iterator const& a, iterator const& b) noexcept { return a.index_ == b.index_; }
-    friend constexpr auto operator<=>(iterator const& a, iterator const& b) noexcept { return a.index_ <=> b.index_; }
-
-  private:
-    size_type index_{0};
-  };
+  using iterator = detail::indexed_iterator<std::string_view, key_access>;
 
   using const_iterator = iterator;
 

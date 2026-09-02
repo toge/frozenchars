@@ -1,5 +1,6 @@
 #include "catch2/catch_all.hpp"
 
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -186,4 +187,17 @@ TEST_CASE("frozen_trie_set iteration", "[frozen_trie]") {
   CHECK(seen[2] == "gamma");
 
   CHECK(Set::keys().size() == 3);
+}
+
+TEST_CASE("frozen_trie iterators model random_access_iterator", "[frozen_trie]") {
+  using Map = frozen_trie_map<int, "x"_fs, "y"_fs, "z"_fs>;
+  using Set = frozen_trie_set<"alpha"_fs, "beta"_fs, "gamma"_fs>;
+  static_assert(std::random_access_iterator<Map::iterator>);
+  static_assert(std::random_access_iterator<Map::const_iterator>);
+  static_assert(std::random_access_iterator<Set::iterator>);
+  auto map = Map{std::array<int, 3>{10, 20, 30}};
+  CHECK(map.begin()[2].first == "z");
+  CHECK(map.begin()[2].second == 30);
+  CHECK(Set::begin()[1] == "beta");
+  CHECK(Set::end()[-1] == "gamma");
 }

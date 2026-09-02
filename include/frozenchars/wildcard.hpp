@@ -264,10 +264,13 @@ struct wildcard_to_regex_helper {
       if (c == '[') {
         auto close = find_matching_close_bracket<PAT>(i);
         if (close >= PAT.size()) return false;
+        // 否定クラスは frozen_regex が DotChars (英数字+_) に対する補集合を取るため委譲不可
+        if (i + 1 < PAT.size() && (PAT.data()[i + 1] == '!' || PAT.data()[i + 1] == '^')) return false;
         i = close;
         continue;
       }
-      if (c == '.') return false;
+      // frozen_regex がメタ文字として解釈する（またはエラーにする）文字はリテラルとして委譲できない
+      if (c == '.' || c == '{' || c == '}' || c == '+' || c == '^' || c == '$') return false;
       if (c == '(') ++paren_depth;
       if (c == ')') {
         if (paren_depth == 0) return false;
@@ -752,15 +755,19 @@ template <FrozenString PAT>
       return false;
     }
 
+    // サフィックスは末尾で照合済みなので、中間部は残りのテキストだけに対して照合する
+    // (同じ文字を中間部とサフィックスで二重に使ってしまうのを防ぐ)
+    auto middle = text;
     if (suff_start < PAT.size()) {
       auto const suff_len = PAT.size() - suff_start;
       if (text.size() < suff_len) return false;
       for (auto i = 0uz; i < suff_len; ++i) {
         if (text[text.size() - suff_len + i] != PAT.data()[suff_start + i]) return false;
       }
+      middle = text.substr(0, text.size() - suff_len);
     }
 
-    return detail::wildcard_match_impl<PAT>(text, pref_len, pref_len, suff_start).matched;
+    return detail::wildcard_match_impl<PAT>(middle, pref_len, pref_len, suff_start).matched;
   }
 
   return detail::wildcard_match_impl<PAT>(text, 0, 0, PAT.size()).matched;

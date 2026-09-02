@@ -807,3 +807,12 @@ TEST_CASE("split_numbers float and double") {
 }
 
 
+
+TEST_CASE("freeze(char) は文字そのもの（コードポイントではない）") {
+  using namespace frozenchars;
+  static_assert(freeze('a').sv() == "a");
+  static_assert(concat("x", 'a').sv() == "xa");
+  // 数値型としての 8bit 整数は従来どおり数値化される
+  static_assert(freeze(static_cast<unsigned char>(97)).sv() == "97");
+  REQUIRE(concat("x", 'a').sv() == "xa");
+}

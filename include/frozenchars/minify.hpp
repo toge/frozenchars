@@ -222,9 +222,70 @@ auto constexpr is_void_element(char const* tag, size_t tag_len) noexcept {
 }
 
 /**
+ * @brief HTML のインライン(フレージング)要素か判定する
+ *
+ * インライン要素に隣接する空白は単語区切りとして意味を持つため 1 個に畳んで残す。
+ * それ以外(ブロック要素・未知のタグ・XML)に隣接する空白は削除する。
+ */
+auto constexpr tag_equal_ci(char const* tag, size_t tag_len, char const* ref, size_t ref_len) noexcept -> bool;
+
+auto constexpr is_inline_tag(char const* tag, size_t tag_len) noexcept -> bool {
+  constexpr std::string_view names[] = {
+    "a", "abbr", "b", "bdi", "bdo", "button", "cite", "code", "data", "del", "dfn", "em", "i", "img", "input",
+    "ins", "kbd", "label", "mark", "q", "s", "samp", "small", "span", "strong", "sub", "sup", "time", "u", "var",
+  };
+  for (auto const n : names) {
+    if (n.size() != tag_len) continue;
+    auto eq = true;
+    for (size_t j = 0; j < tag_len && eq; ++j) {
+      eq = (tag[j] | 0x20) == n[j];
+    }
+    if (eq) return true;
+  }
+  return false;
+}
+
+/**
+ * @brief 位置 pos 以降を見て </p> を省略できるか判定する
+ *
+ * HTML 仕様: 直後(空白を除く)が親要素の終了タグ、入力終端、または特定のブロック要素の
+ * 開始タグである場合に限り省略できる。インライン要素やテキストが続く場合は省略すると
+ * それらが p の中に取り込まれて DOM が変わるため省略しない。
+ */
+auto constexpr can_omit_p_end_tag(char const* buf, size_t len, size_t pos) noexcept -> bool {
+  // 空白とコメントは読み飛ばす
+  while (true) {
+    while (pos < len && is_markup_space(buf[pos])) ++pos;
+    if (pos + 3 < len && buf[pos] == '<' && buf[pos + 1] == '!' && buf[pos + 2] == '-' && buf[pos + 3] == '-') {
+      pos += 4;
+      while (pos + 2 < len && !(buf[pos] == '-' && buf[pos + 1] == '-' && buf[pos + 2] == '>')) ++pos;
+      pos = pos + 2 < len ? pos + 3 : len;
+      continue;
+    }
+    break;
+  }
+  if (pos >= len) return true;
+  if (buf[pos] != '<') return false;
+  if (pos + 1 < len && buf[pos + 1] == '/') return true;
+  auto name_end = pos + 1;
+  while (name_end < len && buf[name_end] != '>' && buf[name_end] != '/' && !is_markup_space(buf[name_end])) ++name_end;
+  auto const name     = buf + pos + 1;
+  auto const name_len = name_end - (pos + 1);
+  constexpr std::string_view blocks[] = {
+    "address", "article", "aside", "blockquote", "details", "div", "dl", "fieldset", "figcaption", "figure",
+    "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "main", "menu", "nav",
+    "ol", "p", "pre", "section", "table", "ul",
+  };
+  for (auto const b : blocks) {
+    if (tag_equal_ci(name, name_len, b.data(), b.size())) return true;
+  }
+  return false;
+}
+
+/**
  * @brief タグ名が一致するか判定する（大文字小文字不区別）
  */
-auto constexpr tag_equal_ci(char const* tag, size_t tag_len, char const* ref, size_t ref_len) noexcept {
+auto constexpr tag_equal_ci(char const* tag, size_t tag_len, char const* ref, size_t ref_len) noexcept -> bool {
   if (tag_len != ref_len) {
     return false;
   }
@@ -298,10 +359,13 @@ constexpr auto emit_close_tag(char const* buf, size_t len, size_t& i, char* out,
     i = scan;
     return true;
   }
-  // 省略可能な終了タグはオプション指定時に除去
+  // 省略可能な終了タグはオプション指定時に除去 (</p> は後続がブロック要素/親の終了のときのみ)
   if (has_flag(options, minify_markup_opt::remove_end_tags) && is_optional_end_tag(buf + tag_start, tag_len)) {
-    i = scan;
-    return true;
+    auto const is_p = tag_len == 1 && (buf[tag_start] | 0x20) == 'p';
+    if (!is_p || can_omit_p_end_tag(buf, len, scan)) {
+      i = scan;
+      return true;
+    }
   }
   // 省略不可の閉じタグはそのまま出力
   for (auto k = i; k < scan; ++k) {
@@ -517,22 +581,194 @@ constexpr void emit_trimmed(char c, char* out, size_t& offset) noexcept {
 }
 
 /// @brief 遅延空白を出力するか判定し、必要なら 1 文字出力する
-constexpr void flush_pending_space(char prev, char c, char* out, size_t& offset, bool& pending_space) noexcept {
-  auto const emit = prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/' && c != '>' && c != '=' && c != '/';
+constexpr void flush_pending_space(char prev, char c, char* out, size_t& offset, bool& pending_space, bool after_inline_tag = false) noexcept {
+  auto const prev_ok = prev != '\0' && prev != '<' && prev != '=' && prev != '/' && (prev != '>' || after_inline_tag);
+  auto const emit    = prev_ok && c != '>' && c != '=' && c != '/';
   if (emit) {
     out[offset++] = ' ';
   }
   pending_space = false;
 }
 
-/// @brief 位置 i が </script> の開始か判定する
-constexpr auto at_close_script(char const* buf, size_t len, size_t i) noexcept -> bool {
-  if (i + 8 >= len) return false;
-  if (buf[i] != '<' || buf[i + 1] != '/') return false;
-  auto const p = i + 2;
-  return ((buf[p] | 0x20) == 's' && (buf[p + 1] | 0x20) == 'c'
-       && (buf[p + 2] | 0x20) == 'r' && (buf[p + 3] | 0x20) == 'i'
-       && (buf[p + 4] | 0x20) == 'p' && (buf[p + 5] | 0x20) == 't');
+/// @brief 位置 i 以降で最初に現れる終了タグ </name>（大文字小文字非依存）の '<' 位置を返す
+///
+/// 見つからなければ len を返す。HTML 仕様どおり、JS 文字列内であっても </script> は要素を終了させる。
+constexpr auto find_close_tag(char const* buf, size_t len, size_t i, std::string_view name) noexcept -> size_t {
+  for (; i + 1 < len; ++i) {
+    if (buf[i] != '<' || buf[i + 1] != '/') continue;
+    auto name_end = i + 2;
+    while (name_end < len && buf[name_end] != '>' && !is_markup_space(buf[name_end])) ++name_end;
+    if (tag_equal_ci(buf + i + 2, name_end - (i + 2), name.data(), name.size())) return i;
+  }
+  return len;
+}
+
+/// @brief JSON を最小化する内部実装（バッファベース）
+///
+/// 文字列リテラル内は保持し、リテラル外の空白と行コメント `//`・ブロックコメントを除去する。
+///
+/// @param input 入力（終端文字は不要）
+/// @param len 入力長
+/// @param output 出力バッファ
+/// @param output_capacity 出力バッファの容量
+/// @return 圧縮後の長さ（終端文字は書き込まない）
+constexpr auto minify_json(char const* input, size_t len, char* output, size_t output_capacity) noexcept -> size_t {
+  auto offset    = 0uz;
+  auto in_string = false;
+  auto escaped   = false;
+  auto const put = [&](char ch) noexcept { if (offset < output_capacity) output[offset++] = ch; };
+
+  for (auto i = 0uz; i < len;) {
+    auto const c = input[i];
+    // 文字列リテラル内部: エスケープ状態を管理しながらそのままコピーする
+    if (in_string) {
+      put(c);
+      if (escaped) {
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else if (c == '"') {
+        in_string = false;
+      }
+      ++i;
+      continue;
+    }
+    if (c == '"') {
+      in_string = true;
+      put(c);
+      ++i;
+      continue;
+    }
+    // 行コメント // とブロックコメント /* */ を除去する
+    if (c == '/' && i + 1 < len && input[i + 1] == '/') {
+      i += 2;
+      while (i < len && input[i] != '\n') ++i;
+      continue;
+    }
+    if (c == '/' && i + 1 < len && input[i + 1] == '*') {
+      i += 2;
+      while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')) ++i;
+      i = i + 1 < len ? i + 2 : len;
+      continue;
+    }
+    // 文字列外の空白は捨て、それ以外のトークンはそのまま出力する
+    if (!is_any_whitespace(c)) put(c);
+    ++i;
+  }
+  return offset;
+}
+
+/// @brief JS で隣接する 2 文字の間に空白が必要か判定する
+///
+/// 識別子/数値同士の結合、および `+ +` `- -` `/ /` が別トークンへ融合するのを防ぐ場合のみ true。
+constexpr auto js_needs_space(char prev, char c) noexcept -> bool {
+  auto const word = [](char ch) noexcept {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+        || ch == '_' || ch == '$' || static_cast<unsigned char>(ch) >= 0x80;
+  };
+  // `1 .toString()` や `a / /re/` のような希少ケースは未対応
+  return (word(prev) && word(c)) || (prev == c && (c == '+' || c == '-' || c == '/'));
+}
+
+/// @brief ';' の直後（空白・コメントを飛ばした先）が '}' か EOF なら ASI 上省略可能と判定する
+constexpr auto js_semicolon_redundant(char const* input, size_t len, size_t j) noexcept -> bool {
+  while (true) {
+    while (j < len && is_any_whitespace(input[j])) ++j;
+    if (j + 1 < len && input[j] == '/' && input[j + 1] == '/') {
+      while (j < len && input[j] != '\n') ++j;
+      continue;
+    }
+    if (j + 1 < len && input[j] == '/' && input[j + 1] == '*') {
+      j += 2;
+      while (j + 1 < len && !(input[j] == '*' && input[j + 1] == '/')) ++j;
+      j = j + 1 < len ? j + 2 : len;
+      continue;
+    }
+    return j >= len || input[j] == '}';
+  }
+}
+
+/// @brief JavaScript を限定的に最小化する内部実装（バッファベース）
+///
+/// コメント除去・空白圧縮・ASI 安全な範囲でのセミコロン除去を行う。
+/// 文字列リテラル（" ' `）とテンプレートリテラルの補間 ${} の内容は保持する。
+///
+/// @param input 入力（終端文字は不要）
+/// @param len 入力長
+/// @param output 出力バッファ
+/// @param output_capacity 出力バッファの容量
+/// @return 圧縮後の長さ（終端文字は書き込まない）
+constexpr auto minify_js(char const* input, size_t len, char* output, size_t output_capacity) noexcept -> size_t {
+  auto offset        = 0uz;
+  auto quote         = '\0';
+  auto brace_depth   = 0uz;  // テンプレートリテラル内 ${} のネスト深度
+  auto pending_space = false;
+  auto const put = [&](char ch) noexcept { if (offset < output_capacity) output[offset++] = ch; };
+
+  for (auto i = 0uz; i < len;) {
+    auto const c = input[i];
+
+    // 文字列/テンプレートリテラル内部: エスケープを含めそのまま出力し、閉じクォートを検出する
+    if (quote != '\0') {
+      put(c);
+      if (c == '\\') {
+        if (i + 1 < len) put(input[i + 1]);
+        i += 2;
+        continue;
+      }
+      if (quote == '`') {
+        if (c == '$' && i + 1 < len && input[i + 1] == '{') {
+          put('{');
+          ++brace_depth;
+          i += 2;
+          continue;
+        }
+        // ${} 内のネストされたテンプレートリテラル/文字列は未対応
+        if (brace_depth > 0 && c == '{') ++brace_depth;
+        else if (brace_depth > 0 && c == '}') --brace_depth;
+      }
+      if (c == quote && brace_depth == 0) quote = '\0';
+      ++i;
+      continue;
+    }
+
+    // 行コメント // とブロックコメント /* */ は除去し、空白として扱う
+    if (c == '/' && i + 1 < len && input[i + 1] == '/') {
+      i += 2;
+      while (i < len && input[i] != '\n') ++i;
+      pending_space = true;
+      continue;
+    }
+    if (c == '/' && i + 1 < len && input[i + 1] == '*') {
+      i += 2;
+      while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')) ++i;
+      i = i + 1 < len ? i + 2 : len;
+      pending_space = true;
+      continue;
+    }
+
+    if (is_any_whitespace(c)) {
+      pending_space = true;
+      ++i;
+      continue;
+    }
+
+    // セミコロン除去（ASI 安全な範囲）
+    if (c == ';') {
+      if (!js_semicolon_redundant(input, len, i + 1)) put(';');
+      pending_space = false;
+      ++i;
+      continue;
+    }
+
+    // 遅延空白はトークンの結合を防ぐ場合のみ出力する
+    if (pending_space && offset > 0 && js_needs_space(output[offset - 1], c)) put(' ');
+    pending_space = false;
+    if (c == '"' || c == '\'' || c == '`') quote = c;
+    put(c);
+    ++i;
+  }
+  return offset;
 }
 
 /// @brief HTML/XML 本文を最小限の空白へ圧縮する内部実装（バッファベース）
@@ -547,131 +783,24 @@ constexpr auto at_close_script(char const* buf, size_t len, size_t i) noexcept -
 /// @param options minify オプション（ビットフィールド）
 /// @return constexpr std::size_t 圧縮後の長さ
 constexpr auto minify_markup(char const* input, char* output, std::size_t output_capacity, minify_markup_opt options = minify_markup_opt::remove_quotes | minify_markup_opt::remove_end_tags) noexcept -> std::size_t {
-  // 出力位置・入力位置・クォート状態・空白遅延フラグの初期化
-  auto offset        = 0uz;
-  auto i             = 0uz;
-  auto in_quote      = '\0';
-  auto pending_space  = false;
-  auto in_script      = false;
-  // script_mode: 0 = JS (minify_js behavior), 1 = importmap (minify_json), 2 = preserve (no processing)
-  auto script_mode     = 0u;
-  auto script_quote   = '\0';
-  auto script_depth   = 0uz;
-  auto script_dollar_brace = false;  // ${ の次の '{' 二重カウント防止
-  auto in_style       = false;
-  auto const len      = std::char_traits<char>::length(input);
+  // 出力位置・入力位置・空白遅延フラグの初期化
+  auto offset          = 0uz;
+  auto i               = 0uz;
+  auto pending_space   = false;
+  // 直前に出力したタグがインライン要素なら、その後ろの空白は 1 個残す
+  auto last_tag_inline = false;
+  auto in_style        = false;
+  auto const len       = std::char_traits<char>::length(input);
 
   // 入力全体を1文字ずつ走査し、コメント除去・空白正規化・属性最適化を施しながら出力バッファに詰める
   while (i < len) {
     // HTML/XML コメントをブロックごとスキップ
-    if (in_quote == '\0' && !in_script && skip_markup_comment(input, len, i)) {
+    if (skip_markup_comment(input, len, i)) {
       pending_space = true;
       continue;
     }
 
     auto const c = input[i];
-
-    // <script> 内の JS コメント除去（適切な script_mode の場合のみ）
-    if (in_script && !has_flag(options, minify_markup_opt::preserve_script) && script_mode == 0) {
-      // エスケープ文字の処理
-      if (script_quote != '\0' && c == '\\') {
-        if (offset < output_capacity) output[offset++] = c;
-        ++i;
-        if (i < len) {
-          if (offset < output_capacity) output[offset++] = input[i];
-          ++i;
-        }
-        continue;
-      }
-      // 行コメント //
-      if (script_quote == '\0' && c == '/' && i + 1 < len && input[i + 1] == '/') {
-        i += 2;
-        while (i < len && input[i] != '\n' && !at_close_script(input, len, i)) ++i;
-        pending_space = true;
-        continue;
-      }
-      // ブロックコメント /* */
-      if (script_quote == '\0' && c == '/' && i + 1 < len && input[i + 1] == '*') {
-        i += 2;
-        while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')
-            && !at_close_script(input, len, i)) ++i;
-        if (i + 1 < len) i += 2;
-        pending_space = true;
-        continue;
-      }
-      // テンプレートリテラルの補間 ${}
-      if (script_quote == '`' && c == '$' && i + 1 < len && input[i + 1] == '{') {
-        ++script_depth;
-        script_dollar_brace = true;
-      } else if (script_quote == '`' && script_depth > 0 && c == '{' && !script_dollar_brace) {
-        ++script_depth;
-      } else if (script_quote == '`' && script_depth > 0 && c == '}') {
-        --script_depth;
-        // ponytail: ${} 内のネストされたテンプレートリテラルは未対応
-      }
-      if (c != '{' && c != '}' && c != '$') script_dollar_brace = false;
-      // JS 文字列リテラルの開始/終了
-      if (script_quote == '\0' && (c == '"' || c == '\'' || c == '`')) {
-        script_quote = c;
-      } else if (c == script_quote && script_depth == 0) {
-        script_quote = '\0';
-      }
-    }
-
-    // importmap (JSON) の場合はスクリプト内を JSON 風に minify して一括コピーする
-    if (in_script && script_mode == 1u) {
-      // closing </script> の位置を見つける
-      auto j = i;
-      while (j < len && !at_close_script(input, len, j)) ++j;
-      // input[i..j) を JSON 風に minify
-      auto in_str = false;
-      auto escaped = false;
-      auto p = i;
-      while (p < j) {
-        auto const ch = input[p];
-        if (in_str) {
-          if (offset < output_capacity) output[offset++] = ch;
-          if (escaped) {
-            escaped = false;
-          } else if (ch == '\\') {
-            escaped = true;
-          } else if (ch == '"') {
-            in_str = false;
-          }
-          ++p;
-          continue;
-        }
-        if (ch == '"') {
-          in_str = true;
-          if (offset < output_capacity) output[offset++] = ch;
-          ++p;
-          continue;
-        }
-        // 行コメント //
-        if (ch == '/' && p + 1 < j && input[p + 1] == '/') {
-          p += 2;
-          while (p < j && input[p] != '\n') ++p;
-          continue;
-        }
-        // ブロックコメント /* */
-        if (ch == '/' && p + 1 < j && input[p + 1] == '*') {
-          p += 2;
-          while (p + 1 < j && !(input[p] == '*' && input[p + 1] == '/')) ++p;
-          if (p + 1 < j) p += 2;
-          continue;
-        }
-        // 文字列外の空白は除去
-        if (detail::is_any_whitespace(ch)) {
-          ++p;
-          continue;
-        }
-        if (offset < output_capacity) output[offset++] = ch;
-        ++p;
-      }
-      // i を閉じタグ直前に進める（ループ先頭で閉じタグ処理される）
-      i = j;
-      continue;
-    }
 
     // <style> 内の CSS を minify
     if (in_style) {
@@ -735,41 +864,18 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       }
     }
 
-    // クォート内は内容をそのまま保持する
-    if (in_quote != '\0') {
-      if (offset < output_capacity) {
-        output[offset++] = c;
-      }
-      if (c == in_quote) {
-        in_quote = '\0';
-      }
-      ++i;
-      continue;
-    }
-
-    if (!in_script && (c == '"' || c == '\'')) {
-      if (pending_space && offset > 0) {
-        auto const prev = output[offset - 1];
-        if (prev != '\0' && prev != '<' && prev != '>' && prev != '=' && prev != '/') {
-          output[offset++] = ' ';
-        }
-        pending_space = false;
-      }
-      in_quote = c;
-      if (offset < output_capacity) {
-        output[offset++] = c;
-      }
-      ++i;
-      continue;
-    }
-
     // テンプレートタグ {{ ... }} は保護区間として透過コピーする（Mustache/injamm 対応）
-    if (!in_script && c == '{' && i + 1 < len && input[i + 1] == '{') {
-      // {{ の直前に遅延空白や出力済み空白があれば捨てる
-      pending_space = false;
-      if (offset > 0 && output[offset - 1] == ' ') {
-        --offset;
+    if (c == '{' && i + 1 < len && input[i + 1] == '{') {
+      // セクション/コメント/パーシャル ({{# {{/ {{^ {{! {{>) は構造タグなので前後の空白を捨てる。
+      // それ以外 ({{name}} 等) はインラインテキスト扱いで、前の空白は 1 個残す
+      auto const sigil      = i + 2 < len ? input[i + 2] : '\0';
+      auto const structural = sigil == '#' || sigil == '/' || sigil == '^' || sigil == '!' || sigil == '>';
+      if (structural) {
+        if (offset > 0 && output[offset - 1] == ' ') --offset;
+      } else if (pending_space && offset > 0 && offset < output_capacity) {
+        flush_pending_space(output[offset - 1], '{', output, offset, pending_space, last_tag_inline);
       }
+      pending_space = false;
       // {{ から最初に現れる }} までをそのまま出力する
       auto j = i;
       if (offset + 1 < output_capacity) {
@@ -790,89 +896,63 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       }
       i             = j;
       pending_space = false;
+      if (structural) {
+        while (i < len && is_markup_space(input[i])) ++i;
+      }
       continue;
     }
 
     // タグ境界の前後空白は削除し、タグ内では単一空白に正規化する
-    // <script> 内部では </script> のみタグとして扱い、それ以外の < は JS コードの一部として出力
     if (c == '<') {
-      // <script> 内の </script> 検出
-      if (in_script && i + 8 < len && input[i + 1] == '/') {
-        auto const p = i + 2;
-        if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
-            && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
-            && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
-          auto const after = input[p + 6];
-          if (after == '>' || is_markup_space(after)) {
-            in_script = false;
-          script_mode = 0u;
-          // </script> は通常の閉じタグ処理へフォールスルー
-        }
-      }
-      }
-      // <script> 内の < は通常のタグとして扱わない
-      if (in_script && script_mode == 2u) {
-      // preserve モード: 文字をそのまま出力
-      if (offset < output_capacity) output[offset++] = c;
-      ++i;
-      continue;
-      } else if (in_script) {
-      // JS / importmap モード: treat '<' as part of script content
-      if (offset < output_capacity) output[offset++] = c;
-      ++i;
-      continue;
-      }
-
+      // タグ名を取り出し、インライン要素なら直前の空白を 1 個残す (それ以外は削除)
+      auto tag_name_start = i + 1;
+      if (tag_name_start < len && input[tag_name_start] == '/') ++tag_name_start;
+      auto tag_name_end = tag_name_start;
+      while (tag_name_end < len && input[tag_name_end] != '>' && input[tag_name_end] != '/' && !is_markup_space(input[tag_name_end])) ++tag_name_end;
+      auto const tag_name     = std::string_view{input + tag_name_start, tag_name_end - tag_name_start};
+      auto const is_tag       = [&](std::string_view ref) noexcept { return tag_equal_ci(tag_name.data(), tag_name.size(), ref.data(), ref.size()); };
+      auto const this_tag_inline = is_inline_tag(tag_name.data(), tag_name.size());
       if (offset > 0 && output[offset - 1] == ' ') {
-      --offset;
+        --offset;
+      }
+      if (this_tag_inline && pending_space && offset > 0 && offset < output_capacity && (output[offset - 1] != '>' || last_tag_inline)) {
+        output[offset++] = ' ';
       }
       pending_space = false;
 
-// <script> 開始検出（大文字小文字非依存）
-       auto script_open = false;
-       if (i + 7 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-       auto const p = i + 1;
-       if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 'c'
-           && (input[p + 2] | 0x20) == 'r' && (input[p + 3] | 0x20) == 'i'
-           && (input[p + 4] | 0x20) == 'p' && (input[p + 5] | 0x20) == 't') {
-         auto const after = input[p + 6];
-         if (after == '>' || is_markup_space(after) || after == '/') {
-           script_open = true;
-         }
-       }
-       }
-
-       // <style> 開始検出（大文字小文字非依存）
-       auto style_open = false;
-       if (i + 6 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-       auto const p = i + 1;
-       if ((input[p] | 0x20) == 's' && (input[p + 1] | 0x20) == 't'
-           && (input[p + 2] | 0x20) == 'y' && (input[p + 3] | 0x20) == 'l'
-           && (input[p + 4] | 0x20) == 'e') {
-         auto const after = input[p + 5];
-         if (after == '>' || is_markup_space(after) || after == '/') {
-           style_open = true;
-         }
-       }
-       }
-
-       // 閉じタグ処理（void / 省略可能ならスキップ、それ以外は出力）
-       if (emit_close_tag(input, len, i, output, offset, options)) {
-       continue;
-       }
-       // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
-       if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
-       auto opened_mode = 0u;
-       i = emit_open_tag(input, len, i, output, offset, options, &opened_mode);
-       if (script_open) {
-         in_script = true;
-         script_mode = opened_mode;
-       }
-       if (style_open) {
-         in_style = true;
-       }
-       continue;
-       }
+      // 閉じタグ処理（void / 省略可能ならスキップ、それ以外は出力）
+      if (emit_close_tag(input, len, i, output, offset, options)) {
+        last_tag_inline = this_tag_inline;
+        continue;
+      }
+      // 開いたタグ: <! や <? 等はそのまま出力、通常タグは属性最適化
+      if (i + 1 < len && input[i + 1] != '/' && input[i + 1] != '!' && input[i + 1] != '?') {
+        // script_mode: 0 = JS (minify_js), 1 = importmap (minify_json), 2 = preserve
+        auto script_mode = 0u;
+        i = emit_open_tag(input, len, i, output, offset, options, &script_mode);
+        last_tag_inline = this_tag_inline;
+        if (is_tag("style")) {
+          in_style = true;
+        }
+        // <script> は type に応じて JS / JSON 最小化、<pre> / <textarea> と preserve_script 指定時は終了タグまで透過コピーする
+        auto const is_script = is_tag("script");
+        if (is_script || is_tag("pre") || is_tag("textarea")) {
+          auto const close = find_close_tag(input, len, i, tag_name);
+          auto const mode  = is_script && !has_flag(options, minify_markup_opt::preserve_script) ? script_mode : 2u;
+          if (mode == 0u) {
+            offset += minify_js(input + i, close - i, output + offset, output_capacity - offset);
+          } else if (mode == 1u) {
+            offset += minify_json(input + i, close - i, output + offset, output_capacity - offset);
+          } else {
+            for (; i < close; ++i) {
+              if (offset < output_capacity) output[offset++] = input[i];
+            }
+          }
+          i = close;
+          emit_close_tag(input, len, i, output, offset, options);
+        }
+        continue;
+      }
 
       if (offset < output_capacity) {
         output[offset++] = c;
@@ -881,86 +961,23 @@ constexpr auto minify_markup(char const* input, char* output, std::size_t output
       continue;
     }
 
-    // script 内 JS: セミコロン除去（ASI 安全な範囲）
-    if (in_script && script_mode == 0u && !has_flag(options, minify_markup_opt::preserve_script) && script_quote == '\0' && c == ';') {
-      auto j = i + 1;
-      auto keep = true;
-      auto tl_depth = 0uz;
-      while (true) {
-        while (j < len && detail::is_any_whitespace(input[j])) ++j;
-        if (j >= len || at_close_script(input, len, j)) { keep = false; break; }
-        auto const nc = input[j];
-        if (tl_depth > 0) {
-          if (nc == '{') { ++tl_depth; ++j; continue; }
-          if (nc == '}') { --tl_depth; ++j; continue; }
-          ++j; continue;
-        }
-        if (nc == '}') { keep = false; break; }
-        if (nc == '`') {
-          ++j;
-          while (j < len && input[j] != '`') {
-            if (input[j] == '\\') { j += 2; continue; }
-            if (input[j] == '$' && j + 1 < len && input[j + 1] == '{') { tl_depth = 1; j += 2; continue; }
-            ++j;
-          }
-          if (j < len) ++j;
-          continue;
-        }
-        if (nc == '"' || nc == '\'') {
-          ++j;
-          while (j < len && input[j] != nc) {
-            if (input[j] == '\\') j += 2; else ++j;
-          }
-          if (j < len) ++j;
-          continue;
-        }
-        if (nc == '<' && at_close_script(input, len, j)) { keep = false; break; }
-        if (nc == '/' && j + 1 < len && input[j + 1] == '/') {
-          while (j < len && input[j] != '\n' && !at_close_script(input, len, j)) ++j;
-          continue;
-        }
-        if (nc == '/' && j + 1 < len && input[j + 1] == '*') {
-          j += 2;
-          while (j + 1 < len && !(input[j] == '*' && input[j + 1] == '/') && !at_close_script(input, len, j)) ++j;
-          if (j + 1 < len && !at_close_script(input, len, j)) j += 2;
-          continue;
-        }
-        break;
-      }
-      if (keep) {
-        if (offset < output_capacity) output[offset++] = ';';
-      }
-      pending_space = false;
-      ++i;
-      continue;
-    }
-
     // テキスト中の '>' は直前に空白があれば削ってから出力する
-    // preserve_script または preserve-mode の script 内では行わない
-    if (script_quote == '\0' && c == '>' && !((has_flag(options, minify_markup_opt::preserve_script) || script_mode == 2u) && in_script)) {
+    if (c == '>') {
       emit_trimmed(c, output, offset);
       ++i;
       continue;
     }
 
     // 空白文字は遅延フラグを立ててスキップ
-    // preserve_script または preserve-mode の script 内は空白をそのまま出力
     if (is_markup_space(c)) {
-      if ((has_flag(options, minify_markup_opt::preserve_script) || script_mode == 2u) && in_script) {
-        if (offset < output_capacity) output[offset++] = c;
-      } else if (!in_script || script_quote == '\0') {
-        pending_space = true;
-      } else {
-        // スクリプト内の文字列内や JS/importmap モード: そのまま出力 (JS will be post-processed by inline logic)
-        if (offset < output_capacity) output[offset++] = c;
-      }
+      pending_space = true;
       ++i;
       continue;
     }
 
     // 遅延された空白を出力するか判定してから文字を出力
     if (pending_space && offset > 0) {
-      flush_pending_space(output[offset - 1], c, output, offset, pending_space);
+      flush_pending_space(output[offset - 1], c, output, offset, pending_space, last_tag_inline);
     }
     if (offset < output_capacity) {
       output[offset++] = c;
@@ -1063,70 +1080,8 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_json(FrozenString<N> const& str) noexcept {
-  auto res       = FrozenString<N>{};
-  auto offset    = 0uz;
-  auto i         = 0uz;
-  auto in_string = false;
-  auto escaped   = false;
-
-  while (i < str.length) {
-    auto const c = str.buffer[i];
-    // 文字列リテラル内部: エスケープ状態を管理しながらそのまま出力バッファにコピーする
-    if (in_string) {
-      res.buffer[offset++] = c;
-      if (escaped) {
-        escaped = false;
-      } else if (c == '\\') {
-        escaped = true;
-      } else if (c == '"') {
-        in_string = false;
-      }
-      ++i;
-      continue;
-    }
-
-    // 文字列リテラルの開始: 引用符を出力して文字列モードに移行する
-    if (c == '"') {
-      in_string            = true;
-      res.buffer[offset++] = c;
-      ++i;
-      continue;
-    }
-
-    // JSON トップレベルの行コメント // およびブロックコメント /* */ を除去する
-    if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '/') {
-      i += 2;
-      while (i < str.length && str.buffer[i] != '\n') {
-        ++i;
-      }
-      continue;
-    }
-
-    if (c == '/' && i + 1 < str.length && str.buffer[i + 1] == '*') {
-      i += 2;
-      while (i + 1 < str.length && !(str.buffer[i] == '*' && str.buffer[i + 1] == '/')) {
-        ++i;
-      }
-      if (i + 1 < str.length) {
-        i += 2;
-      }
-      continue;
-    }
-
-    // トップレベルの空白文字はすべてスキップする
-    if (detail::is_any_whitespace(c)) {
-      ++i;
-      continue;
-    }
-
-    // コメント・空白以外のトークン（構造文字・数値・キーワード）はそのまま出力する
-    res.buffer[offset++] = c;
-    ++i;
-  }
-
-  // 末尾に null 終端を設定し圧縮後の長さを確定する
-  res.buffer[offset] = '\0';
-  res.length         = offset;
+  auto res   = FrozenString<N>{};
+  res.length = detail::minify_json(str.buffer.data(), str.length, res.buffer.data(), N);
   return res;
 }
 
@@ -1149,8 +1104,8 @@ template <size_t N>
  *
  * 以下の処理を行います:
  * - 行コメント `//` とブロックコメントの除去
- * - 文字列リテラル外の連続する空白の単一スペースへの圧縮
- * - 括弧・カンマ・セミコロンなどの前後にある不要な空白の除去
+ * - 文字列リテラル外の空白の除去（識別子同士の結合を防ぐ箇所のみ 1 個残す）
+ * - ASI 上省略可能なセミコロン（直後が `}` か終端）の除去
  *
  * 文字列リテラル（"、'、\`）、テンプレートリテラルの補間（${}）、
  * およびエスケープシーケンス内の内容は保持します。
@@ -1166,167 +1121,8 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_js(FrozenString<N> const& str) noexcept {
-  auto res            = FrozenString<N>{};
-  auto offset         = 0uz;
-  auto i              = 0uz;
-  auto quote          = '\0';
-  auto brace_depth    = 0uz;
-  auto pending_space  = false;
-  auto dollar_brace   = false;  // ${ の次の '{' 二重カウント防止
-
-  while (i < str.length) {
-    auto const c = str.buffer[i];
-
-    // エスケープ文字の処理
-    if (quote != '\0' && c == '\\') {
-      res.buffer[offset++] = c;
-      ++i;
-      if (i < str.length) {
-        res.buffer[offset++] = str.buffer[i];
-        ++i;
-      }
-      continue;
-    }
-
-    // 行コメント //
-    if (quote == '\0' && c == '/' && i + 1 < str.length && str.buffer[i + 1] == '/') {
-      i += 2;
-      while (i < str.length && str.buffer[i] != '\n') ++i;
-      pending_space = true;
-      continue;
-    }
-
-    // ブロックコメント /* */
-    if (quote == '\0' && c == '/' && i + 1 < str.length && str.buffer[i + 1] == '*') {
-      i += 2;
-      while (i + 1 < str.length && !(str.buffer[i] == '*' && str.buffer[i + 1] == '/')) ++i;
-      if (i + 1 < str.length) i += 2;
-      pending_space = true;
-      continue;
-    }
-
-    // テンプレートリテラルの補間 ${}
-    if (quote == '`' && c == '$' && i + 1 < str.length && str.buffer[i + 1] == '{') {
-      ++brace_depth;
-      dollar_brace = true;  // 次の '{' は二重カウントしない
-    } else if (quote == '`' && brace_depth > 0 && c == '{' && !dollar_brace) {
-      ++brace_depth;
-    } else if (quote == '`' && brace_depth > 0 && c == '}') {
-      --brace_depth;
-      dollar_brace = false;  // 式の閉じでリセット
-      // ponytail: ${} 内のネストされたテンプレートリテラルは未対応
-    }
-    if (c != '{' && c != '}' && c != '$') dollar_brace = false;
-
-    // 文字列リテラルの開始/終了
-    if (quote == '\0' && (c == '"' || c == '\'' || c == '`')) {
-      quote = c;
-    } else if (c == quote && brace_depth == 0) {
-      quote = '\0';
-      pending_space = false;
-    }
-
-    // 文字列内部はそのまま出力
-    if (quote != '\0') {
-      res.buffer[offset++] = c;
-      ++i;
-      continue;
-    }
-
-    // 空白文字は遅延フラグを立ててスキップ
-    if (detail::is_any_whitespace(c)) {
-      pending_space = true;
-      ++i;
-      continue;
-    }
-
-    // セミコロン除去（ASI 安全な範囲）:
-    // 直後の実トークンが '}' または EOF なら削除する。
-    // コメント・文字列・テンプレートリテラルをスキップして確認する。
-    if (quote == '\0' && c == ';') {
-      auto j = i + 1;
-      auto keep = true;
-      auto tl_depth = 0uz;  // テンプレートリテラルの ${} ネスト深度
-      while (true) {
-        while (j < str.length && detail::is_any_whitespace(str.buffer[j])) ++j;
-        if (j >= str.length) { keep = false; break; }
-        auto const nc = str.buffer[j];
-        // テンプレートリテラルの ${} 内: } は式の閉じ而非文の閉じ
-        if (tl_depth > 0) {
-          if (nc == '{') { ++tl_depth; ++j; continue; }
-          if (nc == '}') { --tl_depth; ++j; continue; }
-          ++j; continue;
-        }
-        if (nc == '}') { keep = false; break; }
-        // テンプレートリテラル開始
-        if (nc == '`') {
-          ++j;
-          while (j < str.length && str.buffer[j] != '`') {
-            if (str.buffer[j] == '\\') { j += 2; continue; }
-            if (str.buffer[j] == '$' && j + 1 < str.length && str.buffer[j + 1] == '{') { tl_depth = 1; j += 2; continue; }
-            ++j;
-          }
-          if (j < str.length) ++j;  // skip closing backtick
-          continue;
-        }
-        // 文字列: 閉じクォートまでスキップ
-        if (nc == '"' || nc == '\'') {
-          ++j;
-          while (j < str.length && str.buffer[j] != nc) {
-            if (str.buffer[j] == '\\') j += 2; else ++j;
-          }
-          if (j < str.length) ++j;
-          continue;
-        }
-        // コメント
-        if (nc == '/' && j + 1 < str.length && str.buffer[j + 1] == '/') {
-          while (j < str.length && str.buffer[j] != '\n') ++j;
-          continue;
-        }
-        if (nc == '/' && j + 1 < str.length && str.buffer[j + 1] == '*') {
-          j += 2;
-          while (j + 1 < str.length && !(str.buffer[j] == '*' && str.buffer[j + 1] == '/')) ++j;
-          if (j + 1 < str.length) j += 2;
-          continue;
-        }
-        break;
-      }
-      if (keep) {
-        res.buffer[offset++] = ';';
-      }
-      pending_space = false;
-      ++i;
-      continue;
-    }
-
-    // 遅延空白: トークン境界に必要な場合のみ出力
-    if (pending_space && offset > 0) {
-      auto const prev = res.buffer[offset - 1];
-      auto const no_space_after_prev = prev == '(' || prev == '['
-                                    || prev == '{' || prev == ')'
-                                    || prev == ']' || prev == '}'
-                                    || prev == ';' || prev == ','
-                                    || prev == '.' || prev == ':';
-      auto const no_space_before_cur = c == ')' || c == ']' || c == '}'
-                                    || c == ';' || c == ',' || c == '.'
-                                    || c == ':' || c == '(' || c == '['
-                                    || c == '{';
-      if (!no_space_after_prev && !no_space_before_cur) {
-        res.buffer[offset++] = ' ';
-      }
-      pending_space = false;
-    }
-
-    res.buffer[offset++] = c;
-    ++i;
-  }
-
-  // 末尾の余分な空白を除去して終端
-  if (offset > 0 && res.buffer[offset - 1] == ' ') {
-    --offset;
-  }
-  res.buffer[offset] = '\0';
-  res.length         = offset;
+  auto res   = FrozenString<N>{};
+  res.length = detail::minify_js(str.buffer.data(), str.length, res.buffer.data(), N);
   return res;
 }
 
@@ -1693,7 +1489,9 @@ constexpr auto minify_sql(char const* input, char* output, std::size_t output_ca
       auto const prev_is_punct = detail::is_sql_punct(prev);
       auto const next_is_punct = detail::is_sql_punct(c);
       auto const next_is_close = c == ')';
-      if (prev != '\0' && !prev_is_punct && !next_is_punct && !next_is_close) {
+      // `- -` を詰めると `--` 行コメントになるため、この組み合わせだけは空白を残す
+      auto const would_fuse    = prev == '-' && c == '-';
+      if (prev != '\0' && ((!prev_is_punct && !next_is_punct && !next_is_close) || would_fuse)) {
         if (offset < output_capacity) {
           output[offset++] = ' ';
         }
@@ -1835,7 +1633,10 @@ constexpr bool lua_needs_space(char last_out, char c) noexcept {
   auto const id_to_id    = isIdentChar(last_out) && isIdentChar(c);
   auto const id_to_q     = isIdentChar(last_out) && (c == '\'' || c == '"');
   auto const close_to_id = isCloseChar(last_out) && isIdentChar(c);
-  return id_to_id || id_to_q || close_to_id;
+  // `- -` → `--` (コメント化)、`1 ..` → `1..` (不正な数値リテラル) の融合を防ぐ
+  auto const minus_minus = last_out == '-' && c == '-';
+  auto const num_to_dot  = (last_out >= '0' && last_out <= '9') && c == '.';
+  return id_to_id || id_to_q || close_to_id || minus_minus || num_to_dot;
 }
 
 /// @brief Cypher ミニファイ用の字句解析状態
@@ -2107,9 +1908,7 @@ enum class minify_lua_state : unsigned char {
   normal,        ///< 通常コード
   single_quote,  ///< シングルクォート文字列 '...'
   double_quote,  ///< ダブルクォート文字列 "..."
-  line_comment,  ///< 行コメント -- ～ 行末
-  long_comment,  ///< 長括弧コメント --[=*[ ... ]=*]
-  long_string,   ///< 長括弧文字列 [=*[ ... ]=*]（内容をそのまま保持）
+  line_comment,  ///< 行コメント -- ～ 行末（長括弧コメント/文字列は normal 内で一括処理）
   directive_line, ///< Luau 型ディレクティブ --!...（keep_directives 時のみ）
 };
 
@@ -2143,9 +1942,8 @@ constexpr std::size_t minify_lua(char const* input, char* output,
   bool pending_space = false;
   char last_out = '\0';
 
-  // ponytail: Lua 5.2+ の「--[[ で対応する ]] が無い場合は行コメント扱い」という
-  // Edge case は捨て、Luau セマンティクス（常に長括弧扱い、EOF まで close が無ければ
-  // EOF まで長コメント/文字列）に統一。
+  // 対応する閉じ長括弧が無い `--[[` は行コメント、`[[` は通常の '[' として扱う
+  // （Lua 5.2+ 準拠）。Luau の「EOF まで長コメント/文字列」セマンティクスは未対応。
   auto write_char = [&](char c) noexcept {
     if (out_len < output_capacity - 1) {
       output[out_len++] = c;
@@ -2319,13 +2117,6 @@ constexpr std::size_t minify_lua(char const* input, char* output,
         state = minify_lua_state::normal;
         pending_space = true;
       }
-      ++i;
-      break;
-    }
-
-    case minify_lua_state::long_comment:
-    case minify_lua_state::long_string: {
-      // 到達しない: 長括弧は normal 状態で一括スキップ/出力する
       ++i;
       break;
     }

@@ -435,3 +435,28 @@ TEST_CASE("wildcard_find_all: alternatives") {
   }
   REQUIRE(i == 2);
 }
+
+TEST_CASE("wildcard: [!...] negation matches punctuation (no regex delegation)") {
+  using frozenchars::wildcard_match;
+  static_assert(wildcard_match<"[!a-z]">("-"));
+  static_assert(wildcard_match<"a[!b]c">("a-c"));
+  static_assert(!wildcard_match<"a[!b]c">("abc"));
+  static_assert(wildcard_match<"*[!a-z]">("x-"));
+}
+
+TEST_CASE("wildcard: suffix fast-reject must not reuse middle characters") {
+  using frozenchars::wildcard_match;
+  static_assert(!wildcard_match<"[ab]x*x">("ax"));
+  static_assert(!wildcard_match<"(a|b)x*x">("ax"));
+  static_assert(!wildcard_match<"a[bc]*c">("ac"));
+  static_assert(wildcard_match<"[ab]x*x">("axx"));
+  static_assert(wildcard_match<"a[bc]*c">("abzzc"));
+}
+
+TEST_CASE("wildcard: regex metacharacters are literals in glob patterns") {
+  using frozenchars::wildcard_match;
+  static_assert(wildcard_match<"{a}">("{a}"));
+  static_assert(wildcard_match<"a+b">("a+b"));
+  static_assert(!wildcard_match<"a+b">("aab"));
+  static_assert(wildcard_match<"^a$">("^a$"));
+}

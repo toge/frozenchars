@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <array>
+#include <iterator>
 #include <string_view>
 #include <utility>
 
@@ -118,4 +119,15 @@ TEST_CASE("frozen_multimap contains_all", "[frozen_multimap]") {
   STATIC_CHECK(map.contains_all<"a"_fs, "b"_fs>());
   STATIC_CHECK(map.contains_all<>());
   STATIC_CHECK(!map.contains_all<"a"_fs, "z"_fs>());
+}
+
+TEST_CASE("frozen_multimap iterators model random_access_iterator", "[frozen_multimap]") {
+  using Map = frozen_multimap<int, "gzip"_fs, "deflate"_fs, "gzip"_fs, "br"_fs>;
+  static_assert(std::random_access_iterator<Map::iterator>);
+  static_assert(std::random_access_iterator<Map::const_iterator>);
+  auto const map = Map{std::array<int, 4>{1, 2, 3, 4}};
+  // ソート順: br(4), deflate(2), gzip(1), gzip(3)
+  REQUIRE(map.begin()[0].second == 4);
+  REQUIRE(map.begin()[2].first == "gzip");
+  REQUIRE(map.begin()[3].second == 3);
 }

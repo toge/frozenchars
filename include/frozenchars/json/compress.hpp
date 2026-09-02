@@ -53,7 +53,7 @@ template <FrozenString Input>
     case json_type::boolean: return v.bool_val ? "true" : "false";
     case json_type::number: return std::string(v.str_val);
     case json_type::string: return std::string(v.str_val);
-    default: throw std::runtime_error("decompress: unexpected value table entry");
+    default: FROZENCHARS_THROW(std::runtime_error("decompress: unexpected value table entry"));
     }
   };
 
@@ -72,7 +72,7 @@ template <FrozenString Input>
       }
     }
   }
-  if (root_val == nullptr) throw std::runtime_error("decompress: missing root");
+  if (root_val == nullptr) FROZENCHARS_THROW(std::runtime_error("decompress: missing root"));
 
   // root を再帰的に再構築する。文字列は Base62 参照として values へ解決する
   auto rebuild = [&](auto&& self, frozenchars::json::detail::json_value const& v) -> std::string {
@@ -104,10 +104,10 @@ template <FrozenString Input>
         ref = ref.substr(1, ref.size() - 2);
       }
       auto const idx = frozenchars::json::detail::from_base62(ref);
-      if (idx >= values.size()) throw std::runtime_error("decompress: value index out of range");
+      if (idx >= values.size()) FROZENCHARS_THROW(std::runtime_error("decompress: value index out of range"));
       return values[idx];
     }
-    default: throw std::runtime_error("decompress: unexpected node type");
+    default: FROZENCHARS_THROW(std::runtime_error("decompress: unexpected node type"));
     }
   };
 

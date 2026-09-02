@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <stdexcept>
 #include <string_view>
 
 #include "string.hpp"
@@ -377,7 +376,7 @@ template <size_t N>
 [[nodiscard]] auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") {
   constexpr auto MAX_SEP_LEN = 32uz;
   if (sep.size() > MAX_SEP_LEN) {
-    throw std::invalid_argument("join_lines: separator exceeds MAX_SEP_LEN (32). Use join_lines<Sep>(str) for longer separators.");
+    FROZENCHARS_THROW(std::invalid_argument("join_lines: separator exceeds MAX_SEP_LEN (32). Use join_lines<Sep>(str) for longer separators."));
   }
   constexpr auto OUT_CAP = N + (N * MAX_SEP_LEN) + 1;
   auto res = FrozenString<OUT_CAP>{};
