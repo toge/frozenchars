@@ -400,7 +400,6 @@ jobs:
           # ホストでの例外なし互換も維持
           g++ -std=c++23 -fno-exceptions -I include test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs && /tmp/test_basic_fs
           python3 tools/amalgamate.py --check
-          python3 tools/amalgamate.py --check
 
   linux-wasi-minimal-wasip2:
     runs-on: ubuntu-latest

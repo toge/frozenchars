@@ -11,91 +11,107 @@ target_compile_features(smoke_no_exceptions PUBLIC cxx_std_23)
 target_compile_options(smoke_no_exceptions PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-exceptions>)
 add_test(NAME smoke_no_exceptions COMMAND smoke_no_exceptions)
 
-find_package(Catch2 REQUIRED CONFIG)
-find_package(ctre REQUIRED CONFIG)
-find_package(nanobench CONFIG REQUIRED)
+# Catch2/ctre/nanobench は wasm32-wasip1/wasip2 ではビルドできないため
+# find_package 自体をスキップする（vcpkg も platform フィルターでインストールしない）。
+if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
+  find_package(Catch2 CONFIG)
+  find_package(ctre CONFIG)
+  find_package(nanobench CONFIG)
+endif()
 
 file(GLOB test_src test_*.cpp)
 
-if(EMSCRIPTEN)
-  # Emscripten: vcpkg がインストールした Catch2 静的ライブラリは
-  # -sNO_DISABLE_EXCEPTION_CATCHING なしでコンパイルされているため、
-  # Catch2 の例外翻訳関数 (translateActiveException / handleExceptionMatchExpr) が
-  # 正しく動作しない。ここでは Catch2 のソースをアマルガメーションファイル経由で
-  # 再コンパイルすることで、例外サポートを有効にする。
-  include(FetchContent)
-  FetchContent_Declare(
-    catch2_emscripten
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.15.1
-    GIT_SHALLOW TRUE
-    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/catch2_emscripten-src
-  )
-  # FetchContent_Populate を使う（MakeAvailable は add_subdirectory を呼ぶため、
-  # vcpkg の Catch2::Catch2 ターゲットと衝突する）
-  FetchContent_GetProperties(catch2_emscripten)
-  if(NOT catch2_emscripten_POPULATED)
-    FetchContent_Populate(catch2_emscripten)
+if(Catch2_FOUND AND ctre_FOUND)
+  if(EMSCRIPTEN)
+    # Emscripten: vcpkg がインストールした Catch2 静的ライブラリは
+    # -sNO_DISABLE_EXCEPTION_CATCHING なしでコンパイルされているため、
+    # Catch2 の例外翻訳関数 (translateActiveException / handleExceptionMatchExpr) が
+    # 正しく動作しない。ここでは Catch2 のソースをアマルガメーションファイル経由で
+    # 再コンパイルすることで、例外サポートを有効にする。
+    include(FetchContent)
+    FetchContent_Declare(
+      catch2_emscripten
+      GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+      GIT_TAG v3.15.1
+      GIT_SHALLOW TRUE
+      SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/catch2_emscripten-src
+    )
+    # FetchContent_Populate を使う（MakeAvailable は add_subdirectory を呼ぶため、
+    # vcpkg の Catch2::Catch2 ターゲットと衝突する）
+    FetchContent_GetProperties(catch2_emscripten)
+    if(NOT catch2_emscripten_POPULATED)
+      FetchContent_Populate(catch2_emscripten)
+    endif()
+    add_library(catch2_emscripten_core STATIC
+      "${catch2_emscripten_SOURCE_DIR}/extras/catch_amalgamated.cpp"
+    )
+    target_include_directories(catch2_emscripten_core
+      BEFORE PUBLIC
+        "${catch2_emscripten_SOURCE_DIR}/extras"
+    )
+    target_compile_options(catch2_emscripten_core
+      PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING"
+    )
+    target_compile_features(catch2_emscripten_core PRIVATE cxx_std_17)
+    target_link_options(catch2_emscripten_core
+      INTERFACE "-sNO_DISABLE_EXCEPTION_CATCHING"
+    )
+
+    # Catch2::Catch2WithMain は Catch2::Catch2 に依存するため使えない。
+    # 代わりに em_catch2_main.cpp が main() を提供する。
+    list(APPEND test_src em_catch2_main.cpp)
+    set(_catch2_targets catch2_emscripten_core)
+  else()
+    set(_catch2_targets Catch2::Catch2 Catch2::Catch2WithMain)
   endif()
-  add_library(catch2_emscripten_core STATIC
-    "${catch2_emscripten_SOURCE_DIR}/extras/catch_amalgamated.cpp"
-  )
-  target_include_directories(catch2_emscripten_core
-    BEFORE PUBLIC
-      "${catch2_emscripten_SOURCE_DIR}/extras"
-  )
-  target_compile_options(catch2_emscripten_core
-    PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING"
-  )
-  target_compile_features(catch2_emscripten_core PRIVATE cxx_std_17)
-  target_link_options(catch2_emscripten_core
-    INTERFACE "-sNO_DISABLE_EXCEPTION_CATCHING"
-  )
 
-  # Catch2::Catch2WithMain は Catch2::Catch2 に依存するため使えない。
-  # 代わりに em_catch2_main.cpp が main() を提供する。
-  list(APPEND test_src em_catch2_main.cpp)
-  set(_catch2_targets catch2_emscripten_core)
-else()
-  set(_catch2_targets Catch2::Catch2 Catch2::Catch2WithMain)
+  add_executable(all_test ${test_src})
+
+  target_link_libraries(all_test PRIVATE
+    frozenchars::frozenchars
+    ${_catch2_targets}
+    ctre::ctre
+  )
+  target_compile_features(all_test PUBLIC cxx_std_23)
+
+  if(EMSCRIPTEN)
+    target_compile_options(all_test PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING")
+  endif()
+
+  add_test(NAME all_test COMMAND all_test -r junit)
+
+  add_subdirectory(../example example_examples)
+
+  if(nanobench_FOUND)
+    add_executable(bench_frozen_map bench_frozen_map.cpp)
+    target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars nanobench::nanobench)
+    target_compile_features(bench_frozen_map PUBLIC cxx_std_23)
+
+    add_executable(bench_frozen_set bench_frozen_set.cpp)
+    target_link_libraries(bench_frozen_set PRIVATE frozenchars::frozenchars nanobench::nanobench)
+    target_compile_features(bench_frozen_set PUBLIC cxx_std_23)
+
+    add_executable(bench_frozen_trie bench_frozen_trie.cpp)
+    target_link_libraries(bench_frozen_trie PRIVATE frozenchars::frozenchars nanobench::nanobench)
+    target_compile_features(bench_frozen_trie PUBLIC cxx_std_23)
+
+    add_executable(bench_map_comparison bench_map_comparison.cpp)
+    target_link_libraries(bench_map_comparison PRIVATE frozenchars::frozenchars nanobench::nanobench)
+    target_compile_features(bench_map_comparison PUBLIC cxx_std_23)
+
+    add_executable(bench_pattern_comparison bench_pattern_comparison.cpp)
+    target_link_libraries(bench_pattern_comparison PRIVATE frozenchars::frozenchars wildcards ctre::ctre nanobench::nanobench)
+    target_compile_features(bench_pattern_comparison PUBLIC cxx_std_23)
+
+    add_executable(bench_wildcard bench_wildcard.cpp)
+    target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards nanobench::nanobench)
+    target_compile_features(bench_wildcard PUBLIC cxx_std_23)
+
+    add_executable(bench_frozen_regex bench_frozen_regex.cpp)
+    target_link_libraries(bench_frozen_regex PRIVATE frozenchars::frozenchars ctre::ctre nanobench::nanobench)
+    target_compile_features(bench_frozen_regex PUBLIC cxx_std_23)
+  endif()
 endif()
-
-add_executable(all_test ${test_src})
-
-target_link_libraries(all_test PRIVATE
-  frozenchars::frozenchars
-  ${_catch2_targets}
-  ctre::ctre
-)
-target_compile_features(all_test PUBLIC cxx_std_23)
-
-if(EMSCRIPTEN)
-  target_compile_options(all_test PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING")
-endif()
-
-add_test(NAME all_test COMMAND all_test -r junit)
-
-add_subdirectory(../example example_examples)
-
-add_executable(bench_frozen_map bench_frozen_map.cpp)
-target_link_libraries(bench_frozen_map PRIVATE frozenchars::frozenchars nanobench::nanobench)
-target_compile_features(bench_frozen_map PUBLIC cxx_std_23)
-
-add_executable(bench_frozen_set bench_frozen_set.cpp)
-target_link_libraries(bench_frozen_set PRIVATE frozenchars::frozenchars nanobench::nanobench)
-target_compile_features(bench_frozen_set PUBLIC cxx_std_23)
-
-add_executable(bench_frozen_trie bench_frozen_trie.cpp)
-target_link_libraries(bench_frozen_trie PRIVATE frozenchars::frozenchars nanobench::nanobench)
-target_compile_features(bench_frozen_trie PUBLIC cxx_std_23)
-
-add_executable(bench_map_comparison bench_map_comparison.cpp)
-target_link_libraries(bench_map_comparison PRIVATE frozenchars::frozenchars nanobench::nanobench)
-target_compile_features(bench_map_comparison PUBLIC cxx_std_23)
-
-add_executable(bench_pattern_comparison bench_pattern_comparison.cpp)
-target_link_libraries(bench_pattern_comparison PRIVATE frozenchars::frozenchars wildcards ctre::ctre nanobench::nanobench)
-target_compile_features(bench_pattern_comparison PUBLIC cxx_std_23)
 
 # wildcards ベンチマーク依存: 構成時に取得
 # (https://github.com/zemasoft/wildcards)
@@ -130,14 +146,6 @@ unset(_wc_patched)
 unset(_wc_content)
 add_library(wildcards INTERFACE)
 target_include_directories(wildcards INTERFACE ${wildcards_SOURCE_DIR}/single_include)
-
-add_executable(bench_wildcard bench_wildcard.cpp)
-target_link_libraries(bench_wildcard PRIVATE frozenchars::frozenchars wildcards nanobench::nanobench)
-target_compile_features(bench_wildcard PUBLIC cxx_std_23)
-
-add_executable(bench_frozen_regex bench_frozen_regex.cpp)
-target_link_libraries(bench_frozen_regex PRIVATE frozenchars::frozenchars ctre::ctre nanobench::nanobench)
-target_compile_features(bench_frozen_regex PUBLIC cxx_std_23)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/run_compile_fail.cmake)
 
