@@ -11590,7 +11590,8 @@ public:
    * @param values キー順に対応する値の初期化リスト
    * @return std::expected<frozen_map, std::errc> 構築結果。要素数不一致は std::errc::invalid_argument
    */
-  static constexpr auto try_make(std::initializer_list<T> values) noexcept
+  static constexpr auto try_make(std::initializer_list<T> values) noexcept(
+    std::is_nothrow_copy_constructible_v<T>&& std::is_nothrow_move_constructible_v<T>)
     -> std::expected<frozen_map, std::errc> requires std::constructible_from<T, T const&> {
     if (values.size() != size()) return std::unexpected(std::errc::invalid_argument);
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -11602,7 +11603,8 @@ public:
    * @param entries キー・値ペアの配列
    * @return std::expected<frozen_map, std::errc> 構築結果。未知キー・重複・欠落は std::errc::invalid_argument
    */
-  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept
+  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept(
+    std::is_nothrow_move_constructible_v<T>)
     -> std::expected<frozen_map, std::errc> {
     auto values = std::array<std::optional<T>, size()>{};
     for (auto& entry : entries) {
@@ -12160,7 +12162,8 @@ public:
    * @param values 宣言順に対応する値の初期化リスト
    * @return std::expected<frozen_multimap, std::errc> 構築結果。要素数不一致は std::errc::invalid_argument
    */
-  static constexpr auto try_make(std::initializer_list<T> values) noexcept
+  static constexpr auto try_make(std::initializer_list<T> values) noexcept(
+    std::is_nothrow_copy_constructible_v<T>&& std::is_nothrow_move_constructible_v<T>)
     -> std::expected<frozen_multimap, std::errc> requires std::constructible_from<T, T const&> {
     if (values.size() != size()) return std::unexpected(std::errc::invalid_argument);
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -12172,7 +12175,8 @@ public:
    * @param entries キー・値ペアの配列
    * @return std::expected<frozen_multimap, std::errc> 構築結果。未知キー・欠落は std::errc::invalid_argument
    */
-  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept
+  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept(
+    std::is_nothrow_move_constructible_v<T>)
     -> std::expected<frozen_multimap, std::errc> {
     auto values = std::array<std::optional<T>, size()>{};
     for (auto& entry : entries) {
@@ -17238,6 +17242,7 @@ consteval auto dump_string() -> string_dump<Str> {
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <string>
@@ -17245,12 +17250,6 @@ consteval auto dump_string() -> string_dump<Str> {
 #include <system_error>
 #include <utility>
 #include <vector>
-
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <string_view>
 
 namespace frozenchars::json::detail {
 
@@ -17951,10 +17950,6 @@ template <FrozenString Input>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <vector>
-
-#include <cstdint>
-#include <string_view>
 #include <vector>
 
 namespace frozenchars::json::detail {
