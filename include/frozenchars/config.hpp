@@ -21,6 +21,29 @@
 #  define FROZENCHARS_WASI_MINIMAL 1
 #endif
 
+#include <cstdlib>
+
+/**
+ * @brief consteval経路の失敗通知。
+ *
+ * 例外ありでは `throw msg`（従来どおり、不正入力はコンパイルエラーになり
+ * 診断メッセージが残る）。`-fno-exceptions`（`__cpp_exceptions` 未定義）では
+ * 非constexprな [[noreturn]] 関数の呼び出しになり、定数評価に触れると
+ * コンパイルエラー、実行時に触れると std::abort() する。
+ */
+namespace frozenchars::detail {
+[[noreturn]] inline void consteval_fail(char const* msg) noexcept {
+  (void)msg;
+  std::abort();
+}
+} // namespace frozenchars::detail
+
+#ifdef __cpp_exceptions
+#define FROZENCHARS_CONSTEVAL_FAIL(msg) throw(msg)
+#else
+#define FROZENCHARS_CONSTEVAL_FAIL(msg) ::frozenchars::detail::consteval_fail(msg)
+#endif
+
 /**
  * @brief 例外送出の統一マクロ。
  *
