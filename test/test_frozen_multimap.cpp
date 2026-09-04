@@ -2,6 +2,7 @@
 
 #include <array>
 #include <iterator>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -133,4 +134,34 @@ TEST_CASE("frozen_multimap iterators model random_access_iterator", "[frozen_mul
   REQUIRE(map.begin()[0].second == 4);
   REQUIRE(map.begin()[2].first == "gzip");
   REQUIRE(map.begin()[3].second == 3);
+}
+
+TEST_CASE("frozen_multimap keyed initialization rejects unknown keys", "[frozen_multimap]") {
+  auto const bad = frozen_multimap<int, "gzip"_fs, "deflate"_fs, "gzip"_fs>::try_make(
+    std::array{
+      frozen_map_entry<int>{"gzip", 1},
+      frozen_map_entry<int>{"deflate", 2},
+      frozen_map_entry<int>{"other", 3},
+    });
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
+}
+
+TEST_CASE("frozen_multimap keyed initialization rejects placement failure", "[frozen_multimap]") {
+  // "gzip" は 2 スロットしかないため、3 個目は配置できず invalid_argument になる
+  auto const bad = frozen_multimap<int, "gzip"_fs, "deflate"_fs, "gzip"_fs>::try_make(
+    std::array{
+      frozen_map_entry<int>{"gzip", 1},
+      frozen_map_entry<int>{"gzip", 2},
+      frozen_map_entry<int>{"gzip", 3},
+    });
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
+}
+
+TEST_CASE("frozen_multimap initializer_list initialization rejects wrong size", "[frozen_multimap]") {
+  auto const bad = frozen_multimap<std::string, "gzip"_fs, "deflate"_fs, "gzip"_fs, "br"_fs>::try_make(
+    {"1", "2"});
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
 }

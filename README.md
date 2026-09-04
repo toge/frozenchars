@@ -1728,7 +1728,7 @@ frozen_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
 assert(view_map["timeout"] == "30");
 ```
 
-要素数がキー数と一致しない場合は、実行時に `std::invalid_argument` を送出します。
+要素数がキー数と一致しない場合、投げるコンストラクタはコンパイル時評価ではコンパイルエラー（`FROZENCHARS_CONSTEVAL_FAIL`）、実行時評価では `std::abort()` になります。要素数を実行時に検証したい場合は、`try_make` が `std::expected<frozen_map, std::errc>`（要素数不一致は `std::errc::invalid_argument`）を返します。
 
 `std::string_view` は non-owning なので、保持先の寿命には注意してください。Context7 で確認した `cppreference` の通り、
 文字列リテラルを渡すのは安全ですが、一時 `std::string` をそのまま渡すとダングリング参照になります。
@@ -1924,7 +1924,7 @@ for (auto it = first; it != last; ++it) {
   // 重複キー "gzip" の値 1 と 3 を走査
 }
 
-assert(enc.at("gzip") == 1);  // 重複キーはソート順で最初の値を返す
+assert(enc.at("gzip")->get() == 1);  // 重複キーはソート順で最初の値を返す
 assert(enc.contains_all<"gzip"_fs, "br"_fs>());  // 複数キーの一括存在判定
 ```
 

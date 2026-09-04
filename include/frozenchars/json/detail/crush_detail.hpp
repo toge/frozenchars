@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <string>
@@ -12,12 +13,6 @@
 #include <system_error>
 #include <utility>
 #include <vector>
-
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <string_view>
 
 namespace frozenchars::json::detail {
 
