@@ -17,7 +17,7 @@ TEST_CASE("frozen_bimap inherits frozen_map lookup", "[frozen_bimap]") {
     std::array<int, 3>{200, 500, 429}
   };
 
-  REQUIRE(map.at("status_ok") == 200);
+  REQUIRE(map.at("status_ok")->get() == 200);
   REQUIRE(map.contains("status_err"));
   REQUIRE_FALSE(map.contains("status_unknown"));
   REQUIRE(map.get("status_retry").has_value());

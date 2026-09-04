@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
+#include <expected>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <ranges>
 #include <string>
+#include <system_error>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -35,8 +38,8 @@ TEST_CASE("frozen_map glaze read_json ignores unknown keys", "[frozen_map][glaze
 
   auto const ec = glz::read_json(map, R"({"timeout":45,"retry":9,"unknown":100})");
   REQUIRE(!ec);
-  REQUIRE(map.at("timeout") == 45);
-  REQUIRE(map.at("retry") == 9);
+  REQUIRE(map.at("timeout")->get() == 45);
+  REQUIRE(map.at("retry")->get() == 9);
 }
 
 TEST_CASE("frozen_map glaze write_json emits known keys", "[frozen_map][glaze]") {
@@ -114,16 +117,12 @@ TEST_CASE("frozen_map lookup and miss handling", "[frozen_map]") {
 
   REQUIRE(map["timeout"] == 30);
   REQUIRE(map["retry"] == 5);
-  REQUIRE(map.at("timeout") == 30);
+  REQUIRE(map.at("timeout")->get() == 30);
   REQUIRE(map.get("timeout")->get() == 30);
   REQUIRE_FALSE(map.get("missing").has_value());
-  REQUIRE_THROWS_AS(map.at("missing"), std::out_of_range);
-  REQUIRE_THROWS_AS(map["missing"], std::out_of_range);
-
-  SECTION("at() exception includes the missing key") {
-    REQUIRE_THROWS_WITH(map.at("timeut"),
-      Catch::Matchers::ContainsSubstring("timeut"));
-  }
+  auto const miss = map.at("missing");
+  REQUIRE_FALSE(miss.has_value());
+  REQUIRE(miss.error() == std::errc::invalid_argument);
 }
 
 TEST_CASE("frozen_map supports find and count", "[frozen_map]") {
@@ -155,8 +154,8 @@ static_assert(requires { { IntPerfectMap::size() } -> std::same_as<IntPerfectMap
 static_assert(requires(IntPerfectMap& map, IntPerfectMap const& cmap) {
   { map.find("timeout") };
   { cmap.find("timeout") };
-  { map.at("timeout") } -> std::same_as<int&>;
-  { cmap.at("timeout") } -> std::same_as<int const&>;
+  { map.at("timeout") } -> std::same_as<std::expected<std::reference_wrapper<int>, std::errc>>;
+  { cmap.at("timeout") } -> std::same_as<std::expected<std::reference_wrapper<int const>, std::errc>>;
   { map.get("timeout") } -> std::same_as<std::optional<std::reference_wrapper<int>>>;
   { cmap.get("timeout") } -> std::same_as<std::optional<std::reference_wrapper<int const>>>;
   { cmap.contains("timeout") } -> std::same_as<bool>;
@@ -353,27 +352,23 @@ TEST_CASE("frozen_map make_frozen_map builds from pair-like entries", "[frozen_m
 }
 
 TEST_CASE("frozen_map keyed initialization rejects unknown keys", "[frozen_map]") {
-  REQUIRE_THROWS_WITH(
-    (frozen_map<int, "timeout"_fs, "retry"_fs>{
-      std::array{
-        frozen_map_entry<int>{"timeout", 30},
-        frozen_map_entry<int>{"other", 5},
-      }
-    }),
-    Catch::Matchers::ContainsSubstring("unknown key")
-  );
+  auto const bad = frozen_map<int, "timeout"_fs, "retry"_fs>::try_make(
+    std::array{
+      frozen_map_entry<int>{"timeout", 30},
+      frozen_map_entry<int>{"other", 5},
+    });
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
 }
 
 TEST_CASE("frozen_map keyed initialization rejects duplicate keys", "[frozen_map]") {
-  REQUIRE_THROWS_WITH(
-    (frozen_map<int, "timeout"_fs, "retry"_fs>{
-      std::array{
-        frozen_map_entry<int>{"timeout", 30},
-        frozen_map_entry<int>{"timeout", 5},
-      }
-    }),
-    Catch::Matchers::ContainsSubstring("duplicate key")
-  );
+  auto const bad = frozen_map<int, "timeout"_fs, "retry"_fs>::try_make(
+    std::array{
+      frozen_map_entry<int>{"timeout", 30},
+      frozen_map_entry<int>{"timeout", 5},
+    });
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
 }
 
 TEST_CASE("frozen_map keyed initialization supports non-default-constructible values",
@@ -448,8 +443,9 @@ TEST_CASE("frozen_map const access returns const references", "[frozen_map]") {
     std::array<int, 3>{30, 7, 2}
   };
 
-  static_assert(std::same_as<decltype(map.at("timeout")), int const&>);
-  REQUIRE(map.at("timeout") == 30);
+  static_assert(std::same_as<decltype(map.at("timeout")),
+    std::expected<std::reference_wrapper<int const>, std::errc>>);
+  REQUIRE(map.at("timeout")->get() == 30);
   REQUIRE(map.get("timeout")->get() == 30);
   REQUIRE(map["timeout"] == 30);
 }
@@ -528,14 +524,10 @@ TEST_CASE("frozen_map supports std::string initializer_list initialization", "[f
 }
 
 TEST_CASE("frozen_map initializer_list initialization rejects wrong size", "[frozen_map]") {
-  REQUIRE_THROWS_WITH(
-    (frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs>{
-      "100", "200"
-    }),
-    Catch::Matchers::ContainsSubstring(
-      "expected 3 values (one per key), got 2"
-    )
-  );
+  auto const bad = frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs>::try_make(
+    {"100", "200"});
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
 }
 
 TEST_CASE("frozen_map structured bindings mutate mapped value", "[frozen_map]") {

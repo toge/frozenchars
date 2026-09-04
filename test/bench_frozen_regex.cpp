@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
 
   // frozen_regex to_frozen_map + lookup
   constexpr auto m_small = R_small_alt::template to_frozen_map<int, 1, 2, 3, 4>();
-  bench.run("fr: to_map+at 'GET' hit",       [&]{ auto v = m_small.at("GET"); ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
+  bench.run("fr: to_map+at 'GET' hit",       [&]{ auto v = m_small.at("GET")->get(); ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
   bench.run("fr: to_map+find miss",           [&]{ auto it = m_small.find("PATCH"); ankerl::nanobench::doNotOptimizeAway(it != m_small.end()); g_sink += (it != m_small.end()); });
 
   // ---- CTRE match() ----

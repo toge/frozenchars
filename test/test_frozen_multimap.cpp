@@ -3,6 +3,7 @@
 #include <array>
 #include <iterator>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 #include "frozenchars/literals.hpp"
@@ -103,13 +104,15 @@ TEST_CASE("frozen_multimap at returns first value for key", "[frozen_multimap]")
     std::array<int, 4>{1, 2, 3, 4}
   };
 
-  REQUIRE(map.at("gzip") == 1);     // 重複キーはソート順で最初の値
-  REQUIRE(map.at("br") == 4);
-  REQUIRE(std::as_const(map).at("deflate") == 2);
-  REQUIRE_THROWS_AS(map.at("zstd"), std::out_of_range);
+  REQUIRE(map.at("gzip")->get() == 1);     // 重複キーはソート順で最初の値
+  REQUIRE(map.at("br")->get() == 4);
+  REQUIRE(std::as_const(map).at("deflate")->get() == 2);
+  auto const miss = map.at("zstd");
+  REQUIRE_FALSE(miss.has_value());
+  REQUIRE(miss.error() == std::errc::invalid_argument);
 
-  map.at("br") = 44;
-  REQUIRE(map.at("br") == 44);
+  (*map.at("br")).get() = 44;
+  REQUIRE(map.at("br")->get() == 44);
 }
 
 TEST_CASE("frozen_multimap contains_all", "[frozen_multimap]") {

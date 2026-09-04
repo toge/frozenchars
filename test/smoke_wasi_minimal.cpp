@@ -48,12 +48,12 @@ static_assert(E.size() == 6);
 static_assert(*frozenchars::parse_number<int>("42"_fs) == 42);
 static_assert(frozenchars::hex_decode("41"_fs).sv() == "A");
 constexpr frozenchars::frozen_map<int, "a"_fs, "b"_fs> MAP{1, 2};
-static_assert(MAP.at("b") == 2);
+static_assert(MAP.at("b")->get() == 2);
 static_assert(frozenchars::frozen_regex<"(a|b)c">::keys().size() == 2);
 static_assert(frozenchars::frozen_format<"{}-{}"_fs>(1, "x").sv() == "1-x");
 static_assert(frozenchars::json::compress<R"({"a":[1,2]})"_fs>().size() > 0);
 
 int main() {
   // 実行時パスも例外なしでリンクできること (見つかるキーのみ使用)
-  return MAP.at("a") == 1 ? 0 : 1;
+  return MAP.at("a")->get() == 1 ? 0 : 1;
 }

@@ -2,6 +2,7 @@
 
 #include <iterator>
 #include <string>
+#include <system_error>
 #include <utility>
 
 #include "frozenchars/literals.hpp"
@@ -141,7 +142,9 @@ TEST_CASE("frozen_trie_map basic operations", "[frozen_trie]") {
   CHECK(map["x"] == 10);
   CHECK(map["y"] == 20);
   CHECK(map["z"] == 30);
-  CHECK_THROWS_AS(map["w"], std::out_of_range);
+  CHECK(map.at("x")->get() == 10);
+  CHECK(!map.at("w").has_value());
+  CHECK(map.at("w").error() == std::errc::invalid_argument);
 
   CHECK(map.contains("x"));
   CHECK_FALSE(map.contains("w"));

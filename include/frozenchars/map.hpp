@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <concepts>
 #include <cstdint>
+#include <expected>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -12,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -779,30 +781,28 @@ public:
     return ((contains_impl<QueryKeys>()) && ... && true);
   }
   /**
-   * @brief キーに対応する値への参照を取得する（未検出は例外）
+   * @brief キーに対応する値への参照を取得する（未検出は expected で報告）
    *
    * @param key 探索するキー
-   * @return T& 値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T>, std::errc> 値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
+  [[nodiscard]] constexpr auto at(std::string_view key) noexcept
+    -> std::expected<std::reference_wrapper<T>, std::errc> {
     auto const i = lookup_::find_index_raw(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::ref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
   /**
-   * @brief キーに対応する値への参照を取得する（const 版、未検出は例外）
+   * @brief キーに対応する値への参照を取得する（const 版、未検出は expected で報告）
    *
    * @param key 探索するキー
-   * @return T const& 値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T const>, std::errc> 値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
+  [[nodiscard]] constexpr auto at(std::string_view key) const noexcept
+    -> std::expected<std::reference_wrapper<T const>, std::errc> {
     auto const i = lookup_::find_index_raw(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::cref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
   /**
    * @brief キーに対応する値を optional で取得する（未検出は nullopt）
@@ -830,12 +830,17 @@ public:
     return default_value;
   }
   /**
-   * @brief キーに対応する値への参照を取得する（未検出は at() が例外を送出）
+   * @brief キーに対応する値への参照を取得する（チェックなし）
    * @param key 探索するキー
+   * @pre contains(key)
    * @return T& / T const& 値への参照
    */
-  constexpr auto operator[](std::string_view key) -> T& { return at(key); }
-  constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
+  constexpr auto operator[](std::string_view key) noexcept -> T& {
+    return values_[lookup_::find_index_raw(key)];
+  }
+  constexpr auto operator[](std::string_view key) const noexcept -> T const& {
+    return values_[lookup_::find_index_raw(key)];
+  }
   /**
    * @brief lvalue のマップを指定した結果型へ変換する
    * @tparam Result 変換先（std::map / std::unordered_map / std::array<pair-like, size()>）
@@ -850,6 +855,45 @@ public:
    */
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map&&, mapped_type>>
   [[nodiscard]] constexpr auto to() && -> Result { return to_result<Result>(std::move(*this)); }
+  /**
+   * @brief 初期化リストから構築する（要素数はキー数と一致が必要）
+   * @param values キー順に対応する値の初期化リスト
+   * @return std::expected<frozen_map, std::errc> 構築結果。要素数不一致は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::initializer_list<T> values) noexcept
+    -> std::expected<frozen_map, std::errc> requires std::constructible_from<T, T const&> {
+    if (values.size() != size()) return std::unexpected(std::errc::invalid_argument);
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_map{std::array<T, size()>{*(values.begin() + I)...}};
+    }(std::make_index_sequence<size()>{});
+  }
+  /**
+   * @brief キー・値エントリ配列から構築する（キー一致で配置）
+   * @param entries キー・値ペアの配列
+   * @return std::expected<frozen_map, std::errc> 構築結果。未知キー・重複・欠落は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept
+    -> std::expected<frozen_map, std::errc> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto const index = lookup_::find_index_raw(entry.key);
+      if (index == size()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+      if (values[index].has_value()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+      values[index].emplace(std::move(entry.value));
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_map{std::array<T, size()>{std::move(*values[I])...}};
+    }(std::make_index_sequence<size()>{});
+  }
 private:
   using lookup_ = detail::lookup_index<Keys...>;
 
@@ -874,7 +918,7 @@ private:
   }
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) FROZENCHARS_THROW(std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
+    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー順の値配列へ並べ替え（欠落キーは例外）
@@ -883,16 +927,16 @@ private:
     for (auto& entry : entries) {
       auto const index = lookup_::find_index_raw(entry.key);
       if (index == size()) {
-        FROZENCHARS_THROW(std::invalid_argument("frozen_map unknown key"));
+        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_map unknown key"));
       }
       if (values[index].has_value()) {
-        FROZENCHARS_THROW(std::invalid_argument("frozen_map duplicate key"));
+        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_map duplicate key"));
       }
       values[index].emplace(std::move(entry.value));
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        FROZENCHARS_THROW(std::invalid_argument("missing key"));
+        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("missing key"));
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {

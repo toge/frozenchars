@@ -28,9 +28,9 @@ TEST_CASE("frozen_map Optimization B: Hashless lookup", "[frozen_map][opt]") {
 
     // 内部フラグ all_lengths_unique_ を直接確認はできないが、挙動で検証する
     Map map{std::array{1, 2, 3}};
-    REQUIRE(map.at("a") == 1);
-    REQUIRE(map.at("bb") == 2);
-    REQUIRE(map.at("ccc") == 3);
+    REQUIRE(map.at("a")->get() == 1);
+    REQUIRE(map.at("bb")->get() == 2);
+    REQUIRE(map.at("ccc")->get() == 3);
     REQUIRE_FALSE(map.contains("b"));
     REQUIRE_FALSE(map.contains("aa"));
     REQUIRE_FALSE(map.contains("cccc"));
@@ -39,9 +39,9 @@ TEST_CASE("frozen_map Optimization B: Hashless lookup", "[frozen_map][opt]") {
   SECTION("Duplicate lengths") {
     using Map = frozen_map<int, "foo"_fs, "bar"_fs, "baz"_fs>;
     Map map{std::array{1, 2, 3}};
-    REQUIRE(map.at("foo") == 1);
-    REQUIRE(map.at("bar") == 2);
-    REQUIRE(map.at("baz") == 3);
+    REQUIRE(map.at("foo")->get() == 1);
+    REQUIRE(map.at("bar")->get() == 2);
+    REQUIRE(map.at("baz")->get() == 3);
     REQUIRE_FALSE(map.contains("qux"));
   }
 }
@@ -86,9 +86,9 @@ TEST_CASE("frozen_map Optimization D: CHD path for more than 64 keys", "[frozen_
   // 全キーヒット
   for (auto i = 0uz; i < 99; ++i) {
     CAPTURE(i);
-    REQUIRE(map.at(Map::keys_in_declaration_order()[i]) == static_cast<int>(i + 1));
+    REQUIRE(map.at(Map::keys_in_declaration_order()[i])->get() == static_cast<int>(i + 1));
   }
-  REQUIRE(map.at("a_much_longer_key_101") == 100);
+  REQUIRE(map.at("a_much_longer_key_101")->get() == 100);
 
   // ミス: 長さ一致・長さ不一致の両方
   REQUIRE_FALSE(map.contains("key100"));  // 長さ一致でハッシュ検索まで到達
@@ -110,7 +110,7 @@ TEST_CASE("frozen_map unique lengths detection", "[frozen_map][opt]") {
     std::pair{"bb", 2},
     std::pair{"ccc", 3}
   );
-  REQUIRE(map.at("a") == 1);
-  REQUIRE(map.at("bb") == 2);
-  REQUIRE(map.at("ccc") == 3);
+  REQUIRE(map.at("a")->get() == 1);
+  REQUIRE(map.at("bb")->get() == 2);
+  REQUIRE(map.at("ccc")->get() == 3);
 }
