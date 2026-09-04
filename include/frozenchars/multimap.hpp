@@ -327,7 +327,7 @@ private:
 
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_multimap size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
+    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL("frozen_multimap size mismatch: expected one value per key");
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー一致の未使用宣言順スロットへ順次配置（重複キーは宣言順に割り当て、欠落キーは例外）
@@ -346,7 +346,7 @@ private:
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("missing key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_multimap missing key");
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {

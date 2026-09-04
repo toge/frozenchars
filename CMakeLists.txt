@@ -5,11 +5,6 @@ set(FROZENCHARS_VERSION "0.7.1")
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
 option(BUILD_TEST "Enable tests" ON)
-option(ENABLE_WASI_MINIMAL "Enable WASI minimal (no exceptions) mode - wasi-sdk wasm32-wasip1 assumed" OFF)
-
-if(ENABLE_WASI_MINIMAL)
-  add_compile_definitions(FROZENCHARS_WASI_MINIMAL=1)
-endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

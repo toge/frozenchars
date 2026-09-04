@@ -68,7 +68,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
   if (c >= 'A' && c <= 'F') {
     return static_cast<std::uint8_t>(10 + (c - 'A'));
   }
-  FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("parse_hex_color: invalid hex digit"));
+  FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
 }
 
 /**
@@ -80,7 +80,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  */
 [[nodiscard]] auto consteval parse_hex_byte(char const hi, char const lo) {
   if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
-    FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("parse_hex_color: invalid hex digit"));
+    FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
   }
   return static_cast<std::uint8_t>((hex_digit_to_value(hi) << 4u) | hex_digit_to_value(lo));
 }

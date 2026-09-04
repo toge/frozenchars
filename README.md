@@ -243,7 +243,7 @@ auto constexpr r = "  Hello, World!  "_fs
 
 ## WASI環境対応
 
-`wasm32-wasip1`（旧 `wasm32-wasi`）環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。例外を利用する一部機能のみが無効化されます。
+`wasm32-wasip1`（旧 `wasm32-wasi`）環境でも、コア機能はヘッダオンリーかつ `consteval` 主体のため利用できます。ライブラリは既定で例外なしのため、`-fno-exceptions` でそのままビルドできます。特別なフラグは不要です。
 frozencharsは `<string>` / `<vector>` / `<map>` 等の hosted ヘッダを必要とするため、真の bare-metal (`wasm32-unknown-unknown` の `--freestanding -nostdlib`) は非対応です。
 本ライブラリの WASI 対応は `wasm32-wasip1` + `wasi-sdk` sysroot を想定して提供します（`wasm3`, `wasmedge` 等の WASI ランタイムで実行可能）。
 
@@ -251,30 +251,25 @@ frozencharsは `<string>` / `<vector>` / `<map>` 等の hosted ヘッダを必�
 
 ### 有効化方法
 
-| 方法             | 手順                                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| コンパイラフラグ | `-DFROZENCHARS_WASI_MINIMAL` を付与（`g++ -DFROZENCHARS_WASI_MINIMAL -I include ...`）                                         |
-| CMake            | `-DENABLE_WASI_MINIMAL=ON`（`CMakeLists.txt:8`、`include/frozenchars/config.hpp:11`）                                          |
-| 単一ヘッダ       | `single_include/frozenchars_wasi_minimal.hpp` を使う（先頭で `FROZENCHARS_WASI_MINIMAL` が定義済み、`tools/amalgamate.py:47`） |
+特別なフラグは不要です。`wasm32-wasip1` + `wasi-sdk` sysroot を指定してそのままビルドしてください（clang での WASI ビルド例は `include/frozenchars/config.hpp` のコメントを参照してください）。
 
-`wasm32-wasip1` / `wasm32-emscripten` は WASI/hosted とみなすため自動では有効にならず、WASI 上で WASI_MINIMAL サブセットを検証したい場合は明示的に `-DFROZENCHARS_WASI_MINIMAL` を付与してください。
-それ以外の `__STDC_HOSTED__ == 0` 環境でも明示的なフラグが必要です。clang での WASI ビルド例は `include/frozenchars/config.hpp` のコメントを参照してください。
+`FROZENCHARS_WASI_MINIMAL` / `ENABLE_WASI_MINIMAL` / `single_include/frozenchars_wasi_minimal.hpp` は廃止しました（frozenchars が既定で例外なしになったため）。移行時はこれらの指定を削除してください。`FROZENCHARS_WASI_MINIMAL` を定義すると `#error` になります。
 
 ### 例外なしモードの挙動
 
-`FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出は `FROZENCHARS_THROW` マクロ（`include/frozenchars/config.hpp`）経由で `std::abort()` に置き換わります。`<stdexcept>` は include されず、`-fno-exceptions` でビルドできます。
+ライブラリは既定で例外なし（glaze流儀）です。実行時APIの失敗は `std::expected<T, std::errc>` で返るため、`-fno-exceptions` でビルドできます（例: `if (auto v = parse_number<int>(s)) use(*v);`）。コンパイル時（NTTP）の不正入力は従来どおりコンパイルエラーになります。
 
-| 状況                                                                        | hosted                                                   | WASI_MINIMAL                             |
-| --------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------- |
-| コンパイル時評価での不正入力（`parse_number("x")`、`frozen_regex<"(">` 等） | コンパイルエラー                                         | コンパイルエラー（変わらず）             |
-| 実行時の不正入力（`frozen_map::at` 未検出、`parse_number` 実行時パス等）    | `std::out_of_range` / `std::invalid_argument` 等を throw | `std::abort()`                           |
-| `FrozenString::front()` / `back()` / `operator[]` の範囲外                  | `std::out_of_range` を throw                             | `std::abort()`                           |
-| `json::validate_json` の不正 JSON                                           | `false` を返す                                           | `std::abort()`（例外で復帰できないため） |
+| 状況                                                                        | 挙動                                                              |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| コンパイル時評価での不正入力（`parse_number("x")`、`frozen_regex<"(">` 等） | コンパイルエラー                                                  |
+| 実行時の不正入力（`frozen_map::at` 未検出、`parse_number` 実行時パス等）    | `std::expected<T, std::errc>` でエラーを返す                      |
+| `FrozenString::front()` / `back()` / `operator[]` の範囲外                  | チェックなし（事前条件。範囲外アクセスは未定義動作）              |
+| `json::validate_json` の不正 JSON                                           | `false` を返す                                                    |
 
 数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、無い環境では手動実装へフォールバックします。
 
 `frozen_map` / `frozen_set` / `frozen_trie_map` など `<string>` / `<vector>` を使うコンテナ系は、`wasm32-wasip1` + `wasi-sdk` ではそのままビルドできます。
-CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml`）は `wasi-sdk` の `wasm32-wasip1` で `ENABLE_WASI_MINIMAL=ON` の wasm 生成を、`smoke_wasi_minimal` テストは hosted で `-fno-exceptions` ビルドを検証しています。
+CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml`）は `wasi-sdk` の `wasm32-wasip1` で wasm 生成を、`smoke_no_exceptions` テストは hosted で `-fno-exceptions` ビルドを検証しています。
 
 ### vcpkg + cmake で wasm32-wasip1 をビルドする
 
@@ -296,8 +291,7 @@ EOF
 cmake -B build-wasi -S . -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE=$HOME/vm/vcpkg/scripts/buildsystems/vcpkg.cmake \
   -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 \
-  -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets \
-  -DENABLE_WASI_MINIMAL=ON
+  -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets
 cmake --build build-wasi
 file build-wasi/test/smoke_* # WebAssembly
 ```
@@ -2352,7 +2346,6 @@ Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `sin
 |---|---|---|
 | `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 615KB / 17k行 |
 | `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 667KB / 18k行 |
-| `single_include/frozenchars_wasi_minimal.hpp` | `frozenchars.hpp` 相当を WASI Minimal 用に再生成（先頭で `FROZENCHARS_WASI_MINIMAL` 定義済み） | 約 615KB / 17k行 |
 
 glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
 

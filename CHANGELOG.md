@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **例外なしを既定化（glaze追従、破壊的変更）**: 実行時APIは一律 `std::expected<T, std::errc>` を返すようになり、`-fno-exceptions` でビルドできるようになった。`FROZENCHARS_THROW` / `FROZENCHARS_WASI_MINIMAL` / `ENABLE_WASI_MINIMAL` / `single_include/frozenchars_wasi_minimal.hpp` / `test/smoke_wasi_minimal.cpp` を廃止。`frozen_map` 等の `at()` は `expected<reference_wrapper<T>, errc>`、`operator[]` と `FrozenString::front/back/operator[]` はチェックなし（事前条件）になった。投げるコンストラクタは `try_make` ファクトリに分離。コンパイル時（NTTP）の不正入力は従来どおりコンパイルエラー。
 - **例外なしモードを実装**: `FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出が `FROZENCHARS_THROW` マクロ経由で `std::abort()` になり、`-fno-exceptions` でビルドできるようになった。従来は `FrozenString::front()/back()/operator[]` の 3 箇所しか無効化されていなかった。
 - `minify_html`: インライン要素（`<b>` / `<span>` / `<a>` 等）とテキストの間の空白を 1 個残すようになった（従来は削除して単語が連結していた）。`{{name}}` はインラインテキスト扱い、`{{#sec}}` / `{{/sec}}` は構造タグ扱い。
 - `minify_html`: `</p>` の省略を、直後がブロック要素・親の終了・入力終端のときに限定した（インライン要素やテキストが続くと DOM が変わるため）。

@@ -298,40 +298,40 @@ constexpr bool is_space(char c) noexcept {
  * @file frozenchars/config.hpp
  * @brief ビルドモード設定。
  *
- * FROZENCHARS_WASI_MINIMAL が定義されると、ライブラリ内の全ての例外送出
- * (FROZENCHARS_THROW) が std::abort() に置き換わり、-fno-exceptions でも
- * ビルドできる「例外なしモード」になる。コンパイル時評価での不正入力は
- * 従来どおりコンパイルエラーになる。wasm32-wasip1 / wasm32-emscripten は
- * WASI/hosted とみなすため自動では有効にならず、WASI 上で
- * 最小構成を検証する場合は手動で `-DFROZENCHARS_WASI_MINIMAL` を指定する。
+ * frozenchars は既定で例外なし（glaze流儀）。実行時APIの失敗は
+ * `std::expected<T, std::errc>` で返るため、`-fno-exceptions` でビルドできる。
+ * コンパイル時評価での不正入力は従来どおりコンパイルエラーになる。
  * 本ライブラリの WASI 対応は wasi-sdk sysroot を用いた wasm32-wasip1 でのビルドを
- * 想定（wasm3 等で実行可能）。`<iostream>` は wasip1/wasip2 では WASI 経由で
- * 利用可能なため無効化しない。
+ * 想定（wasm3 等で実行可能）。
  *
  * 例: clang++ --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot
- *       -fno-exceptions -DFROZENCHARS_WASI_MINIMAL=1 -I include -c src.cpp -o src.o
+ *       -fno-exceptions -I include -c src.cpp -o src.o
  */
-#if !defined(FROZENCHARS_WASI_MINIMAL) && defined(__wasm__) && !defined(__wasi__) && !defined(__EMSCRIPTEN__)
-#  define FROZENCHARS_WASI_MINIMAL 1
-#endif
+#include <cstdlib>
 
 /**
- * @brief 例外送出の統一マクロ。
+ * @brief consteval経路の失敗通知。
  *
- * hosted (既定) では `throw expr` に展開する。FROZENCHARS_WASI_MINIMAL 定義時は
- * expr を評価せず `detail::fail()` を呼ぶ。fail() は非 constexpr のため
- * コンパイル時評価では従来どおりコンパイルエラーになり、実行時は std::abort() する。
- * これにより -fno-exceptions でもライブラリ全体がビルドできる。
+ * 例外ありでは `throw msg`（不正入力はコンパイルエラーになり診断メッセージが残る）。
+ * `-fno-exceptions`（`__cpp_exceptions` 未定義）では非constexprな [[noreturn]]
+ * 関数の呼び出しになり、定数評価に触れるとコンパイルエラー、実行時に触れると
+ * std::abort() する。
  */
-#ifndef FROZENCHARS_WASI_MINIMAL
-#  include <stdexcept>
-#  define FROZENCHARS_THROW(expr) throw expr
-#else
-#  include <cstdlib>
 namespace frozenchars::detail {
-[[noreturn]] inline void fail() noexcept { std::abort(); }
+[[noreturn]] inline void consteval_fail(char const* msg) noexcept {
+  (void)msg;
+  std::abort();
+}
 } // namespace frozenchars::detail
-#  define FROZENCHARS_THROW(expr) ::frozenchars::detail::fail()
+
+#ifdef __cpp_exceptions
+#define FROZENCHARS_CONSTEVAL_FAIL(msg) throw(msg)
+#else
+#define FROZENCHARS_CONSTEVAL_FAIL(msg) ::frozenchars::detail::consteval_fail(msg)
+#endif
+
+#ifdef FROZENCHARS_WASI_MINIMAL
+#error "FROZENCHARS_WASI_MINIMAL was removed: frozenchars is now exception-free by default. See README."
 #endif
 // ---- end frozenchars/config.hpp ----
 // ---- begin frozenchars/detail/pipe.hpp ----
@@ -526,27 +526,27 @@ struct FrozenString {
   }
 
   /**
-   * @brief 先頭要素を返す (length > 0 を事前条件とする)
+   * @brief 先頭要素を返す
+   * @pre !empty()
    */
-  [[nodiscard]] constexpr auto front() const -> char {
-    if (empty()) FROZENCHARS_THROW(std::out_of_range{"FrozenString::front() called on empty string"});
+  [[nodiscard]] constexpr auto front() const noexcept -> char {
     return buffer[0];
   }
 
   /**
    * @brief 末尾要素を返す
+   * @pre !empty()
    */
-  [[nodiscard]] constexpr auto back() const -> char {
-    if (empty()) FROZENCHARS_THROW(std::out_of_range{"FrozenString::back() called on empty string"});
+  [[nodiscard]] constexpr auto back() const noexcept -> char {
     return buffer[length - 1];
   }
 
   /**
    * @brief 指定インデックスの文字を返す
    * @param i インデックス
+   * @pre i < size()
    */
-  [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
-    if (i >= length) FROZENCHARS_THROW(std::out_of_range{"FrozenString::operator[] index out of range"});
+  [[nodiscard]] constexpr auto operator[](size_t i) const noexcept -> char {
     return buffer[i];
   }
 
@@ -1031,7 +1031,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
   if (c >= 'A' && c <= 'F') {
     return static_cast<std::uint8_t>(10 + (c - 'A'));
   }
-  FROZENCHARS_THROW(std::invalid_argument("parse_hex_color: invalid hex digit"));
+  FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
 }
 
 /**
@@ -1043,7 +1043,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  */
 [[nodiscard]] auto consteval parse_hex_byte(char const hi, char const lo) {
   if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
-    FROZENCHARS_THROW(std::invalid_argument("parse_hex_color: invalid hex digit"));
+    FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
   }
   return static_cast<std::uint8_t>((hex_digit_to_value(hi) << 4u) | hex_digit_to_value(lo));
 }
@@ -1591,12 +1591,14 @@ constexpr auto const& freeze(std::array<FrozenString<N>, Count> const& arr) noex
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
 #include <system_error>
 #define FROZENCHARS_HAS_CHARCONV 1
 #else
 #define FROZENCHARS_HAS_CHARCONV 0
+#include <system_error>
 #endif
 #include <limits>
 
@@ -1609,13 +1611,15 @@ namespace frozenchars {
  * @tparam T 変換後の型
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto 変換後の数値
+ * @return 変換後の数値。不正な形式は std::errc::invalid_argument、
+ *         桁あふれは std::errc::result_out_of_range を保持する expected
  */
 template <typename T, size_t N>
-[[nodiscard]] auto constexpr parse_number(FrozenString<N> const& str) -> T {
+[[nodiscard]] auto constexpr parse_number(FrozenString<N> const& str) noexcept
+  -> std::expected<T, std::errc> {
   auto const sv = str.sv();
   if (sv.empty()) {
-    FROZENCHARS_THROW(std::invalid_argument("empty string"));
+    return std::unexpected(std::errc::invalid_argument);
   }
 
   size_t start = 0;
@@ -1628,14 +1632,14 @@ template <typename T, size_t N>
   }
 
   if (start >= sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("no digits"));
+    return std::unexpected(std::errc::invalid_argument);
   }
 
   // 整数型の場合は std::from_chars を使用して変換する
   if constexpr (std::integral<T>) {
     if constexpr (std::unsigned_integral<T>) {
       if (neg) {
-    FROZENCHARS_THROW(std::out_of_range("negative value for unsigned type"));
+        return std::unexpected(std::errc::invalid_argument);
       }
     }
 
@@ -1654,7 +1658,7 @@ template <typename T, size_t N>
     }
 
     if (start >= sv.size() && base != 10) {
-    FROZENCHARS_THROW(std::invalid_argument("missing digits after prefix"));
+      return std::unexpected(std::errc::invalid_argument);
     }
 
 #if FROZENCHARS_HAS_CHARCONV == 0
@@ -1670,13 +1674,13 @@ template <typename T, size_t N>
         else if (base == 2 && (c == '0' || c == '1')) digit = c - '0';
         else if (base == 8 && c >= '0' && c <= '7') digit = c - '0';
         else {
-          FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+          return std::unexpected(std::errc::invalid_argument);
         }
         if (digit < 0 || digit >= base) {
-          FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+          return std::unexpected(std::errc::invalid_argument);
         }
         if (acc > (std::numeric_limits<unsigned long long>::max() - static_cast<unsigned long long>(digit)) / static_cast<unsigned long long>(base)) {
-          FROZENCHARS_THROW(std::out_of_range("overflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         acc = acc * static_cast<unsigned long long>(base) + static_cast<unsigned long long>(digit);
       }
@@ -1684,19 +1688,19 @@ template <typename T, size_t N>
         return static_cast<T>(acc);
       } else if constexpr (std::unsigned_integral<T>) {
         if (acc > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-          FROZENCHARS_THROW(std::out_of_range("overflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         return static_cast<T>(acc);
       } else {
         if (!neg) {
           if (acc > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-            FROZENCHARS_THROW(std::out_of_range("overflow"));
+            return std::unexpected(std::errc::result_out_of_range);
           }
           return static_cast<T>(acc);
         } else {
           auto max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
           if (acc > max_abs) {
-            FROZENCHARS_THROW(std::out_of_range("underflow"));
+            return std::unexpected(std::errc::result_out_of_range);
           }
           if (acc == max_abs) return std::numeric_limits<T>::min();
           return static_cast<T>(-static_cast<long long>(acc));
@@ -1708,47 +1712,47 @@ template <typename T, size_t N>
       T res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       if (ptr != sv.data() + sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       return res;
     } else if constexpr (std::unsigned_integral<T>) {
       unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       if (ptr != sv.data() + sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       return static_cast<T>(res);
     } else {
       unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       if (ptr != sv.data() + sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (neg) {
         auto const max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
         if (res > max_abs) {
-    FROZENCHARS_THROW(std::out_of_range("underflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         if (res == max_abs) {
           return std::numeric_limits<T>::min();
@@ -1756,7 +1760,7 @@ template <typename T, size_t N>
         return static_cast<T>(-static_cast<long long>(res));
       } else {
         if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         return static_cast<T>(res);
       }
@@ -1774,10 +1778,10 @@ template <typename T, size_t N>
       T           result{};
       auto const [ptr, ec] = std::from_chars(first, last, result);
       if (ec == std::errc::invalid_argument || ptr != last) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid float"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("float overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       return result;
     }
@@ -1785,10 +1789,10 @@ template <typename T, size_t N>
 
     // コンパイル時パス: uint64_t で整数部・小数部を蓄積して精度を向上させる。
     // float/double への変換は最後に1回だけ行う。
-    auto constexpr pow10 = [](int n) -> T {
+    auto constexpr pow10 = [](int n) -> std::expected<T, std::errc> {
       // コンパイル時ステップ枯渇を防ぐため、指数に上限を設ける。double の最大実用値は約 308。
       if (n < 0 || n > 1024) {
-    FROZENCHARS_THROW(std::out_of_range("parse_number: exponent too large for compile-time path"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       T result = 1;
       T base   = 10;
@@ -1819,7 +1823,9 @@ template <typename T, size_t N>
     }
     T res = static_cast<T>(int_part);
     if (extra_exp > 0) {
-      res *= pow10(extra_exp);
+      auto const e = pow10(extra_exp);
+      if (!e) return std::unexpected(e.error());
+      res *= *e;
     }
 
     // 小数部を uint64_t で蓄積し、最後に1回の除算で精度を確保する
@@ -1837,7 +1843,9 @@ template <typename T, size_t N>
         has_digits = true;
       }
       if (frac_count > 0) {
-        res += static_cast<T>(frac_digits) / pow10(frac_count);
+        auto const e = pow10(frac_count);
+        if (!e) return std::unexpected(e.error());
+        res += static_cast<T>(frac_digits) / *e;
       }
     }
 
@@ -1857,29 +1865,33 @@ template <typename T, size_t N>
         has_exp_digits = true;
       }
       if (!has_exp_digits) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid exponent"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (eneg) {
         exp = -exp;
       }
     }
     if (!has_digits || i < sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid float"));
+      return std::unexpected(std::errc::invalid_argument);
     }
     T final_res = neg ? -res : res;
     if (exp != 0) {
       if (exp > 0) {
-        final_res *= pow10(exp);
+        auto const e = pow10(exp);
+        if (!e) return std::unexpected(e.error());
+        final_res *= *e;
       } else {
-        final_res /= pow10(-exp);
+        auto const e = pow10(-exp);
+        if (!e) return std::unexpected(e.error());
+        final_res /= *e;
       }
     }
     if (final_res == std::numeric_limits<T>::infinity() || final_res == -std::numeric_limits<T>::infinity()) {
-    FROZENCHARS_THROW(std::out_of_range("float overflow"));
+      return std::unexpected(std::errc::result_out_of_range);
     }
     return final_res;
   } else {
-    FROZENCHARS_THROW(std::invalid_argument("unsupported type"));
+    return std::unexpected(std::errc::invalid_argument);
   }
 }
 
@@ -1889,10 +1901,12 @@ template <typename T, size_t N>
  * @tparam T 変換先の数値型（ParseNumberTarget を満たす型）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return T 変換結果（不正な形式は例外）
+ * @return 変換結果。不正な形式は std::errc::invalid_argument、
+ *         桁あふれは std::errc::result_out_of_range を保持する expected
  */
 template <typename T, size_t N>
-[[nodiscard]] auto constexpr parse_number(char const (&str)[N]) -> T {
+[[nodiscard]] auto constexpr parse_number(char const (&str)[N]) noexcept
+  -> std::expected<T, std::errc> {
   return parse_number<T>(FrozenString{str});
 }
 
@@ -5449,7 +5463,7 @@ template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = 
   auto const token_count = split_count<IsDelimiter>(str);
   auto const tokens = split<N, IsDelimiter>(str);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = frozenchars::parse_number<Result>(tokens[i]);
+    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
   }
   return res;
 }
@@ -5464,7 +5478,7 @@ template <typename Pred, ParseNumberTarget Int = int, size_t N>
   auto const token_count = split_count(str, is_delimiter);
   auto const tokens = split<N>(str, is_delimiter);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = frozenchars::parse_number<Result>(tokens[i]);
+    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
   }
   return res;
 }
@@ -5894,7 +5908,7 @@ template <size_t N>
 [[nodiscard]] auto consteval join_lines(FrozenString<N> const& str, std::string_view sep = "") {
   constexpr auto MAX_SEP_LEN = 32uz;
   if (sep.size() > MAX_SEP_LEN) {
-    FROZENCHARS_THROW(std::invalid_argument("join_lines: separator exceeds MAX_SEP_LEN (32). Use join_lines<Sep>(str) for longer separators."));
+    FROZENCHARS_CONSTEVAL_FAIL("join_lines: separator exceeds MAX_SEP_LEN (32). Use join_lines<Sep>(str) for longer separators.");
   }
   constexpr auto OUT_CAP = N + (N * MAX_SEP_LEN) + 1;
   auto res = FrozenString<OUT_CAP>{};
@@ -10595,6 +10609,7 @@ template<class ... Args>
 #include <cstddef>
 #include <concepts>
 #include <cstdint>
+#include <expected>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -10602,6 +10617,7 @@ template<class ... Args>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -10945,7 +10961,7 @@ template <std::size_t TableSize, FrozenString... Keys>
     }
     if (!collision) { return result_t{seed, table}; }
   }
-  FROZENCHARS_THROW("frozen_map seed search exhausted");
+  std::unreachable();
 }
 
 /**
@@ -11062,7 +11078,7 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
         break;
       }
     }
-    if (!found) FROZENCHARS_THROW("frozen_map CHD seed search exhausted");
+    if (!found) std::unreachable();
   }
   return result;
 }
@@ -11495,30 +11511,28 @@ public:
     return ((contains_impl<QueryKeys>()) && ... && true);
   }
   /**
-   * @brief キーに対応する値への参照を取得する（未検出は例外）
+   * @brief キーに対応する値への参照を取得する（未検出は expected で報告）
    *
    * @param key 探索するキー
-   * @return T& 値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T>, std::errc> 値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
+  [[nodiscard]] constexpr auto at(std::string_view key) noexcept
+    -> std::expected<std::reference_wrapper<T>, std::errc> {
     auto const i = lookup_::find_index_raw(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::ref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
   /**
-   * @brief キーに対応する値への参照を取得する（const 版、未検出は例外）
+   * @brief キーに対応する値への参照を取得する（const 版、未検出は expected で報告）
    *
    * @param key 探索するキー
-   * @return T const& 値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T const>, std::errc> 値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
+  [[nodiscard]] constexpr auto at(std::string_view key) const noexcept
+    -> std::expected<std::reference_wrapper<T const>, std::errc> {
     auto const i = lookup_::find_index_raw(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::cref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
   /**
    * @brief キーに対応する値を optional で取得する（未検出は nullopt）
@@ -11546,12 +11560,17 @@ public:
     return default_value;
   }
   /**
-   * @brief キーに対応する値への参照を取得する（未検出は at() が例外を送出）
+   * @brief キーに対応する値への参照を取得する（チェックなし）
    * @param key 探索するキー
+   * @pre contains(key)
    * @return T& / T const& 値への参照
    */
-  constexpr auto operator[](std::string_view key) -> T& { return at(key); }
-  constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
+  constexpr auto operator[](std::string_view key) noexcept -> T& {
+    return values_[lookup_::find_index_raw(key)];
+  }
+  constexpr auto operator[](std::string_view key) const noexcept -> T const& {
+    return values_[lookup_::find_index_raw(key)];
+  }
   /**
    * @brief lvalue のマップを指定した結果型へ変換する
    * @tparam Result 変換先（std::map / std::unordered_map / std::array<pair-like, size()>）
@@ -11566,6 +11585,45 @@ public:
    */
   template <typename Result> requires detail::frozen_map_result<Result, size(), detail::forward_like_t<frozen_map&&, mapped_type>>
   [[nodiscard]] constexpr auto to() && -> Result { return to_result<Result>(std::move(*this)); }
+  /**
+   * @brief 初期化リストから構築する（要素数はキー数と一致が必要）
+   * @param values キー順に対応する値の初期化リスト
+   * @return std::expected<frozen_map, std::errc> 構築結果。要素数不一致は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::initializer_list<T> values) noexcept
+    -> std::expected<frozen_map, std::errc> requires std::constructible_from<T, T const&> {
+    if (values.size() != size()) return std::unexpected(std::errc::invalid_argument);
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_map{std::array<T, size()>{*(values.begin() + I)...}};
+    }(std::make_index_sequence<size()>{});
+  }
+  /**
+   * @brief キー・値エントリ配列から構築する（キー一致で配置）
+   * @param entries キー・値ペアの配列
+   * @return std::expected<frozen_map, std::errc> 構築結果。未知キー・重複・欠落は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept
+    -> std::expected<frozen_map, std::errc> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto const index = lookup_::find_index_raw(entry.key);
+      if (index == size()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+      if (values[index].has_value()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+      values[index].emplace(std::move(entry.value));
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_map{std::array<T, size()>{std::move(*values[I])...}};
+    }(std::make_index_sequence<size()>{});
+  }
 private:
   using lookup_ = detail::lookup_index<Keys...>;
 
@@ -11590,7 +11648,7 @@ private:
   }
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) FROZENCHARS_THROW(std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
+    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL("frozen_map size mismatch: expected one value per key");
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー順の値配列へ並べ替え（欠落キーは例外）
@@ -11599,16 +11657,16 @@ private:
     for (auto& entry : entries) {
       auto const index = lookup_::find_index_raw(entry.key);
       if (index == size()) {
-        FROZENCHARS_THROW(std::invalid_argument("frozen_map unknown key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_map unknown key");
       }
       if (values[index].has_value()) {
-        FROZENCHARS_THROW(std::invalid_argument("frozen_map duplicate key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_map duplicate key");
       }
       values[index].emplace(std::move(entry.value));
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        FROZENCHARS_THROW(std::invalid_argument("missing key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_map missing key");
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -11834,12 +11892,15 @@ constexpr auto make_frozen_bimap_kv() -> frozen_bimap<T, KVs.key...> {
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <expected>
+#include <functional>
 #include <initializer_list>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -12032,36 +12093,34 @@ public:
     return {end(), end()};
   }
   /**
-   * @brief キーに対応する最初の値への参照を取得する（未検出は例外）
+   * @brief キーに対応する最初の値への参照を取得する（未検出は expected で報告）
    *
    * 重複キーの場合はソート順で最初に現れる値を返す。
    *
    * @param key 探索するキー
-   * @return T& 最初の値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T>, std::errc> 最初の値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
+  [[nodiscard]] constexpr auto at(std::string_view key) noexcept
+    -> std::expected<std::reference_wrapper<T>, std::errc> {
     auto const pos = lookup_::first_pos(key);
     if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
-      return values_[lookup_::sorted_indices_[pos]];
+      return std::ref(values_[lookup_::sorted_indices_[pos]]);
     }
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_multimap key not found: "} + std::string{key}));
+    return std::unexpected(std::errc::invalid_argument);
   }
   /**
-   * @brief キーに対応する最初の値への参照を取得する（const 版、未検出は例外）
+   * @brief キーに対応する最初の値への参照を取得する（const 版、未検出は expected で報告）
    *
    * @param key 探索するキー
-   * @return T const& 最初の値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T const>, std::errc> 最初の値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
+  [[nodiscard]] constexpr auto at(std::string_view key) const noexcept
+    -> std::expected<std::reference_wrapper<T const>, std::errc> {
     auto const pos = lookup_::first_pos(key);
     if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
-      return values_[lookup_::sorted_indices_[pos]];
+      return std::cref(values_[lookup_::sorted_indices_[pos]]);
     }
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_multimap key not found: "} + std::string{key}));
+    return std::unexpected(std::errc::invalid_argument);
   }
   /// @brief 先頭イテレータを返す（ソート順）
   constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
@@ -12096,6 +12155,52 @@ public:
    */
   constexpr explicit frozen_multimap(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
 
+  /**
+   * @brief 初期化リストから構築する（要素数はキー数と一致が必要）
+   * @param values 宣言順に対応する値の初期化リスト
+   * @return std::expected<frozen_multimap, std::errc> 構築結果。要素数不一致は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::initializer_list<T> values) noexcept
+    -> std::expected<frozen_multimap, std::errc> requires std::constructible_from<T, T const&> {
+    if (values.size() != size()) return std::unexpected(std::errc::invalid_argument);
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_multimap{std::array<T, size()>{*(values.begin() + I)...}};
+    }(std::make_index_sequence<size()>{});
+  }
+  /**
+   * @brief キー・値エントリ配列から構築する（重複キーは宣言順スロットへ割り当て）
+   * @param entries キー・値ペアの配列
+   * @return std::expected<frozen_multimap, std::errc> 構築結果。未知キー・欠落は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept
+    -> std::expected<frozen_multimap, std::errc> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto placed = false;
+      for (auto slot = 0uz; slot < size(); ++slot) {
+        if (values[slot].has_value()) {
+          continue;
+        }
+        if (lookup_::key_views_[slot] == entry.key) {
+          values[slot].emplace(std::move(entry.value));
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_multimap{std::array<T, size()>{std::move(*values[I])...}};
+    }(std::make_index_sequence<size()>{});
+  }
+
 private:
   using lookup_ = detail::multimap_index<Keys...>;
 
@@ -12109,7 +12214,7 @@ private:
 
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) FROZENCHARS_THROW(std::invalid_argument("frozen_multimap size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
+    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL("frozen_multimap size mismatch: expected one value per key");
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー一致の未使用宣言順スロットへ順次配置（重複キーは宣言順に割り当て、欠落キーは例外）
@@ -12128,7 +12233,7 @@ private:
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        FROZENCHARS_THROW(std::invalid_argument("missing key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_multimap missing key");
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -12734,10 +12839,13 @@ public:
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <expected>
+#include <functional>
 #include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -12823,23 +12931,39 @@ public:
     return lookup_::find(key) != size() ? 1uz : 0uz;
   }
   /**
-   * @brief キーに対応する値にアクセス（なければ例外）
+   * @brief キーに対応する値への参照を取得する（未検出は expected で報告）
    * @param key 検索キー
-   * @throws std::out_of_range キーが見つからない場合
+   * @return std::expected<std::reference_wrapper<T>, std::errc> 値への参照。未検出は std::errc::invalid_argument
    */
-  constexpr auto at(std::string_view key) -> T& {
+  [[nodiscard]] constexpr auto at(std::string_view key) noexcept
+    -> std::expected<std::reference_wrapper<T>, std::errc> {
     auto const i = lookup_::find(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::ref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
-  /** @copydoc at */
-  constexpr auto at(std::string_view key) const -> T const& {
+  /**
+   * @brief キーに対応する値への参照を取得する（const 版、未検出は expected で報告）
+   * @param key 検索キー
+   * @return std::expected<std::reference_wrapper<T const>, std::errc> 値への参照。未検出は std::errc::invalid_argument
+   */
+  [[nodiscard]] constexpr auto at(std::string_view key) const noexcept
+    -> std::expected<std::reference_wrapper<T const>, std::errc> {
     auto const i = lookup_::find(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::cref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
-  constexpr auto operator[](std::string_view key) -> T& { return at(key); }
-  constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
+  /**
+   * @brief キーに対応する値への参照を取得する（チェックなし）
+   * @param key 検索キー
+   * @pre contains(key)
+   */
+  constexpr auto operator[](std::string_view key) noexcept -> T& { return values_[lookup_::find(key)]; }
+  /**
+   * @brief キーに対応する値への参照を取得する（チェックなし、const 版）
+   * @param key 検索キー
+   * @pre contains(key)
+   */
+  constexpr auto operator[](std::string_view key) const noexcept -> T const& { return values_[lookup_::find(key)]; }
 
   constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
   constexpr auto end() noexcept -> iterator { return iterator{{this}, size()}; }
@@ -13027,10 +13151,10 @@ struct parser {
 
   /// @brief エントリポイント: パターン全体をパースして AST を返す
   static consteval auto parse(std::string_view pattern) -> ast {
-    if (pattern.empty()) FROZENCHARS_THROW("frozen_regex: empty pattern");
+    if (pattern.empty()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: empty pattern");
     parser p{pattern, {}};
     auto const root = p.parse_alt();
-    if (!p.eof()) FROZENCHARS_THROW("frozen_regex: unbalanced bracket");
+    if (!p.eof()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unbalanced bracket");
     p.tree.root_index = root;
     return p.tree;
   }
@@ -13042,7 +13166,7 @@ struct parser {
 
   /// @brief 現在の先頭文字を覗く（消費しない）
   [[nodiscard]] consteval auto peek() const -> char {
-    if (eof()) FROZENCHARS_THROW("frozen_regex: unexpected end of pattern");
+    if (eof()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unexpected end of pattern");
     return src.front();
   }
 
@@ -13055,7 +13179,7 @@ struct parser {
 
   /// @brief 文法エラー（consteval throw でコンパイルエラー）
   [[noreturn]] consteval auto error([[maybe_unused]] char const* msg) -> void {
-    FROZENCHARS_THROW(msg);
+    FROZENCHARS_CONSTEVAL_FAIL(msg);
   }
 
   /// @brief ノードを追加してインデックスを返す
@@ -13084,7 +13208,7 @@ struct parser {
     while (!eof() && peek() != '|' && peek() != ')') {
       children.push_back(parse_atom());
     }
-    if (children.empty()) FROZENCHARS_THROW("frozen_regex: empty alternative");
+    if (children.empty()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: empty alternative");
     if (children.size() == 1) return children[0];
     node concat_node{node_kind::concat, '\0', {}, false, std::move(children)};
     return add_node(std::move(concat_node));
@@ -13099,13 +13223,13 @@ struct parser {
     if (c == '\\') return parse_escape_atom();
     // 量指定子は非対応
     if (c == '+' || c == '*' || c == '?') {
-      FROZENCHARS_THROW("frozen_regex: quantifiers not supported");
+      FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: quantifiers not supported");
     }
     if (c == '{') {
-      FROZENCHARS_THROW("frozen_regex: quantifiers not supported");
+      FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: quantifiers not supported");
     }
     // 先読み・後読きは非対応（peek で (?= 等を検出）
-    if (c == ')') FROZENCHARS_THROW("frozen_regex: unbalanced parenthesis");
+    if (c == ')') FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unbalanced parenthesis");
     // 通常リテラル
     consume();
     return add_node(node{node_kind::literal, c, {}, false, {}});
@@ -13116,10 +13240,10 @@ struct parser {
     consume();  ///< '(' を消費
     // (?= 等の先読み・後読みを検出
     if (!eof() && peek() == '?') {
-      FROZENCHARS_THROW("frozen_regex: lookahead/lookbehind not supported");
+      FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: lookahead/lookbehind not supported");
     }
     auto const inner = parse_alt();
-    if (eof() || peek() != ')') FROZENCHARS_THROW("frozen_regex: unbalanced parenthesis");
+    if (eof() || peek() != ')') FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unbalanced parenthesis");
     consume();  ///< ')' を消費
     return add_node(node{node_kind::group, '\0', {}, false, {inner}});
   }
@@ -13137,17 +13261,17 @@ struct parser {
       auto const c1 = parse_class_char();
       if (!eof() && peek() == '-') {
         consume();
-        if (eof() || peek() == ']') FROZENCHARS_THROW("frozen_regex: dangling '-' in character class");
+        if (eof() || peek() == ']') FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: dangling '-' in character class");
         auto const c2 = parse_class_char();
-        if (c1 > c2) FROZENCHARS_THROW("frozen_regex: invalid character range");
+        if (c1 > c2) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: invalid character range");
         for (auto ch = c1; ch <= c2; ++ch) chars.push_back(ch);
       } else {
         chars.push_back(c1);
       }
     }
-    if (eof()) FROZENCHARS_THROW("frozen_regex: unbalanced bracket");
+    if (eof()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unbalanced bracket");
     consume();  ///< ']' を消費
-    if (chars.empty()) FROZENCHARS_THROW("frozen_regex: empty character class");
+    if (chars.empty()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: empty character class");
     node n{node_kind::char_class, '\0', std::move(chars), negate, {}};
     return add_node(std::move(n));
   }
@@ -13156,7 +13280,7 @@ struct parser {
   consteval auto parse_class_char() -> char {
     auto const c = peek();
     if (c == '\\') return parse_escape();
-    if (c == ']') FROZENCHARS_THROW("frozen_regex: unbalanced bracket");
+    if (c == ']') FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unbalanced bracket");
     consume();
     return c;
   }
@@ -13176,14 +13300,14 @@ struct parser {
   /// @brief エスケープ1文字を消費して返す
   consteval auto parse_escape() -> char {
     consume();  ///< '\\' を消費
-    if (eof()) FROZENCHARS_THROW("frozen_regex: dangling backslash");
+    if (eof()) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: dangling backslash");
     auto const c = consume();
     switch (c) {
       case '\\': case '.': case '[': case ']':
       case '(': case ')': case '|': case '-': case '^':
         return c;
       default:
-        FROZENCHARS_THROW("frozen_regex: unsupported escape sequence");
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unsupported escape sequence");
     }
   }
 
@@ -13245,7 +13369,7 @@ struct enumerator {
       return merge_alt(std::move(child_results));
     }
     }
-    FROZENCHARS_THROW("frozen_regex: unreachable");
+    FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: unreachable");
   }
 
   /// @brief CONCAT の直積: 単位元 "" から各子の文字列を順に結合
@@ -13279,7 +13403,7 @@ struct enumerator {
 
   /// @brief 列挙数が MaxStrings を超えたら throw
   consteval auto check_overflow(std::size_t current) const -> void {
-    if (current > MaxStrings) FROZENCHARS_THROW("frozen_regex: enumeration exceeds MaxStrings");
+    if (current > MaxStrings) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: enumeration exceeds MaxStrings");
   }
 
   /// @brief 否定クラスの差集合: dot_chars から exclude を引く
@@ -13297,7 +13421,7 @@ struct enumerator {
   static consteval auto finalize(std::vector<std::string> strs) -> enumerate_result {
     std::ranges::sort(strs);
     strs.erase(std::unique(strs.begin(), strs.end()), strs.end());
-    if (strs.size() > MaxStrings) FROZENCHARS_THROW("frozen_regex: enumeration exceeds MaxStrings");
+    if (strs.size() > MaxStrings) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: enumeration exceeds MaxStrings");
     std::size_t maxlen = 0;
     for (auto const& s : strs) maxlen = std::max(maxlen, s.size());
     return enumerate_result{std::move(strs), maxlen};
@@ -14448,7 +14572,7 @@ struct to_ctre_adaptor : frozenchars::pipe_adaptor_base {
   template <size_t N>
   [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const {
     if (str.length != N - 1) {
-      FROZENCHARS_THROW("FrozenStringのactual lengthがbufferサイズN-1と一致しません。to_ctre<expr>() を使用してください。");
+      FROZENCHARS_CONSTEVAL_FAIL("FrozenStringのactual lengthがbufferサイズN-1と一致しません。to_ctre<expr>() を使用してください。");
     }
     return ctll::fixed_string<N - 1>(ctll::construct_from_pointer, str.data());
   }
@@ -14691,14 +14815,14 @@ struct format_scan_result {
         ++fields;
         ++i;
         while (i < len && data[i] != '}') ++i;
-        if (i >= len) FROZENCHARS_THROW("frozen_format: unmatched '{' in format string");
+        if (i >= len) FROZENCHARS_CONSTEVAL_FAIL("frozen_format: unmatched '{' in format string");
         ++i;
       }
     } else if (data[i] == '}') {
       if (i + 1 < len && data[i + 1] == '}') {
         literal += 1; i += 2;
       } else {
-        FROZENCHARS_THROW("frozen_format: unmatched '}' in format string");
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_format: unmatched '}' in format string");
       }
     } else {
       literal += 1; ++i;
@@ -17115,8 +17239,10 @@ consteval auto dump_string() -> string_dump<Str> {
 #include <array>
 #include <bitset>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -17166,17 +17292,17 @@ inline constexpr auto replacement_characters_utf16 = [] {
  *
  * @param input UTF-8 バイト列
  * @param index 開始位置。デコードしたバイト数だけ進める（1〜4バイト）
- * @return char32_t デコードしたコードポイント
- * @throw std::runtime_error 不正な UTF-8 シーケンスの場合
+ * @return std::expected<char32_t, std::errc> デコードしたコードポイント。不正は invalid_argument
  */
-inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& index) -> char32_t {
+inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& index) noexcept
+  -> std::expected<char32_t, std::errc> {
   auto const lead = static_cast<uint8_t>(input[index]);
   // 1バイト（ASCII）
   if (lead < 0x80) { return static_cast<char32_t>(input[index++]); }
   // 2バイトシーケンス
   if ((lead & 0xE0) == 0xC0) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
-    if ((c1 & 0xC0) != 0x80) FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+    if ((c1 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 2;
     return (static_cast<char32_t>(lead & 0x1F) << 6) | static_cast<char32_t>(c1 & 0x3F);
   }
@@ -17184,7 +17310,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   if ((lead & 0xF0) == 0xE0) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 3;
     return (static_cast<char32_t>(lead & 0x0F) << 12) |
            (static_cast<char32_t>(c1 & 0x3F) << 6) |
@@ -17196,36 +17322,38 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     auto const c3 = static_cast<uint8_t>(input[index + 3]);
     if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
-      FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+      return std::unexpected(std::errc::invalid_argument);
     index += 4;
     return (static_cast<char32_t>(lead & 0x07) << 18) |
            (static_cast<char32_t>(c1 & 0x3F) << 12) |
            (static_cast<char32_t>(c2 & 0x3F) << 6) |
            static_cast<char32_t>(c3 & 0x3F);
   }
-  FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+  return std::unexpected(std::errc::invalid_argument);
 };
 
 /**
  * @brief UTF-8 文字列を UTF-16 文字列に変換する
  *
  * @param input UTF-8 バイト列
- * @return std::u16string 変換した UTF-16 文字列（BMP 外はサロゲートペアで表現）
- * @throw std::runtime_error 不正な UTF-8 シーケンスの場合
+ * @return std::expected<std::u16string, std::errc> 変換した UTF-16 文字列。不正は invalid_argument
+ * @details BMP 外はサロゲートペアで表現する
  */
-inline constexpr auto utf8_to_utf16 = [](std::string_view const input) -> std::u16string {
+inline constexpr auto utf8_to_utf16 = [](std::string_view const input) noexcept
+  -> std::expected<std::u16string, std::errc> {
   auto output = std::u16string{};
   output.reserve(input.size());
   size_t idx = 0;
   while (idx < input.size()) {
     auto const cp = decode_utf8(input, idx);
-    if (cp < 0x10000) {
-      output.push_back(static_cast<char16_t>(cp));
+    if (!cp) return std::unexpected(cp.error());
+    if (*cp < 0x10000) {
+      output.push_back(static_cast<char16_t>(*cp));
     } else {
       // BMP 外はサロゲートペアに分割
 
-      output.push_back(static_cast<char16_t>(0xD800 + ((cp - 0x10000) >> 10)));
-      output.push_back(static_cast<char16_t>(0xDC00 + ((cp - 0x10000) & 0x3FF)));
+      output.push_back(static_cast<char16_t>(0xD800 + ((*cp - 0x10000) >> 10)));
+      output.push_back(static_cast<char16_t>(0xDC00 + ((*cp - 0x10000) & 0x3FF)));
     }
   }
   return output;
@@ -17235,10 +17363,10 @@ inline constexpr auto utf8_to_utf16 = [](std::string_view const input) -> std::u
  * @brief UTF-16 文字列を UTF-8 文字列に変換する
  *
  * @param input UTF-16 文字列
- * @return std::string 変換した UTF-8 バイト列
- * @throw std::runtime_error 対になっていないサロゲートがある場合
+ * @return std::expected<std::string, std::errc> 変換した UTF-8 バイト列。不正は invalid_argument
  */
-inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) -> std::string {
+inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) noexcept
+  -> std::expected<std::string, std::errc> {
   auto output = std::string{};
   output.reserve(input.size());
   // 1つのコードポイントを UTF-8 バイト列として追記する
@@ -17264,7 +17392,7 @@ inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) -> std
     // 上位サロゲートなら次の下位サロゲートと合成してコードポイントを復元
     if (v >= 0xD800 && v <= 0xDBFF) {
       if (i + 1 >= input.size() || input[i + 1] < 0xDC00 || input[i + 1] > 0xDFFF)
-        FROZENCHARS_THROW(std::runtime_error("invalid UTF-16"));
+        return std::unexpected(std::errc::invalid_argument);
       auto const cp = 0x10000 + ((static_cast<char32_t>(v - 0xD800) << 10) | (input[i + 1] - 0xDC00));
       append_utf8(cp);
       ++i;
@@ -17640,6 +17768,8 @@ template <typename CharT>
 } // namespace frozenchars::json::detail
 // ---- end frozenchars/json/detail/crush_detail.hpp ----
 
+#include <utility>
+
 namespace frozenchars::json {
 
 namespace detail {
@@ -17655,7 +17785,7 @@ namespace detail {
 template <FrozenString Input>
 [[nodiscard]] consteval auto crushed_size() -> size_t {
   auto const input_sv = Input.sv();
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(input_sv);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(input_sv);
   {
     std::u16string filtered;
     filtered.reserve(u16.size());
@@ -17673,7 +17803,7 @@ template <FrozenString Input>
   }
   output_u16.push_back(u'_');
 
-  auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
+  auto const output_u8 = *frozenchars::json::detail::utf16_to_utf8(output_u16);
   return output_u8.size() + 1;
 }
 
@@ -17682,14 +17812,13 @@ template <FrozenString Input>
  *
  * @param input crush 出力（末尾に '_' を含む）
  * @return std::string 復元した UTF-8 JSON テキスト
- * @throw std::runtime_error 末尾 '_' が無い、または置換文字が見つからない場合
  */
 [[nodiscard]] consteval auto uncrush_to_string(std::string_view const input) -> std::string {
   if (input.empty() || input.back() != '_') {
-    FROZENCHARS_THROW(std::runtime_error("uncrush: missing trailing '_'"));
+    std::unreachable();
   }
   auto const body_utf8 = input.substr(0, input.size() - 1);
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(body_utf8);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(body_utf8);
 
   // デリミタ U+0001 で body / split に分割
   std::u16string_view body = u16;
@@ -17707,7 +17836,7 @@ template <FrozenString Input>
   for (auto const rc : split) {
     auto const p = data.rfind(rc);
     if (p == std::u16string::npos) {
-      FROZENCHARS_THROW(std::runtime_error("uncrush: replacement char not found"));
+      std::unreachable();
     }
     auto const original = data.substr(p + 1);
     data.resize(p);
@@ -17720,7 +17849,7 @@ template <FrozenString Input>
 
   // JSON 構造文字を復元（swap の逆方向）
   auto const swapped_back = frozenchars::json::detail::json_crush_swap<char16_t>(data, false);
-  return frozenchars::json::detail::utf16_to_utf8(swapped_back);
+  return *frozenchars::json::detail::utf16_to_utf8(swapped_back);
 }
 
 /**
@@ -17752,7 +17881,7 @@ template <FrozenString Input>
   auto const input_sv = Input.sv();
 
   // UTF-16 に変換し、内部で使うデリミタが入力に含まれていれば除去
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(input_sv);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(input_sv);
   {
     std::u16string filtered;
     filtered.reserve(u16.size());
@@ -17774,7 +17903,7 @@ template <FrozenString Input>
   }
   output_u16.push_back(u'_');
 
-  auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
+  auto const output_u8 = *frozenchars::json::detail::utf16_to_utf8(output_u16);
 
   // FrozenString バッファへコピーして終端を付ける
   auto res = FrozenString<N>{};
@@ -17811,14 +17940,17 @@ template <FrozenString Input>
 // ==== entry: frozenchars/json/compress.hpp ====
 
 #include <string_view>
+#include <utility>
 
 // ---- begin frozenchars/json/detail/compress_detail.hpp ----
 
 
 #include <algorithm>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <cstdint>
@@ -17862,18 +17994,18 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置（'"' を指す）。終端クォートの次まで進める
- * @return std::string_view 前後のクォートを含む文字列ビュー
- * @throw std::runtime_error 先頭が '"' でない、または終端クォートが無い場合
+ * @return std::expected<std::string_view, std::errc> 前後のクォートを含む文字列ビュー。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) -> std::string_view {
-  if (p >= s.size() || s[p] != '"') FROZENCHARS_THROW(std::runtime_error("expected '\"'"));
+[[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) noexcept
+  -> std::expected<std::string_view, std::errc> {
+  if (p >= s.size() || s[p] != '"') return std::unexpected(std::errc::invalid_argument);
   auto const start = p;
   ++p;
   while (p < s.size() && s[p] != '"') {
     if (s[p] == '\\') ++p;
     ++p;
   }
-  if (p >= s.size()) FROZENCHARS_THROW(std::runtime_error("unterminated string"));
+  if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   ++p;
   return std::string_view(s.data() + start, p - start);
 }
@@ -17881,7 +18013,8 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
 /**
  * @brief 任意の JSON 値をパースする（前方宣言）
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) -> json_value;
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc>;
 
 /**
  * @brief JSON 数値をパースする
@@ -17913,23 +18046,25 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置（'[' を指す）。閉じ ']' の次まで進める
- * @return json_value array 型の値
- * @throw std::runtime_error 要素の区切り ',' または閉じ ']' が現れない場合
+ * @return std::expected<json_value, std::errc> array 型の値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   ++p;
   skip_ws(s, p);
   std::vector<json_value> arr;
-  if (p < s.size() && s[p] == ']') { ++p; return {json_type::array, false, {}, std::move(arr), {}}; }
+  if (p < s.size() && s[p] == ']') { ++p; return json_value{json_type::array, false, {}, std::move(arr), {}}; }
   while (true) {
     skip_ws(s, p);
-    arr.push_back(parse_value(s, p));
+    auto elem = parse_value(s, p);
+    if (!elem) return std::unexpected(elem.error());
+    arr.push_back(std::move(*elem));
     skip_ws(s, p);
     if (p < s.size() && s[p] == ',') { ++p; continue; }
     if (p < s.size() && s[p] == ']') { ++p; break; }
-    FROZENCHARS_THROW(std::runtime_error("expected ',' or ']'"));
+    return std::unexpected(std::errc::invalid_argument);
   }
-  return {json_type::array, false, {}, std::move(arr), {}};
+  return json_value{json_type::array, false, {}, std::move(arr), {}};
 }
 
 /**
@@ -17937,30 +18072,34 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置（'{' を指す）。閉じ '}' の次まで進める
- * @return json_value object 型の値。キーは keys、値は arr に同一インデックスで格納する
- * @throw std::runtime_error ':' 区切りが無い、または ',' / '}' が現れない場合
+ * @return std::expected<json_value, std::errc> object 型の値。不正は invalid_argument
+ * @details キーは keys、値は arr に同一インデックスで格納する
  */
-[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   ++p;
   skip_ws(s, p);
   std::vector<std::string_view> keys;
   std::vector<json_value> vals;
-  if (p < s.size() && s[p] == '}') { ++p; return {json_type::object, false, {}, std::move(vals), std::move(keys)}; }
+  if (p < s.size() && s[p] == '}') { ++p; return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)}; }
   while (true) {
     skip_ws(s, p);
-    auto const key = parse_string(s, p);
+    auto key = parse_string(s, p);
+    if (!key) return std::unexpected(key.error());
     skip_ws(s, p);
-    if (p >= s.size() || s[p] != ':') FROZENCHARS_THROW(std::runtime_error("expected ':'"));
+    if (p >= s.size() || s[p] != ':') return std::unexpected(std::errc::invalid_argument);
     ++p;
     skip_ws(s, p);
-    keys.push_back(key);
-    vals.push_back(parse_value(s, p));
+    keys.push_back(*key);
+    auto val = parse_value(s, p);
+    if (!val) return std::unexpected(val.error());
+    vals.push_back(std::move(*val));
     skip_ws(s, p);
     if (p < s.size() && s[p] == ',') { ++p; continue; }
     if (p < s.size() && s[p] == '}') { ++p; break; }
-    FROZENCHARS_THROW(std::runtime_error("expected ',' or '}'"));
+    return std::unexpected(std::errc::invalid_argument);
   }
-  return {json_type::object, false, {}, std::move(vals), std::move(keys)};
+  return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)};
 }
 
 /**
@@ -17968,43 +18107,45 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置。値の終端まで進める
- * @return json_value パースした値
- * @throw std::runtime_error 入力終端に達した、または未対応の文字が現れた場合
+ * @return std::expected<json_value, std::errc> パースした値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   skip_ws(s, p);
-  if (p >= s.size()) FROZENCHARS_THROW(std::runtime_error("unexpected EOF"));
+  if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   auto const c = s[p];
   if (c == '{') return parse_object(s, p);
   if (c == '[') return parse_array(s, p);
   if (c == '"') {
-    auto const str = parse_string(s, p);
-    return {json_type::string, false, str, {}, {}};
+    auto str = parse_string(s, p);
+    if (!str) return std::unexpected(str.error());
+    return json_value{json_type::string, false, *str, {}, {}};
   }
   auto starts_with = [&](size_t pos, std::string_view pat) -> bool {
     if (pat.size() > s.size() - pos) return false;
     for (size_t i = 0; i < pat.size(); ++i) if (s[pos + i] != pat[i]) return false;
     return true;
   };
-  if (c == 't' && starts_with(p, "true"))  { p += 4; return {json_type::boolean, true, {}, {}, {}}; }
-  if (c == 'f' && starts_with(p, "false")) { p += 5; return {json_type::boolean, false, {}, {}, {}}; }
-  if (c == 'n' && starts_with(p, "null"))  { p += 4; return {json_type::null, false, {}, {}, {}}; }
+  if (c == 't' && starts_with(p, "true"))  { p += 4; return json_value{json_type::boolean, true, {}, {}, {}}; }
+  if (c == 'f' && starts_with(p, "false")) { p += 5; return json_value{json_type::boolean, false, {}, {}, {}}; }
+  if (c == 'n' && starts_with(p, "null"))  { p += 4; return json_value{json_type::null, false, {}, {}, {}}; }
   if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
-  FROZENCHARS_THROW(std::runtime_error("unexpected character"));
+  return std::unexpected(std::errc::invalid_argument);
 }
 
 /**
  * @brief JSON 文字列全体をパースする
  *
  * @param s JSON 文字列
- * @return json_value ルート値
- * @throw std::runtime_error パース失敗、または末尾に余分な内容がある場合
+ * @return std::expected<json_value, std::errc> ルート値。不正・末尾余剰は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_json(std::string_view const s) -> json_value {
+[[nodiscard]] constexpr auto parse_json(std::string_view const s) noexcept
+  -> std::expected<json_value, std::errc> {
   size_t p = 0;
   auto val = parse_value(s, p);
+  if (!val) return std::unexpected(val.error());
   skip_ws(s, p);
-  if (p != s.size()) FROZENCHARS_THROW(std::runtime_error("trailing content"));
+  if (p != s.size()) return std::unexpected(std::errc::invalid_argument);
   return val;
 }
 
@@ -18012,22 +18153,14 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  * @brief JSON 文字列が構文的に妥当かを判定する
  *
  * @param s 検証する文字列
- * @return bool 全体を過不足なくパースできれば true、例外や余分な内容があれば false
+ * @return bool 全体を過不足なくパースできれば true、不正や余分な内容があれば false
  */
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
-  // ponytail: WASI_MINIMAL では例外で復帰できないため不正 JSON は abort する
-#ifndef FROZENCHARS_WASI_MINIMAL
-  try {
-#endif
-    size_t p = 0;
-    (void)parse_value(s, p);
-    skip_ws(s, p);
-    return p == s.size();
-#ifndef FROZENCHARS_WASI_MINIMAL
-  } catch (...) {
-    return false;
-  }
-#endif
+  size_t p = 0;
+  auto v = parse_value(s, p);
+  if (!v) return false;
+  skip_ws(s, p);
+  return p == s.size();
 }
 
 } // namespace frozenchars::json::detail
@@ -18059,10 +18192,10 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
  * @brief Base62 文字列を符号なし整数に変換する
  *
  * @param s 変換する Base62 文字列
- * @return uint64_t 変換結果
- * @throw std::runtime_error 不正な文字を含む場合
+ * @return std::expected<uint64_t, std::errc> 変換結果。不正文字は invalid_argument
  */
-[[nodiscard]] constexpr auto from_base62(std::string_view const s) -> uint64_t {
+[[nodiscard]] constexpr auto from_base62(std::string_view const s) noexcept
+  -> std::expected<uint64_t, std::errc> {
   uint64_t value = 0;
   for (auto const c : s) {
     value *= 62;
@@ -18073,7 +18206,7 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
     } else if (c >= 'a' && c <= 'z') {
       value += static_cast<uint64_t>(c - 'a' + 36);
     } else {
-      FROZENCHARS_THROW(std::runtime_error("from_base62: invalid character"));
+      return std::unexpected(std::errc::invalid_argument);
     }
   }
   return value;
@@ -18252,7 +18385,7 @@ namespace detail {
  */
 template <FrozenString Input>
 [[nodiscard]] consteval auto compressed_size() -> size_t {
-  auto const parsed = frozenchars::json::detail::parse_json(Input.sv());
+  auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());
   auto const result = frozenchars::json::detail::compress_to_string(parsed);
   return result.size() + 1;
 }
@@ -18262,10 +18395,9 @@ template <FrozenString Input>
  *
  * @param input 圧縮済み JSON 文字列（compress の出力形式）
  * @return std::string 復元した JSON テキスト
- * @throw std::runtime_error root が無い、または値参照が範囲外の場合
  */
 [[nodiscard]] consteval auto decompress_to_string(std::string_view const input) -> std::string {
-  auto const parsed = frozenchars::json::detail::parse_json(input);
+  auto const parsed = *frozenchars::json::detail::parse_json(input);
 
   // 値テーブルの各要素を JSON リテラルテキストへ復元する
   auto literal_of = [](frozenchars::json::detail::json_value const& v) -> std::string {
@@ -18275,7 +18407,7 @@ template <FrozenString Input>
     case json_type::boolean: return v.bool_val ? "true" : "false";
     case json_type::number: return std::string(v.str_val);
     case json_type::string: return std::string(v.str_val);
-    default: FROZENCHARS_THROW(std::runtime_error("decompress: unexpected value table entry"));
+    default: std::unreachable();
     }
   };
 
@@ -18294,7 +18426,7 @@ template <FrozenString Input>
       }
     }
   }
-  if (root_val == nullptr) FROZENCHARS_THROW(std::runtime_error("decompress: missing root"));
+  if (root_val == nullptr) std::unreachable();
 
   // root を再帰的に再構築する。文字列は Base62 参照として values へ解決する
   auto rebuild = [&](auto&& self, frozenchars::json::detail::json_value const& v) -> std::string {
@@ -18325,11 +18457,11 @@ template <FrozenString Input>
       if (ref.size() >= 2 && ref.front() == '"' && ref.back() == '"') {
         ref = ref.substr(1, ref.size() - 2);
       }
-      auto const idx = frozenchars::json::detail::from_base62(ref);
-      if (idx >= values.size()) FROZENCHARS_THROW(std::runtime_error("decompress: value index out of range"));
+      auto const idx = *frozenchars::json::detail::from_base62(ref);
+      if (idx >= values.size()) std::unreachable();
       return values[idx];
     }
-    default: FROZENCHARS_THROW(std::runtime_error("decompress: unexpected node type"));
+    default: std::unreachable();
     }
   };
 
@@ -18360,7 +18492,7 @@ template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto compress() -> FrozenString<detail::compressed_size<Input>()> {
   constexpr auto N = detail::compressed_size<Input>();
-  auto const parsed = frozenchars::json::detail::parse_json(Input.sv());
+  auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());
   auto const result = frozenchars::json::detail::compress_to_string(parsed);
 
   auto res = FrozenString<N>{};
@@ -18405,11 +18537,11 @@ template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto crush_compress() {
   // まず構造圧縮（重複値をテーブル参照へ）
-  auto const parsed = frozenchars::json::detail::parse_json(Input.sv());
+  auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());
   auto const compressed_str = frozenchars::json::detail::compress_to_string(parsed);
 
   // 続けて JSON-Crush 圧縮：UTF-16変換→デリミタ除去→swap→js_crush
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(compressed_str);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(compressed_str);
   {
     std::u16string filtered;
     filtered.reserve(u16.size());
@@ -18425,7 +18557,7 @@ template <FrozenString Input>
     output_u16.append(crush_result.split);
   }
   output_u16.push_back(u'_');
-  auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
+  auto const output_u8 = *frozenchars::json::detail::utf16_to_utf8(output_u16);
 
   // 入力長から必要バッファ長を上限見積りし、FrozenString へコピー
   constexpr auto N = Input.length * 64 + 32;

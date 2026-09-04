@@ -918,7 +918,7 @@ private:
   }
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_map size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
+    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL("frozen_map size mismatch: expected one value per key");
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー順の値配列へ並べ替え（欠落キーは例外）
@@ -927,16 +927,16 @@ private:
     for (auto& entry : entries) {
       auto const index = lookup_::find_index_raw(entry.key);
       if (index == size()) {
-        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_map unknown key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_map unknown key");
       }
       if (values[index].has_value()) {
-        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("frozen_map duplicate key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_map duplicate key");
       }
       values[index].emplace(std::move(entry.value));
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        FROZENCHARS_CONSTEVAL_FAIL(std::invalid_argument("missing key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_map missing key");
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {

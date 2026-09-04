@@ -2,7 +2,7 @@
 """
 frozenchars 単一ヘッダ生成スクリプト (stdlib のみ)
 
-  python3 tools/amalgamate.py                # single_include/frozenchars.hpp + _json.hpp + _wasi_minimal.hpp を生成
+  python3 tools/amalgamate.py                # single_include/frozenchars.hpp + _json.hpp を生成
   python3 tools/amalgamate.py --check        # 生成結果と既存ファイルの差分検証
   python3 tools/amalgamate.py --stdout       # all_basic 版を標準出力へ
 
@@ -39,23 +39,6 @@ def read_license() -> str:
     lines = ["// " + line if line else "//" for line in txt.splitlines()]
     return "\n".join(lines)
   return "// MIT License — see LICENSE in repository"
-
-
-def inject_wasi_minimal_define(text: str) -> str:
-  """
-  通常ヘッダのテキストに FROZENCHARS_WASI_MINIMAL 定義を注入して
-  WASI Minimal 単一ヘッダを作る。利用者が追加の -DFROZENCHARS_WASI_MINIMAL を
-  付けなくても WASI Minimal モードで使えるようにする。
-  # ponytail: 既存の amalgamate 出力を書き換えるだけ。別エントリの再アマルガム不要
-  """
-  marker = "#pragma once\n"
-  if marker in text:
-    return text.replace(
-      marker,
-      marker + "\n#ifndef FROZENCHARS_WASI_MINIMAL\n#define FROZENCHARS_WASI_MINIMAL 1\n#endif\n",
-      1,
-    )
-  return "#ifndef FROZENCHARS_WASI_MINIMAL\n#define FROZENCHARS_WASI_MINIMAL 1\n#endif\n" + text
 
 
 def resolve(rel: str, visited: set[str]) -> str:
@@ -181,18 +164,9 @@ def main() -> int:
     return check_or_write([(ROOT / args.output, amalgamate(args.entry))], args.check)
 
   std_txt = amalgamate("frozenchars/mod/all_basic.hpp")
-  wasi_minimal_txt = inject_wasi_minimal_define(std_txt).replace(
-    "Source: frozenchars/mod/all_basic.hpp",
-    "Source: frozenchars/mod/all_basic.hpp (WASI minimal)",
-  ).replace(
-    "python3 tools/amalgamate.py",
-    "python3 tools/amalgamate.py (WASI minimal)",
-    1,
-  )
   outputs = [
     (ROOT / "single_include/frozenchars.hpp", std_txt),
     (ROOT / "single_include/frozenchars_json.hpp", generate_with_json()),
-    (ROOT / "single_include/frozenchars_wasi_minimal.hpp", wasi_minimal_txt),
   ]
   return check_or_write(outputs, args.check)
 
