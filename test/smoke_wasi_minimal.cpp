@@ -45,7 +45,7 @@ static_assert(E.sv() == "frozen");
 static_assert(E.size() == 6);
 
 // ---- FROZENCHARS_THROW を含むモジュールが例外なしでコンパイル・評価できる ----
-static_assert(frozenchars::parse_number<int>("42"_fs) == 42);
+static_assert(*frozenchars::parse_number<int>("42"_fs) == 42);
 static_assert(frozenchars::hex_decode("41"_fs).sv() == "A");
 constexpr frozenchars::frozen_map<int, "a"_fs, "b"_fs> MAP{1, 2};
 static_assert(MAP.at("b") == 2);
