@@ -310,7 +310,7 @@ struct join_lines_adaptor : pipe_adaptor_base {
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
 
   template <size_t N>
-  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::join_lines(str, sep);
   }
 

@@ -616,7 +616,7 @@ template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
 #include <format>
 
 template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
-[[nodiscard]] consteval auto frozen_std_format(Args const&... args) {
+[[nodiscard]] consteval auto frozen_std_format(Args const&... args) noexcept {
   constexpr std::string_view fmt = Fmt.sv();
   constexpr auto size = std::formatted_size(fmt, args...);
   static_assert(size < Capacity, "frozen_std_format: output exceeds Capacity");
