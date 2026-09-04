@@ -38,7 +38,7 @@ struct json_value {
  * @param s 対象文字列
  * @param p 現在位置。空白でない文字まで進める
  */
-constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
+constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
   while (p < s.size() && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n' || s[p] == '\r')) ++p;
 }
 
@@ -77,7 +77,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  * @return json_value number 型の値。整数部を int64_t として保持し、元文字列も str_val に残す
  * @note 符号・小数部・指数部を読み飛ばすが、値は from_chars による整数変換のみ行う
  */
-[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept -> json_value {
   auto const start = p;
   if (p < s.size() && s[p] == '-') ++p;
   while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;

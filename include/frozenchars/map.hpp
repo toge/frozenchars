@@ -79,7 +79,7 @@ static constexpr std::uint32_t k_polynomial = 0x82F63B78;  // CRC32C (Castagnoli
  *
  * @return std::array<std::uint32_t, 256> 256 エントリのルックアップテーブル
  */
-[[nodiscard]] consteval auto make_table() {
+[[nodiscard]] consteval auto make_table() noexcept {
   std::array<std::uint32_t, 256> table{};
   for (std::uint32_t i = 0; i < 256; ++i) {
     std::uint32_t res = i;
@@ -171,7 +171,7 @@ constexpr auto hash_impl(std::string_view key, std::uint32_t seed) noexcept -> s
  * @param n 基準値
  * @return std::size_t n 以上の最小の 2 のべき乗
  */
-[[nodiscard]] consteval auto next_pow2(std::size_t n) -> std::size_t {
+[[nodiscard]] consteval auto next_pow2(std::size_t n) noexcept -> std::size_t {
   std::size_t res = 1; while (res < n) res <<= 1; return res;
 }
 
@@ -198,7 +198,7 @@ struct lookup_seed_result {
  * シードは 16 刻みの粗探索で当たりをつけた後、密探索に切り替える 2 段階戦略で収束を速める。
  */
 template <std::size_t TableSize, FrozenString... Keys>
-[[nodiscard]] consteval auto find_lookup_seed() {
+[[nodiscard]] consteval auto find_lookup_seed() noexcept {
   using result_t = lookup_seed_result<TableSize, sizeof...(Keys)>;
   using index_t = typename result_t::index_t;
   constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
@@ -385,7 +385,7 @@ struct lookup_index {
   static constexpr auto k_max_key_len_ = std::max({Keys.length...});  // キーの最大長
 
   // 存在するキー長の集合（長さによる迅速な除外用）
-  static constexpr auto valid_lengths_ = [] {
+  static constexpr auto valid_lengths_ = []() noexcept {
     std::array<bool, k_max_key_len_ + 1> table{};
     ((table[Keys.length] = true), ...);
     return table;
@@ -399,7 +399,7 @@ struct lookup_index {
   }();
 
   // キー長 → 要素インデックスのマップ（長さ一意の場合にのみ有効なスロットを保持）
-  static constexpr auto length_to_index_ = [] {
+  static constexpr auto length_to_index_ = []() noexcept {
     std::array<index_t, k_max_key_len_ + 1> table{};
     table.fill(static_cast<index_t>(-1));
     std::size_t idx = 0;
@@ -437,7 +437,7 @@ struct lookup_index {
   static constexpr auto mask_ = table_size_ - 1;  // ビットマスク（table_size_ は 2 冪）
 
   // ルックアップテーブル方式なら衝突ゼロのシードを探索、それ以外は空メタデータ
-  static consteval auto make_lookup_metadata() {
+  static consteval auto make_lookup_metadata() noexcept {
     if constexpr (use_lookup_table_) {
       return detail::find_lookup_seed<table_size_, Keys...>();
     } else {
@@ -469,7 +469,7 @@ struct lookup_index {
   };
 
   // 全キーを padded_key 配列に変換する（短いキーの高速比較用）
-  static consteval auto make_padded_keys() {
+  static consteval auto make_padded_keys() noexcept {
     std::array<padded_key, size()> res{};
     std::size_t idx = 0;
     ([&] {
@@ -483,7 +483,7 @@ struct lookup_index {
   }
 
   // 短いキーのみパディング版を保持、さもなければ空配列（key_equals で通常比較にフォールバック）
-  static constexpr auto padded_keys_ = [] {
+  static constexpr auto padded_keys_ = []() noexcept {
     if constexpr (all_keys_short) {
       return make_padded_keys();
     } else {
@@ -946,7 +946,7 @@ private:
     }(std::make_index_sequence<size()>{});
   }
   // 値を Self の価値カテゴリ・const 性に合わせて転送する
-  template <typename Self> static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) { return detail::forward_like_dispatch<Self>(self.values_[index]); }
+  template <typename Self> static constexpr decltype(auto) forward_mapped(Self&& self, size_type index) noexcept { return detail::forward_like_dispatch<Self>(self.values_[index]); }
   // to() の配列（std::array<pair-like>）への変換
   template <typename Result, typename Self, std::size_t... Index> static constexpr auto to_array_result(Self&& self, std::index_sequence<Index...>) -> Result { return Result{ typename Result::value_type{ lookup_::key_views_[Index], forward_mapped<Self>(std::forward<Self>(self), Index) }... }; }
   // to() の連想コンテナ（std::map / std::unordered_map）への変換

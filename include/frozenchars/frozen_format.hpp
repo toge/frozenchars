@@ -109,7 +109,7 @@ struct format_scan_result {
   size_t num_fields;
   size_t num_literal_chars;
 };
-[[nodiscard]] consteval auto scan_format(char const* data, size_t len) -> format_scan_result {
+[[nodiscard]] consteval auto scan_format(char const* data, size_t len) noexcept -> format_scan_result {
   size_t fields = 0;
   size_t literal = 0;
   size_t i = 0;

@@ -215,7 +215,7 @@ struct OrderedCandidate {
  * 下位サロゲートが続くこと、下位サロゲートが単独で現れないことを検証する。
  */
 template <typename CharT>
-[[nodiscard]] constexpr auto has_unmatched_surrogate(std::basic_string_view<CharT> const s) -> bool {
+[[nodiscard]] constexpr auto has_unmatched_surrogate(std::basic_string_view<CharT> const s) noexcept -> bool {
   if constexpr (std::same_as<CharT, char16_t>) {
     for (size_t i = 0; i < s.size(); ++i) {
       auto const c = static_cast<uint32_t>(s[i]);
@@ -241,7 +241,7 @@ template <typename CharT>
  * @return int64_t 直前の出現と重ならないように選んだ最大の出現回数
  */
 template <typename CharT>
-[[nodiscard]] constexpr auto greedy_non_overlapping_count(std::vector<size_t> const& positions, size_t len) -> int64_t {
+[[nodiscard]] constexpr auto greedy_non_overlapping_count(std::vector<size_t> const& positions, size_t len) noexcept -> int64_t {
   if (positions.empty()) return 0;
   int64_t cnt = 1;
   size_t end = positions[0] + len;
