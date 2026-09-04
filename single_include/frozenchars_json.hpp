@@ -10514,7 +10514,7 @@ concept FreezablePair = requires(T const& t) {
  */
 template <class Key, class Value>
 requires (Freezable<Key> && Freezable<Value>)
-[[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value) {
+[[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value) noexcept {
   return concat(
     url_encode(freeze(key)), "=", url_encode(freeze(value))
   );
@@ -10525,7 +10525,7 @@ requires (Freezable<Key> && Freezable<Value>)
  */
 template <class Key, class Value, class... Tail>
 requires (sizeof...(Tail) % 2 == 0 && Freezable<Key> && Freezable<Value>)
-[[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) {
+[[nodiscard]] auto consteval make_querystring_impl(Key&& key, Value&& value, Tail&&... tail) noexcept {
   return concat(
     url_encode(freeze(key)), "=", url_encode(freeze(value)),
     "&",
@@ -10539,7 +10539,7 @@ requires (sizeof...(Tail) % 2 == 0 && Freezable<Key> && Freezable<Value>)
  * @return "key1=val1&key2=val2" 形式の文字列
  */
 template <FreezablePair T>
-[[nodiscard]] auto consteval make_querystring_impl(T&& t) {
+[[nodiscard]] auto consteval make_querystring_impl(T&& t) noexcept {
   return concat(
     url_encode(freeze(std::get<0>(t))), "=", url_encode(freeze(std::get<1>(t)))
   );
@@ -10549,7 +10549,7 @@ template <FreezablePair T>
  * @brief タプルと残りの引数からクエリ文字列を生成する（再帰用）
  */
 template <FreezablePair Head, class... Tail>
-[[nodiscard]] auto consteval make_querystring_impl(Head&& head, Tail&&... tail) {
+[[nodiscard]] auto consteval make_querystring_impl(Head&& head, Tail&&... tail) noexcept {
   return concat(
     url_encode(freeze(std::get<0>(head))), "=", url_encode(freeze(std::get<1>(head))),
     "&",
@@ -10566,7 +10566,7 @@ template <FreezablePair Head, class... Tail>
  * @return クエリ文字列（先頭に '?' が付く）
  */
 template<class ... Args>
-[[nodiscard]] auto consteval make_querystring(Args&&... args) {
+[[nodiscard]] auto consteval make_querystring(Args&&... args) noexcept {
   return concat("?", detail::make_querystring_impl(args...));
 }
 
@@ -10577,7 +10577,7 @@ template<class ... Args>
  * @return クエリ文字列（先頭に '?' が付く）
  */
 template<class ... Args>
-[[nodiscard]] auto consteval make_querystring(std::tuple<Args...> const& t) {
+[[nodiscard]] auto consteval make_querystring(std::tuple<Args...> const& t) noexcept {
   return concat("?", std::apply([](auto&&... args) {
     return detail::make_querystring_impl(args...);
   }, t));
@@ -15314,7 +15314,7 @@ template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
 #include <format>
 
 template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
-[[nodiscard]] consteval auto frozen_std_format(Args const&... args) {
+[[nodiscard]] consteval auto frozen_std_format(Args const&... args) noexcept {
   constexpr std::string_view fmt = Fmt.sv();
   constexpr auto size = std::formatted_size(fmt, args...);
   static_assert(size < Capacity, "frozen_std_format: output exceeds Capacity");
@@ -16086,7 +16086,7 @@ struct join_lines_adaptor : pipe_adaptor_base {
   constexpr join_lines_adaptor(std::string_view s = "") noexcept : sep(s) {}
 
   template <size_t N>
-  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const {
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
     return frozenchars::join_lines(str, sep);
   }
 
