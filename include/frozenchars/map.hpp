@@ -229,7 +229,7 @@ template <std::size_t TableSize, FrozenString... Keys>
     }
     if (!collision) { return result_t{seed, table}; }
   }
-  FROZENCHARS_THROW("frozen_map seed search exhausted");
+  std::unreachable();
 }
 
 /**
@@ -346,7 +346,7 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
         break;
       }
     }
-    if (!found) FROZENCHARS_THROW("frozen_map CHD seed search exhausted");
+    if (!found) std::unreachable();
   }
   return result;
 }
