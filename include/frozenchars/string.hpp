@@ -94,27 +94,27 @@ struct FrozenString {
   }
 
   /**
-   * @brief 先頭要素を返す (length > 0 を事前条件とする)
+   * @brief 先頭要素を返す
+   * @pre !empty()
    */
-  [[nodiscard]] constexpr auto front() const -> char {
-    if (empty()) FROZENCHARS_THROW(std::out_of_range{"FrozenString::front() called on empty string"});
+  [[nodiscard]] constexpr auto front() const noexcept -> char {
     return buffer[0];
   }
 
   /**
    * @brief 末尾要素を返す
+   * @pre !empty()
    */
-  [[nodiscard]] constexpr auto back() const -> char {
-    if (empty()) FROZENCHARS_THROW(std::out_of_range{"FrozenString::back() called on empty string"});
+  [[nodiscard]] constexpr auto back() const noexcept -> char {
     return buffer[length - 1];
   }
 
   /**
    * @brief 指定インデックスの文字を返す
    * @param i インデックス
+   * @pre i < size()
    */
-  [[nodiscard]] constexpr auto operator[](size_t i) const -> char {
-    if (i >= length) FROZENCHARS_THROW(std::out_of_range{"FrozenString::operator[] index out of range"});
+  [[nodiscard]] constexpr auto operator[](size_t i) const noexcept -> char {
     return buffer[i];
   }
 
