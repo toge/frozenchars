@@ -101,15 +101,15 @@ TEST_CASE("frozen_set map_type alias", "[frozen_set]") {
   using Map = Set::map_type<int>;
   static_assert(Map::size() == 2);
   Map map{std::array<int, 2>{10, 20}};
-  REQUIRE(map.at("x") == 10);
-  REQUIRE(map.at("y") == 20);
+  REQUIRE(map.at("x")->get() == 10);
+  REQUIRE(map.at("y")->get() == 20);
 }
 
 TEST_CASE("frozen_set to_frozen_map", "[frozen_set]") {
   using Set = frozen_set<"key1"_fs, "key2"_fs>;
   auto map = to_frozen_map<std::string>(Set{}, std::array{"val1"s, "val2"s});
-  REQUIRE(map.at("key1") == "val1");
-  REQUIRE(map.at("key2") == "val2");
+  REQUIRE(map.at("key1")->get() == "val1");
+  REQUIRE(map.at("key2")->get() == "val2");
 }
 
 TEST_CASE("frozen_set single key", "[frozen_set]") {

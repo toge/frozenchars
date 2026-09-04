@@ -4,12 +4,15 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <expected>
+#include <functional>
 #include <initializer_list>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -203,36 +206,34 @@ public:
     return {end(), end()};
   }
   /**
-   * @brief キーに対応する最初の値への参照を取得する（未検出は例外）
+   * @brief キーに対応する最初の値への参照を取得する（未検出は expected で報告）
    *
    * 重複キーの場合はソート順で最初に現れる値を返す。
    *
    * @param key 探索するキー
-   * @return T& 最初の値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T>, std::errc> 最初の値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) -> T& {
+  [[nodiscard]] constexpr auto at(std::string_view key) noexcept
+    -> std::expected<std::reference_wrapper<T>, std::errc> {
     auto const pos = lookup_::first_pos(key);
     if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
-      return values_[lookup_::sorted_indices_[pos]];
+      return std::ref(values_[lookup_::sorted_indices_[pos]]);
     }
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_multimap key not found: "} + std::string{key}));
+    return std::unexpected(std::errc::invalid_argument);
   }
   /**
-   * @brief キーに対応する最初の値への参照を取得する（const 版、未検出は例外）
+   * @brief キーに対応する最初の値への参照を取得する（const 版、未検出は expected で報告）
    *
    * @param key 探索するキー
-   * @return T const& 最初の値への参照
-   * @throw std::out_of_range キーが存在しない場合
+   * @return std::expected<std::reference_wrapper<T const>, std::errc> 最初の値への参照。未検出は std::errc::invalid_argument
    */
-  [[nodiscard]] constexpr auto at(std::string_view key) const -> T const& {
+  [[nodiscard]] constexpr auto at(std::string_view key) const noexcept
+    -> std::expected<std::reference_wrapper<T const>, std::errc> {
     auto const pos = lookup_::first_pos(key);
     if (pos < size() && lookup_::sorted_key_views_[pos] == key) [[likely]] {
-      return values_[lookup_::sorted_indices_[pos]];
+      return std::cref(values_[lookup_::sorted_indices_[pos]]);
     }
-    FROZENCHARS_THROW(std::out_of_range(
-      std::string{"frozen_multimap key not found: "} + std::string{key}));
+    return std::unexpected(std::errc::invalid_argument);
   }
   /// @brief 先頭イテレータを返す（ソート順）
   constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
@@ -267,6 +268,54 @@ public:
    */
   constexpr explicit frozen_multimap(std::array<frozen_map_entry<T>, size()> entries) : values_{reorder_entries(std::move(entries))} {}
 
+  /**
+   * @brief 初期化リストから構築する（要素数はキー数と一致が必要）
+   * @param values 宣言順に対応する値の初期化リスト
+   * @return std::expected<frozen_multimap, std::errc> 構築結果。要素数不一致は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::initializer_list<T> values) noexcept(
+    std::is_nothrow_copy_constructible_v<T>&& std::is_nothrow_move_constructible_v<T>)
+    -> std::expected<frozen_multimap, std::errc> requires std::constructible_from<T, T const&> {
+    if (values.size() != size()) return std::unexpected(std::errc::invalid_argument);
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_multimap{std::array<T, size()>{*(values.begin() + I)...}};
+    }(std::make_index_sequence<size()>{});
+  }
+  /**
+   * @brief キー・値エントリ配列から構築する（重複キーは宣言順スロットへ割り当て）
+   * @param entries キー・値ペアの配列
+   * @return std::expected<frozen_multimap, std::errc> 構築結果。未知キー・欠落は std::errc::invalid_argument
+   */
+  static constexpr auto try_make(std::array<frozen_map_entry<T>, size()> entries) noexcept(
+    std::is_nothrow_move_constructible_v<T>)
+    -> std::expected<frozen_multimap, std::errc> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto placed = false;
+      for (auto slot = 0uz; slot < size(); ++slot) {
+        if (values[slot].has_value()) {
+          continue;
+        }
+        if (lookup_::key_views_[slot] == entry.key) {
+          values[slot].emplace(std::move(entry.value));
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        return std::unexpected(std::errc::invalid_argument);
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return frozen_multimap{std::array<T, size()>{std::move(*values[I])...}};
+    }(std::make_index_sequence<size()>{});
+  }
+
 private:
   using lookup_ = detail::multimap_index<Keys...>;
 
@@ -280,7 +329,7 @@ private:
 
   // 初期化リストから値配列を構築（要素数検証付き）
   static constexpr auto copy_initializer_list(std::initializer_list<T> values) -> std::array<T, size()> requires std::constructible_from<T, T const&> {
-    if (values.size() != size()) FROZENCHARS_THROW(std::invalid_argument("frozen_multimap size mismatch: expected " + std::to_string(size()) + " values (one per key), got " + std::to_string(values.size())));
+    if (values.size() != size()) FROZENCHARS_CONSTEVAL_FAIL("frozen_multimap size mismatch: expected one value per key");
     return [&]<std::size_t... I>(std::index_sequence<I...>) { return std::array<T, size()>{ *(values.begin() + I)... }; }(std::make_index_sequence<size()>{});
   }
   // エントリ配列をキー一致の未使用宣言順スロットへ順次配置（重複キーは宣言順に割り当て、欠落キーは例外）
@@ -299,7 +348,7 @@ private:
     }
     for (auto const& slot : values) {
       if (!slot.has_value()) {
-        FROZENCHARS_THROW(std::invalid_argument("missing key"));
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_multimap missing key");
       }
     }
     return [&]<std::size_t... I>(std::index_sequence<I...>) {

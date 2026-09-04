@@ -148,18 +148,18 @@ TEST_CASE("frozen_regex to_frozen_map int values", "[frozen_regex]") {
   using R = frozen_regex<R"(GET|POST|PUT)"_fs>;
   auto const map = R::template to_frozen_map<int, 200, 201, 204>();
   static_assert(map.size() == 3);
-  REQUIRE(map.at("GET") == 200);
-  REQUIRE(map.at("POST") == 201);
-  REQUIRE(map.at("PUT") == 204);
+  REQUIRE(map.at("GET")->get() == 200);
+  REQUIRE(map.at("POST")->get() == 201);
+  REQUIRE(map.at("PUT")->get() == 204);
 }
 
 TEST_CASE("frozen_regex to_frozen_map double values", "[frozen_regex]") {
   using R = frozen_regex<R"(dev|prd|stg)"_fs>;
   auto const map = R::template to_frozen_map<double, 0.5, 1.0, 1.5>();
   static_assert(map.size() == 3);
-  REQUIRE(map.at("dev") == 0.5);
-  REQUIRE(map.at("prd") == 1.0);
-  REQUIRE(map.at("stg") == 1.5);
+  REQUIRE(map.at("dev")->get() == 0.5);
+  REQUIRE(map.at("prd")->get() == 1.0);
+  REQUIRE(map.at("stg")->get() == 1.5);
 }
 
 TEST_CASE("frozen_regex complex pattern 7 HTTP methods", "[frozen_regex]") {
@@ -220,12 +220,12 @@ TEST_CASE("frozen_regex regex_map string length", "[frozen_regex][frozen_map]") 
     frozen_regex<"cat|dog|elephant|hi"_fs>::regex_map<[](std::string_view s) {
       return s.size();
     }>();
-  static_assert(map.at("cat") == 3);
-  static_assert(map.at("dog") == 3);
-  static_assert(map.at("elephant") == 8);
-  static_assert(map.at("hi") == 2);
-  REQUIRE(map.at("cat") == 3);
-  REQUIRE(map.at("hi") == 2);
+  static_assert(map.at("cat")->get() == 3);
+  static_assert(map.at("dog")->get() == 3);
+  static_assert(map.at("elephant")->get() == 8);
+  static_assert(map.at("hi")->get() == 2);
+  REQUIRE(map.at("cat")->get() == 3);
+  REQUIRE(map.at("hi")->get() == 2);
   REQUIRE(map.find("bird") == map.end());
 }
 
@@ -236,12 +236,12 @@ TEST_CASE("frozen_regex regex_map parse int", "[frozen_regex][frozen_map]") {
       std::from_chars(s.data(), s.data() + s.size(), v);
       return v;
     }>();
-  static_assert(map.at("100") == 100);
-  static_assert(map.at("200") == 200);
-  static_assert(map.at("300") == 300);
-  static_assert(map.at("400") == 400);
-  REQUIRE(map.at("100") == 100);
-  REQUIRE(map.at("400") == 400);
+  static_assert(map.at("100")->get() == 100);
+  static_assert(map.at("200")->get() == 200);
+  static_assert(map.at("300")->get() == 300);
+  static_assert(map.at("400")->get() == 400);
+  REQUIRE(map.at("100")->get() == 100);
+  REQUIRE(map.at("400")->get() == 400);
   REQUIRE(map.find("500") == map.end());
 }
 
@@ -251,10 +251,10 @@ TEST_CASE("frozen_regex regex_map custom type", "[frozen_regex][frozen_map]") {
     frozen_regex<"a|b|c"_fs>::regex_map<[](std::string_view) {
       return wrapper{42};
     }>();
-  static_assert(map.at("a").value == 42);
-  static_assert(map.at("b").value == 42);
-  static_assert(map.at("c").value == 42);
-  REQUIRE(map.at("a").value == 42);
+  static_assert(map.at("a")->get().value == 42);
+  static_assert(map.at("b")->get().value == 42);
+  static_assert(map.at("c")->get().value == 42);
+  REQUIRE(map.at("a")->get().value == 42);
 }
 
 TEST_CASE("frozen_regex regex_map asserts count_v", "[frozen_regex][frozen_map]") {
@@ -263,6 +263,6 @@ TEST_CASE("frozen_regex regex_map asserts count_v", "[frozen_regex][frozen_map]"
   static_assert(R::count_v == 2);
   // regex_map は列挙から自動的に count_v を推論するため手動カウントは不要
   constexpr auto map = R::regex_map<[](std::string_view) { return 1; }>();
-  static_assert(map.at("x") == 1);
-  static_assert(map.at("y") == 1);
+  static_assert(map.at("x")->get() == 1);
+  static_assert(map.at("y")->get() == 1);
 }

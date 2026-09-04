@@ -3,10 +3,13 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <expected>
+#include <functional>
 #include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -95,23 +98,39 @@ public:
     return lookup_::find(key) != size() ? 1uz : 0uz;
   }
   /**
-   * @brief キーに対応する値にアクセス（なければ例外）
+   * @brief キーに対応する値への参照を取得する（未検出は expected で報告）
    * @param key 検索キー
-   * @throws std::out_of_range キーが見つからない場合
+   * @return std::expected<std::reference_wrapper<T>, std::errc> 値への参照。未検出は std::errc::invalid_argument
    */
-  constexpr auto at(std::string_view key) -> T& {
+  [[nodiscard]] constexpr auto at(std::string_view key) noexcept
+    -> std::expected<std::reference_wrapper<T>, std::errc> {
     auto const i = lookup_::find(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::ref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
-  /** @copydoc at */
-  constexpr auto at(std::string_view key) const -> T const& {
+  /**
+   * @brief キーに対応する値への参照を取得する（const 版、未検出は expected で報告）
+   * @param key 検索キー
+   * @return std::expected<std::reference_wrapper<T const>, std::errc> 値への参照。未検出は std::errc::invalid_argument
+   */
+  [[nodiscard]] constexpr auto at(std::string_view key) const noexcept
+    -> std::expected<std::reference_wrapper<T const>, std::errc> {
     auto const i = lookup_::find(key);
-    if (i != size()) [[likely]] return values_[i];
-    FROZENCHARS_THROW(std::out_of_range(std::string{"frozen_trie_map key not found: "} + std::string{key}));
+    if (i != size()) [[likely]] return std::cref(values_[i]);
+    return std::unexpected(std::errc::invalid_argument);
   }
-  constexpr auto operator[](std::string_view key) -> T& { return at(key); }
-  constexpr auto operator[](std::string_view key) const -> T const& { return at(key); }
+  /**
+   * @brief キーに対応する値への参照を取得する（チェックなし）
+   * @param key 検索キー
+   * @pre contains(key)
+   */
+  constexpr auto operator[](std::string_view key) noexcept -> T& { return values_[lookup_::find(key)]; }
+  /**
+   * @brief キーに対応する値への参照を取得する（チェックなし、const 版）
+   * @param key 検索キー
+   * @pre contains(key)
+   */
+  constexpr auto operator[](std::string_view key) const noexcept -> T const& { return values_[lookup_::find(key)]; }
 
   constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
   constexpr auto end() noexcept -> iterator { return iterator{{this}, size()}; }

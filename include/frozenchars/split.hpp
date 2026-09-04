@@ -170,7 +170,7 @@ template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = 
   auto const token_count = split_count<IsDelimiter>(str);
   auto const tokens = split<N, IsDelimiter>(str);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = frozenchars::parse_number<Result>(tokens[i]);
+    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
   }
   return res;
 }
@@ -185,7 +185,7 @@ template <typename Pred, ParseNumberTarget Int = int, size_t N>
   auto const token_count = split_count(str, is_delimiter);
   auto const tokens = split<N>(str, is_delimiter);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = frozenchars::parse_number<Result>(tokens[i]);
+    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
   }
   return res;
 }

@@ -584,23 +584,23 @@ TEST_CASE("split complexity") {
 }
 
 TEST_CASE("parse_number basics") {
-  auto constexpr n1 = parse_number<int>("123"_fs);
+  auto constexpr n1 = *parse_number<int>("123"_fs);
   static_assert(n1 == 123);
   REQUIRE(n1 == 123);
 
-  auto constexpr n2 = parse_number<long>("-456"_fs);
+  auto constexpr n2 = *parse_number<long>("-456"_fs);
   static_assert(n2 == -456);
   REQUIRE(n2 == -456);
 
-  auto constexpr n3 = parse_number<unsigned int>("789"_fs);
+  auto constexpr n3 = *parse_number<unsigned int>("789"_fs);
   static_assert(n3 == 789);
   REQUIRE(n3 == 789);
 
   // float 比較には WithinRel を使用
-  auto constexpr n4 = parse_number<float>("123.45"_fs);
+  auto constexpr n4 = *parse_number<float>("123.45"_fs);
   REQUIRE_THAT(n4, Catch::Matchers::WithinRel(123.45f));
 
-  auto constexpr n5 = parse_number<double>("-0.00123"_fs);
+  auto constexpr n5 = *parse_number<double>("-0.00123"_fs);
   REQUIRE_THAT(n5, Catch::Matchers::WithinRel(-0.00123));
 }
 

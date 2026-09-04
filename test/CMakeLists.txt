@@ -1,22 +1,15 @@
-# WASI_MINIMAL 向けスモークは常時ビルド可能（hosted 依存なし）
+# 例外なしスモークは常時ビルド可能（hosted 依存なし）
 add_executable(smoke_mod_core smoke_mod_core.cpp)
 target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
 add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
 
-add_executable(smoke_wasi_minimal smoke_wasi_minimal.cpp)
-target_link_libraries(smoke_wasi_minimal PRIVATE frozenchars::frozenchars)
-target_compile_features(smoke_wasi_minimal PUBLIC cxx_std_23)
-target_compile_definitions(smoke_wasi_minimal PRIVATE FROZENCHARS_WASI_MINIMAL=1)
-# WASI_MINIMAL の契約 (例外なしでビルド可能) を hosted でも検証する
-target_compile_options(smoke_wasi_minimal PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-exceptions>)
-add_test(NAME smoke_wasi_minimal COMMAND smoke_wasi_minimal)
-
-if(ENABLE_WASI_MINIMAL)
-  # WASI_MINIMAL ビルドでは hosted なテスト/ベンチ/サンプルはスキップ
-  # all_test は <ostream> operator<< に依存する test_format.cpp がコンパイル不可のため除外
-  return()
-endif()
+add_executable(smoke_no_exceptions smoke_no_exceptions.cpp)
+target_link_libraries(smoke_no_exceptions PRIVATE frozenchars::frozenchars)
+target_compile_features(smoke_no_exceptions PUBLIC cxx_std_23)
+# 例外なしが既定の契約を hosted でも検証する（Catch2 は例外を要するため素の main を使用）
+target_compile_options(smoke_no_exceptions PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-exceptions>)
+add_test(NAME smoke_no_exceptions COMMAND smoke_no_exceptions)
 
 find_package(Catch2 REQUIRED CONFIG)
 find_package(ctre REQUIRED CONFIG)

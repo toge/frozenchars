@@ -109,7 +109,7 @@ struct format_scan_result {
   size_t num_fields;
   size_t num_literal_chars;
 };
-[[nodiscard]] consteval auto scan_format(char const* data, size_t len) -> format_scan_result {
+[[nodiscard]] consteval auto scan_format(char const* data, size_t len) noexcept -> format_scan_result {
   size_t fields = 0;
   size_t literal = 0;
   size_t i = 0;
@@ -121,14 +121,14 @@ struct format_scan_result {
         ++fields;
         ++i;
         while (i < len && data[i] != '}') ++i;
-        if (i >= len) FROZENCHARS_THROW("frozen_format: unmatched '{' in format string");
+        if (i >= len) FROZENCHARS_CONSTEVAL_FAIL("frozen_format: unmatched '{' in format string");
         ++i;
       }
     } else if (data[i] == '}') {
       if (i + 1 < len && data[i + 1] == '}') {
         literal += 1; i += 2;
       } else {
-        FROZENCHARS_THROW("frozen_format: unmatched '}' in format string");
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_format: unmatched '}' in format string");
       }
     } else {
       literal += 1; ++i;

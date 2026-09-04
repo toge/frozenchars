@@ -58,7 +58,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 変換する16進数字
  * @return auto 変換結果の数字
  */
-[[nodiscard]] auto consteval hex_digit_to_value(char const c) {
+[[nodiscard]] auto consteval hex_digit_to_value(char const c) noexcept {
   if (c >= '0' && c <= '9') {
     return static_cast<std::uint8_t>(c - '0');
   }
@@ -68,7 +68,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
   if (c >= 'A' && c <= 'F') {
     return static_cast<std::uint8_t>(10 + (c - 'A'));
   }
-  FROZENCHARS_THROW(std::invalid_argument("parse_hex_color: invalid hex digit"));
+  FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
 }
 
 /**
@@ -78,9 +78,9 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param lo 下位4bitを表す16進数字
  * @return auto 変換結果
  */
-[[nodiscard]] auto consteval parse_hex_byte(char const hi, char const lo) {
+[[nodiscard]] auto consteval parse_hex_byte(char const hi, char const lo) noexcept {
   if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
-    FROZENCHARS_THROW(std::invalid_argument("parse_hex_color: invalid hex digit"));
+    FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
   }
   return static_cast<std::uint8_t>((hex_digit_to_value(hi) << 4u) | hex_digit_to_value(lo));
 }
@@ -91,7 +91,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 変換する16進数字
  * @return auto 変換結果
  */
-[[nodiscard]] auto consteval parse_hex_shorthand_byte(char const c) {
+[[nodiscard]] auto consteval parse_hex_shorthand_byte(char const c) noexcept {
   auto const value = hex_digit_to_value(c);
   return static_cast<std::uint8_t>((value << 4u) | value);
 }

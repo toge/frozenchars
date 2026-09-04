@@ -377,33 +377,26 @@ jobs:
             ~/vcpkg/bootstrap-vcpkg.sh
           fi
 
-      - name: Build WASI minimal with vcpkg + wasi-sdk (wasm32-wasip1, no single header)
+      - name: Build WASI with vcpkg + wasi-sdk (wasm32-wasip1, no single header)
         run: |
           cmake -B build -S . -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 \
             -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets \
-            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake \
-            -DENABLE_WASI_MINIMAL=ON
-          cmake --build build
-          file build/test/smoke_wasi_minimal | grep -q WebAssembly
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake
+          cmake --build build --target smoke_no_exceptions smoke_mod_core
+          file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
 
       - name: Verify single headers compile (hosted & WASI minimal wasm)
         run: |
-          /opt/wasi-sdk/bin/clang++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c test/smoke_wasi_minimal.cpp -o /tmp/test_basic_fs_wasm.o
+          /opt/wasi-sdk/bin/clang++ -std=c++23 -I include -c test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs_wasm.o
           file /tmp/test_basic_fs_wasm.o | grep -q WebAssembly
           /opt/wasi-sdk/bin/clang++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs_wasm.o <<'EOF'
-          #include "frozenchars_wasi_minimal.hpp"
-          int main(){return 0;}
-          EOF
-          file /tmp/single_fs_wasm.o | grep -q WebAssembly
-          # hosted ヘッダを WASI minimal フラグ付きでも wasm でビルドできること
-          /opt/wasi-sdk/bin/clang++ -std=c++23 -I single_include -DFROZENCHARS_WASI_MINIMAL=1 -c -x c++ - -o /tmp/single_hosted_fsflag_wasm.o <<'EOF'
           #include "frozenchars.hpp"
           int main(){return 0;}
           EOF
-          file /tmp/single_hosted_fsflag_wasm.o | grep -q WebAssembly
-          # ホストでの WASI minimal 互換も維持
-          g++ -std=c++23 -I include -DFROZENCHARS_WASI_MINIMAL=1 -c test/smoke_wasi_minimal.cpp -o /tmp/test_basic_fs.o
+          file /tmp/single_fs_wasm.o | grep -q WebAssembly
+          # ホストでの例外なし互換も維持
+          g++ -std=c++23 -fno-exceptions -I include test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs && /tmp/test_basic_fs
           python3 tools/amalgamate.py --check

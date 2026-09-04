@@ -17,7 +17,7 @@ int main() {
   constexpr auto frozen = frozenchars::freeze("world");
   static_assert(frozen.length == 5);
 
-  constexpr auto value = frozenchars::parse_number<int>("12345"_fs);
+  constexpr auto value = *frozenchars::parse_number<int>("12345"_fs);
   static_assert(value == 12345);
 
   return 0;

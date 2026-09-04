@@ -34,11 +34,11 @@ TEST_CASE("Hex/Bin/Oct/Precision freeze yields expected string", "[freeze][conce
 
 // number_conv のランタイム/コンパイル時 parse_number スモーク
 TEST_CASE("parse_number integer and float", "[number_conv]") {
-  STATIC_CHECK(parse_number<int>("42"_fs) == 42);
-  STATIC_CHECK(parse_number<int>("-7"_fs) == -7);
-  STATIC_CHECK(parse_number<unsigned>("0x1A"_fs) == 0x1Au);
-  REQUIRE(parse_number<double>("3.14"_fs) == 3.14);
-  REQUIRE(parse_number<float>("1.5"_fs) == 1.5f);
+  STATIC_CHECK(*parse_number<int>("42"_fs) == 42);
+  STATIC_CHECK(*parse_number<int>("-7"_fs) == -7);
+  STATIC_CHECK(*parse_number<unsigned>("0x1A"_fs) == 0x1Au);
+  REQUIRE(*parse_number<double>("3.14"_fs) == 3.14);
+  REQUIRE(*parse_number<float>("1.5"_fs) == 1.5f);
 }
 
 // trie_set: 1 キーと複数キーのスモーク

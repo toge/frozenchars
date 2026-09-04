@@ -73,7 +73,8 @@ int main(int argc, char** argv) {
 
   bench.run("small(3) find hit", [&]{ auto it = small_map.find("aa"); ankerl::nanobench::doNotOptimizeAway(it != small_map.end()); g_sink += (it != small_map.end()); });
   bench.run("small(3) find miss", [&]{ auto it = small_map.find("xx"); ankerl::nanobench::doNotOptimizeAway(it != small_map.end()); g_sink += (it != small_map.end()); });
-  bench.run("small(3) at hit", [&]{ auto v = small_map.at("bbbbbb"); ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
+  bench.run("small(3) at hit", [&]{ auto v = small_map.at("bbbbbb")->get(); ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
+  bench.run("small(3) operator[] hit", [&]{ auto v = small_map["bbbbbb"]; ankerl::nanobench::doNotOptimizeAway(v); g_sink += v; });
 
   bench.run("med(10) find hit first", [&]{ auto it = medium_map.find("timeout"); ankerl::nanobench::doNotOptimizeAway(it != medium_map.end()); g_sink += (it != medium_map.end()); });
   bench.run("med(10) find hit last", [&]{ auto it = medium_map.find("status"); ankerl::nanobench::doNotOptimizeAway(it != medium_map.end()); g_sink += (it != medium_map.end()); });

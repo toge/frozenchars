@@ -5,12 +5,14 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
 #include <system_error>
 #define FROZENCHARS_HAS_CHARCONV 1
 #else
 #define FROZENCHARS_HAS_CHARCONV 0
+#include <system_error>
 #endif
 #include <limits>
 
@@ -24,13 +26,15 @@ namespace frozenchars {
  * @tparam T 変換後の型
  * @tparam N 文字列の長さ (終端文字'\0'を含む)
  * @param str 対象文字列
- * @return auto 変換後の数値
+ * @return 変換後の数値。不正な形式は std::errc::invalid_argument、
+ *         桁あふれは std::errc::result_out_of_range を保持する expected
  */
 template <typename T, size_t N>
-[[nodiscard]] auto constexpr parse_number(FrozenString<N> const& str) -> T {
+[[nodiscard]] auto constexpr parse_number(FrozenString<N> const& str) noexcept
+  -> std::expected<T, std::errc> {
   auto const sv = str.sv();
   if (sv.empty()) {
-    FROZENCHARS_THROW(std::invalid_argument("empty string"));
+    return std::unexpected(std::errc::invalid_argument);
   }
 
   size_t start = 0;
@@ -43,14 +47,14 @@ template <typename T, size_t N>
   }
 
   if (start >= sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("no digits"));
+    return std::unexpected(std::errc::invalid_argument);
   }
 
   // 整数型の場合は std::from_chars を使用して変換する
   if constexpr (std::integral<T>) {
     if constexpr (std::unsigned_integral<T>) {
       if (neg) {
-    FROZENCHARS_THROW(std::out_of_range("negative value for unsigned type"));
+        return std::unexpected(std::errc::invalid_argument);
       }
     }
 
@@ -69,7 +73,7 @@ template <typename T, size_t N>
     }
 
     if (start >= sv.size() && base != 10) {
-    FROZENCHARS_THROW(std::invalid_argument("missing digits after prefix"));
+      return std::unexpected(std::errc::invalid_argument);
     }
 
 #if FROZENCHARS_HAS_CHARCONV == 0
@@ -85,13 +89,13 @@ template <typename T, size_t N>
         else if (base == 2 && (c == '0' || c == '1')) digit = c - '0';
         else if (base == 8 && c >= '0' && c <= '7') digit = c - '0';
         else {
-          FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+          return std::unexpected(std::errc::invalid_argument);
         }
         if (digit < 0 || digit >= base) {
-          FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+          return std::unexpected(std::errc::invalid_argument);
         }
         if (acc > (std::numeric_limits<unsigned long long>::max() - static_cast<unsigned long long>(digit)) / static_cast<unsigned long long>(base)) {
-          FROZENCHARS_THROW(std::out_of_range("overflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         acc = acc * static_cast<unsigned long long>(base) + static_cast<unsigned long long>(digit);
       }
@@ -99,19 +103,19 @@ template <typename T, size_t N>
         return static_cast<T>(acc);
       } else if constexpr (std::unsigned_integral<T>) {
         if (acc > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-          FROZENCHARS_THROW(std::out_of_range("overflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         return static_cast<T>(acc);
       } else {
         if (!neg) {
           if (acc > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-            FROZENCHARS_THROW(std::out_of_range("overflow"));
+            return std::unexpected(std::errc::result_out_of_range);
           }
           return static_cast<T>(acc);
         } else {
           auto max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
           if (acc > max_abs) {
-            FROZENCHARS_THROW(std::out_of_range("underflow"));
+            return std::unexpected(std::errc::result_out_of_range);
           }
           if (acc == max_abs) return std::numeric_limits<T>::min();
           return static_cast<T>(-static_cast<long long>(acc));
@@ -123,47 +127,47 @@ template <typename T, size_t N>
       T res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       if (ptr != sv.data() + sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       return res;
     } else if constexpr (std::unsigned_integral<T>) {
       unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       if (ptr != sv.data() + sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       return static_cast<T>(res);
     } else {
       unsigned long long res = 0;
       auto const [ptr, ec] = std::from_chars(sv.data() + start, sv.data() + sv.size(), res, base);
       if (ec == std::errc::invalid_argument) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       if (ptr != sv.data() + sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid digit"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (neg) {
         auto const max_abs = static_cast<unsigned long long>(std::numeric_limits<T>::max()) + 1ULL;
         if (res > max_abs) {
-    FROZENCHARS_THROW(std::out_of_range("underflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         if (res == max_abs) {
           return std::numeric_limits<T>::min();
@@ -171,7 +175,7 @@ template <typename T, size_t N>
         return static_cast<T>(-static_cast<long long>(res));
       } else {
         if (res > static_cast<unsigned long long>(std::numeric_limits<T>::max())) {
-    FROZENCHARS_THROW(std::out_of_range("overflow"));
+          return std::unexpected(std::errc::result_out_of_range);
         }
         return static_cast<T>(res);
       }
@@ -189,10 +193,10 @@ template <typename T, size_t N>
       T           result{};
       auto const [ptr, ec] = std::from_chars(first, last, result);
       if (ec == std::errc::invalid_argument || ptr != last) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid float"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (ec == std::errc::result_out_of_range) {
-    FROZENCHARS_THROW(std::out_of_range("float overflow"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       return result;
     }
@@ -200,10 +204,10 @@ template <typename T, size_t N>
 
     // コンパイル時パス: uint64_t で整数部・小数部を蓄積して精度を向上させる。
     // float/double への変換は最後に1回だけ行う。
-    auto constexpr pow10 = [](int n) -> T {
+    auto constexpr pow10 = [](int n) -> std::expected<T, std::errc> {
       // コンパイル時ステップ枯渇を防ぐため、指数に上限を設ける。double の最大実用値は約 308。
       if (n < 0 || n > 1024) {
-    FROZENCHARS_THROW(std::out_of_range("parse_number: exponent too large for compile-time path"));
+        return std::unexpected(std::errc::result_out_of_range);
       }
       T result = 1;
       T base   = 10;
@@ -234,7 +238,9 @@ template <typename T, size_t N>
     }
     T res = static_cast<T>(int_part);
     if (extra_exp > 0) {
-      res *= pow10(extra_exp);
+      auto const e = pow10(extra_exp);
+      if (!e) return std::unexpected(e.error());
+      res *= *e;
     }
 
     // 小数部を uint64_t で蓄積し、最後に1回の除算で精度を確保する
@@ -252,7 +258,9 @@ template <typename T, size_t N>
         has_digits = true;
       }
       if (frac_count > 0) {
-        res += static_cast<T>(frac_digits) / pow10(frac_count);
+        auto const e = pow10(frac_count);
+        if (!e) return std::unexpected(e.error());
+        res += static_cast<T>(frac_digits) / *e;
       }
     }
 
@@ -272,29 +280,33 @@ template <typename T, size_t N>
         has_exp_digits = true;
       }
       if (!has_exp_digits) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid exponent"));
+        return std::unexpected(std::errc::invalid_argument);
       }
       if (eneg) {
         exp = -exp;
       }
     }
     if (!has_digits || i < sv.size()) {
-    FROZENCHARS_THROW(std::invalid_argument("invalid float"));
+      return std::unexpected(std::errc::invalid_argument);
     }
     T final_res = neg ? -res : res;
     if (exp != 0) {
       if (exp > 0) {
-        final_res *= pow10(exp);
+        auto const e = pow10(exp);
+        if (!e) return std::unexpected(e.error());
+        final_res *= *e;
       } else {
-        final_res /= pow10(-exp);
+        auto const e = pow10(-exp);
+        if (!e) return std::unexpected(e.error());
+        final_res /= *e;
       }
     }
     if (final_res == std::numeric_limits<T>::infinity() || final_res == -std::numeric_limits<T>::infinity()) {
-    FROZENCHARS_THROW(std::out_of_range("float overflow"));
+      return std::unexpected(std::errc::result_out_of_range);
     }
     return final_res;
   } else {
-    FROZENCHARS_THROW(std::invalid_argument("unsupported type"));
+    return std::unexpected(std::errc::invalid_argument);
   }
 }
 
@@ -304,10 +316,12 @@ template <typename T, size_t N>
  * @tparam T 変換先の数値型（ParseNumberTarget を満たす型）
  * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
  * @param str 対象文字列リテラル
- * @return T 変換結果（不正な形式は例外）
+ * @return 変換結果。不正な形式は std::errc::invalid_argument、
+ *         桁あふれは std::errc::result_out_of_range を保持する expected
  */
 template <typename T, size_t N>
-[[nodiscard]] auto constexpr parse_number(char const (&str)[N]) -> T {
+[[nodiscard]] auto constexpr parse_number(char const (&str)[N]) noexcept
+  -> std::expected<T, std::errc> {
   return parse_number<T>(FrozenString{str});
 }
 
