@@ -22,6 +22,7 @@
 #endif
 
 #include <cstdlib>
+#include <exception>
 
 /**
  * @brief consteval経路の失敗通知。
@@ -34,6 +35,11 @@
 namespace frozenchars::detail {
 [[noreturn]] inline void consteval_fail(char const* msg) noexcept {
   (void)msg;
+  std::abort();
+}
+/// @brief std::exception派生の失敗通知（-fno-exceptions用オーバーロード）。
+[[noreturn]] inline void consteval_fail(std::exception const& e) noexcept {
+  (void)e;
   std::abort();
 }
 } // namespace frozenchars::detail
