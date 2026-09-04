@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include "frozenchars/literals.hpp"
 #include "frozenchars/json/crush.hpp"
@@ -76,4 +77,13 @@ TEST_CASE("uncrush roundtrip", "[json][crush]") {
   // サロゲートペア
   STATIC_CHECK(frozenchars::json::uncrush<
                frozenchars::json::crush<R"({"a":"😀","b":"😀"})"_fs>()>().sv() == R"({"a":"😀","b":"😀"})");
+}
+
+TEST_CASE("json detail utf conversion reports errors via expected", "[json][crush]") {
+  auto const bad = frozenchars::json::detail::utf8_to_utf16("\xff\xff");
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
+  auto const ok = frozenchars::json::detail::utf8_to_utf16("abc");
+  REQUIRE(ok.has_value());
+  REQUIRE(*ok == u"abc");
 }

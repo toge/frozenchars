@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string_view>
+#include <utility>
 
 #include "detail/compress_detail.hpp"
 #include "detail/crush_detail.hpp"
@@ -30,7 +31,7 @@ namespace detail {
  */
 template <FrozenString Input>
 [[nodiscard]] consteval auto compressed_size() -> size_t {
-  auto const parsed = frozenchars::json::detail::parse_json(Input.sv());
+  auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());
   auto const result = frozenchars::json::detail::compress_to_string(parsed);
   return result.size() + 1;
 }
@@ -40,10 +41,9 @@ template <FrozenString Input>
  *
  * @param input 圧縮済み JSON 文字列（compress の出力形式）
  * @return std::string 復元した JSON テキスト
- * @throw std::runtime_error root が無い、または値参照が範囲外の場合
  */
 [[nodiscard]] consteval auto decompress_to_string(std::string_view const input) -> std::string {
-  auto const parsed = frozenchars::json::detail::parse_json(input);
+  auto const parsed = *frozenchars::json::detail::parse_json(input);
 
   // 値テーブルの各要素を JSON リテラルテキストへ復元する
   auto literal_of = [](frozenchars::json::detail::json_value const& v) -> std::string {
@@ -53,7 +53,7 @@ template <FrozenString Input>
     case json_type::boolean: return v.bool_val ? "true" : "false";
     case json_type::number: return std::string(v.str_val);
     case json_type::string: return std::string(v.str_val);
-    default: FROZENCHARS_THROW(std::runtime_error("decompress: unexpected value table entry"));
+    default: std::unreachable();
     }
   };
 
@@ -72,7 +72,7 @@ template <FrozenString Input>
       }
     }
   }
-  if (root_val == nullptr) FROZENCHARS_THROW(std::runtime_error("decompress: missing root"));
+  if (root_val == nullptr) std::unreachable();
 
   // root を再帰的に再構築する。文字列は Base62 参照として values へ解決する
   auto rebuild = [&](auto&& self, frozenchars::json::detail::json_value const& v) -> std::string {
@@ -103,11 +103,11 @@ template <FrozenString Input>
       if (ref.size() >= 2 && ref.front() == '"' && ref.back() == '"') {
         ref = ref.substr(1, ref.size() - 2);
       }
-      auto const idx = frozenchars::json::detail::from_base62(ref);
-      if (idx >= values.size()) FROZENCHARS_THROW(std::runtime_error("decompress: value index out of range"));
+      auto const idx = *frozenchars::json::detail::from_base62(ref);
+      if (idx >= values.size()) std::unreachable();
       return values[idx];
     }
-    default: FROZENCHARS_THROW(std::runtime_error("decompress: unexpected node type"));
+    default: std::unreachable();
     }
   };
 
@@ -138,7 +138,7 @@ template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto compress() -> FrozenString<detail::compressed_size<Input>()> {
   constexpr auto N = detail::compressed_size<Input>();
-  auto const parsed = frozenchars::json::detail::parse_json(Input.sv());
+  auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());
   auto const result = frozenchars::json::detail::compress_to_string(parsed);
 
   auto res = FrozenString<N>{};
@@ -183,11 +183,11 @@ template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto crush_compress() {
   // まず構造圧縮（重複値をテーブル参照へ）
-  auto const parsed = frozenchars::json::detail::parse_json(Input.sv());
+  auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());
   auto const compressed_str = frozenchars::json::detail::compress_to_string(parsed);
 
   // 続けて JSON-Crush 圧縮：UTF-16変換→デリミタ除去→swap→js_crush
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(compressed_str);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(compressed_str);
   {
     std::u16string filtered;
     filtered.reserve(u16.size());
@@ -203,7 +203,7 @@ template <FrozenString Input>
     output_u16.append(crush_result.split);
   }
   output_u16.push_back(u'_');
-  auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
+  auto const output_u8 = *frozenchars::json::detail::utf16_to_utf8(output_u16);
 
   // 入力長から必要バッファ長を上限見積りし、FrozenString へコピー
   constexpr auto N = Input.length * 64 + 32;

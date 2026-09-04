@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include "frozenchars/literals.hpp"
 #include "frozenchars/json/compress.hpp"
@@ -82,4 +83,14 @@ TEST_CASE("compress output is valid json", "[json][compress]") {
   constexpr auto compressed = frozenchars::json::compress<
     R"([{"name":"item","val":1},{"name":"item","val":1}])"_fs>();
   CHECK(frozenchars::json::validate_json(compressed.sv()));
+}
+
+TEST_CASE("json detail parser reports errors via expected", "[json][compress]") {
+  auto const bad = frozenchars::json::detail::parse_json("not json");
+  REQUIRE_FALSE(bad.has_value());
+  REQUIRE(bad.error() == std::errc::invalid_argument);
+  auto const trailing = frozenchars::json::detail::parse_json(R"({"a":1} extra)");
+  REQUIRE_FALSE(trailing.has_value());
+  REQUIRE_FALSE(frozenchars::json::validate_json("{bad}"));
+  REQUIRE(frozenchars::json::validate_json(R"({"a":[1,2]})"));
 }

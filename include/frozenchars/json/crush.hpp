@@ -3,6 +3,8 @@
 #include "detail/crush_detail.hpp"
 #include "frozenchars/string.hpp"
 
+#include <utility>
+
 namespace frozenchars::json {
 
 namespace detail {
@@ -18,7 +20,7 @@ namespace detail {
 template <FrozenString Input>
 [[nodiscard]] consteval auto crushed_size() -> size_t {
   auto const input_sv = Input.sv();
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(input_sv);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(input_sv);
   {
     std::u16string filtered;
     filtered.reserve(u16.size());
@@ -36,7 +38,7 @@ template <FrozenString Input>
   }
   output_u16.push_back(u'_');
 
-  auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
+  auto const output_u8 = *frozenchars::json::detail::utf16_to_utf8(output_u16);
   return output_u8.size() + 1;
 }
 
@@ -45,14 +47,13 @@ template <FrozenString Input>
  *
  * @param input crush 出力（末尾に '_' を含む）
  * @return std::string 復元した UTF-8 JSON テキスト
- * @throw std::runtime_error 末尾 '_' が無い、または置換文字が見つからない場合
  */
 [[nodiscard]] consteval auto uncrush_to_string(std::string_view const input) -> std::string {
   if (input.empty() || input.back() != '_') {
-    FROZENCHARS_THROW(std::runtime_error("uncrush: missing trailing '_'"));
+    std::unreachable();
   }
   auto const body_utf8 = input.substr(0, input.size() - 1);
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(body_utf8);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(body_utf8);
 
   // デリミタ U+0001 で body / split に分割
   std::u16string_view body = u16;
@@ -70,7 +71,7 @@ template <FrozenString Input>
   for (auto const rc : split) {
     auto const p = data.rfind(rc);
     if (p == std::u16string::npos) {
-      FROZENCHARS_THROW(std::runtime_error("uncrush: replacement char not found"));
+      std::unreachable();
     }
     auto const original = data.substr(p + 1);
     data.resize(p);
@@ -83,7 +84,7 @@ template <FrozenString Input>
 
   // JSON 構造文字を復元（swap の逆方向）
   auto const swapped_back = frozenchars::json::detail::json_crush_swap<char16_t>(data, false);
-  return frozenchars::json::detail::utf16_to_utf8(swapped_back);
+  return *frozenchars::json::detail::utf16_to_utf8(swapped_back);
 }
 
 /**
@@ -115,7 +116,7 @@ template <FrozenString Input>
   auto const input_sv = Input.sv();
 
   // UTF-16 に変換し、内部で使うデリミタが入力に含まれていれば除去
-  auto u16 = frozenchars::json::detail::utf8_to_utf16(input_sv);
+  auto u16 = *frozenchars::json::detail::utf8_to_utf16(input_sv);
   {
     std::u16string filtered;
     filtered.reserve(u16.size());
@@ -137,7 +138,7 @@ template <FrozenString Input>
   }
   output_u16.push_back(u'_');
 
-  auto const output_u8 = frozenchars::json::detail::utf16_to_utf8(output_u16);
+  auto const output_u8 = *frozenchars::json::detail::utf16_to_utf8(output_u16);
 
   // FrozenString バッファへコピーして終端を付ける
   auto res = FrozenString<N>{};

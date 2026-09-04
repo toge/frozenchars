@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <cstdint>
@@ -49,18 +51,18 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置（'"' を指す）。終端クォートの次まで進める
- * @return std::string_view 前後のクォートを含む文字列ビュー
- * @throw std::runtime_error 先頭が '"' でない、または終端クォートが無い場合
+ * @return std::expected<std::string_view, std::errc> 前後のクォートを含む文字列ビュー。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) -> std::string_view {
-  if (p >= s.size() || s[p] != '"') FROZENCHARS_THROW(std::runtime_error("expected '\"'"));
+[[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) noexcept
+  -> std::expected<std::string_view, std::errc> {
+  if (p >= s.size() || s[p] != '"') return std::unexpected(std::errc::invalid_argument);
   auto const start = p;
   ++p;
   while (p < s.size() && s[p] != '"') {
     if (s[p] == '\\') ++p;
     ++p;
   }
-  if (p >= s.size()) FROZENCHARS_THROW(std::runtime_error("unterminated string"));
+  if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   ++p;
   return std::string_view(s.data() + start, p - start);
 }
@@ -68,7 +70,8 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
 /**
  * @brief 任意の JSON 値をパースする（前方宣言）
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) -> json_value;
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc>;
 
 /**
  * @brief JSON 数値をパースする
@@ -100,23 +103,25 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置（'[' を指す）。閉じ ']' の次まで進める
- * @return json_value array 型の値
- * @throw std::runtime_error 要素の区切り ',' または閉じ ']' が現れない場合
+ * @return std::expected<json_value, std::errc> array 型の値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   ++p;
   skip_ws(s, p);
   std::vector<json_value> arr;
-  if (p < s.size() && s[p] == ']') { ++p; return {json_type::array, false, {}, std::move(arr), {}}; }
+  if (p < s.size() && s[p] == ']') { ++p; return json_value{json_type::array, false, {}, std::move(arr), {}}; }
   while (true) {
     skip_ws(s, p);
-    arr.push_back(parse_value(s, p));
+    auto elem = parse_value(s, p);
+    if (!elem) return std::unexpected(elem.error());
+    arr.push_back(std::move(*elem));
     skip_ws(s, p);
     if (p < s.size() && s[p] == ',') { ++p; continue; }
     if (p < s.size() && s[p] == ']') { ++p; break; }
-    FROZENCHARS_THROW(std::runtime_error("expected ',' or ']'"));
+    return std::unexpected(std::errc::invalid_argument);
   }
-  return {json_type::array, false, {}, std::move(arr), {}};
+  return json_value{json_type::array, false, {}, std::move(arr), {}};
 }
 
 /**
@@ -124,30 +129,34 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置（'{' を指す）。閉じ '}' の次まで進める
- * @return json_value object 型の値。キーは keys、値は arr に同一インデックスで格納する
- * @throw std::runtime_error ':' 区切りが無い、または ',' / '}' が現れない場合
+ * @return std::expected<json_value, std::errc> object 型の値。不正は invalid_argument
+ * @details キーは keys、値は arr に同一インデックスで格納する
  */
-[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   ++p;
   skip_ws(s, p);
   std::vector<std::string_view> keys;
   std::vector<json_value> vals;
-  if (p < s.size() && s[p] == '}') { ++p; return {json_type::object, false, {}, std::move(vals), std::move(keys)}; }
+  if (p < s.size() && s[p] == '}') { ++p; return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)}; }
   while (true) {
     skip_ws(s, p);
-    auto const key = parse_string(s, p);
+    auto key = parse_string(s, p);
+    if (!key) return std::unexpected(key.error());
     skip_ws(s, p);
-    if (p >= s.size() || s[p] != ':') FROZENCHARS_THROW(std::runtime_error("expected ':'"));
+    if (p >= s.size() || s[p] != ':') return std::unexpected(std::errc::invalid_argument);
     ++p;
     skip_ws(s, p);
-    keys.push_back(key);
-    vals.push_back(parse_value(s, p));
+    keys.push_back(*key);
+    auto val = parse_value(s, p);
+    if (!val) return std::unexpected(val.error());
+    vals.push_back(std::move(*val));
     skip_ws(s, p);
     if (p < s.size() && s[p] == ',') { ++p; continue; }
     if (p < s.size() && s[p] == '}') { ++p; break; }
-    FROZENCHARS_THROW(std::runtime_error("expected ',' or '}'"));
+    return std::unexpected(std::errc::invalid_argument);
   }
-  return {json_type::object, false, {}, std::move(vals), std::move(keys)};
+  return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)};
 }
 
 /**
@@ -155,43 +164,45 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置。値の終端まで進める
- * @return json_value パースした値
- * @throw std::runtime_error 入力終端に達した、または未対応の文字が現れた場合
+ * @return std::expected<json_value, std::errc> パースした値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) -> json_value {
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   skip_ws(s, p);
-  if (p >= s.size()) FROZENCHARS_THROW(std::runtime_error("unexpected EOF"));
+  if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   auto const c = s[p];
   if (c == '{') return parse_object(s, p);
   if (c == '[') return parse_array(s, p);
   if (c == '"') {
-    auto const str = parse_string(s, p);
-    return {json_type::string, false, str, {}, {}};
+    auto str = parse_string(s, p);
+    if (!str) return std::unexpected(str.error());
+    return json_value{json_type::string, false, *str, {}, {}};
   }
   auto starts_with = [&](size_t pos, std::string_view pat) -> bool {
     if (pat.size() > s.size() - pos) return false;
     for (size_t i = 0; i < pat.size(); ++i) if (s[pos + i] != pat[i]) return false;
     return true;
   };
-  if (c == 't' && starts_with(p, "true"))  { p += 4; return {json_type::boolean, true, {}, {}, {}}; }
-  if (c == 'f' && starts_with(p, "false")) { p += 5; return {json_type::boolean, false, {}, {}, {}}; }
-  if (c == 'n' && starts_with(p, "null"))  { p += 4; return {json_type::null, false, {}, {}, {}}; }
+  if (c == 't' && starts_with(p, "true"))  { p += 4; return json_value{json_type::boolean, true, {}, {}, {}}; }
+  if (c == 'f' && starts_with(p, "false")) { p += 5; return json_value{json_type::boolean, false, {}, {}, {}}; }
+  if (c == 'n' && starts_with(p, "null"))  { p += 4; return json_value{json_type::null, false, {}, {}, {}}; }
   if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
-  FROZENCHARS_THROW(std::runtime_error("unexpected character"));
+  return std::unexpected(std::errc::invalid_argument);
 }
 
 /**
  * @brief JSON 文字列全体をパースする
  *
  * @param s JSON 文字列
- * @return json_value ルート値
- * @throw std::runtime_error パース失敗、または末尾に余分な内容がある場合
+ * @return std::expected<json_value, std::errc> ルート値。不正・末尾余剰は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_json(std::string_view const s) -> json_value {
+[[nodiscard]] constexpr auto parse_json(std::string_view const s) noexcept
+  -> std::expected<json_value, std::errc> {
   size_t p = 0;
   auto val = parse_value(s, p);
+  if (!val) return std::unexpected(val.error());
   skip_ws(s, p);
-  if (p != s.size()) FROZENCHARS_THROW(std::runtime_error("trailing content"));
+  if (p != s.size()) return std::unexpected(std::errc::invalid_argument);
   return val;
 }
 
@@ -199,22 +210,14 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) -> void {
  * @brief JSON 文字列が構文的に妥当かを判定する
  *
  * @param s 検証する文字列
- * @return bool 全体を過不足なくパースできれば true、例外や余分な内容があれば false
+ * @return bool 全体を過不足なくパースできれば true、不正や余分な内容があれば false
  */
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
-  // ponytail: WASI_MINIMAL では例外で復帰できないため不正 JSON は abort する
-#ifndef FROZENCHARS_WASI_MINIMAL
-  try {
-#endif
-    size_t p = 0;
-    (void)parse_value(s, p);
-    skip_ws(s, p);
-    return p == s.size();
-#ifndef FROZENCHARS_WASI_MINIMAL
-  } catch (...) {
-    return false;
-  }
-#endif
+  size_t p = 0;
+  auto v = parse_value(s, p);
+  if (!v) return false;
+  skip_ws(s, p);
+  return p == s.size();
 }
 
 } // namespace frozenchars::json::detail
@@ -246,10 +249,10 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
  * @brief Base62 文字列を符号なし整数に変換する
  *
  * @param s 変換する Base62 文字列
- * @return uint64_t 変換結果
- * @throw std::runtime_error 不正な文字を含む場合
+ * @return std::expected<uint64_t, std::errc> 変換結果。不正文字は invalid_argument
  */
-[[nodiscard]] constexpr auto from_base62(std::string_view const s) -> uint64_t {
+[[nodiscard]] constexpr auto from_base62(std::string_view const s) noexcept
+  -> std::expected<uint64_t, std::errc> {
   uint64_t value = 0;
   for (auto const c : s) {
     value *= 62;
@@ -260,7 +263,7 @@ constexpr auto BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
     } else if (c >= 'a' && c <= 'z') {
       value += static_cast<uint64_t>(c - 'a' + 36);
     } else {
-      FROZENCHARS_THROW(std::runtime_error("from_base62: invalid character"));
+      return std::unexpected(std::errc::invalid_argument);
     }
   }
   return value;

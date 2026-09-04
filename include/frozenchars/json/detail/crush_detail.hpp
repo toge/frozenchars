@@ -6,8 +6,10 @@
 #include <array>
 #include <bitset>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -57,17 +59,17 @@ inline constexpr auto replacement_characters_utf16 = [] {
  *
  * @param input UTF-8 バイト列
  * @param index 開始位置。デコードしたバイト数だけ進める（1〜4バイト）
- * @return char32_t デコードしたコードポイント
- * @throw std::runtime_error 不正な UTF-8 シーケンスの場合
+ * @return std::expected<char32_t, std::errc> デコードしたコードポイント。不正は invalid_argument
  */
-inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& index) -> char32_t {
+inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& index) noexcept
+  -> std::expected<char32_t, std::errc> {
   auto const lead = static_cast<uint8_t>(input[index]);
   // 1バイト（ASCII）
   if (lead < 0x80) { return static_cast<char32_t>(input[index++]); }
   // 2バイトシーケンス
   if ((lead & 0xE0) == 0xC0) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
-    if ((c1 & 0xC0) != 0x80) FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+    if ((c1 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 2;
     return (static_cast<char32_t>(lead & 0x1F) << 6) | static_cast<char32_t>(c1 & 0x3F);
   }
@@ -75,7 +77,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   if ((lead & 0xF0) == 0xE0) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 3;
     return (static_cast<char32_t>(lead & 0x0F) << 12) |
            (static_cast<char32_t>(c1 & 0x3F) << 6) |
@@ -87,36 +89,38 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     auto const c3 = static_cast<uint8_t>(input[index + 3]);
     if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
-      FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+      return std::unexpected(std::errc::invalid_argument);
     index += 4;
     return (static_cast<char32_t>(lead & 0x07) << 18) |
            (static_cast<char32_t>(c1 & 0x3F) << 12) |
            (static_cast<char32_t>(c2 & 0x3F) << 6) |
            static_cast<char32_t>(c3 & 0x3F);
   }
-  FROZENCHARS_THROW(std::runtime_error("invalid UTF-8"));
+  return std::unexpected(std::errc::invalid_argument);
 };
 
 /**
  * @brief UTF-8 文字列を UTF-16 文字列に変換する
  *
  * @param input UTF-8 バイト列
- * @return std::u16string 変換した UTF-16 文字列（BMP 外はサロゲートペアで表現）
- * @throw std::runtime_error 不正な UTF-8 シーケンスの場合
+ * @return std::expected<std::u16string, std::errc> 変換した UTF-16 文字列。不正は invalid_argument
+ * @details BMP 外はサロゲートペアで表現する
  */
-inline constexpr auto utf8_to_utf16 = [](std::string_view const input) -> std::u16string {
+inline constexpr auto utf8_to_utf16 = [](std::string_view const input) noexcept
+  -> std::expected<std::u16string, std::errc> {
   auto output = std::u16string{};
   output.reserve(input.size());
   size_t idx = 0;
   while (idx < input.size()) {
     auto const cp = decode_utf8(input, idx);
-    if (cp < 0x10000) {
-      output.push_back(static_cast<char16_t>(cp));
+    if (!cp) return std::unexpected(cp.error());
+    if (*cp < 0x10000) {
+      output.push_back(static_cast<char16_t>(*cp));
     } else {
       // BMP 外はサロゲートペアに分割
 
-      output.push_back(static_cast<char16_t>(0xD800 + ((cp - 0x10000) >> 10)));
-      output.push_back(static_cast<char16_t>(0xDC00 + ((cp - 0x10000) & 0x3FF)));
+      output.push_back(static_cast<char16_t>(0xD800 + ((*cp - 0x10000) >> 10)));
+      output.push_back(static_cast<char16_t>(0xDC00 + ((*cp - 0x10000) & 0x3FF)));
     }
   }
   return output;
@@ -126,10 +130,10 @@ inline constexpr auto utf8_to_utf16 = [](std::string_view const input) -> std::u
  * @brief UTF-16 文字列を UTF-8 文字列に変換する
  *
  * @param input UTF-16 文字列
- * @return std::string 変換した UTF-8 バイト列
- * @throw std::runtime_error 対になっていないサロゲートがある場合
+ * @return std::expected<std::string, std::errc> 変換した UTF-8 バイト列。不正は invalid_argument
  */
-inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) -> std::string {
+inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) noexcept
+  -> std::expected<std::string, std::errc> {
   auto output = std::string{};
   output.reserve(input.size());
   // 1つのコードポイントを UTF-8 バイト列として追記する
@@ -155,7 +159,7 @@ inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) -> std
     // 上位サロゲートなら次の下位サロゲートと合成してコードポイントを復元
     if (v >= 0xD800 && v <= 0xDBFF) {
       if (i + 1 >= input.size() || input[i + 1] < 0xDC00 || input[i + 1] > 0xDFFF)
-        FROZENCHARS_THROW(std::runtime_error("invalid UTF-16"));
+        return std::unexpected(std::errc::invalid_argument);
       auto const cp = 0x10000 + ((static_cast<char32_t>(v - 0xD800) << 10) | (input[i + 1] - 0xDC00));
       append_utf8(cp);
       ++i;
