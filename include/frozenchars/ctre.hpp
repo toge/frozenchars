@@ -21,7 +21,7 @@ struct to_ctre_adaptor : frozenchars::pipe_adaptor_base {
   template <size_t N>
   [[nodiscard]] consteval auto operator()(frozenchars::FrozenString<N> const& str) const {
     if (str.length != N - 1) {
-      FROZENCHARS_THROW("FrozenStringのactual lengthがbufferサイズN-1と一致しません。to_ctre<expr>() を使用してください。");
+      FROZENCHARS_CONSTEVAL_FAIL("FrozenStringのactual lengthがbufferサイズN-1と一致しません。to_ctre<expr>() を使用してください。");
     }
     return ctll::fixed_string<N - 1>(ctll::construct_from_pointer, str.data());
   }
