@@ -333,7 +333,7 @@ jobs:
           name: coverage-info
           path: coverage.info
 
-  linux-wasi-minimal:
+  linux-wasip1:
     runs-on: ubuntu-latest
     container: fedora:44
 
@@ -401,7 +401,7 @@ jobs:
           g++ -std=c++23 -fno-exceptions -I include test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs && /tmp/test_basic_fs
           python3 tools/amalgamate.py --check
 
-  linux-wasi-minimal-wasip2:
+  linux-wasip2:
     runs-on: ubuntu-latest
     container: fedora:44
 
@@ -457,9 +457,9 @@ jobs:
 
       - name: Verify single headers compile (hosted & WASI minimal wasm2)
         run: |
-          /opt/wasi-sdk/bin/clang++ -std=c++23 -I include -c test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs_wasm.o
+          /opt/wasi-sdk/bin/clang++ --target=wasm32-wasip2 -std=c++23 -I include -c test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs_wasm.o
           file /tmp/test_basic_fs_wasm.o | grep -q WebAssembly
-          /opt/wasi-sdk/bin/clang++ -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs_wasm.o <<'EOF'
+          /opt/wasi-sdk/bin/clang++ --target=wasm32-wasip2 -std=c++23 -I single_include -c -x c++ - -o /tmp/single_fs_wasm.o <<'EOF'
           #include "frozenchars.hpp"
           int main(){return 0;}
           EOF
