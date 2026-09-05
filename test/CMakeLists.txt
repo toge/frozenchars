@@ -2,14 +2,26 @@
 add_executable(smoke_mod_core smoke_mod_core.cpp)
 target_link_libraries(smoke_mod_core PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_mod_core PUBLIC cxx_std_23)
-add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
 
 add_executable(smoke_no_exceptions smoke_no_exceptions.cpp)
 target_link_libraries(smoke_no_exceptions PRIVATE frozenchars::frozenchars)
 target_compile_features(smoke_no_exceptions PUBLIC cxx_std_23)
 # 例外なしが既定の契約を hosted でも検証する（Catch2 は例外を要するため素の main を使用）
 target_compile_options(smoke_no_exceptions PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-exceptions>)
-add_test(NAME smoke_no_exceptions COMMAND smoke_no_exceptions)
+
+# wasm バイナリは直接実行できないため、wasmedge 経由で実行する
+if(CMAKE_SYSTEM_NAME STREQUAL "WASI")
+  find_program(WASMEDGE_EXECUTABLE wasmedge)
+  if(WASMEDGE_EXECUTABLE)
+    add_test(NAME smoke_mod_core COMMAND ${WASMEDGE_EXECUTABLE} smoke_mod_core)
+    add_test(NAME smoke_no_exceptions COMMAND ${WASMEDGE_EXECUTABLE} smoke_no_exceptions)
+  else()
+    message(STATUS "wasmedge not found: smoke tests will not run under ctest (run manually: wasmedge ./smoke_<name>)")
+  endif()
+else()
+  add_test(NAME smoke_mod_core COMMAND smoke_mod_core)
+  add_test(NAME smoke_no_exceptions COMMAND smoke_no_exceptions)
+endif()
 
 # Catch2/ctre/nanobench は wasm32-wasip1/wasip2 ではビルドできないため
 # find_package 自体をスキップする（vcpkg も platform フィルターでインストールしない）。

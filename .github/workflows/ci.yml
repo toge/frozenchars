@@ -360,6 +360,11 @@ jobs:
           /opt/wasi-sdk/bin/clang --version
           /opt/wasi-sdk/bin/clang++ --version
 
+      - name: Install wasmedge
+        run: |
+          curl -sSf --max-time 300 https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh | bash -s -- --version=0.17.1
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+
       - name: Restore vcpkg cache
         uses: actions/cache@v4
         with:
@@ -387,6 +392,9 @@ jobs:
           cmake --build build --target smoke_no_exceptions smoke_mod_core
           file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
+
+      - name: Test (wasmedge)
+        run: ctest --test-dir build -V
 
       - name: Verify single headers compile (hosted & WASI minimal wasm)
         run: |
@@ -427,6 +435,11 @@ jobs:
           /opt/wasi-sdk/bin/clang --version
           /opt/wasi-sdk/bin/clang++ --version
 
+      - name: Install wasmedge
+        run: |
+          curl -sSf --max-time 300 https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh | bash -s -- --version=0.17.1
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+
       - name: Restore vcpkg cache
         uses: actions/cache@v4
         with:
@@ -454,6 +467,9 @@ jobs:
           cmake --build build --target smoke_no_exceptions smoke_mod_core
           file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
+
+      - name: Test (wasmedge)
+        run: ctest --test-dir build -V
 
       - name: Verify single headers compile (hosted & WASI minimal wasm2)
         run: |
