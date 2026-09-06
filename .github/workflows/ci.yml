@@ -363,9 +363,9 @@ jobs:
       - name: Install wasmtime
         run: |
           WASMTIME_VERSION=$(curl -s https://api.github.com/repos/bytecodealliance/wasmtime/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-          curl -sSL "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-${WASMTIME_VERSION}-x86_64-linux.tar.xz" -o /tmp/wasmtime.tar.xz
+          curl -sSL "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-v${WASMTIME_VERSION}-x86_64-linux.tar.xz" -o /tmp/wasmtime.tar.xz
           tar -xf /tmp/wasmtime.tar.xz -C /tmp
-          echo "/tmp/wasmtime-${WASMTIME_VERSION}-x86_64-linux" >> $GITHUB_PATH
+          echo "/tmp/wasmtime-v${WASMTIME_VERSION}-x86_64-linux" >> $GITHUB_PATH
           wasmtime --version
 
       - name: Restore vcpkg cache
@@ -441,9 +441,9 @@ jobs:
       - name: Install wasmtime
         run: |
           WASMTIME_VERSION=$(curl -s https://api.github.com/repos/bytecodealliance/wasmtime/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-          curl -sSL "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-${WASMTIME_VERSION}-x86_64-linux.tar.xz" -o /tmp/wasmtime.tar.xz
+          curl -sSL "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-v${WASMTIME_VERSION}-x86_64-linux.tar.xz" -o /tmp/wasmtime.tar.xz
           tar -xf /tmp/wasmtime.tar.xz -C /tmp
-          echo "/tmp/wasmtime-${WASMTIME_VERSION}-x86_64-linux" >> $GITHUB_PATH
+          echo "/tmp/wasmtime-v${WASMTIME_VERSION}-x86_64-linux" >> $GITHUB_PATH
           wasmtime --version
 
       - name: Restore vcpkg cache
