@@ -9,14 +9,14 @@ target_compile_features(smoke_no_exceptions PUBLIC cxx_std_23)
 # 例外なしが既定の契約を hosted でも検証する（Catch2 は例外を要するため素の main を使用）
 target_compile_options(smoke_no_exceptions PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-exceptions>)
 
-# wasm バイナリは直接実行できないため、wasmedge 経由で実行する
+# wasm バイナリは直接実行できないため、wasmtime 経由で実行する
 if(CMAKE_SYSTEM_NAME STREQUAL "WASI")
-  find_program(WASMEDGE_EXECUTABLE wasmedge)
-  if(WASMEDGE_EXECUTABLE)
-    add_test(NAME smoke_mod_core COMMAND ${WASMEDGE_EXECUTABLE} smoke_mod_core)
-    add_test(NAME smoke_no_exceptions COMMAND ${WASMEDGE_EXECUTABLE} smoke_no_exceptions)
+  find_program(WASMTIME_EXECUTABLE wasmtime)
+  if(WASMTIME_EXECUTABLE)
+    add_test(NAME smoke_mod_core COMMAND ${WASMTIME_EXECUTABLE} run smoke_mod_core)
+    add_test(NAME smoke_no_exceptions COMMAND ${WASMTIME_EXECUTABLE} run smoke_no_exceptions)
   else()
-    message(STATUS "wasmedge not found: smoke tests will not run under ctest (run manually: wasmedge ./smoke_<name>)")
+    message(STATUS "wasmtime not found: smoke tests will not run under ctest (run manually: wasmtime run ./smoke_<name>)")
   endif()
 else()
   add_test(NAME smoke_mod_core COMMAND smoke_mod_core)

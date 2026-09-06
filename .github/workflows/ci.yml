@@ -360,10 +360,13 @@ jobs:
           /opt/wasi-sdk/bin/clang --version
           /opt/wasi-sdk/bin/clang++ --version
 
-      - name: Install wasmedge
+      - name: Install wasmtime
         run: |
-          curl -sSf --max-time 300 https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh | bash -s -- --version=0.18.0-alpha.1
-          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+          WASMTIME_VERSION=$(curl -s https://api.github.com/repos/bytecodealliance/wasmtime/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+          curl -sSL "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-${WASMTIME_VERSION}-x86_64-linux.tar.xz" -o /tmp/wasmtime.tar.xz
+          tar -xf /tmp/wasmtime.tar.xz -C /tmp
+          echo "/tmp/wasmtime-${WASMTIME_VERSION}-x86_64-linux" >> $GITHUB_PATH
+          wasmtime --version
 
       - name: Restore vcpkg cache
         uses: actions/cache@v4
@@ -393,7 +396,7 @@ jobs:
           file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
 
-      - name: Test (wasmedge)
+      - name: Test (wasmtime)
         run: ctest --test-dir build -V
 
       - name: Verify single headers compile (hosted & WASI minimal wasm)
@@ -435,10 +438,13 @@ jobs:
           /opt/wasi-sdk/bin/clang --version
           /opt/wasi-sdk/bin/clang++ --version
 
-      - name: Install wasmedge
+      - name: Install wasmtime
         run: |
-          curl -sSf --max-time 300 https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh | bash -s -- --version=0.18.0-alpha.1
-          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+          WASMTIME_VERSION=$(curl -s https://api.github.com/repos/bytecodealliance/wasmtime/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+          curl -sSL "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-${WASMTIME_VERSION}-x86_64-linux.tar.xz" -o /tmp/wasmtime.tar.xz
+          tar -xf /tmp/wasmtime.tar.xz -C /tmp
+          echo "/tmp/wasmtime-${WASMTIME_VERSION}-x86_64-linux" >> $GITHUB_PATH
+          wasmtime --version
 
       - name: Restore vcpkg cache
         uses: actions/cache@v4
@@ -468,7 +474,7 @@ jobs:
           file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
 
-      - name: Test (wasmedge)
+      - name: Test (wasmtime)
         run: ctest --test-dir build -V
 
       - name: Verify single headers compile (hosted & WASI minimal wasm2)
