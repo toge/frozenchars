@@ -18,7 +18,7 @@ namespace frozenchars::detail {
  * @return auto 変換された 0..255 の値
  */
 template <typename T>
-[[nodiscard]] auto constexpr to_u8(T const v) noexcept {
+[[nodiscard]] auto constexpr to_u8(T v) noexcept {
   if constexpr (std::same_as<std::remove_cv_t<T>, std::byte>) {
     return std::to_integer<unsigned char>(v);
   } else {

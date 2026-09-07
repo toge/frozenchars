@@ -156,7 +156,7 @@ template <typename T>
  * @param precision 小数点以下の桁数
  * @return auto 変換文字列とその長さのペア
  */
-[[nodiscard]] auto constexpr to_float_chars(double value, int const precision) noexcept {
+[[nodiscard]] auto constexpr to_float_chars(double value, int precision) noexcept {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
 
