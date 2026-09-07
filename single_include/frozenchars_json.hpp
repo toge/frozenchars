@@ -919,7 +919,7 @@ template <typename T>
  * @param precision 小数点以下の桁数
  * @return auto 変換文字列とその長さのペア
  */
-[[nodiscard]] auto constexpr to_float_chars(double value, int const precision) noexcept {
+[[nodiscard]] auto constexpr to_float_chars(double value, int precision) noexcept {
   auto buffer = std::array<char, 48>{};
   auto i = 0uz;
 
@@ -1009,7 +1009,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 判定する文字
  * @return auto 16進数字文字なら true
  */
-[[nodiscard]] auto consteval is_hex_digit(char const c) noexcept {
+[[nodiscard]] auto consteval is_hex_digit(char c) noexcept {
   return (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'f')
     || (c >= 'A' && c <= 'F');
@@ -1021,7 +1021,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 変換する16進数字
  * @return auto 変換結果の数字
  */
-[[nodiscard]] auto consteval hex_digit_to_value(char const c) noexcept {
+[[nodiscard]] auto consteval hex_digit_to_value(char c) noexcept {
   if (c >= '0' && c <= '9') {
     return static_cast<std::uint8_t>(c - '0');
   }
@@ -1041,7 +1041,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param lo 下位4bitを表す16進数字
  * @return auto 変換結果
  */
-[[nodiscard]] auto consteval parse_hex_byte(char const hi, char const lo) noexcept {
+[[nodiscard]] auto consteval parse_hex_byte(char hi, char lo) noexcept {
   if (!is_hex_digit(hi) || !is_hex_digit(lo)) {
     FROZENCHARS_CONSTEVAL_FAIL("parse_hex_color: invalid hex digit");
   }
@@ -1054,7 +1054,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 変換する16進数字
  * @return auto 変換結果
  */
-[[nodiscard]] auto consteval parse_hex_shorthand_byte(char const c) noexcept {
+[[nodiscard]] auto consteval parse_hex_shorthand_byte(char c) noexcept {
   auto const value = hex_digit_to_value(c);
   return static_cast<std::uint8_t>((value << 4u) | value);
 }
@@ -1066,7 +1066,7 @@ inline constexpr auto is_char = [](char c) noexcept { return c == Target; };
  * @param c 判定する文字
  * @return auto エンコード不要なら true
  */
-auto constexpr is_unreserved(char const c) noexcept {
+auto constexpr is_unreserved(char c) noexcept {
   return (c >= 'A' && c <= 'Z')
     || (c >= 'a' && c <= 'z')
     || (c >= '0' && c <= '9')
@@ -1124,7 +1124,7 @@ template <size_t N>
  * @param uppercase 大文字にするかどうか
  * @return auto 変換結果の文字
  */
-auto constexpr value_to_hex_digit(std::uint8_t const value, bool const uppercase = true) noexcept {
+auto constexpr value_to_hex_digit(std::uint8_t value, bool uppercase = true) noexcept {
   if (value < 10) {
     return static_cast<char>('0' + value);
   }
@@ -1148,7 +1148,7 @@ inline constexpr char base64_chars[] =
  * @param c 変換する文字
  * @return auto 変換後の数値。不正な文字の場合は 255
  */
-auto constexpr base64_char_to_value(char const c) noexcept -> std::uint8_t {
+auto constexpr base64_char_to_value(char c) noexcept -> std::uint8_t {
   if (c >= 'A' && c <= 'Z') {
     return static_cast<std::uint8_t>(c - 'A');
   }
@@ -1219,7 +1219,7 @@ namespace frozenchars::detail {
  * @return auto 変換された 0..255 の値
  */
 template <typename T>
-[[nodiscard]] auto constexpr to_u8(T const v) noexcept {
+[[nodiscard]] auto constexpr to_u8(T v) noexcept {
   if constexpr (std::same_as<std::remove_cv_t<T>, std::byte>) {
     return std::to_integer<unsigned char>(v);
   } else {
