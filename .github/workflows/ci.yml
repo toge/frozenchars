@@ -221,7 +221,8 @@ jobs:
           cmake -B build -S . -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DVCPKG_TARGET_TRIPLET=wasm32-emscripten \
-            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
+            -DCMAKE_CXX_FLAGS="-msimd128 -O3"
 
       - name: Build
         run: |
@@ -392,7 +393,8 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 \
             -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets \
-            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake \
+            -DCMAKE_CXX_FLAGS="-msimd128 -O3"
           cmake --build build --target smoke_no_exceptions smoke_mod_core
           file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
@@ -471,7 +473,8 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DVCPKG_TARGET_TRIPLET=wasm32-wasip2 \
             -DVCPKG_OVERLAY_TRIPLETS=$PWD/triplets \
-            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p2.cmake
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk-p2.cmake \
+            -DCMAKE_CXX_FLAGS="-msimd128 -O3"
           cmake --build build --target smoke_no_exceptions smoke_mod_core
           file build/test/smoke_no_exceptions | grep -q WebAssembly
           file build/test/smoke_mod_core | grep -q WebAssembly
