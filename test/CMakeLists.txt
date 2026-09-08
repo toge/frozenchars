@@ -114,6 +114,7 @@ if(Catch2_FOUND AND ctre_FOUND)
     if(EMSCRIPTEN)
       set(_wasm_bench_og_files
         bench_frozen_map.cpp
+        bench_frozen_regex.cpp
         bench_frozen_set.cpp
         bench_frozen_trie.cpp
       )
