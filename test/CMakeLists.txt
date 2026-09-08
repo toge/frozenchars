@@ -107,6 +107,21 @@ if(Catch2_FOUND AND ctre_FOUND)
     target_link_libraries(bench_frozen_trie PRIVATE frozenchars::frozenchars nanobench::nanobench)
     target_compile_features(bench_frozen_trie PUBLIC cxx_std_23)
 
+    # LLVM WebAssembly バックエンドのバグ回避:
+    # nanobench の Bench::run で ConstantPool<i1> の instruction selection が失敗する。
+    # 問題のあるファイルだけ -O0 でコンパイルする。
+    # ref: https://github.com/llvm/llvm-project/issues (WebAssembly ISel bug)
+    if(EMSCRIPTEN)
+      set(_wasm_bench_og_files
+        bench_frozen_map.cpp
+        bench_frozen_set.cpp
+        bench_frozen_trie.cpp
+      )
+      foreach(_f IN LISTS _wasm_bench_og_files)
+        set_source_files_properties(${_f} PROPERTIES COMPILE_FLAGS "-O0")
+      endforeach()
+    endif()
+
     add_executable(bench_map_comparison bench_map_comparison.cpp)
     target_link_libraries(bench_map_comparison PRIVATE frozenchars::frozenchars nanobench::nanobench)
     target_compile_features(bench_map_comparison PUBLIC cxx_std_23)
