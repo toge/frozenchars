@@ -18,8 +18,8 @@ TEST_CASE("fnv1a hashing") {
   }
 
   SECTION("known 64-bit value") {
-    static_assert(fnv1a("hello") == 0xa430d84680aabd0buz);
-    REQUIRE(fnv1a("hello") == 0xa430d84680aabd0buz);
+    static_assert(fnv1a<std::uint64_t>("hello") == 0xa430d84680aabd0bull);
+    REQUIRE(fnv1a<std::uint64_t>("hello") == 0xa430d84680aabd0bull);
   }
 
   SECTION("known 32-bit value") {
