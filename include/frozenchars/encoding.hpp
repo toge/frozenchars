@@ -887,6 +887,179 @@ template <auto Str>
   return shrink_to_fit<html_decode(Str)>();
 }
 
+// ===== JSON string escape =====
+
+namespace detail {
+
+/**
+ * @brief JSON 文字列エスケープで 1 文字が占める最大バイト数を返す
+ *
+ * @param c 判定する文字
+ * @return size_t エスケープ後のバイト数（1・2 または 6）
+ */
+constexpr auto json_escaped_char_size(char const c) noexcept -> size_t {
+  switch (c) {
+  case '"':
+  case '\\':
+  case '\b':
+  case '\f':
+  case '\n':
+  case '\r':
+  case '\t':
+    return 2;
+  default:
+    // U+0000..U+001F は \u00XX の 6 文字になる
+    return static_cast<unsigned char>(c) < 0x20 ? 6 : 1;
+  }
+}
+
+/**
+ * @brief JSON 文字列エスケープ後の文字数を計算する
+ *
+ * @tparam N FrozenString の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return size_t エスケープ後の文字数
+ */
+template <size_t N>
+[[nodiscard]] auto consteval count_json_escaped_size(FrozenString<N> const& str) noexcept -> size_t {
+  auto count = 0uz;
+  for (auto const c : str.sv()) {
+    count += json_escaped_char_size(c);
+  }
+  return count;
+}
+
+/**
+ * @brief 1 文字を JSON 文字列エスケープして書き込む
+ *
+ * @param c 対象の文字
+ * @param out 書き込み先（十分な領域があること）
+ * @return size_t 書き込んだ文字数（1・2 または 6）
+ */
+constexpr auto write_json_escaped_char(char const c, char* out) noexcept -> size_t {
+  switch (c) {
+  case '"': out[0] = '\\'; out[1] = '"'; return 2;
+  case '\\': out[0] = '\\'; out[1] = '\\'; return 2;
+  case '\b': out[0] = '\\'; out[1] = 'b'; return 2;
+  case '\f': out[0] = '\\'; out[1] = 'f'; return 2;
+  case '\n': out[0] = '\\'; out[1] = 'n'; return 2;
+  case '\r': out[0] = '\\'; out[1] = 'r'; return 2;
+  case '\t': out[0] = '\\'; out[1] = 't'; return 2;
+  default:
+    if (static_cast<unsigned char>(c) < 0x20) {
+      // 制御文字は \u00XX（16進は小文字）
+      auto const byte = static_cast<std::uint8_t>(c);
+      out[0] = '\\'; out[1] = 'u'; out[2] = '0'; out[3] = '0';
+      out[4] = value_to_hex_digit(static_cast<std::uint8_t>((byte >> 4) & 0x0F), false);
+      out[5] = value_to_hex_digit(static_cast<std::uint8_t>(byte & 0x0F), false);
+      return 6;
+    }
+    out[0] = c;
+    return 1;
+  }
+}
+
+} // namespace detail
+
+/**
+ * @brief 文字列を JSON 文字列用にエスケープする
+ *
+ * 以下の文字を変換します（RFC 8259）:
+ * - `"` → `\"`、`\` → `\\`
+ * - `\b` `\f` `\n` `\r` `\t` → 対応する短縮エスケープ
+ * - その他の U+0000..U+001F → `\u00XX`
+ *
+ * 非 ASCII の UTF-8 バイト列はそのまま通します（JSON は生の UTF-8 を許容）。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto エスケープ後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_escape(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 6 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  for (auto const c : str.sv()) {
+    offset += detail::write_json_escaped_char(c, res.buffer.data() + offset);
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを JSON 文字列用にエスケープする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto エスケープ後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_escape(char const (&str)[N]) noexcept {
+  return json_escape(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を JSON 文字列用にエスケープする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto エスケープ後の文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval json_escape() noexcept {
+  return shrink_to_fit<json_escape(Str)>();
+}
+
+/**
+ * @brief 文字列を JSON 文字列リテラル（前後の `"` 込み）にする
+ *
+ * 内容は json_escape と同じ規則でエスケープし、前後に `"` を付与します。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 引用符込みの文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_quoted(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 6 * (N > 0 ? N - 1 : 0) + 3;
+  auto res = FrozenString<OUT_CAP>{};
+  res.buffer[0] = '"';
+  auto offset = 1uz;
+  for (auto const c : str.sv()) {
+    offset += detail::write_json_escaped_char(c, res.buffer.data() + offset);
+  }
+  res.buffer[offset++] = '"';
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを JSON 文字列リテラル（前後の `"` 込み）にする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 引用符込みの文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_quoted(char const (&str)[N]) noexcept {
+  return json_quoted(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を JSON 文字列リテラルにする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 引用符込みの文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval json_quoted() noexcept {
+  return shrink_to_fit<json_quoted(Str)>();
+}
+
 /**
  * @brief UTF-8 文字列のコードポイント数を計算する
  *

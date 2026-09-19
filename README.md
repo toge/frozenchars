@@ -21,6 +21,7 @@
   - [consteval（常にコンパイル時）](#consteval（常にコンパイル時）)
   - [_fs リテラル](#_fs-リテラル)
   - [パイプ演算子](#パイプ演算子)
+  - [コンパイル時ハッシュ（fnv1a / hash_v / _hash）](#コンパイル時ハッシュfnv1a--hash_v--_hash)
 - [要件](#要件)
 - [WASI環境対応](#wasi環境対応)
 - [サンプルコード](#サンプルコド)
@@ -48,6 +49,7 @@
 - [base64_decode（Base64デコード）](#base64_decode（base64デコド）)
 - [html_encode / html_decode（HTMLエンティティ変換）](#html_encode-html_decode（htmlエンティティ変換）)
 - [escape_c / unescape_c（C エスケープ変換）](#escape_c-unescape_c（c-エスケープ変換）)
+- [json_escape / json_quoted（JSON 文字列エスケープ）](#json_escape--json_quoted（json-文字列エスケープ）)
 - [minify_html / minify_xml / minify_json / minify_yaml / minify_sql / minify_cypher（マークアップ / データ / クエリ 縮小）](#minify_html-minify_xml-minify_json-minify_yaml-minify_sql-minify_cypher（マクアップ-デタ-クエリ-縮小）)
 - [minify_lua（Lua / Luau 縮小）](#minify_lua（lua--luau-縮小）)
 - [linebreak（改行表現の相互変換）](#linebreak（改行表現の相互変換）)
@@ -233,6 +235,40 @@ auto constexpr r = "  Hello, World!  "_fs
 左辺は `FrozenString` だけでなく `const char[N]` 文字列リテラルも直接受け付けます（`_fs` リテラルは省略可能）。
 
 詳細は「[パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)」を参照してください。
+
+### コンパイル時ハッシュ（`fnv1a` / `hash_v` / `_hash`）
+
+FNV-1a ハッシュをコンパイル時・実行時の両方で計算できます。結果は
+コンパイル時定数なので、文字列 `switch` の `case` ラベルに使えます。
+`frozenchars/hash.hpp` 単体でも、`frozenchars/mod/core.hpp` /
+`frozenchars.hpp` からでも利用できます。
+
+```cpp
+#include "frozenchars/hash.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(fnv1a("hello") == fnv1a(std::string_view{"hello"}));
+static_assert(hash_v<"hello"> == fnv1a("hello"));
+static_assert("hello"_hash != "world"_hash);
+
+// 文字列スイッチ: case ラベルはコンパイラが計算し、実行時は入力のみハッシュする
+constexpr int status_for(std::string_view method) {
+  switch (fnv1a(method)) {
+  case "GET"_hash:    return 200;
+  case "POST"_hash:   return 201;
+  case "DELETE"_hash: return 204;
+  default:            return 405;
+  }
+}
+static_assert(status_for("GET") == 200);
+
+// 複合キー: 複数のハッシュ値を 1 つにまとめる
+constexpr auto point_hash = hash_combine(fnv1a("x"), fnv1a("y"));
+```
+
+- `fnv1a<std::uint32_t>(...)` とすると 32bit 版になります。
+- `constexpr_hash<T>` は `std::hash` 互換のファンクタで、constexpr 文脈でも使えます。
 
 ## 要件
 
@@ -900,6 +936,41 @@ static_assert(unescape_c("\\x41"_fs).sv() == "A");
 // NTTP 版（コンパイル時のみ）
 static_assert(escape_c<"a\tb"_fs>().sv() == "a\\tb");
 static_assert(unescape_c<escape_c<"こんにちは"_fs>()>().sv() == "こんにちは");
+```
+
+## `json_escape` / `json_quoted`（JSON 文字列エスケープ）
+
+`json_escape` は文字列を JSON 文字列リテラル用にエスケープし、`json_quoted` は
+同じエスケープに前後の `"` を加えます（RFC 8259）。
+
+変換対象:
+
+- `"` → `\"`、`\` → `\\`
+- `\b \f \n \r \t` → 対応する短縮エスケープ
+- その他の U+0000..U+001F → `\u00XX`（16 進小文字）
+- 非 ASCII の UTF-8 バイト列はそのまま通す（JSON は生の UTF-8 を許容）
+
+```cpp
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
+
+static_assert(json_escape("say \"hi\""_fs).sv() == R"(say \"hi\")");
+static_assert(json_escape("x\x01y"_fs).sv() == "x\\u0001y");
+static_assert(json_escape("日本語"_fs).sv() == "日本語");
+
+static_assert(json_quoted("say \"hi\""_fs).sv() == R"("say \"hi\"")");
+
+// NTTP 版（コンパイル時のみ）はバッファ長が確定する
+static_assert(json_escape<"a\nb"_fs>().size() == 4);
+static_assert(json_quoted<"hi"_fs>().size() == 4);
+```
+
+```cpp
+// パイプ演算子
+namespace fops = frozenchars::ops;
+auto constexpr v = "say \"hi\""_fs | fops::json_quoted;
+static_assert(v.sv() == R"("say \"hi\"")");
 ```
 
 ## `minify_html` / `minify_xml` / `minify_json` / `minify_yaml` / `minify_sql` / `minify_cypher`（マークアップ / データ / クエリ 縮小）

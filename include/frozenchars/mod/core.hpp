@@ -11,6 +11,7 @@
 #include "frozenchars/char_pred.hpp"
 #include "frozenchars/string.hpp"
 #include "frozenchars/literals.hpp"
+#include "frozenchars/hash.hpp"
 #include "frozenchars/freeze.hpp"
 #include "frozenchars/number_conv.hpp"
 #include "frozenchars/format.hpp"

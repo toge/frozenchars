@@ -527,6 +527,34 @@ struct html_decode_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief JSON 文字列エスケープするパイプアダプタ
+ */
+struct json_escape_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::json_escape(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::json_escape(FrozenString{str});
+  }
+};
+
+/**
+ * @brief JSON 文字列リテラル（前後の `"` 込み）にするパイプアダプタ
+ */
+struct json_quoted_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::json_quoted(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::json_quoted(FrozenString{str});
+  }
+};
+
+/**
  * @brief 指定幅で単語折り返しするパイプアダプタ
  */
 struct word_wrap_adaptor : pipe_adaptor_base {
@@ -732,6 +760,8 @@ inline constexpr auto&                               to_ascii = hex_encode;     
 inline constexpr auto&                               from_ascii = hex_decode;   ///< hex_decode の別名
 inline constexpr html_encode_adaptor                 html_encode{};             ///< HTML エンティティエンコード
 inline constexpr html_decode_adaptor                 html_decode{};             ///< HTML エンティティデコード
+inline constexpr json_escape_adaptor                 json_escape{};             ///< JSON 文字列エスケープ
+inline constexpr json_quoted_adaptor                 json_quoted{};             ///< JSON 文字列（前後の " 込み）
 inline constexpr minify_html_adaptor                 minify_html{};             ///< HTML ミニファイ
 inline constexpr minify_xml_adaptor                  minify_xml{};              ///< XML ミニファイ
 inline constexpr minify_json_adaptor                 minify_json{};             ///< JSON ミニファイ

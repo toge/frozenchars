@@ -760,6 +760,162 @@ struct hash<frozenchars::FrozenString<N>> {
 
 } // namespace std
 // ---- end frozenchars/literals.hpp ----
+// ---- begin frozenchars/hash.hpp ----
+
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+
+namespace frozenchars {
+
+namespace detail {
+
+/**
+ * @brief FNV-1a のビット幅ごとのパラメータ
+ *
+ * @tparam BitWidth ハッシュ値のビット幅（32 または 64）
+ */
+template <std::size_t BitWidth>
+struct fnv1a_params;
+
+template <>
+struct fnv1a_params<32> {
+  static constexpr std::uint32_t OFFSET_BASIS = 2166136261u;  ///< 32bit の offset basis
+  static constexpr std::uint32_t PRIME = 16777619u;           ///< 32bit の FNV prime
+};
+
+template <>
+struct fnv1a_params<64> {
+  static constexpr std::uint64_t OFFSET_BASIS = 14695981039346656037ull;  ///< 64bit の offset basis
+  static constexpr std::uint64_t PRIME = 1099511628211ull;                ///< 64bit の FNV prime
+};
+
+/**
+ * @brief ハッシュ値の型から FNV-1a パラメータを選択する
+ *
+ * @tparam SizeT ハッシュ値の型
+ */
+template <typename SizeT>
+struct fnv1a_constants : fnv1a_params<sizeof(SizeT) * 8> {};
+
+} // namespace detail
+
+/**
+ * @brief FNV-1a ハッシュを計算する
+ *
+ * コンパイル時・実行時の両方で同じ値になる。文字列スイッチの case ラベルや、
+ * 複数フィールドをまとめた複合キーに利用できる。
+ *
+ * @tparam SizeT ハッシュ値の型（既定: std::size_t。std::uint32_t で 32bit 版になる）
+ * @param str 対象文字列
+ * @return SizeT ハッシュ値
+ */
+template <typename SizeT = std::size_t>
+[[nodiscard]] constexpr auto fnv1a(std::string_view const str) noexcept -> SizeT {
+  using constants = detail::fnv1a_constants<SizeT>;
+
+  auto hash = static_cast<SizeT>(constants::OFFSET_BASIS);
+  for (auto const c : str) {
+    // 符号付き char でも一貫した値になるよう unsigned char を経由する
+    hash ^= static_cast<SizeT>(static_cast<unsigned char>(c));
+    hash *= constants::PRIME;
+  }
+  return hash;
+}
+
+/**
+ * @brief FrozenString の FNV-1a ハッシュを計算する
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return std::size_t ハッシュ値
+ */
+template <size_t N>
+[[nodiscard]] constexpr auto fnv1a(FrozenString<N> const& str) noexcept -> std::size_t {
+  return fnv1a(str.sv());
+}
+
+/**
+ * @brief 文字列リテラル / FrozenString のコンパイル時ハッシュ値
+ *
+ * @tparam S 対象の FrozenString（NTTP）
+ *
+ * @code
+ * static_assert(hash_v<"hello"> == fnv1a("hello"));
+ * @endcode
+ */
+template <FrozenString S>
+inline constexpr std::size_t hash_v = fnv1a(S.sv());
+
+/**
+ * @brief constexpr 文脈で使える std::hash 互換のハッシュ関数オブジェクト
+ *
+ * @tparam T ハッシュ対象の型（fnv1a にそのまま渡せること）
+ */
+template <typename T>
+struct constexpr_hash {
+  /**
+   * @brief ハッシュ値を計算する
+   *
+   * @param value 対象の値
+   * @return std::size_t ハッシュ値
+   */
+  [[nodiscard]] constexpr auto operator()(T const& value) const noexcept -> std::size_t {
+    return fnv1a(value);
+  }
+};
+
+/**
+ * @brief 2 つのハッシュ値を結合する
+ *
+ * @param h1 1 つ目のハッシュ値
+ * @param h2 2 つ目のハッシュ値
+ * @return std::size_t 結合後のハッシュ値
+ */
+[[nodiscard]] constexpr auto hash_combine(std::size_t const h1, std::size_t const h2) noexcept -> std::size_t {
+  // Boost 流の結合（黄金比由来の定数を加えて撹拌する）
+  return h1 ^ (h2 + 0x9e3779b9uz + (h1 << 6) + (h1 >> 2));
+}
+
+/**
+ * @brief 3 つ以上のハッシュ値を左から順に結合する
+ *
+ * @tparam Rest 残りのハッシュ値の型
+ * @param h1 1 つ目のハッシュ値
+ * @param h2 2 つ目のハッシュ値
+ * @param rest 3 つ目以降のハッシュ値
+ * @return std::size_t 結合後のハッシュ値
+ */
+template <typename... Rest>
+[[nodiscard]] constexpr auto hash_combine(std::size_t const h1, std::size_t const h2, Rest... rest) noexcept -> std::size_t {
+  return hash_combine(hash_combine(h1, h2), rest...);
+}
+
+} // namespace frozenchars
+
+namespace frozenchars::literals {
+
+/**
+ * @brief 文字列リテラルのコンパイル時 FNV-1a ハッシュ値を得る
+ *
+ * @param str 対象の文字列リテラル
+ * @param len 文字数
+ * @return std::size_t ハッシュ値
+ *
+ * @code
+ * switch (fnv1a(runtime_string)) {
+ *   case "GET"_hash:  ...
+ *   case "POST"_hash: ...
+ * }
+ * @endcode
+ */
+[[nodiscard]] auto consteval operator""_hash(char const* str, std::size_t const len) noexcept -> std::size_t {
+  return frozenchars::fnv1a(std::string_view{str, len});
+}
+
+} // namespace frozenchars::literals
+// ---- end frozenchars/hash.hpp ----
 // ---- begin frozenchars/freeze.hpp ----
 
 // ---- begin frozenchars/detail/number_conv.hpp ----
@@ -9861,6 +10017,179 @@ template <auto Str>
   return shrink_to_fit<html_decode(Str)>();
 }
 
+// ===== JSON string escape =====
+
+namespace detail {
+
+/**
+ * @brief JSON 文字列エスケープで 1 文字が占める最大バイト数を返す
+ *
+ * @param c 判定する文字
+ * @return size_t エスケープ後のバイト数（1・2 または 6）
+ */
+constexpr auto json_escaped_char_size(char const c) noexcept -> size_t {
+  switch (c) {
+  case '"':
+  case '\\':
+  case '\b':
+  case '\f':
+  case '\n':
+  case '\r':
+  case '\t':
+    return 2;
+  default:
+    // U+0000..U+001F は \u00XX の 6 文字になる
+    return static_cast<unsigned char>(c) < 0x20 ? 6 : 1;
+  }
+}
+
+/**
+ * @brief JSON 文字列エスケープ後の文字数を計算する
+ *
+ * @tparam N FrozenString の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return size_t エスケープ後の文字数
+ */
+template <size_t N>
+[[nodiscard]] auto consteval count_json_escaped_size(FrozenString<N> const& str) noexcept -> size_t {
+  auto count = 0uz;
+  for (auto const c : str.sv()) {
+    count += json_escaped_char_size(c);
+  }
+  return count;
+}
+
+/**
+ * @brief 1 文字を JSON 文字列エスケープして書き込む
+ *
+ * @param c 対象の文字
+ * @param out 書き込み先（十分な領域があること）
+ * @return size_t 書き込んだ文字数（1・2 または 6）
+ */
+constexpr auto write_json_escaped_char(char const c, char* out) noexcept -> size_t {
+  switch (c) {
+  case '"': out[0] = '\\'; out[1] = '"'; return 2;
+  case '\\': out[0] = '\\'; out[1] = '\\'; return 2;
+  case '\b': out[0] = '\\'; out[1] = 'b'; return 2;
+  case '\f': out[0] = '\\'; out[1] = 'f'; return 2;
+  case '\n': out[0] = '\\'; out[1] = 'n'; return 2;
+  case '\r': out[0] = '\\'; out[1] = 'r'; return 2;
+  case '\t': out[0] = '\\'; out[1] = 't'; return 2;
+  default:
+    if (static_cast<unsigned char>(c) < 0x20) {
+      // 制御文字は \u00XX（16進は小文字）
+      auto const byte = static_cast<std::uint8_t>(c);
+      out[0] = '\\'; out[1] = 'u'; out[2] = '0'; out[3] = '0';
+      out[4] = value_to_hex_digit(static_cast<std::uint8_t>((byte >> 4) & 0x0F), false);
+      out[5] = value_to_hex_digit(static_cast<std::uint8_t>(byte & 0x0F), false);
+      return 6;
+    }
+    out[0] = c;
+    return 1;
+  }
+}
+
+} // namespace detail
+
+/**
+ * @brief 文字列を JSON 文字列用にエスケープする
+ *
+ * 以下の文字を変換します（RFC 8259）:
+ * - `"` → `\"`、`\` → `\\`
+ * - `\b` `\f` `\n` `\r` `\t` → 対応する短縮エスケープ
+ * - その他の U+0000..U+001F → `\u00XX`
+ *
+ * 非 ASCII の UTF-8 バイト列はそのまま通します（JSON は生の UTF-8 を許容）。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto エスケープ後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_escape(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 6 * (N > 0 ? N - 1 : 0) + 1;
+  auto res = FrozenString<OUT_CAP>{};
+  auto offset = 0uz;
+  for (auto const c : str.sv()) {
+    offset += detail::write_json_escaped_char(c, res.buffer.data() + offset);
+  }
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを JSON 文字列用にエスケープする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto エスケープ後の文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_escape(char const (&str)[N]) noexcept {
+  return json_escape(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を JSON 文字列用にエスケープする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto エスケープ後の文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval json_escape() noexcept {
+  return shrink_to_fit<json_escape(Str)>();
+}
+
+/**
+ * @brief 文字列を JSON 文字列リテラル（前後の `"` 込み）にする
+ *
+ * 内容は json_escape と同じ規則でエスケープし、前後に `"` を付与します。
+ *
+ * @tparam N 文字列の長さ (終端文字'\0'を含む)
+ * @param str 対象文字列
+ * @return auto 引用符込みの文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_quoted(FrozenString<N> const& str) noexcept {
+  constexpr auto OUT_CAP = 6 * (N > 0 ? N - 1 : 0) + 3;
+  auto res = FrozenString<OUT_CAP>{};
+  res.buffer[0] = '"';
+  auto offset = 1uz;
+  for (auto const c : str.sv()) {
+    offset += detail::write_json_escaped_char(c, res.buffer.data() + offset);
+  }
+  res.buffer[offset++] = '"';
+  res.buffer[offset] = '\0';
+  res.length = offset;
+  return res;
+}
+
+/**
+ * @brief 文字列リテラルを JSON 文字列リテラル（前後の `"` 込み）にする
+ *
+ * @tparam N 文字列リテラルの長さ (終端文字'\0'を含む)
+ * @param str 対象文字列リテラル
+ * @return auto 引用符込みの文字列
+ */
+template <size_t N>
+[[nodiscard]] auto consteval json_quoted(char const (&str)[N]) noexcept {
+  return json_quoted(FrozenString{str});
+}
+
+/**
+ * @brief 文字列を JSON 文字列リテラルにする（NTTP版・正確なバッファサイズ）
+ *
+ * @tparam Str 変換対象の FrozenString（NTTPとして渡す）
+ * @return auto 引用符込みの文字列
+ */
+template <auto Str>
+  requires detail::is_frozen_string_v<decltype(Str)>
+[[nodiscard]] auto consteval json_quoted() noexcept {
+  return shrink_to_fit<json_quoted(Str)>();
+}
+
 /**
  * @brief UTF-8 文字列のコードポイント数を計算する
  *
@@ -16303,6 +16632,34 @@ struct html_decode_adaptor : pipe_adaptor_base {
 };
 
 /**
+ * @brief JSON 文字列エスケープするパイプアダプタ
+ */
+struct json_escape_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::json_escape(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::json_escape(FrozenString{str});
+  }
+};
+
+/**
+ * @brief JSON 文字列リテラル（前後の `"` 込み）にするパイプアダプタ
+ */
+struct json_quoted_adaptor : pipe_adaptor_base {
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(FrozenString<N> const& str) const noexcept {
+    return frozenchars::json_quoted(str);
+  }
+  template <size_t N>
+  [[nodiscard]] consteval auto operator()(char const (&str)[N]) const noexcept {
+    return frozenchars::json_quoted(FrozenString{str});
+  }
+};
+
+/**
  * @brief 指定幅で単語折り返しするパイプアダプタ
  */
 struct word_wrap_adaptor : pipe_adaptor_base {
@@ -16508,6 +16865,8 @@ inline constexpr auto&                               to_ascii = hex_encode;     
 inline constexpr auto&                               from_ascii = hex_decode;   ///< hex_decode の別名
 inline constexpr html_encode_adaptor                 html_encode{};             ///< HTML エンティティエンコード
 inline constexpr html_decode_adaptor                 html_decode{};             ///< HTML エンティティデコード
+inline constexpr json_escape_adaptor                 json_escape{};             ///< JSON 文字列エスケープ
+inline constexpr json_quoted_adaptor                 json_quoted{};             ///< JSON 文字列（前後の " 込み）
 inline constexpr minify_html_adaptor                 minify_html{};             ///< HTML ミニファイ
 inline constexpr minify_xml_adaptor                  minify_xml{};              ///< XML ミニファイ
 inline constexpr minify_json_adaptor                 minify_json{};             ///< JSON ミニファイ

@@ -29,6 +29,8 @@
 
 ### Added
 
+- `hash`（`frozenchars/hash.hpp`）: FNV-1a ハッシュ `fnv1a`、`hash_v<"...">`、`"..."_hash` リテラル、`hash_combine`、`constexpr_hash<T>`。コンパイル時定数として文字列 `switch` の `case` ラベルに使える。
+- `json_escape` / `json_quoted`（`encoding.hpp`）: JSON 文字列リテラルのエスケープ（RFC 8259）をコンパイル時に計算。NTTP 版はバッファ長が確定する。パイプ演算子 `ops::json_escape` / `ops::json_quoted` も利用可能。
 - `json::decompress` / `json::uncrush`: コンパイル時 JSON 圧縮（`compress` / `crush`）の復元 API。
 - `json::compress` の出力を有効な JSON に変更。数値の原文（小数・指数）と型情報を保持。
 
