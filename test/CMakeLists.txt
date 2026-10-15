@@ -144,7 +144,12 @@ endif()
 # wildcards ベンチマーク依存: 構成時に取得
 # (https://github.com/zemasoft/wildcards)
 include(FetchContent)
-cmake_policy(SET CMP0169 OLD)
+if(POLICY CMP0169)
+  # CMP0169 (CMake 3.30+): 単一引数の FetchContent_Populate は非推奨。
+  # OLD を指定して既存の populate 後のパッチ処理を維持する。
+  # CMake 3.30 未満ではこのポリシーは存在しないため設定をスキップする。
+  cmake_policy(SET CMP0169 OLD)
+endif()
 FetchContent_Declare(
   wildcards
   GIT_REPOSITORY https://github.com/zemasoft/wildcards.git
@@ -196,6 +201,12 @@ assert_compile_fail(
 )
 
 assert_compile_fail(
+  NAME frozen_map_operator_missing_key
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_operator_missing_key.cpp
+  EXPECTED_TEXT "frozenchars: frozen_map::operator[]: key not found"
+)
+
+assert_compile_fail(
   NAME frozen_map_make_frozen_map_bad_key
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_make_frozen_map_bad_key.cpp
   EXPECTED_TEXT "frozen_map entry key must be convertible to std::string_view"
@@ -220,6 +231,12 @@ assert_compile_fail(
 )
 
 assert_compile_fail(
+  NAME frozen_trie_map_operator_missing_key
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_trie_map_operator_missing_key.cpp
+  EXPECTED_TEXT "frozenchars: frozen_trie_map::operator[]: key not found"
+)
+
+assert_compile_fail(
   NAME frozen_bimap_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_bimap_empty_keys.cpp
   EXPECTED_TEXT "frozen_bimap requires at least one key"
@@ -235,6 +252,13 @@ assert_compile_fail(
   NAME frozen_multimap_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_multimap_empty_keys.cpp
   EXPECTED_TEXT "frozen_multimap requires at least one key"
+)
+
+assert_compile_fail(
+  NAME base64_decode_invalid_padding
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/base64_decode_invalid_padding.cpp
+  EXPECTED_TEXT "frozenchars: base64_decode: invalid Base64 input"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
 assert_compile_fail(

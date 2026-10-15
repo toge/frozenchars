@@ -13,6 +13,7 @@
  * 例: clang++ --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot
  *       -fno-exceptions -I include -c src.cpp -o src.o
  */
+#include <cassert>
 #include <cstdlib>
 
 /**
@@ -34,6 +35,21 @@ namespace frozenchars::detail {
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) throw(msg)
 #else
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) ::frozenchars::detail::consteval_fail(msg)
+#endif
+
+/**
+ * @brief 実行時・コンパイル時の前提条件チェック（assert 相当）。
+ *
+ * cond が偽の場合:
+ * - 実行時: assert により中止（NDEBUG 定義時は無効化。通常の assert と同様）。
+ * - 定数評価中: assert の条件評価が定数式評価に失敗しコンパイルエラー
+ *   （診断のソース表示にメッセージが現れる）。
+ *
+ * @param cond 真となるべき条件式
+ * @param msg 文字列リテラル（診断メッセージ）
+ */
+#ifndef FROZENCHARS_ASSERT
+#define FROZENCHARS_ASSERT(cond, msg) assert((cond) && (msg))
 #endif
 
 #ifdef FROZENCHARS_WASI_MINIMAL

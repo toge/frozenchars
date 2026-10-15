@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -834,12 +836,17 @@ public:
    * @param key 探索するキー
    * @pre contains(key)
    * @return T& / T const& 値への参照
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
    */
   constexpr auto operator[](std::string_view key) noexcept -> T& {
-    return values_[lookup_::find_index_raw(key)];
+    auto const index = lookup_::find_index_raw(key);
+    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
+    return values_[index];
   }
   constexpr auto operator[](std::string_view key) const noexcept -> T const& {
-    return values_[lookup_::find_index_raw(key)];
+    auto const index = lookup_::find_index_raw(key);
+    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
+    return values_[index];
   }
   /**
    * @brief lvalue のマップを指定した結果型へ変換する

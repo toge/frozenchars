@@ -17,6 +17,9 @@
 
 ### Fixed
 
+- `frozen_map::operator[]` / `frozen_trie_map::operator[]`: 存在しないキーで番兵インデックス（= `size()`）による `std::array` の範囲外アクセス（未定義動作）となる問題を修正。`FROZENCHARS_ASSERT` によるチェックを追加し、定数評価ではメッセージ付きのコンパイルエラー、実行時（assert 有効ビルド）は `frozenchars: frozen_map::operator[]: key not found` で中止する。
+- `base64_decode`（NTTP 版）: `'=' 終端の 4 文字未満入力（`"="`・`"=="`・`"AB="` 等）でデコードサイズ計算が `size_t` アンダーフローし、`FrozenString requires N > 0` という無関係なエラーになっていた問題を修正。`frozenchars: base64_decode: invalid Base64 input (padding exceeds data)` として診断される。
+- CMake: `cmake_policy(SET CMP0169 OLD)`（CMake 3.30 で追加されたポリシー）を `cmake_minimum_required(VERSION 3.25)` のまま設定していたため、CMake 3.25〜3.29 では `cmake_minimum_required` 直後に hard error となり configure できない問題を修正（`if(POLICY CMP0169)` で保護）。
 - `freeze(char)` / `concat(..., 'a')` が文字をコードポイント（`"97"`）に変換していた。
 - `wildcard_match`: `[!...]` 否定クラスが英数字以外にマッチしなかった（frozen_regex 委譲の補集合が `DotChars` 限定のため）。`{` `}` `+` `^` `$` を含む `*` なしパターンがコンパイルエラーになっていた。
 - `wildcard_match`: サフィックス早期判定が中間部と同じ文字を二重に使い、`[ab]x*x` が `"ax"` にマッチしていた。

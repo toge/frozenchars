@@ -307,6 +307,7 @@ constexpr bool is_space(char c) noexcept {
  * 例: clang++ --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot
  *       -fno-exceptions -I include -c src.cpp -o src.o
  */
+#include <cassert>
 #include <cstdlib>
 
 /**
@@ -328,6 +329,21 @@ namespace frozenchars::detail {
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) throw(msg)
 #else
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) ::frozenchars::detail::consteval_fail(msg)
+#endif
+
+/**
+ * @brief 実行時・コンパイル時の前提条件チェック（assert 相当）。
+ *
+ * cond が偽の場合:
+ * - 実行時: assert により中止（NDEBUG 定義時は無効化。通常の assert と同様）。
+ * - 定数評価中: assert の条件評価が定数式評価に失敗しコンパイルエラー
+ *   （診断のソース表示にメッセージが現れる）。
+ *
+ * @param cond 真となるべき条件式
+ * @param msg 文字列リテラル（診断メッセージ）
+ */
+#ifndef FROZENCHARS_ASSERT
+#define FROZENCHARS_ASSERT(cond, msg) assert((cond) && (msg))
 #endif
 
 #ifdef FROZENCHARS_WASI_MINIMAL
@@ -1336,6 +1352,10 @@ auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
 /**
  * @brief Base64デコード後の最大バイト数を計算する
  *
+ * '=' 終端の 4 文字未満入力（"="・"=="・"AB=" 等）では
+ * FROZENCHARS_CONSTEVAL_FAIL で失敗する（パディングがデータ長を超えて
+ * size_t アンダーフローするため）。
+ *
  * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
  * @param str 処理対象の文字列
  * @return std::size_t デコード後のバイト数（パディングを考慮）
@@ -1348,9 +1368,14 @@ template <size_t N>
   }
   auto count = (s.size() / 4) * 3;
   if (s.ends_with("==")) {
+    if (count < 2) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+    }
     count -= 2;
-  }
-  else if (s.ends_with("=")) {
+  } else if (s.ends_with("=")) {
+    if (count < 1) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+    }
     count -= 1;
   }
   return count;
@@ -10933,6 +10958,7 @@ template<class ... Args>
 
 // ---- begin frozenchars/map.hpp ----
 
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -11893,12 +11919,17 @@ public:
    * @param key 探索するキー
    * @pre contains(key)
    * @return T& / T const& 値への参照
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
    */
   constexpr auto operator[](std::string_view key) noexcept -> T& {
-    return values_[lookup_::find_index_raw(key)];
+    auto const index = lookup_::find_index_raw(key);
+    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
+    return values_[index];
   }
   constexpr auto operator[](std::string_view key) const noexcept -> T const& {
-    return values_[lookup_::find_index_raw(key)];
+    auto const index = lookup_::find_index_raw(key);
+    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
+    return values_[index];
   }
   /**
    * @brief lvalue のマップを指定した結果型へ変換する
@@ -13169,6 +13200,7 @@ public:
 // ---- end frozenchars/trie_index.hpp ----
 // ---- begin frozenchars/trie_map.hpp ----
 
+
 #include <array>
 #include <concepts>
 #include <cstddef>
@@ -13289,14 +13321,24 @@ public:
    * @brief キーに対応する値への参照を取得する（チェックなし）
    * @param key 検索キー
    * @pre contains(key)
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
    */
-  constexpr auto operator[](std::string_view key) noexcept -> T& { return values_[lookup_::find(key)]; }
+  constexpr auto operator[](std::string_view key) noexcept -> T& {
+    auto const index = lookup_::find(key);
+    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
+    return values_[index];
+  }
   /**
    * @brief キーに対応する値への参照を取得する（チェックなし、const 版）
    * @param key 検索キー
    * @pre contains(key)
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
    */
-  constexpr auto operator[](std::string_view key) const noexcept -> T const& { return values_[lookup_::find(key)]; }
+  constexpr auto operator[](std::string_view key) const noexcept -> T const& {
+    auto const index = lookup_::find(key);
+    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
+    return values_[index];
+  }
 
   constexpr auto begin() noexcept -> iterator { return iterator{{this}, 0}; }
   constexpr auto end() noexcept -> iterator { return iterator{{this}, size()}; }

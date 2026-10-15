@@ -217,6 +217,10 @@ auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
 /**
  * @brief Base64デコード後の最大バイト数を計算する
  *
+ * '=' 終端の 4 文字未満入力（"="・"=="・"AB=" 等）では
+ * FROZENCHARS_CONSTEVAL_FAIL で失敗する（パディングがデータ長を超えて
+ * size_t アンダーフローするため）。
+ *
  * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
  * @param str 処理対象の文字列
  * @return std::size_t デコード後のバイト数（パディングを考慮）
@@ -229,9 +233,14 @@ template <size_t N>
   }
   auto count = (s.size() / 4) * 3;
   if (s.ends_with("==")) {
+    if (count < 2) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+    }
     count -= 2;
-  }
-  else if (s.ends_with("=")) {
+  } else if (s.ends_with("=")) {
+    if (count < 1) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+    }
     count -= 1;
   }
   return count;

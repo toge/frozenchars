@@ -1894,6 +1894,8 @@ assert(map.get_value_or("missing", 99) == 99);
 
 `get()` が `std::optional<std::reference_wrapper<...>>` を返すのに対し、`get_value_or` は値をコピーして返すため、デフォルト値との分岐を一行で書けます。
 
+`operator[]` はキーの存在を前提とした高速アクセスです。存在しないキーに対しては、定数評価ではメッセージ付きのコンパイルエラー、実行時（assert 有効ビルド）では `Assertion ... frozenchars: frozen_map::operator[]: key not found` で中止します（`NDEBUG` 定義時はチェック無効。既定の事前条件は `contains(key)`）。キーの存在が保証できない経路では `at()` / `get()` / `contains()` を使ってください。
+
 #### `contains_all` — 複数キーの一括存在判定
 
 複数のキーが全てマップ内に存在するかをコンパイル時に判定します。空パックに対しては `true`（vacuous truth）を返します。
@@ -2019,6 +2021,8 @@ assert(map["timeout"] == 1);
 assert(map["timeout_ms"] == 2);
 assert(map.contains("timeout_us"));
 ```
+
+`operator[]` の事前条件は `frozen_map` と同じです（存在しないキーには定数評価でコンパイルエラー、実行時の assert 有効ビルドでは abort）。
 
 #### `frozen_trie_map` の特徴
 
