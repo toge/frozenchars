@@ -460,3 +460,20 @@ TEST_CASE("wildcard: regex metacharacters are literals in glob patterns") {
   static_assert(!wildcard_match<"a+b">("aab"));
   static_assert(wildcard_match<"^a$">("^a$"));
 }
+
+TEST_CASE("wildcard: backtracking over many stars stays bounded") {
+  // `*` の後ろに文字クラスが続くと素朴なバックトレッキングは `*` の個数に対して
+  // 指数的に増える。ここでは失敗状態をメモ化してコンパイル時のステップ数を
+  // 抑えており、このテストのコンパイル自体が回帰ガードになる。
+  constexpr auto ten_stars = "*[a]*[a]*[a]*[a]*[a]*[a]*[a]*[a]*[a]*[q]"_fs;
+  constexpr auto text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"_fs;
+
+  static_assert(!wildcard_match<ten_stars>(text));
+  REQUIRE_FALSE(wildcard_match<ten_stars>(text.sv()));
+
+  // 実際にマッチするケースも同じ道を通る
+  constexpr auto matching = "*[a]*[a]*[a]*[a]*[a]*[a]*[a]*[a]*[a]*[a]"_fs;
+  static_assert(wildcard_match<matching>(text));
+  REQUIRE(wildcard_match<matching>(text.sv()));
+  REQUIRE(wildcard_match<matching>(std::string(200, 'a')));
+}

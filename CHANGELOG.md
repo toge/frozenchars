@@ -8,6 +8,10 @@
 
 ### Changed
 
+- `wildcard_match` / `wildcard_find`: `*` の後ろに `?` / `[` / `(` / `\` が続くパターンでバックトレッキングが `*` の個数に対して指数的に増えていた（コンパイル時のステップ数超過や実行時間の爆発）問題を修正。失敗した (テキスト位置, パターン位置) をメモ化して O(テキスト長 × パターン長) に収めた。
+- `wildcard_match(FrozenString const&, std::string_view)`: コンパイルできない（一度もコンパイルが通らない）オーバーロードを削除。パターンを NTTP で渡す `wildcard_match<PAT>(text)` を使用すること。
+- `wildcard_match(char const (&)[N], std::string_view)`: 他のオーバーロードに合わせて `constexpr` を付与。
+
 - `make_frozen_trie_map`: エントリをキー名で対応づけるようになり、並び順がキー順と違っても正しく格納される。`frozen_map` / `frozen_multimap` / `frozen_bimap` と同じく未知キー・重複キー・欠落キーをコンパイル時エラーにする（従来は位置で代入していたため、キーの取り違えが静かに通っていた）。
 
 - `test/CMakeLists.txt`: compile-fail ケース（33件）を CMake 設定時ではなく `ctest` のテストとして実行するようにした。静的_assert の診断メッセージを変更しても `bash test.sh` が検出する。

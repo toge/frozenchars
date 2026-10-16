@@ -319,26 +319,58 @@ struct wildcard_to_regex_helper {
 };
 
 /**
- * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
+ * @brief バックトレッキングで「失敗した状態」を記録するメモ
  *
- * 対応構文:
- * - `*` : 任意の文字列（空文字列を含む）
- * - `?` : 任意の1文字
- * - `\\` : エスケープ（次の文字をリテラルとして扱う）
- * - `[abc]` : セット内の任意の1文字
- * - `[!abc]` : セット外の任意の1文字
- * - `(ab|cd)` : alternatives（このうちいずれかにマッチ）
+ * `*` の後ろに `?` / `[` / `(` / `\\` が続くパターンでは、素朴なバックトレッキングは
+ * `*` の個数に対して指数的に増える。このメモは (テキスト位置, パターン位置, partial) の
+ * 失敗状態を記録し、同じ状態の再計算を省略する（メモ化により O(text × pattern) に収まる）。
+ *
+ * メモリ使用量を抑えるため、記録対象はパターン全体（pi_end == PAT.size()）に
+ * 限定し、テキスト長も上限を設ける。上限を超えた状態はメモ化しない（正確性は保たれる）。
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ */
+template <FrozenString PAT>
+struct wildcard_memo {
+  /// パターン位置（+ 終端）の数
+  static constexpr size_t k_stride = PAT.size() + 1uz;
+  /// メモ化するテキスト位置の上限（使用メモリは約 5KB に収める）
+  static constexpr size_t k_text_cap = (2048uz / k_stride) > 64uz ? 2048uz / k_stride : 64uz;
+  /// 記録済みなら true
+  std::array<bool, k_stride * k_text_cap * 2uz> failed{};
+
+  /**
+   * @brief 状態に対応する記録先を取得する
+   * @param ti テキスト位置
+   * @param pi パターン位置
+   * @param pi_end パターン範囲の終端（パターン全体以外では記録しない）
+   * @param partial 途中までFuelするモードか
+   * @return 記録先のポインタ。記録対象外なら nullptr
+   */
+  [[nodiscard]] constexpr auto at(size_t ti, size_t pi, size_t pi_end, bool partial) noexcept -> bool* {
+    if (pi_end != PAT.size() || ti >= k_text_cap) {
+      return nullptr;
+    }
+    return &failed[((partial ? k_text_cap : 0uz) + ti) * k_stride + pi];
+  }
+};
+
+/**
+ * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する（メモなし）
  *
  * @tparam PAT パターン文字列（FrozenString NTTP）
  * @param text 対象テキスト
  * @param ti テキスト内の現在位置
  * @param pi パターン内の開始位置
  * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
+ * @param partial 途中までFuelするモードか
+ * @param memo 失敗状態のメモ（nullptr なら記録しない）
  * @return match_result1
  */
 template <FrozenString PAT>
 [[nodiscard]] constexpr match_result
-wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial = false) noexcept {
+wildcard_match_uncached(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial,
+                        wildcard_memo<PAT>* memo) noexcept {
   while (pi < pi_end) {
     auto c = PAT.data()[pi];
 
@@ -379,7 +411,7 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
         for (auto found = text.find(lit_sv, ti);
               found != std::string_view::npos;
               found = text.find(lit_sv, found + 1)) {
-          auto r = wildcard_match_impl<PAT>(text, found + lit_sv.size(), lit_end, pi_end, partial);
+          auto r = wildcard_match_impl<PAT>(text, found + lit_sv.size(), lit_end, pi_end, partial, memo);
           if (r.matched) return r;
         }
         return {false, ti};
@@ -387,7 +419,7 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
       // Fallback: full backtracking for complex cases (? [ ( \ after *)
       for (auto i = ti; i <= text.size(); ++i) {
-        auto r = wildcard_match_impl<PAT>(text, i, pi, pi_end, partial);
+        auto r = wildcard_match_impl<PAT>(text, i, pi, pi_end, partial, memo);
         if (r.matched) return r;
       }
       return {false, ti};
@@ -426,12 +458,12 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
         for (auto branch = wildcard_plan<PAT>::first_branch[pi];
              branch != wildcard_plan<PAT>::NO_BRANCH;
              branch = wildcard_plan<PAT>::next_branch[branch]) {
-          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true);
+          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true, memo);
           if (br.matched) {
             if (after_alt >= pi_end) {
               if (partial || br.pos == text.size()) return br;
             } else {
-              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial, memo);
               if (rr.matched) return rr;
             }
           }
@@ -449,6 +481,46 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
   if (partial) return {true, ti};
   return {ti == text.size(), ti};
+}
+
+/**
+ * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
+ *
+ * 対応構文:
+ * - `*` : 任意の文字列（空文字列を含む）
+ * - `?` : 任意の1文字
+ * - `\\` : エスケープ（次の文字をリテラルとして扱う）
+ * - `[abc]` : セット内の任意の1文字
+ * - `[!abc]` : セット外の任意の1文字
+ * - `(ab|cd)` : alternatives（このうちいずれかにマッチ）
+ *
+ * memo が渡された場合、失敗した (ti, pi) を記録して再計算を省略する。
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @param ti テキスト内の現在位置
+ * @param pi パターン内の開始位置
+ * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
+ * @param partial 途中までFuelするモードか
+ * @param memo 失敗状態のメモ（nullptr なら記録しない）
+ * @return match_result1
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr match_result
+wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial = false,
+                    wildcard_memo<PAT>* memo = nullptr) noexcept {
+  if (memo != nullptr) {
+    if (auto* const slot = memo->at(ti, pi, pi_end, partial); slot != nullptr && *slot) {
+      return {false, ti};
+    }
+  }
+  auto const result = wildcard_match_uncached<PAT>(text, ti, pi, pi_end, partial, memo);
+  if (memo != nullptr && !result.matched) {
+    if (auto* const slot = memo->at(ti, pi, pi_end, partial); slot != nullptr) {
+      *slot = true;
+    }
+  }
+  return result;
 }
 
 /**
@@ -521,7 +593,8 @@ struct find_result {
 template <FrozenString PAT>
 [[nodiscard]] constexpr auto wildcard_find_shortest_match_from(std::string_view text, size_t start) noexcept
   -> std::optional<find_result> {
-  auto const r = wildcard_match_impl<PAT>(text, start, 0, PAT.size(), true);
+  auto memo = wildcard_memo<PAT>{};
+  auto const r = wildcard_match_impl<PAT>(text, start, 0, PAT.size(), true, &memo);
   if (r.matched && r.pos > start) {
     return find_result{start, r.pos};
   }
@@ -767,10 +840,12 @@ template <FrozenString PAT>
       middle = text.substr(0, text.size() - suff_len);
     }
 
-    return detail::wildcard_match_impl<PAT>(middle, pref_len, pref_len, suff_start).matched;
+    auto memo = detail::wildcard_memo<PAT>{};
+    return detail::wildcard_match_impl<PAT>(middle, pref_len, pref_len, suff_start, false, &memo).matched;
   }
 
-  return detail::wildcard_match_impl<PAT>(text, 0, 0, PAT.size()).matched;
+  auto memo = detail::wildcard_memo<PAT>{};
+  return detail::wildcard_match_impl<PAT>(text, 0, 0, PAT.size(), false, &memo).matched;
 }
 
 /**
@@ -781,21 +856,8 @@ template <FrozenString PAT>
  * @return auto マッチした場合 true
  */
 template <size_t N>
-[[nodiscard]] bool wildcard_match(char const (&pattern)[N], std::string_view text) noexcept {
+[[nodiscard]] constexpr bool wildcard_match(char const (&pattern)[N], std::string_view text) noexcept {
   return wildcard_match<FrozenString<N>{pattern}>(text);
-}
-
-/**
- * @brief ワイルドカードパターンでテキストがマッチするか判定する（FrozenString パターン版）
- *
- * @tparam M パターンの長さ（終端文字を含む）
- * @param pattern ワイルドカードパターン（FrozenString）
- * @param text マッチング対象のテキスト
- * @return auto マッチした場合 true
- */
-template <size_t M>
-[[nodiscard]] bool wildcard_match(FrozenString<M> const& pattern, std::string_view text) noexcept {
-  return wildcard_match<FrozenString<M>{pattern.data()}>(text);
 }
 
 /**
