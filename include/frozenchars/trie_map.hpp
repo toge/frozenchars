@@ -125,22 +125,22 @@ public:
    * @brief キーに対応する値への参照を取得する（チェックなし）
    * @param key 検索キー
    * @pre contains(key)
-   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時ではメッセージを出して std::abort() する（NDEBUG でも有効）
    */
   constexpr auto operator[](std::string_view key) noexcept -> T& {
     auto const index = lookup_::find(key);
-    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
+    FROZENCHARS_PRECONDITION(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
     return values_[index];
   }
   /**
    * @brief キーに対応する値への参照を取得する（チェックなし、const 版）
    * @param key 検索キー
    * @pre contains(key)
-   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時ではメッセージを出して std::abort() する（NDEBUG でも有効）
    */
   constexpr auto operator[](std::string_view key) const noexcept -> T const& {
     auto const index = lookup_::find(key);
-    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
+    FROZENCHARS_PRECONDITION(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
     return values_[index];
   }
 

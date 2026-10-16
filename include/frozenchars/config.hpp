@@ -14,7 +14,9 @@
  *       -fno-exceptions -I include -c src.cpp -o src.o
  */
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
+#include <type_traits>
 
 /**
  * @brief consteval経路の失敗通知。
@@ -29,12 +31,52 @@ namespace frozenchars::detail {
   (void)msg;
   std::abort();
 }
+
+/**
+ * @brief 実行時に起動する前提条件違反の通知。
+ *
+ * @param msg 文字列リテラル（診断メッセージ）
+ */
+[[noreturn]] inline void precondition_failed(char const* msg) noexcept {
+  std::fputs("frozenchars: precondition failed: ", stderr);
+  std::fputs(msg, stderr);
+  std::fputc('\n', stderr);
+  std::abort();
+}
 } // namespace frozenchars::detail
 
 #ifdef __cpp_exceptions
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) throw(msg)
 #else
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) ::frozenchars::detail::consteval_fail(msg)
+#endif
+
+/**
+ * @brief 実行時に必ず作動する前提条件チェック。
+ *
+ * cond が偽の場合:
+ * - 定数評価中: constexpr ではない consteval_fail() を呼ぶためコンパイルエラーになる。
+ *   診断には展開後の行（診断メッセージを含む）が出力される。
+ * - 実行時: 標準エラーにメッセージを出して std::abort()
+ *
+ * NDEBUG でも無効化されない点が FROZENCHARS_ASSERT と異なる。operator[] の
+ * 未検出キー検出のように、Release ビルドで未定義動作に落入ることを許さない
+ * 箇所で使う。
+ *
+ * @param cond 真となるべき条件式
+ * @param msg 文字列リテラル（診断メッセージ）
+ */
+#ifndef FROZENCHARS_PRECONDITION
+#define FROZENCHARS_PRECONDITION(cond, msg)                                                             \
+  do {                                                                                                  \
+    if (!static_cast<bool>(cond)) [[unlikely]] {                                                        \
+      if (std::is_constant_evaluated()) {                                                               \
+        ::frozenchars::detail::consteval_fail(msg);                                                    \
+      } else {                                                                                          \
+        ::frozenchars::detail::precondition_failed(msg);                                               \
+      }                                                                                                 \
+    }                                                                                                   \
+  } while (false)
 #endif
 
 /**

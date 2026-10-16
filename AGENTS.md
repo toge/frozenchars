@@ -13,7 +13,7 @@
 ## ビルドとテスト
 
 - 通常ビルド: `bash build.sh`（成果物 `build/`）→ テスト: `bash test.sh`
-- 静的リンク版: `bash build.sh static`（`build_static/` に生成）
+- 静的リンク版: `bash build.sh static`（`build_static/` に生成）→ テストは `bash test.sh build_static` とビルドディレクトリを渡す
 - vcpkg の実体パスは `~/vm/vcpkg`（`build.sh:30`）。`conanfile.py` は存在しない（conan 分岐は build.sh 内の死コード）。
 - 1ファイルだけ手元で動かす:
   ```bash
@@ -28,6 +28,8 @@
 
 - `static_assert` のエラーメッセージを変更したら `test/compile_fail/` の `EXPECTED_TEXT` を必ず更新（`run_compile_fail.cmake` が部分一致で検証）。
 - コンパイル時マップの新たな `static_assert` を追加したら、`compile_fail/` にも失敗ケースを追加するルール。
+- compile-fail ケースは `ctest` のテスト（`compile_fail_*`）として登録されている。`bash build.sh` だけでは検証されないので、必ず `bash test.sh` まで実行する。
+- `test/CMakeLists.txt` の compile-fail 追加は `add_compile_fail_test()` で行う（設定時実行の `assert_compile_fail` は廃止）。
 
 ## コーディング規約
 

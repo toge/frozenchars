@@ -14,6 +14,13 @@
 #include <unordered_map>
 #include <utility>
 
+#if defined(__unix__) || defined(__APPLE__)
+#include <csignal>
+#include <cstdlib>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 #include "frozenchars/literals.hpp"
 #include "frozenchars/map.hpp"
 #include "frozenchars/glaze_frozen_map.hpp"
@@ -67,6 +74,28 @@ TEST_CASE("frozen_map basic shape", "[frozen_map]") {
   REQUIRE(map.contains("retry"));
   REQUIRE_FALSE(map.contains("other"));
 }
+
+#if defined(__unix__) || defined(__APPLE__)
+TEST_CASE("frozen_map operator[] aborts on a missing key even in release builds", "[frozen_map]") {
+  auto const map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"timeout", 30},
+    std::pair{"retry", 5}
+  );
+  REQUIRE(map["retry"] == 5);
+
+  // NDEBUG でも未検出キーは範囲外アクセスではなく中断すること
+  auto const pid = fork();
+  REQUIRE(pid >= 0);
+  if (pid == 0) {
+    static_cast<void>(map["missing"]);
+    std::_Exit(0);
+  }
+  int status = 0;
+  REQUIRE(waitpid(pid, &status, 0) == pid);
+  REQUIRE(WIFSIGNALED(status));
+  REQUIRE(WTERMSIG(status) == SIGABRT);
+}
+#endif
 
 TEST_CASE("frozen_map converts to requested STL containers by explicit result type",
     "[frozen_map]") {

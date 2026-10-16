@@ -8,6 +8,11 @@
 
 ### Changed
 
+- `test/CMakeLists.txt`: compile-fail ケース（33件）を CMake 設定時ではなく `ctest` のテストとして実行するようにした。静的_assert の診断メッセージを変更しても `bash test.sh` が検出する。
+- `test/CMakeLists.txt`: `test_*.cpp` の glob に `CONFIGURE_DEPENDS` を付け、テストファイルを追加・改名しただけで再 configure されるようにした（これまで追加したテストが実行されないまま緑になることがあった）。
+- `test.sh`: ビルドディレクトリを第1引数で指定できるようになった（`bash build.sh static && bash test.sh build_static`）。
+- `build.sh`: 何も読み取られていなかった `-DSTATIC=ON` を廃止。`bash build.sh static` は従来どおり `build_static` に(static) トリプレットの構成を作る。
+
 - **例外なしを既定化（glaze追従、破壊的変更）**: 実行時APIは一律 `std::expected<T, std::errc>` を返すようになり、`-fno-exceptions` でビルドできるようになった。`FROZENCHARS_THROW` / `FROZENCHARS_WASI_MINIMAL` / `ENABLE_WASI_MINIMAL` / `single_include/frozenchars_wasi_minimal.hpp` / `test/smoke_wasi_minimal.cpp` を廃止。`frozen_map` 等の `at()` は `expected<reference_wrapper<T>, errc>`、`operator[]` と `FrozenString::front/back/operator[]` はチェックなし（事前条件）になった。投げるコンストラクタは `try_make` ファクトリに分離。コンパイル時（NTTP）の不正入力は従来どおりコンパイルエラー。
 - **例外なしモードを実装**: `FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出が `FROZENCHARS_THROW` マクロ経由で `std::abort()` になり、`-fno-exceptions` でビルドできるようになった。従来は `FrozenString::front()/back()/operator[]` の 3 箇所しか無効化されていなかった。
 - `minify_html`: インライン要素（`<b>` / `<span>` / `<a>` 等）とテキストの間の空白を 1 個残すようになった（従来は削除して単語が連結していた）。`{{name}}` はインラインテキスト扱い、`{{#sec}}` / `{{/sec}}` は構造タグ扱い。
@@ -17,6 +22,7 @@
 
 ### Fixed
 
+- `frozen_map::operator[]` / `frozen_trie_map::operator[]`: 未検出キーのガードが `assert` ベースだったため、`NDEBUG`（Release ビルド、既定の `windows-msvc` CI を含む）では無効化され范围外アクセスがそのまま残っていた。`FROZENCHARS_PRECONDITION` を追加し、定数評価ではコンパイルエラー、実行時は診断メッセージを出して `std::abort()` するようにした（`NDEBUG` でも有効）。
 - `json::decode_utf8`: 入力末尾でシーケンスが切れている場合、継続バイトを境界チェックせずに読んで範囲外アクセスしていた問題を修正。`index + シーケンス長 > 入力長` を先に判定するようにした。
 - `json::validate_json` / `json::compress` / `json::crush`: 入れ子深度の上限がなく、深くネストした入力で再帰がスタック枯渇していた問題を修正。`frozenchars::json::max_depth`（既定 512）を超える JSON は不正として扱う。
 - `frozen_map::operator[]` / `frozen_trie_map::operator[]`: 存在しないキーで番兵インデックス（= `size()`）による `std::array` の範囲外アクセス（未定義動作）となる問題を修正。`FROZENCHARS_ASSERT` によるチェックを追加し、定数評価ではメッセージ付きのコンパイルエラー、実行時（assert 有効ビルド）は `frozenchars: frozen_map::operator[]: key not found` で中止する。
@@ -36,6 +42,7 @@
 
 ### Added
 
+- `FROZENCHARS_PRECONDITION(cond, msg)`: `NDEBUG` でも無効化されない前提条件チェック。定数評価ではコンパイルエラー、実行時は診断メッセージを出して `std::abort()` する。
 - `frozenchars::json::max_depth`: JSON の入れ子深度の上限（既定 512）。`validate_json` / `compress` / `crush` はこれを超える入力を不正として扱う。
 - `hash`（`frozenchars/hash.hpp`）: FNV-1a ハッシュ `fnv1a`、`hash_v<"...">`、`"..."_hash` リテラル、`hash_combine`、`constexpr_hash<T>`。コンパイル時定数として文字列 `switch` の `case` ラベルに使える。
 - `json_escape` / `json_quoted`（`encoding.hpp`）: JSON 文字列リテラルのエスケープ（RFC 8259）をコンパイル時に計算。NTTP 版はバッファ長が確定する。パイプ演算子 `ops::json_escape` / `ops::json_quoted` も利用可能。
