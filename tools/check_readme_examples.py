@@ -4,6 +4,7 @@
 使い方: python3 tools/check_readme_examples.py [--fix-list]
 出力: 失敗ブロックの開始行番号と理由
 """
+import os
 import re
 import subprocess
 import sys
@@ -12,6 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
+# CXX でコンパイラを差し替えられる（CI は対応下限の g++-14 を指定する）
+CXX = os.environ.get("CXX", "g++")
 PRELUDE = (
     '#include "frozenchars.hpp"\n'
     "using namespace frozenchars;\n"
@@ -65,7 +68,7 @@ def main() -> int:
             cpp = Path(tmp) / "block.cpp"
             cpp.write_text(src, encoding="utf-8")
             proc = subprocess.run(
-                ["g++", "-std=c++23", "-fsyntax-only",
+                [CXX, "-std=c++23", "-fsyntax-only",
                  f"-I{ROOT / 'include'}", str(cpp)],
                 capture_output=True, text=True, timeout=300,
             )

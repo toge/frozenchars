@@ -8,13 +8,14 @@
 
 ### Changed
 
-- CI: vcpkg をキャッシュから復元した場合も `git pull --ff-only` と再 bootstrap で更新するようにした。キャッシュされた古いクローンには `vcpkg.json` の `builtin-baseline` が指すコミットやバージョン DB が無く、`vcpkg install` が失敗していたため。
+- CI: vcpkg をキャッシュから復元した場合は `git fetch` + `git reset --hard origin/master` と再 bootstrap で最新に同期するようにした。キャッシュされた古いクローンには `vcpkg.json` の `builtin-baseline` が指すコミットやバージョン DB が無く、また未追跡ファイルとの衝突で `pull` が失敗していたため（Windows は `|| exit /b 1` で失敗を検知する）。
 - `.clang-format`: 既存コードの体裁に合わせて設定し直した（名前空間はフラット、縦位置揃えなし、行末コメント1スペース、`Standard: c++20`、`AccessModifierOffset: -2`）。リポジトリ全体は一括整形されていないため、CI の clang-format ゲートは変更された行のみを検査する。検査には clang-format 22.1.8 を使う。
 - `.clang-tidy`: `readability-identifier-naming.FunctionCase` を `camelBack` から `lower_case` に変更（既存コードの大半が snake_case）。
 - `AGENTS.md`: README の行数・サンプルパス・命名規約を現状に合わせて更新。
 - `CMakeLists.txt`: バージョンを最新のタグに合わせて 0.8.1 に更新。警告オプションを `$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:...>` の複数ID形式に集約して重複を解消（-Wall/-Wextra/-pedantic は GCC・Clang・AppleClang 共通、-fconstexpr-steps は Clang 系共通）。
 - `README.md`: 目次124エントリのアンカーを再生成（死んでいたリンク63件）。コード例88件がすべてコンパイルできるように修正。`vcpkg` の記述・単一ヘッダのサイズ表記・要件のコンパイラ一覧を更新。「よくある落とし穴」に `FrozenString::front()` / `back()` / `operator[]` の範囲外アクセス（チェックなし・未定義動作）と回避方法を追記。
 - CI: README の一貫性を検証する `docs and style` ジョブを追加（目次アンカー / コード例のコンパイル / clang-format 22.1.8 による変更行の書式検査）。
+- CI: `docs and style` の README コード例は対応下限の `g++-14` でコンパイル検証する。Ubuntu 既定の g++ 13 は `std::forward_like` など C++23 の一部が無く全ブロックが失敗するため。`tools/check_readme_examples.py` は環境変数 `CXX` でコンパイラを差し替えできるようにした。
 
 - `CMakeLists.txt`: GCC に `-fconstexpr-ops-limit` / `-fconstexpr-loop-limit` を追加。`json::crush` / `json::compress` は 180 バイト程度の JSON で GCC の既定の constexpr 上限を超え、`crush` がコンパイルエラーになっていた（Clang 系は既に `-fconstexpr-steps` を指定していた）。`json::crush` を使う場合は GCC でも同じフラグが必要。
 - `test/CMakeLists.txt`: ベンチマーク用の `wildcards` 依存を `master` ではなくコミット（5662507f）で固定し再現可能にした。パッチ対象が見つからない場合は `FATAL_ERROR` で検出するようにした（従来は `string(REPLACE)` が静かに空振りし、壊れたベンチのビルドが通っていた）。`nanobench` がある構成時のみ取得するようにした。
@@ -39,6 +40,7 @@
 
 ### Fixed
 
+- `README.md`: `partition` の例が C++26 の constexpr 構造化束縛を使っており GCC 14 でコンパイルできなかったため、C++23 互換の `std::get` + `static_assert` に変更。`remove_comments` / `remove_comment_lines` の例は一時オブジェクトを直接渡すと GCC 14 の constexpr 評価で失敗するため、変数に束縛する形に変更。
 - `test_frozen_map.cpp`: 実プロセスの `fork()` で中止を検証するテストが Emscripten（`__unix__` を定義するが `fork()` 非対応）でもビルド・実行され、`REQUIRE(pid >= 0)` の失敗後に `memory access out of bounds` で異常終了していた問題を修正。Emscripten をテスト対象から除外した。
 - `test/CMakeLists.txt` / `json` の深度テスト: JSON パーサの再帰は `max_depth`=512 段まで進むが、Emscripten の既定スタック 64 KiB では深度 300 程度で枯渇し `validate_json` の深度制限テストが `memory access out of bounds` で落ちていた問題を修正。`all_test` のスタックを 1 MiB に拡張した。
 - `.clang-format`: `Standard: c++23` は clang-format 22 以前では解釈できず設定ファイル全体が無効になっていたため `Standard: c++20` に修正。`public:` の字下げを既存コードに合わせるため `AccessModifierOffset` を -2 に修正。

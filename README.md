@@ -655,21 +655,22 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 
 // パイプ演算子版
-constexpr auto [before, delim, after] = "key=value"_fs | ops::partition<"=">;
-static_assert(before.sv() == "key");
-static_assert(delim.sv() == "=");
-static_assert(after.sv() == "value");
+auto const [before, delim, after] = "key=value"_fs | ops::partition<"=">;
+// constexpr 構造化束縛は C++26 のため、C++23 では式を直接検証する
+static_assert(std::get<0>("key=value"_fs | ops::partition<"=">).sv() == "key");
+static_assert(std::get<1>("key=value"_fs | ops::partition<"=">).sv() == "=");
+static_assert(std::get<2>("key=value"_fs | ops::partition<"=">).sv() == "value");
 
 // 区切り文字が見つからない場合
-constexpr auto [b2, d2, a2] = "hello"_fs | ops::partition<"=">;
-static_assert(b2.sv() == "hello");
-static_assert(d2.sv() == "");
-static_assert(a2.sv() == "");
+auto const [b2, d2, a2] = "hello"_fs | ops::partition<"=">;
+static_assert(std::get<0>("hello"_fs | ops::partition<"=">).sv() == "hello");
+static_assert(std::get<1>("hello"_fs | ops::partition<"=">).sv() == "");
+static_assert(std::get<2>("hello"_fs | ops::partition<"=">).sv() == "");
 
 // 複数の区切り文字がある場合は最初のもので分割
-constexpr auto [b3, d3, a3] = "a=b=c"_fs | ops::partition<"=">;
-static_assert(b3.sv() == "a");
-static_assert(a3.sv() == "b=c");
+auto const [b3, d3, a3] = "a=b=c"_fs | ops::partition<"=">;
+static_assert(std::get<0>("a=b=c"_fs | ops::partition<"=">).sv() == "a");
+static_assert(std::get<2>("a=b=c"_fs | ops::partition<"=">).sv() == "b=c");
 ```
 
 ## `shrink_to_fit`（最初の終端位置に合わせて縮小）
@@ -2307,12 +2308,15 @@ static_assert(set_t::size() == 3);
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+// 一時オブジェクトを直接渡すと GCC 14 の constexpr 評価で失敗するため、変数に束縛する
+auto constexpr src = "a\n# comment\nb"_fs;
+
 // コメント以降を削除する（行は残るため空行が残る）
-auto constexpr r = remove_comments("a\n# comment\nb"_fs);
+auto constexpr r = remove_comments(src);
 // r.sv() == "a\n\nb"
 
 // コメント行そのものを削除する
-auto constexpr lines = remove_comment_lines("a\n# comment\nb"_fs);
+auto constexpr lines = remove_comment_lines(src);
 // lines.sv() == "a\nb"
 ```
 
@@ -2321,7 +2325,8 @@ auto constexpr lines = remove_comment_lines("a\n# comment\nb"_fs);
 ```cpp
 namespace fops = frozenchars::ops;
 
-auto constexpr r2 = "#header\na=1\n#end"_fs | fops::remove_comments();
+auto constexpr src2 = "#header\na=1\n#end"_fs;
+auto constexpr r2 = src2 | fops::remove_comments();
 // r2.sv() == "\na=1\n"
 ```
 
