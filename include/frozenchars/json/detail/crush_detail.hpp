@@ -55,14 +55,18 @@ inline constexpr auto replacement_characters_utf16 = [] {
  * @param input UTF-8 バイト列
  * @param index 開始位置。デコードしたバイト数だけ進める（1〜4バイト）
  * @return std::expected<char32_t, std::errc> デコードしたコードポイント。不正は invalid_argument
+ * @details 入力末尾でシーケンスが切れている場合は、入力の外を参照せずに
+ * invalid_argument を返す。
  */
 inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& index) noexcept
   -> std::expected<char32_t, std::errc> {
+  if (index >= input.size()) return std::unexpected(std::errc::invalid_argument);
   auto const lead = static_cast<uint8_t>(input[index]);
   // 1バイト（ASCII）
   if (lead < 0x80) { return static_cast<char32_t>(input[index++]); }
   // 2バイトシーケンス
   if ((lead & 0xE0) == 0xC0) {
+    if (index + 2 > input.size()) return std::unexpected(std::errc::invalid_argument);
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     if ((c1 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 2;
@@ -70,6 +74,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   }
   // 3バイトシーケンス
   if ((lead & 0xF0) == 0xE0) {
+    if (index + 3 > input.size()) return std::unexpected(std::errc::invalid_argument);
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
@@ -80,6 +85,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   }
   // 4バイトシーケンス
   if ((lead & 0xF8) == 0xF0) {
+    if (index + 4 > input.size()) return std::unexpected(std::errc::invalid_argument);
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     auto const c3 = static_cast<uint8_t>(input[index + 3]);

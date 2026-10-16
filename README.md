@@ -859,7 +859,7 @@ static_assert(e2.sv() == "Zg==");
 
 ## `base64_decode`（Base64デコード）
 
-Base64 エンコードされた文字列をデコードします。
+Base64 エンコードされた文字列をデコードします。末尾グループが 4 文字未満の入力（パディング無し・1文字パディングのどちらも）にも対応します。
 
 ```cpp
 #include "frozenchars.hpp"
@@ -868,10 +868,14 @@ using namespace frozenchars::literals;
 
 auto constexpr d1 = base64_decode("SGVsbG8="_fs);    // "Hello"
 auto constexpr d2 = base64_decode<"Zg=="_fs>();     // NTTP版（正確なサイズ）
+auto constexpr d3 = base64_decode<"QUJDRA"_fs>();   // NTTP版・4の倍数でない入力
 
 static_assert(d1.sv() == "Hello");
 static_assert(d2.sv() == "f");
+static_assert(d3.sv() == "ABCD");
 ```
+
+パディングがデータ文字より長い入力（`"="`・`"=="`）と、パディングの後にデータ文字が続く入力（`"AB=CD"`）はコンパイル時エラーになります。
 
 ## `html_encode` / `html_decode`（HTMLエンティティ変換）
 

@@ -94,3 +94,21 @@ TEST_CASE("json detail parser reports errors via expected", "[json][compress]") 
   REQUIRE_FALSE(frozenchars::json::validate_json("{bad}"));
   REQUIRE(frozenchars::json::validate_json(R"({"a":[1,2]})"));
 }
+
+TEST_CASE("validate_json enforces the nesting depth limit", "[json][compress]") {
+  auto const within = [](std::size_t depth) {
+    return std::string(depth, '[') + std::string(depth, ']');
+  };
+  REQUIRE(frozenchars::json::validate_json(within(frozenchars::json::max_depth)));
+  REQUIRE_FALSE(frozenchars::json::validate_json(within(frozenchars::json::max_depth + 1)));
+  // 配列・オブジェクト・オブジェクト内の配列の混在でも同じ制限が適用される
+  auto const mixed = std::string(frozenchars::json::max_depth / 2, '[') + std::string(frozenchars::json::max_depth / 2, '{') +
+                     std::string(frozenchars::json::max_depth / 2, '}') + std::string(frozenchars::json::max_depth / 2, ']');
+  REQUIRE_FALSE(frozenchars::json::validate_json(mixed));
+}
+
+TEST_CASE("validate_json survives deeply nested untrusted input", "[json][compress]") {
+  // 深度制限が無いと再帰でスタックが枯渇する
+  REQUIRE_FALSE(frozenchars::json::validate_json(std::string(100'000, '[')));
+  REQUIRE_FALSE(frozenchars::json::validate_json(std::string(100'000, '{')));
+}

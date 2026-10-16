@@ -58,6 +58,43 @@ TEST_CASE("Base64 decode") {
     static_assert(decoded.sv() == "f");
     REQUIRE(decoded.sv() == "f");
   }
+
+  SECTION("NTTP unpadded tail of 2 chars") {
+    auto constexpr decoded = base64_decode<"Zg"_fs>();
+    static_assert(decoded.sv() == "f");
+    REQUIRE(decoded.sv() == "f");
+  }
+
+  SECTION("NTTP tail of 3 chars with single padding") {
+    auto constexpr decoded = base64_decode<"Zg="_fs>();
+    static_assert(decoded.sv() == "f");
+    REQUIRE(decoded.sv() == "f");
+  }
+
+  SECTION("NTTP tail of 3 chars without padding") {
+    auto constexpr decoded = base64_decode<"Zm8"_fs>();
+    static_assert(decoded.sv() == "fo");
+    REQUIRE(decoded.sv() == "fo");
+  }
+
+  SECTION("NTTP length not multiple of 4") {
+    auto constexpr decoded = base64_decode<"QUJDRA"_fs>();
+    static_assert(decoded.size() == 4);
+    static_assert(decoded.sv() == "ABCD");
+    REQUIRE(decoded.sv() == "ABCD");
+  }
+
+  SECTION("NTTP length not multiple of 4 with single padding") {
+    auto constexpr decoded = base64_decode<"QUJDRA=="_fs>();
+    static_assert(decoded.sv() == "ABCD");
+    REQUIRE(decoded.sv() == "ABCD");
+  }
+
+  SECTION("NTTP leftover single char is ignored") {
+    auto constexpr decoded = base64_decode<"QUJDR"_fs>();
+    static_assert(decoded.sv() == "ABC");
+    REQUIRE(decoded.sv() == "ABC");
+  }
 }
 
 TEST_CASE("Base64 pipe adaptors") {

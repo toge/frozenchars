@@ -262,6 +262,20 @@ assert_compile_fail(
 )
 
 assert_compile_fail(
+  NAME base64_decode_double_pad_invalid
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/base64_decode_double_pad_invalid.cpp
+  EXPECTED_TEXT "frozenchars: base64_decode: invalid Base64 input"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_compile_fail(
+  NAME base64_decode_data_after_padding
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/base64_decode_data_after_padding.cpp
+  EXPECTED_TEXT "frozenchars: base64_decode: invalid Base64 input (data after padding)"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+assert_compile_fail(
   NAME unescape_c_surrogate
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/unescape_c_surrogate.cpp
   EXPECTED_TEXT "surrogate or out of range"

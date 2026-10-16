@@ -10,7 +10,17 @@
 #include <system_error>
 #include <vector>
 
-namespace frozenchars::json::detail {
+namespace frozenchars::json {
+
+/**
+ * @brief JSON の入れ子深度の上限
+ *
+ * @details parse_value / parse_array / parse_object の再帰が深くなりすぎた場合の
+ * スタック枯渇を防ぐ。この上限を超える JSON は不正として扱う。
+ */
+inline constexpr size_t max_depth = 512;
+
+namespace detail {
 
 /**
  * @brief JSON 値の種別
@@ -65,8 +75,10 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
 
 /**
  * @brief 任意の JSON 値をパースする（前方宣言）
+ *
+ * @param depth 現在の入れ子深度。max_depth を超えたら invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc>;
 
 /**
@@ -101,15 +113,16 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param p 開始位置（'[' を指す）。閉じ ']' の次まで進める
  * @return std::expected<json_value, std::errc> array 型の値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc> {
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
   std::vector<json_value> arr;
   if (p < s.size() && s[p] == ']') { ++p; return json_value{json_type::array, false, {}, std::move(arr), {}}; }
   while (true) {
     skip_ws(s, p);
-    auto elem = parse_value(s, p);
+    auto elem = parse_value(s, p, depth + 1);
     if (!elem) return std::unexpected(elem.error());
     arr.push_back(std::move(*elem));
     skip_ws(s, p);
@@ -128,8 +141,9 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @return std::expected<json_value, std::errc> object 型の値。不正は invalid_argument
  * @details キーは keys、値は arr に同一インデックスで格納する
  */
-[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc> {
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
   std::vector<std::string_view> keys;
@@ -144,7 +158,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
     ++p;
     skip_ws(s, p);
     keys.push_back(*key);
-    auto val = parse_value(s, p);
+    auto val = parse_value(s, p, depth + 1);
     if (!val) return std::unexpected(val.error());
     vals.push_back(std::move(*val));
     skip_ws(s, p);
@@ -162,13 +176,14 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param p 開始位置。値の終端まで進める
  * @return std::expected<json_value, std::errc> パースした値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc> {
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   skip_ws(s, p);
   if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   auto const c = s[p];
-  if (c == '{') return parse_object(s, p);
-  if (c == '[') return parse_array(s, p);
+  if (c == '{') return parse_object(s, p, depth);
+  if (c == '[') return parse_array(s, p, depth);
   if (c == '"') {
     auto str = parse_string(s, p);
     if (!str) return std::unexpected(str.error());
@@ -195,7 +210,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
 [[nodiscard]] constexpr auto parse_json(std::string_view const s) noexcept
   -> std::expected<json_value, std::errc> {
   size_t p = 0;
-  auto val = parse_value(s, p);
+  auto val = parse_value(s, p, 1);
   if (!val) return std::unexpected(val.error());
   skip_ws(s, p);
   if (p != s.size()) return std::unexpected(std::errc::invalid_argument);
@@ -207,10 +222,11 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  *
  * @param s 検証する文字列
  * @return bool 全体を過不足なくパースできれば true、不正や余分な内容があれば false
+ * @note 入れ子深度が frozenchars::json::max_depth を超える場合も false
  */
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
   size_t p = 0;
-  auto v = parse_value(s, p);
+  auto v = parse_value(s, p, 1);
   if (!v) return false;
   skip_ws(s, p);
   return p == s.size();
@@ -218,6 +234,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
 
 } // namespace frozenchars::json::detail
 
+} // namespace frozenchars::json
 
 namespace frozenchars::json::detail {
 

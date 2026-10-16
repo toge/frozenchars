@@ -17,8 +17,12 @@
 
 ### Fixed
 
+- `json::decode_utf8`: 入力末尾でシーケンスが切れている場合、継続バイトを境界チェックせずに読んで範囲外アクセスしていた問題を修正。`index + シーケンス長 > 入力長` を先に判定するようにした。
+- `json::validate_json` / `json::compress` / `json::crush`: 入れ子深度の上限がなく、深くネストした入力で再帰がスタック枯渇していた問題を修正。`frozenchars::json::max_depth`（既定 512）を超える JSON は不正として扱う。
 - `frozen_map::operator[]` / `frozen_trie_map::operator[]`: 存在しないキーで番兵インデックス（= `size()`）による `std::array` の範囲外アクセス（未定義動作）となる問題を修正。`FROZENCHARS_ASSERT` によるチェックを追加し、定数評価ではメッセージ付きのコンパイルエラー、実行時（assert 有効ビルド）は `frozenchars: frozen_map::operator[]: key not found` で中止する。
 - `base64_decode`（NTTP 版）: `'=' 終端の 4 文字未満入力（`"="`・`"=="`・`"AB="` 等）でデコードサイズ計算が `size_t` アンダーフローし、`FrozenString requires N > 0` という無関係なエラーになっていた問題を修正。`frozenchars: base64_decode: invalid Base64 input (padding exceeds data)` として診断される。
+- `base64_decode`（NTTP 版）: 入力長が 4 の倍数でない場合（`"Zg"`・`"Zg="`・`"QUJDRA"` 等、RFC 4648 の末尾グループ）にデコードバッファサイズを 1〜2 バイト少なく計算し、`FrozenString` の範囲外へ書き込んでいた問題を修正。デコード本体と同じ走査でサイズを算出するように変更したので、これらの入力は正しくデコードされる。
+- `base64_decode`（NTTP 版）: パディングの後にデータ文字が続く入力（`"AB=CD"` 等）を `frozenchars: base64_decode: invalid Base64 input (data after padding)` として診断するようにした。
 - CMake: `cmake_policy(SET CMP0169 OLD)`（CMake 3.30 で追加されたポリシー）を `cmake_minimum_required(VERSION 3.25)` のまま設定していたため、CMake 3.25〜3.29 では `cmake_minimum_required` 直後に hard error となり configure できない問題を修正（`if(POLICY CMP0169)` で保護）。
 - `freeze(char)` / `concat(..., 'a')` が文字をコードポイント（`"97"`）に変換していた。
 - `wildcard_match`: `[!...]` 否定クラスが英数字以外にマッチしなかった（frozen_regex 委譲の補集合が `DotChars` 限定のため）。`{` `}` `+` `^` `$` を含む `*` なしパターンがコンパイルエラーになっていた。
@@ -32,6 +36,7 @@
 
 ### Added
 
+- `frozenchars::json::max_depth`: JSON の入れ子深度の上限（既定 512）。`validate_json` / `compress` / `crush` はこれを超える入力を不正として扱う。
 - `hash`（`frozenchars/hash.hpp`）: FNV-1a ハッシュ `fnv1a`、`hash_v<"...">`、`"..."_hash` リテラル、`hash_combine`、`constexpr_hash<T>`。コンパイル時定数として文字列 `switch` の `case` ラベルに使える。
 - `json_escape` / `json_quoted`（`encoding.hpp`）: JSON 文字列リテラルのエスケープ（RFC 8259）をコンパイル時に計算。NTTP 版はバッファ長が確定する。パイプ演算子 `ops::json_escape` / `ops::json_quoted` も利用可能。
 - `json::decompress` / `json::uncrush`: コンパイル時 JSON 圧縮（`compress` / `crush`）の復元 API。

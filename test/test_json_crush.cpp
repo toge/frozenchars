@@ -3,6 +3,11 @@
 #include <string_view>
 #include <system_error>
 
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 #include "frozenchars/literals.hpp"
 #include "frozenchars/json/crush.hpp"
 
@@ -86,4 +91,33 @@ TEST_CASE("json detail utf conversion reports errors via expected", "[json][crus
   auto const ok = frozenchars::json::detail::utf8_to_utf16("abc");
   REQUIRE(ok.has_value());
   REQUIRE(*ok == u"abc");
+}
+
+TEST_CASE("decode_utf8 rejects truncated sequences without reading past the end", "[json][crush]") {
+  auto const decode_at_end_of_buffer = [](char lead) {
+    auto index = std::size_t{0};
+    return frozenchars::json::detail::decode_utf8(std::string_view{&lead, 1}, index);
+  };
+  // 途中で切れたシーケンスは不正。入力の直後にあるメモリを読み飛ばさないこと
+  // （ページ境界に文字列を置いて検証する）。
+  REQUIRE_FALSE(decode_at_end_of_buffer('\xE3').has_value());
+  REQUIRE_FALSE(decode_at_end_of_buffer('\xC3').has_value());
+  REQUIRE_FALSE(decode_at_end_of_buffer('\xF0').has_value());
+
+#if defined(__unix__) || defined(__APPLE__)
+  // 読み取り可能な最後のバイトにリードバイトを置いたページ境界で検証する
+  auto const page = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
+  auto* const base = static_cast<char*>(::mmap(nullptr, page * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+  REQUIRE(base != MAP_FAILED);
+  REQUIRE(::mprotect(base + page, page, PROT_NONE) == 0);
+  auto* const lead = base + page - 1;
+  for (auto const byte : {'\xE3', '\xF0'}) {
+    *lead = byte;
+    auto index = std::size_t{0};
+    auto const decoded = frozenchars::json::detail::decode_utf8(std::string_view{lead, 1}, index);
+    CHECK_FALSE(decoded.has_value());
+    CHECK(index == 0);
+  }
+  ::munmap(base, page * 2);
+#endif
 }

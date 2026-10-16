@@ -215,35 +215,46 @@ auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
 }
 
 /**
- * @brief Base64デコード後の最大バイト数を計算する
+ * @brief Base64デコード後のバイト数を計算する
  *
- * '=' 終端の 4 文字未満入力（"="・"=="・"AB=" 等）では
- * FROZENCHARS_CONSTEVAL_FAIL で失敗する（パディングがデータ長を超えて
- * size_t アンダーフローするため）。
+ * base64_decode 本体と同じ走査（'=' で打ち切り、Base64 以外の文字は無視）を
+ * コンパイル時に再現し、正確な出力バイト数を求める。4文字未満の入力長
+ * （"Zg"・"Zg="・"QUJDRA" 等）でもサイズ計算が破綻しない。
+ *
+ * パディング付き入力でデータ文字が2文字未満の場合は不正として診断する。
  *
  * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
  * @param str 処理対象の文字列
- * @return std::size_t デコード後のバイト数（パディングを考慮）
+ * @return std::size_t デコード後のバイト数
  */
 template <size_t N>
 [[nodiscard]] auto consteval count_base64_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
   auto const s = str.sv();
-  if (s.empty()) {
-    return 0;
-  }
-  auto count = (s.size() / 4) * 3;
-  if (s.ends_with("==")) {
-    if (count < 2) {
-      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+  auto valid = 0uz; // '=' より前に現れた有効な Base64 文字数
+  auto padded = false;
+
+  for (auto const c : s) {
+    if (c == '=') {
+      padded = true;
+      continue;
     }
-    count -= 2;
-  } else if (s.ends_with("=")) {
-    if (count < 1) {
-      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+    auto const val = base64_char_to_value(c);
+    if (val == 255) {
+      continue;
     }
-    count -= 1;
+    if (padded) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (data after padding)");
+    }
+    valid++;
   }
-  return count;
+
+  if (padded && valid < 2) {
+    FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+  }
+
+  // 末尾1文字は1バイトにすらならないため捨てる
+  auto const rest = valid % 4;
+  return (valid / 4) * 3 + (rest >= 2 ? rest - 1 : 0);
 }
 
 } // namespace frozenchars::detail
