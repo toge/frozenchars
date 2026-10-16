@@ -494,3 +494,19 @@ jobs:
           # ホストでの例外なし実行済み
           g++ -std=c++23 -fno-exceptions -I include test/smoke_no_exceptions.cpp -o /tmp/test_basic_fs && /tmp/test_basic_fs
           python3 tools/amalgamate.py --check
+
+  docs:
+    name: README consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: dnf install -y gcc-c++ || sudo apt-get update && sudo apt-get install -y g++
+
+      - name: Check README table of contents anchors
+        run: python3 tools/check_readme_anchors.py
+
+      - name: Compile every README cpp example
+        run: python3 tools/check_readme_examples.py

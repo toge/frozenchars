@@ -13,86 +13,128 @@
 ## 目次
 
 - [特徴](#特徴)
- - [クイックスタート](#クイックスタート)
-   - [最小コンパイル例（1コマンド）](#最小コンパイル例（1コマンド）)
- - [モジュール別インクルード（推奨）](#モジュール別インクルード推奨)
+- [クイックスタート](#クイックスタート)
+  - [最小コンパイル例（1コマンド）](#最小コンパイル例1コマンド)
+- [モジュール別インクルード（推奨）](#モジュール別インクルード推奨)
+  - [移行ガイド](#移行ガイド)
+  - [オプション統合（glaze / json）はオプトイン](#オプション統合glaze-jsonはオプトイン)
+  - [傘ヘッダについて](#傘ヘッダについて)
 - [基本概念](#基本概念)
-  - [FrozenString<N>](#frozenstringn)
-  - [consteval（常にコンパイル時）](#consteval（常にコンパイル時）)
-  - [_fs リテラル](#_fs-リテラル)
+  - [`FrozenString<N>`](#frozenstringn)
+  - [`consteval`（常にコンパイル時）](#consteval常にコンパイル時)
+  - [`_fs` リテラル](#_fs-リテラル)
   - [パイプ演算子](#パイプ演算子)
-  - [コンパイル時ハッシュ（fnv1a / hash_v / _hash）](#コンパイル時ハッシュfnv1a--hash_v--_hash)
+  - [コンパイル時ハッシュ（`fnv1a` / `hash_v` / `_hash`）](#コンパイル時ハッシュfnv1a-hash_v-_hash)
 - [要件](#要件)
 - [WASI環境対応](#wasi環境対応)
-- [サンプルコード](#サンプルコド)
-- [repeat（繰り返し）](#repeat（繰り返し）)
-- [right / center（幅寄せ）](#right-center（幅寄せ）)
-- [toupper / tolower（大文字・小文字変換）](#toupper-tolower（大文字・小文字変換）)
-- [trim / ltrim / rtrim（端の文字を削る）](#trim-ltrim-rtrim（端の文字を削る）)
-- [strip / lstrip / rstrip（文字集合で端の文字を削る）](#strip-lstrip-rstrip（文字集合で端の文字を削る）)
-- [substr（部分文字列）](#substr（部分文字列）)
-- [contains（部分文字列の有無判定）](#contains（部分文字列の有無判定）)
-- [starts_with（接頭辞チェック）](#starts_with（接頭辞チェック）)
-- [ends_with（接尾辞チェック）](#ends_with（接尾辞チェック）)
-- [partition（区切り文字で3分割）](#partition（区切り文字で3分割）)
-- [shrink_to_fit（最初の終端位置に合わせて縮小）](#shrink_to_fit（最初の終端位置に合わせて縮小）)
-- [split（区切りで分割）](#split（区切りで分割）)
-- [split_numbers（区切りで数値列へ変換）](#split_numbers（区切りで数値列へ変換）)
-- [capitalize（先頭大文字化）](#capitalize（先頭大文字化）)
-- [to_snake_case（スネークケース変換）](#to_snake_case（スネクケス変換）)
-- [to_camel_case（キャメルケース変換）](#to_camel_case（キャメルケス変換）)
-- [to_pascal_case（パスカルケース変換）](#to_pascal_case（パスカルケス変換）)
-- [to_kebab_case（ケバブケース変換）](#to_kebab_case（ケバブケス変換）)
-- [url_encode（URLエンコード）](#url_encode（urlエンコド）)
-- [url_decode（URLデコード）](#url_decode（urlデコド）)
-- [base64_encode（Base64エンコード）](#base64_encode（base64エンコド）)
-- [base64_decode（Base64デコード）](#base64_decode（base64デコド）)
-- [html_encode / html_decode（HTMLエンティティ変換）](#html_encode-html_decode（htmlエンティティ変換）)
-- [escape_c / unescape_c（C エスケープ変換）](#escape_c-unescape_c（c-エスケープ変換）)
-- [json_escape / json_quoted（JSON 文字列エスケープ）](#json_escape--json_quoted（json-文字列エスケープ）)
-- [minify_html / minify_xml / minify_json / minify_yaml / minify_sql / minify_cypher（マークアップ / データ / クエリ 縮小）](#minify_html-minify_xml-minify_json-minify_yaml-minify_sql-minify_cypher（マクアップ-デタ-クエリ-縮小）)
-- [minify_lua（Lua / Luau 縮小）](#minify_lua（lua--luau-縮小）)
-- [linebreak（改行表現の相互変換）](#linebreak（改行表現の相互変換）)
-- [word_wrap（ワードラップ）](#word_wrap（ワドラップ）)
-- [levenshtein_distance / lcp（編集距離・最長共通接頭辞）](#levenshtein_distance-lcp（編集距離最長共通接頭辞）)
-- [文字種判定述語（is_alpha / is_digit / ...）](#文字種判定述語（is_alpha-is_digit-）)
-- [utf8_length（UTF-8 コードポイント数）](#utf8_length（utf-8-コドポイント数）)
-- [utf8_to_codepoints / codepoints_to_utf8 / is_valid_utf8（UTF-8 ↔ Unicode 符号点配列）](#utf8_to_codepoints-codepoints_to_utf8-is_valid_utf8（utf-8--unicode-符号点配列）)
-- [make_querystring（クエリ文字列生成）](#make_querystring（クエリ文字列生成）)
+  - [有効化方法](#有効化方法)
+  - [例外なしモードの挙動](#例外なしモードの挙動)
+  - [vcpkg + cmake で wasm32-wasip1 をビルドする](#vcpkg-cmake-で-wasm32-wasip1-をビルドする)
+- [サンプルコード](#サンプルコード)
+- [`repeat`（繰り返し）](#repeat繰り返し)
+- [`right` / `center`（幅寄せ）](#right-center幅寄せ)
+- [`toupper` / `tolower`（大文字・小文字変換）](#toupper-tolower大文字小文字変換)
+- [`trim` / `ltrim` / `rtrim`（端の文字を削る）](#trim-ltrim-rtrim端の文字を削る)
+- [`strip` / `lstrip` / `rstrip`（文字集合で端の文字を削る）](#strip-lstrip-rstrip文字集合で端の文字を削る)
+- [`substr`（部分文字列）](#substr部分文字列)
+- [`contains`（部分文字列の有無判定）](#contains部分文字列の有無判定)
+- [`starts_with`（接頭辞チェック）](#starts_with接頭辞チェック)
+- [`ends_with`（接尾辞チェック）](#ends_with接尾辞チェック)
+- [`find`（前方検索）](#find前方検索)
+- [`rfind`（後方検索）](#rfind後方検索)
+- [`find_first_of` / `find_last_of`（文字集合検索）](#find_first_of-find_last_of文字集合検索)
+- [`reverse`（文字列反転）](#reverse文字列反転)
+- [`count_substring`（部分文字列出現回数）](#count_substring部分文字列出現回数)
+- [`partition`（区切り文字で3分割）](#partition区切り文字で3分割)
+- [`shrink_to_fit`（最初の終端位置に合わせて縮小）](#shrink_to_fit最初の終端位置に合わせて縮小)
+- [`split`（区切りで分割）](#split区切りで分割)
+- [`split_numbers`（区切りで数値列へ変換）](#split_numbers区切りで数値列へ変換)
+- [`capitalize`（先頭大文字化）](#capitalize先頭大文字化)
+- [`to_snake_case`（スネークケース変換）](#to_snake_caseスネークケース変換)
+- [`to_camel_case`（キャメルケース変換）](#to_camel_caseキャメルケース変換)
+- [`to_pascal_case`（パスカルケース変換）](#to_pascal_caseパスカルケース変換)
+- [`to_kebab_case`（ケバブケース変換）](#to_kebab_caseケバブケース変換)
+- [`url_encode`（URLエンコード）](#url_encodeurlエンコード)
+- [`url_decode`（URLデコード）](#url_decodeurlデコード)
+- [`base64_encode`（Base64エンコード）](#base64_encodebase64エンコード)
+- [`base64_decode`（Base64デコード）](#base64_decodebase64デコード)
+- [`html_encode` / `html_decode`（HTMLエンティティ変換）](#html_encode-html_decodehtmlエンティティ変換)
+- [`escape_c` / `unescape_c`（C エスケープ変換）](#escape_c-unescape_cc-エスケープ変換)
+- [`json_escape` / `json_quoted`（JSON 文字列エスケープ）](#json_escape-json_quotedjson-文字列エスケープ)
+- [`minify_html` / `minify_xml` / `minify_json` / `minify_yaml` / `minify_sql` / `minify_cypher`（マークアップ / データ / クエリ 縮小）](#minify_html-minify_xml-minify_json-minify_yaml-minify_sql-minify_cypherマークアップ-データ-クエリ-縮小)
+- [`json::compress` / `json::decompress` / `json::crush` / `json::uncrush`（JSON 構造圧縮と復元）](#jsoncompress-jsondecompress-jsoncrush-jsonuncrushjson-構造圧縮と復元)
+- [`minify_lua`（Lua / Luau 縮小）](#minify_lualua-luau-縮小)
+- [`linebreak`（改行表現の相互変換）](#linebreak改行表現の相互変換)
+- [`word_wrap`（ワードラップ）](#word_wrapワードラップ)
+- [`indent` / `dedent`（行頭インデント追加・削除）](#indent-dedent行頭インデント追加削除)
+- [`levenshtein_distance` / `lcp`（編集距離・最長共通接頭辞）](#levenshtein_distance-lcp編集距離最長共通接頭辞)
+  - [CLI 誤字サジェスト（`suggest`）](#cli-誤字サジェストsuggest)
+- [文字種判定述語（`is_alpha` / `is_digit` / ...）](#文字種判定述語is_alpha-is_digit)
+- [`utf8_length`（UTF-8 コードポイント数）](#utf8_lengthutf-8-コードポイント数)
+- [`utf8_to_codepoints` / `codepoints_to_utf8` / `is_valid_utf8`（UTF-8 ↔ Unicode 符号点配列）](#utf8_to_codepoints-codepoints_to_utf8-is_valid_utf8utf-8-unicode-符号点配列)
+- [`make_querystring`（クエリ文字列生成）](#make_querystringクエリ文字列生成)
+- [`path::dirname` / `basename` / `extension` / `stem` / `join`（パス文字列操作）](#pathdirname-basename-extension-stem-joinパス文字列操作)
 - [マルチライン文字列の処理](#マルチライン文字列の処理)
-- [パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパをつなぐ)
-- [frozen_format（コンパイル時フォーマット）](#frozen_format（コンパイル時フォーマット）)
-- [freeze 対応型一覧](#freeze-対応型一覧)
-  - [早見表（入力型 → 生成される最大文字数）](#早見表（入力型-→-生成される最大文字数）)
-  - [サンプル入力 → 出力（ミニ表）](#サンプル入力-→-出力（ミニ表）)
-  - [変換ルール（文字列系）](#変換ルル（文字列系）)
+- [パイプ演算子で文字列ヘルパーをつなぐ](#パイプ演算子で文字列ヘルパーをつなぐ)
+  - [`_fs` リテラルなしのパイプ](#_fs-リテラルなしのパイプ)
+- [`frozen_format`（コンパイル時フォーマット）](#frozen_formatコンパイル時フォーマット)
+  - [`frozen_std_format`（`std::format` 委譲版）](#frozen_std_formatstdformat-委譲版)
+  - [対応フォーマット指定](#対応フォーマット指定)
+- [`freeze` 対応型一覧](#freeze-対応型一覧)
+  - [早見表（入力型 → 生成される最大文字数）](#早見表入力型-生成される最大文字数)
+  - [サンプル入力 → 出力（ミニ表）](#サンプル入力-出力ミニ表)
+  - [変換ルール（文字列系）](#変換ルール文字列系)
   - [非対応入力](#非対応入力)
 - [よくある落とし穴](#よくある落とし穴)
 - [FrozenStringの応用例](#frozenstringの応用例)
-  - [to_sv（std::format 連携）](#to_sv（stdformat-連携）)
-  - [frozen_map（固定キーの軽量マップ）](#frozen_map（固定キの軽量マップ）)
+  - [`to_sv`（`std::format` 連携）](#to_svstdformat-連携)
+  - [`frozen_map`（固定キーの軽量マップ）](#frozen_map固定キーの軽量マップ)
     - [宣言順の値を braced-init-list で書く](#宣言順の値を-braced-init-list-で書く)
     - [pair-like エントリから作る基本形](#pair-like-エントリから作る基本形)
-    - [to<Result>() で STL コンテナへ変換する](#toresult-で-stl-コンテナへ変換する)
-    - [コンパイル時のキー/値列から作る短縮形](#コンパイル時のキ値列から作る短縮形)
-    - [パフォーマンスと最適化](#パフォマンスと最適化)
-    - [get_value_or — デフォルト付き取得](#get_value_or-—-デフォルト付き取得)
-    - [contains_all — 複数キーの一括存在判定](#contains_all-—-複数キの一括存在判定)
-    - [keys_in_declaration_order — 宣言順キー配列](#keys_in_declaration_order-—-宣言順キ配列)
-    - [operator== / operator!= — 値ごとの等価比較](#operator-operator-—-値ごとの等価比較)
-  - [frozen_bimap（値逆引き付きマップ）](#frozen_bimap（値逆引き付きマップ）)
-  - [frozen_multimap（重複キー許容マップ）](#frozen_multimap（重複キー許容マップ）)
-  - [frozen_trie_map（圧縮トライ マップ）](#frozen_trie_map（圧縮トライ-マップ）)
-  - [frozen_map / frozen_trie_map / STL コンテナの選び方](#frozen_map--frozen_trie_map--stl-コンテナの選び方)
+    - [`to<Result>()` で STL コンテナへ変換する](#toresult-で-stl-コンテナへ変換する)
+    - [コンパイル時のキー/値列から作る短縮形](#コンパイル時のキー値列から作る短縮形)
+    - [パフォーマンスと最適化](#パフォーマンスと最適化)
+    - [`get_value_or` — デフォルト付き取得](#get_value_or-デフォルト付き取得)
+    - [`contains_all` — 複数キーの一括存在判定](#contains_all-複数キーの一括存在判定)
+    - [`keys_in_declaration_order` — 宣言順キー配列](#keys_in_declaration_order-宣言順キー配列)
+    - [`operator==` / `operator!=` — 値ごとの等価比較](#operator-operator-値ごとの等価比較)
+  - [`frozen_bimap`（値逆引き付きマップ）](#frozen_bimap値逆引き付きマップ)
+  - [`frozen_multimap`（重複キー許容マップ）](#frozen_multimap重複キー許容マップ)
+  - [`frozen_trie_map`（圧縮トライ マップ）](#frozen_trie_map圧縮トライ-マップ)
+    - [`frozen_trie_map` の特徴](#frozen_trie_map-の特徴)
+  - [`frozen_map` / `frozen_trie_map` / STL コンテナの選び方](#frozen_map-frozen_trie_map-stl-コンテナの選び方)
+    - [アーキテクチャ比較（マップ系）](#アーキテクチャ比較マップ系)
+    - [用途推奨（マップ系）](#用途推奨マップ系)
+    - [ベンチマークの再現](#ベンチマークの再現)
 - [よくある質問 (FAQ)](#よくある質問-faq)
-- [wildcard_match（ワイルドカードマッチング）](#wildcard_match（ワイルドカドマッチング）)
-  - [frozen_regex / CTRE / wildcard_match / wildcards の選び方](#frozen_regex--ctre--wildcard_match--wildcards-の選び方)
-- [frozen_set（コンパイル時集合）](#frozen_set（コンパイル時集合）)
-- [remove_comments / remove_comment_lines（コメント行除去）](#remove_comments-remove_comment_lines（コメント行除去）)
-- [chrono（日付・時刻のコンパイル時相互変換）](#chrono（日付時刻のコンパイル時相互変換）)
-- [log（コンパイル時ログ）](#log（コンパイル時ログ）)
-- [テスト](#テスト)
-- [インストール / パッケージ生成](#インストル-パッケジ生成)
+  - [Q. `consteval` ですが、実行時にも使えますか？](#q-consteval-ですが実行時にも使えますか)
+  - [Q. `FrozenString` の最大サイズは?](#q-frozenstring-の最大サイズは)
+  - [Q. 実行時の文字列と相互変換できますか?](#q-実行時の文字列と相互変換できますか)
+  - [Q. 他のコンパイル時文字列ライブラリとどう違いますか?](#q-他のコンパイル時文字列ライブラリとどう違いますか)
+- [`wildcard_match`（ワイルドカードマッチング）](#wildcard_matchワイルドカードマッチング)
+  - [`frozen_regex` / `CTRE` / `wildcard_match` / `wildcards` の選び方](#frozen_regex-ctre-wildcard_match-wildcards-の選び方)
+    - [アーキテクチャ比較](#アーキテクチャ比較)
+    - [用途推奨](#用途推奨)
+    - [ベンチマークの再現（マップ系）](#ベンチマークの再現マップ系)
+- [`frozen_set`（コンパイル時集合）](#frozen_setコンパイル時集合)
+- [`remove_comments` / `remove_comment_lines`（コメント行除去）](#remove_comments-remove_comment_linesコメント行除去)
+- [`chrono`（日付・時刻のコンパイル時相互変換）](#chrono日付時刻のコンパイル時相互変換)
+  - [パース（文字列 → chrono 型）](#パース文字列-chrono-型)
+  - [フォーマット（chrono 型 → 文字列）](#フォーマットchrono-型-文字列)
+  - [ラウンドトリップ](#ラウンドトリップ)
+- [`log`（コンパイル時ログ）](#logコンパイル時ログ)
+  - [constexpr_log（コンパイル時蓄積）](#constexpr_logコンパイル時蓄積)
+  - [ログレベル](#ログレベル)
+  - [ビルド時タイムスタンプ](#ビルド時タイムスタンプ)
+  - [dump（コンパイラ診断への出力）](#dumpコンパイラ診断への出力)
+- [ベンチマーク](#ベンチマーク)
+- [インストール / パッケージ生成](#インストール-パッケージ生成)
+  - [ビルド済み環境に組み込む](#ビルド済み環境に組み込む)
+  - [インストール](#インストール)
+  - [vcpkg](#vcpkg)
+- [単一ヘッダ（Wandbox / Compiler Explorer 用）](#単一ヘッダwandbox-compiler-explorer-用)
+  - [生成方法](#生成方法)
+  - [使い方（Wandbox）](#使い方wandbox)
 - [ライセンス](#ライセンス)
 
 ## クイックスタート
@@ -224,11 +266,10 @@ auto constexpr hello = "Hello"_fs;  // FrozenString<6>
 文字列操作をチェーンして簡潔に書けます。
 
 ```cpp
-using namespace frozenchars::ops;
 auto constexpr r = "  Hello, World!  "_fs
-    | trim()
-    | toupper()
-    | right<20>();
+    | fops::trim
+    | fops::toupper
+    | fops::pad_right<20>;
 // r.sv() == "       HELLO, WORLD!"
 ```
 
@@ -273,8 +314,8 @@ constexpr auto point_hash = hash_combine(fnv1a("x"), fnv1a("y"));
 ## 要件
 
 - C++23（`consteval`, NTTP, `std::to_chars` など）
-- 対応コンパイラ: GCC 14 / 15 / 16 以降
-- テスト環境: Fedora 41 / 43 / 44（CI で検証）
+- 対応コンパイラ: GCC 14 / 15 / 16、Clang 19〜22、AppleClang、MSVC、Emscripten、wasi-sdk
+- テスト環境: Fedora 41 / 43 / 44、macOS、Windows（CI で検証）
 - ヘッダオンリー — ビルド済みバイナリ不要
 
 ## WASI環境対応
@@ -655,11 +696,11 @@ static_assert(shrunk.sv() == "abc");
 
 ## `split`（区切りで分割）
 
-`split(...)` は内部で `split_count(...)` を呼び出し、トークン数に合わせた `std::vector<FrozenString<...>>` を返します。1回の呼び出しで分割まで完了します。
+`split<Count>(...)` は `std::array<FrozenString<N>, Count>` を返します。`Count` の指定は必須で、`Count` を大きくした場合は余りが空文字列になります。分割後のトークン数は `split_count(...)` で別途取得できます。
 
-従来どおり `split<Count>(...)` も使え、こちらは `std::array<FrozenString<...>, Count>` を返します（`Count` が大きい場合の余りは空文字列）。
+文字列を NTTP として渡す `split_v<Str, IsDelim>` / `split<Str, IsDelim>()` を使うと、トークン数にちょうど合うサイズの配列になります。
 
-区切り文字の判定はデフォルトで ASCII whitespace（半角スペース、タブ、改行など）ですが、`split<is_delim>(...)` のようにテンプレート引数で判定関数を渡せます。
+区切り文字の判定はデフォルトで ASCII whitespace（半角スペース、タブ、改行など）です。判定関数を使う場合は `split<Count>(str, is_delim)` のように第2引数で渡します。
 
 ```cpp
 #include "frozenchars.hpp"
@@ -669,13 +710,20 @@ using namespace frozenchars::literals;
 auto constexpr count = split_count("  alpha  beta\tgamma\n");
 static_assert(count == 3);
 
-auto constexpr fixed = split("  alpha  beta\tgamma\n"_fs);
+auto constexpr fixed = split<3>("  alpha  beta\tgamma\n"_fs);
 static_assert(fixed[0].sv() == "alpha");
 static_assert(fixed[1].sv() == "beta");
 static_assert(fixed[2].sv() == "gamma");
 
+// NTTP 版はトークン数ちょうどで配列サイズになる
+auto constexpr exact = split_v<"  alpha  beta\tgamma\n"_fs>;
+static_assert(exact.size() == 3);
+
+// 区切り判定は第2引数で渡す
 constexpr bool is_comma(char c) noexcept { return c == ','; }
-auto const values = split<is_comma>("alpha,,beta,gamma");
+auto constexpr values = split<3>("alpha,,beta,gamma"_fs, is_comma);
+static_assert(values[0].sv() == "alpha");
+static_assert(values[2].sv() == "gamma");
 ```
 
 ## `split_numbers`（区切りで数値列へ変換）
@@ -1087,24 +1135,25 @@ static_assert(has_flag(
 #include "frozenchars/minify.hpp"
 using namespace frozenchars;
 
+// ')' の直前の空白は残る（意味が変わるので削除しない）
 auto constexpr q = minify_cypher(
   "MATCH (n) // comment\n"
   "RETURN n;");
-static_assert(q.sv() == "MATCH(n)RETURN n");
+static_assert(q.sv() == "MATCH(n) RETURN n");
 
 // 文字列リテラル内の // や /* */ は削除しない
 auto constexpr s = minify_cypher("RETURN '//not a comment'");
-static_assert(s.sv() == "RETURN'//not a comment'");
+static_assert(s.sv() == "RETURN '//not a comment'");
 
 // バッククォート識別子内の // は削除しない
 auto constexpr b = minify_cypher("MATCH (`my node`) RETURN `my node`");
-static_assert(b == "MATCH(`my node`)RETURN`my node`");
+static_assert(b.sv() == "MATCH(`my node`) RETURN `my node`");
 
 // 実行時バッファ版
 char buf[64];
 auto const* input = "MATCH (n) RETURN n";
 auto const len = minify_cypher(input, buf, sizeof(buf));
-// len = 16, buf = "MATCH(n)RETURN n\0"
+// len = 17, buf = "MATCH(n) RETURN n\0"
 ```
 
 ## `json::compress` / `json::decompress` / `json::crush` / `json::uncrush`（JSON 構造圧縮と復元）
@@ -1199,15 +1248,15 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 
 // <br> → 実改行
-auto constexpr n = br_to_nl("line1<br>line2<br>line3"_fs);
+auto constexpr n = fops::br_to_nl("line1<br>line2<br>line3"_fs);
 // "line1\nline2\nline3"
 
 // 実改行 → <br>
-auto constexpr h = nl_to_br("line1\nline2\nline3"_fs);
+auto constexpr h = fops::nl_to_br("line1\nline2\nline3"_fs);
 // "line1<br>line2<br>line3"
 
 // リテラル \n → 実改行
-auto constexpr u = esc_n_to_nl(R"(hello\nworld)"_fs);
+auto constexpr u = fops::esc_n_to_nl(R"(hello\nworld)"_fs);
 // "hello\nworld"
 ```
 
@@ -1258,10 +1307,10 @@ using namespace frozenchars;
 using namespace frozenchars::literals;
 
 // indent: 各行にタブ1つを付与
-static_assert(("a\nb"_fs | ops::indent<1>) == "\ta\n\tb"_fs);
+static_assert(("a\nb"_fs | ops::indent<1>).sv() == "\ta\n\tb");
 
 // indent: カスタム文字
-static_assert(("a\nb"_fs | ops::indent<1, ' '>) == " a\n b"_fs);
+static_assert(("a\nb"_fs | ops::indent<1, ' '>).sv() == " a\n b");
 
 // dedent: 共通先頭空白を削除
 static_assert(dedent("  hello\n  world"_fs).sv() == "hello\nworld");
@@ -1312,13 +1361,18 @@ static_assert(lcp<>().sv() == "");
 
 ```cpp
 #include "frozenchars.hpp"
+#include <iostream>
 #include <optional>
 #include <string_view>
 
-// argv[1] が "comit" の場合
-auto const input = std::string_view{argv[1]};
-if (auto const s = suggest<"commit", "status", "checkout", "branch", "rebase">(input, 2)) {
-  std::cout << "Did you mean '" << *s << "'?\n";  // → "Did you mean 'commit'?"
+int main(int argc, char** argv) {
+  using namespace frozenchars;
+  if (argc < 2) return 0;
+  // argv[1] が "comit" の場合
+  auto const input = std::string_view{argv[1]};
+  if (auto const s = suggest<"commit", "status", "checkout", "branch", "rebase">(input, 2)) {
+    std::cout << "Did you mean '" << *s << "'?\n";  // → "Did you mean 'commit'?"
+  }
 }
 ```
 
@@ -1756,20 +1810,27 @@ auto s = std::format(frozenchars::to_sv<"id={} name={}"_fs>(), 42, std::string{"
 `formatted_size` / ロケール版もすべて同じ書き方で利用できます。
 
 ```cpp
+#include "frozenchars/format.hpp"
+#include "frozenchars/literals.hpp"
+#include <format>
 #include <iterator>
 #include <locale>
 #include <string>
 
-auto out = std::string{};
-std::format_to(std::back_inserter(out), frozenchars::to_sv<"x={}"_fs>(), 1);
-// out == "x=1"
+using namespace frozenchars::literals;
 
-auto n = std::formatted_size(frozenchars::to_sv<"{} {}"_fs>(), "a", 1);
-// n == 3
+int main() {
+  auto out = std::string{};
+  std::format_to(std::back_inserter(out), frozenchars::to_sv<"x={}"_fs>(), 1);
+  // out == "x=1"
 
-auto const classic = std::locale::classic();
-auto s = std::format(classic, frozenchars::to_sv<"{}"_fs>(), 1234);
-// s == "1234"
+  auto n = std::formatted_size(frozenchars::to_sv<"{} {}"_fs>(), "a", 1);
+  // n == 3
+
+  auto const classic = std::locale::classic();
+  auto s = std::format(classic, frozenchars::to_sv<"{}"_fs>(), 1234);
+  // s == "1234"
+}
 ```
 
 ### `frozen_map`（固定キーの軽量マップ）
@@ -1783,24 +1844,28 @@ auto s = std::format(classic, frozenchars::to_sv<"{}"_fs>(), 1234);
 #### 宣言順の値を braced-init-list で書く
 
 ```cpp
-#include "frozenchars/frozen_map.hpp"
+#include <cassert>
+#include "frozenchars/literals.hpp"
+#include "frozenchars/map.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
-  "30", "5", "2"
-};
+int main() {
+  frozen_map<std::string, "timeout"_fs, "retry"_fs, "backoff"_fs> map{
+    "30", "5", "2"
+  };
 
-assert(map["timeout"] == "30");
-assert(map["retry"] == "5");
-assert(map["backoff"] == "2");
+  assert(map["timeout"] == "30");
+  assert(map["retry"] == "5");
+  assert(map["backoff"] == "2");
 
-frozen_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
-  "30", "5", "2"
-};
+  frozen_map<std::string_view, "timeout"_fs, "retry"_fs, "backoff"_fs> view_map{
+    "30", "5", "2"
+  };
 
-assert(view_map["timeout"] == "30");
+  assert(view_map["timeout"] == "30");
+}
 ```
 
 要素数がキー数と一致しない場合、投げるコンストラクタはコンパイル時評価ではコンパイルエラー（`FROZENCHARS_CONSTEVAL_FAIL`）、実行時評価では `std::abort()` になります。要素数を実行時に検証したい場合は、`try_make` が `std::expected<frozen_map, std::errc>`（要素数不一致は `std::errc::invalid_argument`）を返します。
@@ -1811,7 +1876,7 @@ assert(view_map["timeout"] == "30");
 #### pair-like エントリから作る基本形
 
 ```cpp
-#include "frozenchars/frozen_map.hpp"
+#include "frozenchars/map.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -1851,7 +1916,7 @@ auto moved = std::move(map).to<std::unordered_map<std::string, int>>();
 
 using namespace frozenchars;
 
-auto map = make_frozen_map_kv<int,
+constexpr auto map = make_frozen_map_kv<int,
   kv{"aaa", 5},
   kv{"bbb", 3},
   kv{"ccc", 1},
@@ -1887,13 +1952,20 @@ static_assert(map["ddd"] == 0);
 キーが存在する場合はその値を、存在しない場合は指定したデフォルト値を返します。
 
 ```cpp
-auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
-  std::pair{"timeout", 30},
-  std::pair{"retry", 5}
-);
+#include <cassert>
+#include "frozenchars.hpp"
+using namespace frozenchars;
+using namespace frozenchars::literals;
 
-assert(map.get_value_or("timeout", 0) == 30);
-assert(map.get_value_or("missing", 99) == 99);
+int main() {
+  auto const map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+    std::pair{"timeout", 30},
+    std::pair{"retry", 5}
+  );
+
+  assert(map.get_value_or("timeout", 0) == 30);
+  assert(map.get_value_or("missing", 99) == 99);
+}
 ```
 
 `get()` が `std::optional<std::reference_wrapper<...>>` を返すのに対し、`get_value_or` は値をコピーして返すため、デフォルト値との分岐を一行で書けます。
@@ -1905,6 +1977,11 @@ assert(map.get_value_or("missing", 99) == 99);
 複数のキーが全てマップ内に存在するかをコンパイル時に判定します。空パックに対しては `true`（vacuous truth）を返します。
 
 ```cpp
+constexpr auto map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
+  std::pair{"timeout", 30},
+  std::pair{"retry", 5}
+);
+
 static_assert(map.contains_all<"timeout"_fs, "retry"_fs>());
 static_assert(!map.contains_all<"timeout"_fs, "missing"_fs>());
 static_assert(map.contains_all<>()); // 空パック → true
@@ -1917,12 +1994,18 @@ static_assert(map.contains_all<>()); // 空パック → true
 キーを宣言順で `std::span` として返します。`keys()` がソート済み配列を返すのに対し、宣言時の順序を保ちます。
 
 ```cpp
-auto map = make_frozen_map<int,
-  kv{"aaa", 1}, kv{"bbb", 2}, kv{"ccc", 3}
->();
+#include "frozenchars/map.hpp"
 
-for (auto key : map.keys_in_declaration_order()) {
-  // "aaa", "bbb", "ccc" の順で処理
+using namespace frozenchars;
+
+int main() {
+  constexpr auto map = make_frozen_map_kv<int,
+    kv{"aaa", 1}, kv{"bbb", 2}, kv{"ccc", 3}
+  >();
+
+  for (auto key : map.keys_in_declaration_order()) {
+    // "aaa", "bbb", "ccc" の順で処理
+  }
 }
 ```
 
@@ -1933,15 +2016,15 @@ for (auto key : map.keys_in_declaration_order()) {
 同じキー集合を持つ 2 つの `frozen_map` の全値が等しいかを判定します。値型 `T` に `operator==` が定義されている必要があります。
 
 ```cpp
-auto a = make_frozen_map<int, "x"_fs, "y"_fs>(
+constexpr auto a = make_frozen_map<int, "x"_fs, "y"_fs>(
   std::pair{"x", 1}, std::pair{"y", 2}
 );
-auto b = make_frozen_map<int, "x"_fs, "y"_fs>(
+constexpr auto b = make_frozen_map<int, "x"_fs, "y"_fs>(
   std::pair{"x", 1}, std::pair{"y", 2}
 );
 
-assert(a == b);
-assert(a != make_frozen_map<int, "x"_fs, "y"_fs>(
+static_assert(a == b);
+static_assert(a != make_frozen_map<int, "x"_fs, "y"_fs>(
   std::pair{"x", 1}, std::pair{"y", 99}
 ));
 ```
@@ -1960,17 +2043,17 @@ assert(a != make_frozen_map<int, "x"_fs, "y"_fs>(
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto status = make_frozen_bimap<int, "ok"_fs, "error"_fs, "retry"_fs>(
+constexpr auto status = make_frozen_bimap<int, "ok"_fs, "error"_fs, "retry"_fs>(
   std::pair{"ok", 200}, std::pair{"error", 500}, std::pair{"retry", 429}
 );
 
-assert(status["ok"_fs] == 200);           // frozen_map 互換のキー検索
-assert(status.by_value(500) == "error");  // 値からキーへ逆引き
-assert(status.by_value(404) == std::nullopt);
-assert(status.contains_value(429));
+static_assert(status["ok"_fs] == 200);            // frozen_map 互換のキー検索
+static_assert(status.by_value(500) == "error");   // 値からキーへ逆引き
+static_assert(status.by_value(404) == std::nullopt);
+static_assert(status.contains_value(429));
 
 // kv リテラルからも構築できる（キーは型から抽出）
-auto status2 = make_frozen_bimap_kv<int,
+constexpr auto status2 = make_frozen_bimap_kv<int,
   kv{"ok", 200}, kv{"error", 500}
 >();
 ```
@@ -1986,23 +2069,27 @@ auto status2 = make_frozen_bimap_kv<int,
 Accept-Encoding ヘッダのような重複キーが出現し得るケースを扱うのに適しています。
 
 ```cpp
+#include <cassert>
+#include "frozenchars/literals.hpp"
 #include "frozenchars/multimap.hpp"
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto enc = make_frozen_multimap<int, "gzip"_fs, "deflate"_fs, "gzip"_fs, "br"_fs>(
-  std::pair{"gzip", 1}, std::pair{"deflate", 2}, std::pair{"gzip", 3}, std::pair{"br", 4}
-);
+int main() {
+  auto const enc = make_frozen_multimap<int, "gzip"_fs, "deflate"_fs, "gzip"_fs, "br"_fs>(
+    std::pair{"gzip", 1}, std::pair{"deflate", 2}, std::pair{"gzip", 3}, std::pair{"br", 4}
+  );
 
-assert(enc.count("gzip") == 2);
-auto const [first, last] = enc.equal_range("gzip");
-for (auto it = first; it != last; ++it) {
-  // 重複キー "gzip" の値 1 と 3 を走査
+  assert(enc.count("gzip") == 2);
+  auto const [first, last] = enc.equal_range("gzip");
+  for (auto it = first; it != last; ++it) {
+    // 重複キー "gzip" の値 1 と 3 を走査
+  }
+
+  assert(enc.at("gzip")->get() == 1);  // 重複キーはソート順で最初の値を返す
+  assert((enc.contains_all<"gzip"_fs, "br"_fs>()));  // 複数キーの一括存在判定
 }
-
-assert(enc.at("gzip")->get() == 1);  // 重複キーはソート順で最初の値を返す
-assert(enc.contains_all<"gzip"_fs, "br"_fs>());  // 複数キーの一括存在判定
 ```
 
 ### `frozen_trie_map`（圧縮トライ マップ）
@@ -2017,13 +2104,13 @@ assert(enc.contains_all<"gzip"_fs, "br"_fs>());  // 複数キーの一括存在�
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
-auto map = frozen_trie_map<int, "timeout"_fs, "timeout_ms"_fs, "timeout_us"_fs, "timeout_ns"_fs>{
+constexpr auto map = frozen_trie_map<int, "timeout"_fs, "timeout_ms"_fs, "timeout_us"_fs, "timeout_ns"_fs>{
   std::array<int, 4>{1, 2, 3, 4}
 };
 
-assert(map["timeout"] == 1);
-assert(map["timeout_ms"] == 2);
-assert(map.contains("timeout_us"));
+static_assert(map["timeout"] == 1);
+static_assert(map["timeout_ms"] == 2);
+static_assert(map.contains("timeout_us"));
 ```
 
 `operator[]` の事前条件は `frozen_map` と同じです（存在しないキーには定数評価でコンパイルエラー、実行時の assert 有効ビルドでは abort）。
@@ -2045,24 +2132,24 @@ assert(map.contains("timeout_us"));
 | P1: 短キー(3個) | 3.6 ns | **1.6 ns** | 10.5 ns | 12.0 ns |
 | P2: HTTPメソッド(5個) | 4.7 ns | **0.3 ns** | 14.6 ns | 9.8 ns |
 | P3: 共通接頭辞(4個) | 5.1 ns | **0.3 ns** | 10.7 ns | 11.8 ns |
-| P4: NATO字母(20個) | 3.8 ns | **0.3 ns** | 18.1 ns | 23.3 ns |
+| P4: NATO 字母(20個) | 3.8 ns | **0.3 ns** | 18.1 ns | 23.3 ns |
 | P5: 長キー(5個, 25-40文字) | **1.5 ns** | 8.7 ns | 14.1 ns | 4.6 ns |
 | P6: 同長キー(10個, 21文字) | **8.1 ns** | 9.3 ns | 18.0 ns | 11.4 ns |
 
-> **单位**: ns/iter（1回の検索にかかるナノ秒）。小さいほど高速。
+> **単位**: ns/iter（1回の検索にかかるナノ秒）。小さいほど高速。
 
-#### アーキテクチャ比較
+#### アーキテクチャ比較（マップ系）
 
 | 項目 | `frozen_map` | `frozen_trie_map` | `std::map` | `std::unordered_map` |
 |---|---|---|---|---|
 | 検索アルゴリズム | CRC32C ハッシュ + LUT | 圧縮トライ | 赤黒木 | ハッシュテーブル |
-| 時間計算量 | O(1) 摧定 | O(キー長) | O(log N) | O(1) 摧定 |
+| 時間計算量 | O(1) 想定 | O(キー長) | O(log N) | O(1) 想定 |
 | メモリレイアウト | 連続配列 | フラット配列（ノード+ラベル+子） | ポインタベース木 | バケット配列 |
 | コンパイル時構築 | ○ | ○ | × | × |
 | SIMD 最適化 | CRC32C, 128bit比較 | SSE2/NEON ラベル比較 | × | × |
 | キー数上限 | なし（64超は CHD 2段ハッシュ） | 127 | なし | なし |
 
-#### 用途推奨
+#### 用途推奨（マップ系）
 
 | 場面 | 推奨 | 理由 |
 |---|---|---|
@@ -2153,7 +2240,7 @@ static_assert(!wildcard_match<"a?c"_fs>("abcd"));
 | 文字クラス `[abc]` | 1.1 ns | 1.6 ns | **1.6 ns** (委譲) | 10.7 ns |
 | 文字クラス `[a-m]` | 1.7 ns | **1.6 ns** | **1.6 ns** (委譲) | 8.9 ns |
 
-> **单位**: ns/iter（1回のマッチにかかるナノ秒）。小さいほど高速。
+> **単位**: ns/iter（1回のマッチにかかるナノ秒）。小さいほど高速。
 
 #### アーキテクチャ比較
 
@@ -2176,7 +2263,7 @@ static_assert(!wildcard_match<"a?c"_fs>("abcd"));
 | ワイルドカード風パターン（ファイル名マッチ） | `wildcard_match` | `*?` を含まなければ `frozen_regex` 委譲で超高速。構文がシンプル |
 | パターンが実行時に決まる | `wildcards` | コンパイル時 NTTP が使えない唯一の選択肢 |
 
-#### ベンチマークの再現
+#### ベンチマークの再現（マップ系）
 
 ```bash
 # ビルド
@@ -2205,24 +2292,29 @@ static_assert(set_t::size() == 3);
 
 ## `remove_comments` / `remove_comment_lines`（コメント行除去）
 
-先頭が指定した文字列で始まる行を除去します（デフォルトは `#`）。
+各行のコメント（`#` 以降）を削除します（デフォルトは `#`）。行そのものは残るので、コメント行を丸ごと落としたい場合は `remove_comment_lines` を使います。
 
 ```cpp
 #include "frozenchars.hpp"
 using namespace frozenchars;
 using namespace frozenchars::literals;
 
+// コメント以降を削除する（行は残るため空行が残る）
 auto constexpr r = remove_comments("a\n# comment\nb"_fs);
-// r.sv() == "a\nb"
+// r.sv() == "a\n\nb"
+
+// コメント行そのものを削除する
+auto constexpr lines = remove_comment_lines("a\n# comment\nb"_fs);
+// lines.sv() == "a\nb"
 ```
 
 パイプ演算子でも使用できます。
 
 ```cpp
-using namespace frozenchars::ops;
+namespace fops = frozenchars::ops;
 
-auto constexpr r2 = "#header\na=1\n#end"_fs | remove_comments();
-// r2.sv() == "a=1"
+auto constexpr r2 = "#header\na=1\n#end"_fs | fops::remove_comments();
+// r2.sv() == "\na=1\n"
 ```
 
 ## `chrono`（日付・時刻のコンパイル時相互変換）
@@ -2249,6 +2341,8 @@ using namespace std::chrono;
 
 ```cpp
 // ISO 日付
+using namespace std::chrono;
+
 constexpr auto d1 = parse_iso_date<"2026-07-04"_fs>();
 // d1 == year{2026}/7/4
 
@@ -2284,6 +2378,8 @@ constexpr auto dr = parse_iso_date("2026-07-04"_fs);
 | `format_iso_datetime(tp)` | `sys_days{...}` + `hours{14}` | `"2026-07-04T14:30:00Z"_fs`（`FrozenString<21>`） |
 
 ```cpp
+using namespace std::chrono;
+
 constexpr auto f1 = format_iso_date(year{2026}/7/4);
 // f1.sv() == "2026-07-04"
 
@@ -2297,6 +2393,8 @@ constexpr auto f2 = format_iso_datetime(
 パース結果を再度フォーマットして元の文字列に戻せることをコンパイル時に検証できます。
 
 ```cpp
+using namespace std::chrono;
+
 constexpr auto ymd = year{2026}/7/4;
 constexpr auto formatted = format_iso_date(ymd);
 constexpr auto parsed = parse_iso_date(formatted);
@@ -2375,7 +2473,15 @@ consteval auto make_ts_log() {
 `dump<g_log>()` を呼ぶと**意図的にコンパイルエラーを発生**させ、診断メッセージに
 ログ全体の内容を出力します（Constexpr-Doom の `inspect` テクニックと同様）。デバッグ用です。
 
+<!-- check: skip -->
+
 ```cpp
+consteval auto make_log() {
+  constexpr_log<256, 8, true> log;
+  log.log("hello");
+  return log;
+}
+
 constexpr auto g_log = make_log();
 auto d = dump<g_log>();   // コンパイルエラーになり、診断にログ全文が出る
 ```
@@ -2412,10 +2518,11 @@ cmake --install build --prefix ./install
 
 インストール先には `frozenchars.hpp`、依存ヘッダ、および `find_package(frozenchars CONFIG)` 用の CMake 設定が配置されます。
 
-### vcpkg（将来対応予定）
+### vcpkg
 
-> 現時点で vcpkg の公式レジストリには未登録です。将来的にポートを提供する予定です。
-> それまでは上記の `cmake --install` によるインストール、またはサブディレクトリ／`FetchContent` での取り込みをご利用ください。
+> vcpkg の公式レジストリには未登録です（本リポジトリは `vcpkg.json` と `triplets/` を
+> 提供しており、開発時の依存解決にはこちらを使っています）。
+> 利用側のインストールは上記の `cmake --install`、またはサブディレクトリ／`FetchContent` で行ってください。
 
 ## 単一ヘッダ（Wandbox / Compiler Explorer 用）
 
@@ -2423,8 +2530,8 @@ Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `sin
 
 | ファイル | 内容 | サイズ目安 |
 |---|---|---|
-| `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 615KB / 17k行 |
-| `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 667KB / 18k行 |
+| `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 613KB / 17,636行 |
+| `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 662KB / 18,969行 |
 
 glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
 
