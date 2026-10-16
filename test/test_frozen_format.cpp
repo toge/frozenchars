@@ -181,3 +181,20 @@ TEST_CASE("frozen_format Capacity", "[frozen_format]") {
     REQUIRE(strcmp(r.sv().data(), "ab") == 0);
   }
 }
+
+TEST_CASE("frozen_format supports float precision beyond the legacy 128 byte work buffer", "[frozen_format]") {
+  // 作業バッファは書式文字列の精度に追従する（旧実装は char[128] 固定で
+  // {:.124}f を超える精度でバッファ外へ書き込んでいた）
+  auto const wide = frozen_format<"{:.200f}">(1.5);
+  REQUIRE(wide.sv().size() == 202);
+  REQUIRE(wide.sv().starts_with("1.5"));
+  REQUIRE(wide.sv().ends_with("00"));
+
+  auto const sci = frozen_format<"{:.120e}">(1.5);
+  REQUIRE(sci.sv().size() == 126);
+  REQUIRE(sci.sv().ends_with("e+00"));
+
+  // 汎用形式（'g'）は末尾のゼロを落として短い方を採用するため、結果は "{:.300}" でも "1.5"
+  auto const general = frozen_format<"{:.300}">(1.5);
+  REQUIRE(general.sv() == "1.5");
+}

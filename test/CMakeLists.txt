@@ -399,6 +399,13 @@ add_compile_fail_test(
 )
 
 add_compile_fail_test(
+  NAME frozen_format_field_index
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_field_index.cpp
+  EXPECTED_TEXT "frozen_format: explicit field index is not supported"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
   NAME frozen_format_unmatched_brace2
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_format_unmatched_brace2.cpp
   EXPECTED_TEXT "frozen_format: unmatched '}' in format string"

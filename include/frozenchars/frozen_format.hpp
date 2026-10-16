@@ -40,6 +40,14 @@ struct format_spec {
   auto i = start;
   if (i < end && data[i] == '{') ++i;
   if (i >= end) return spec;
+
+  // '{' の直後の数字は std::format ではフィールドインデックス指定だが、本実装は
+  // インデックス指定をサポートしない。幅指定として黙って解釈すると
+  // std::format と異なる結果になるため、診断して落とす。
+  if (i < end && data[i] >= '0' && data[i] <= '9') {
+    FROZENCHARS_CONSTEVAL_FAIL("frozen_format: explicit field index is not supported (use {} or {} in order)");
+  }
+
   if (data[i] == ':') ++i;
   if (i >= end) return spec;
 
@@ -218,13 +226,16 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
 
 /**
  * @brief 浮動小数点数を汎用形式でバッファに書き込む
+ *
+ * @tparam WorkSize 作業バッファの容量（精度 + 余裕ぶん。呼び出し側の仕様から決める）
+ * @tparam Buf 出力バッファ
  */
-template <typename Buf>
+template <size_t WorkSize, typename Buf>
 constexpr auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
   if (precision < 0) precision = 6;
 
-  char fixed_buf[128]{};  // 固定小数点表現の作業バッファ（double の最大桁数に対して十分な余裕）
-  char sci_buf[128]{};    // 科学計数法表現の作業バッファ
+  std::array<char, WorkSize> fixed_buf{};  // 固定小数点表現の作業バッファ
+  std::array<char, WorkSize> sci_buf{};    // 科学計数法表現の作業バッファ
   auto fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
   auto sci_len = format_float_scientific(sci_buf, 0, value, precision);
 
@@ -261,15 +272,43 @@ constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode
 }
 
 /**
+ * @brief フォーマット文字列に現れる最大の精度指定を返す
+ *
+ * 浮動小数点数の作業バッファを精度に追従させるために使う。
+ *
+ * @param data フォーマット文字列
+ * @param len 文字列長
+ * @return size_t 最大精度（精度指定がなければ 0）
+ */
+[[nodiscard]] consteval auto max_precision_in(char const* data, size_t len) noexcept -> size_t {
+  auto max_precision = 0uz;
+  for (auto i = 0uz; i + 1 < len; ++i) {
+    if (data[i] != '.') continue;
+    auto j = i + 1;
+    auto p = 0u;
+    while (j < len && data[j] >= '0' && data[j] <= '9') {
+      p = p * 10 + static_cast<unsigned>(data[j] - '0');
+      if (p > 9999) p = 9999;
+      ++j;
+    }
+    if (j > i + 1 && p > max_precision) max_precision = p;
+  }
+  return max_precision;
+}
+
+/**
  * @brief 1 つの引数を指定子に従ってバッファへ書き込む
  *
+ * @tparam WorkSize 浮動小数点数の作業バッファ容量（精度 + 余裕ぶん）
+ * @tparam Buf 出力バッファ
+ * @tparam T 引数の型
  * @param buf 出力バッファ
  * @param pos 書き込み開始位置
  * @param arg フォーマットする引数
  * @param spec フォーマット指定子
  * @return size_t 書き込んだ文字数
  */
-template <typename Buf, typename T>
+template <size_t WorkSize, typename Buf, typename T>
 constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec, size_t max_pos) noexcept -> size_t {
   auto start = pos;
 
@@ -413,7 +452,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     int prec = spec.precision;
     if (prec < 0) prec = 6;  // 精度未指定は 6
 
-    char raw[128]{};  // 変換結果の作業バッファ（十分な余裕を持たせる）
+    std::array<char, WorkSize> raw{};  // 変換結果の作業バッファ（精度 + 余裕ぶん）
     size_t raw_len;
     if (type == 'f' || type == 'F') {
       raw_len = detail::format_float_fixed(raw, 0, v, prec);
@@ -430,7 +469,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
         }
       }
     } else {
-      raw_len = detail::format_float_general(raw, 0, v, prec);
+      raw_len = detail::format_float_general<WorkSize>(raw, 0, v, prec);
       if (type == 'G') {
         for (auto j = 0uz; j < raw_len; ++j) {
           if (raw[j] == 'e') raw[j] = 'E';
@@ -565,9 +604,12 @@ template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
         ++i;
         while (i < len && Fmt.buffer[i] != '}') ++i;
         auto spec = detail::parse_spec(Fmt.buffer.data(), len, start, i);
+        // 浮動小数点数の作業バッファは書式文字列中の最大精度に追従させる
+        //（固定長にすると {:.200f} のような大きな精度でバッファ外へ書き込む）
+        constexpr size_t work_size = detail::max_precision_in(Fmt.buffer.data(), len) + 64uz;
 
         [&]<size_t... Is>(std::index_sequence<Is...>) {
-          ((field_idx == Is ? (pos += detail::format_field(result.buffer, pos, std::get<Is>(tup), spec, Capacity - 1), 0) : 0), ...);
+          ((field_idx == Is ? (pos += detail::format_field<work_size>(result.buffer, pos, std::get<Is>(tup), spec, Capacity - 1), 0) : 0), ...);
         }(std::make_index_sequence<sizeof...(Args)>{});
 
         ++field_idx;
