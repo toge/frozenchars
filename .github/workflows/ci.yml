@@ -49,6 +49,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Configure
@@ -82,6 +87,11 @@ jobs:
         run: |
           if not exist C:\vcpkg (
             git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+            call C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          ) else (
+            rem キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            rem builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C C:\vcpkg pull --ff-only
             call C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
           )
         shell: cmd
@@ -133,6 +143,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Configure
@@ -175,6 +190,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Configure
@@ -213,6 +233,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Configure
@@ -259,6 +284,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Configure (ASan + UBSan)
@@ -305,6 +335,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Configure (coverage)
@@ -385,6 +420,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Build WASI with vcpkg + wasi-sdk (wasm32-wasip1, no single header)
@@ -465,6 +505,11 @@ jobs:
           if [ ! -d ~/vcpkg ]; then
             git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
             ~/vcpkg/bootstrap-vcpkg.sh
+          else
+            # キャッシュ由来の clone は古い場合がある。vcpkg.json の
+            # builtin-baseline が指すコミットとバージョン DB を取り込むために更新する。
+            git -C ~/vcpkg pull --ff-only
+            ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
       - name: Build WASI with vcpkg + wasi-sdk (wasm32-wasip2, no single header)
@@ -500,15 +545,66 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 変更ファイルの抽出のため全履歴を取得する
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y g++
 
       - name: Check formatting (.clang-format)
         run: |
-          sudo apt-get install -y clang-format
-          clang-format --dry-run --Werror include/frozenchars/*.hpp include/frozenchars/**/*.hpp test/*.cpp test/compile_fail/*.cpp example/*.cpp
+          # 著者環境と同じバージョンに固定する。apt の clang-format は
+          # .clang-format の設定値を解釈できず、バージョン差による誤検出が起きる。
+          python3 -m venv /tmp/clang-format-venv
+          /tmp/clang-format-venv/bin/pip install --quiet clang-format==22.1.8
+
+          # 既存コードは一括整形されていないため、push / pull_request で
+          # 変更された行だけを検査する（新しく書いた行は整形済みに保つ）。
+          BASE='${{ github.event.pull_request.base.sha }}'
+          if [ -z "$BASE" ]; then
+            BASE='${{ github.event.before }}'
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "差分の基準コミットを特定できないため書式チェックをスキップします"
+            exit 0
+          fi
+
+          FILES=$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- include test example | grep -E '[.](hpp|cpp)$' || true)
+          if [ -z "$FILES" ]; then
+            echo "書式チェック対象のファイル変更なし"
+            exit 0
+          fi
+
+          FAILED=0
+          while IFS= read -r file; do
+            # -U0 のハンクヘッダーから「追加された行」の範囲を抽出する
+            # (例: @@ -1,2 +1,3 @@ → --lines=1:3)
+            RANGES=()
+            while IFS= read -r hunk; do
+              start=${hunk%%,*}
+              start=${start#+}
+              count=${hunk##*,}
+              if [ "$count" = "$hunk" ]; then
+                count=1
+              fi
+              if [ "$count" = "0" ]; then
+                continue
+              fi
+              RANGES+=("--lines=$start:$((start + count - 1))")
+            done < <(git diff -U0 --no-color "$BASE" HEAD -- "$file" | sed -n 's/^@@ .* \([+][0-9,]*\) @@.*/\1/p')
+
+            if [ "${#RANGES[@]}" -eq 0 ]; then
+              continue
+            fi
+            echo "  $file (${RANGES[*]})"
+            if ! /tmp/clang-format-venv/bin/clang-format --dry-run --Werror "${RANGES[@]}" "$file"; then
+              FAILED=1
+            fi
+          done <<< "$FILES"
+
+          exit $FAILED
 
       - name: Check README table of contents anchors
         run: python3 tools/check_readme_anchors.py

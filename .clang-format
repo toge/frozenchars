@@ -9,7 +9,7 @@ ColumnLimit: 200
 # int* count
 PointerAlignment: Left
 
-AccessModifierOffset: -4
+AccessModifierOffset: -2
 
 # void func(arg1,
 #           arg2);
@@ -43,7 +43,7 @@ NamespaceIndentation: None
 
 ReflowComments: true
 
-Standard: c++23
+Standard: c++20
 
 # 行末コメントは 1 スペース
 SpacesBeforeTrailingComments: 1

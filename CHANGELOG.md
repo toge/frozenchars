@@ -8,12 +8,13 @@
 
 ### Changed
 
-- `.clang-format`: 既存コードの体裁に合わせて設定し直した（名前空間はフラット、縦位置揃えなし、行末コメント1スペース、`Standard: c++23`）。設定とコードが食い違っていたため 58 ヘッダ中 49 個に差分が出していたが、設定修正後は差分がゼロになった。CI で `clang-format --dry-run --Werror` を実行する。
+- CI: vcpkg をキャッシュから復元した場合も `git pull --ff-only` と再 bootstrap で更新するようにした。キャッシュされた古いクローンには `vcpkg.json` の `builtin-baseline` が指すコミットやバージョン DB が無く、`vcpkg install` が失敗していたため。
+- `.clang-format`: 既存コードの体裁に合わせて設定し直した（名前空間はフラット、縦位置揃えなし、行末コメント1スペース、`Standard: c++20`、`AccessModifierOffset: -2`）。リポジトリ全体は一括整形されていないため、CI の clang-format ゲートは変更された行のみを検査する。検査には clang-format 22.1.8 を使う。
 - `.clang-tidy`: `readability-identifier-naming.FunctionCase` を `camelBack` から `lower_case` に変更（既存コードの大半が snake_case）。
 - `AGENTS.md`: README の行数・サンプルパス・命名規約を現状に合わせて更新。
 - `CMakeLists.txt`: バージョンを最新のタグに合わせて 0.8.1 に更新。警告オプションを `$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:...>` の複数ID形式に集約して重複を解消（-Wall/-Wextra/-pedantic は GCC・Clang・AppleClang 共通、-fconstexpr-steps は Clang 系共通）。
 - `README.md`: 目次124エントリのアンカーを再生成（死んでいたリンク63件）。コード例88件がすべてコンパイルできるように修正。`vcpkg` の記述・単一ヘッダのサイズ表記・要件のコンパイラ一覧を更新。「よくある落とし穴」に `FrozenString::front()` / `back()` / `operator[]` の範囲外アクセス（チェックなし・未定義動作）と回避方法を追記。
-- CI: README の一貫性を検証する `docs and style` ジョブを追加（目次アンカー / コード例のコンパイル / clang-format）。
+- CI: README の一貫性を検証する `docs and style` ジョブを追加（目次アンカー / コード例のコンパイル / clang-format 22.1.8 による変更行の書式検査）。
 
 - `CMakeLists.txt`: GCC に `-fconstexpr-ops-limit` / `-fconstexpr-loop-limit` を追加。`json::crush` / `json::compress` は 180 バイト程度の JSON で GCC の既定の constexpr 上限を超え、`crush` がコンパイルエラーになっていた（Clang 系は既に `-fconstexpr-steps` を指定していた）。`json::crush` を使う場合は GCC でも同じフラグが必要。
 - `test/CMakeLists.txt`: ベンチマーク用の `wildcards` 依存を `master` ではなくコミット（5662507f）で固定し再現可能にした。パッチ対象が見つからない場合は `FATAL_ERROR` で検出するようにした（従来は `string(REPLACE)` が静かに空振りし、壊れたベンチのビルドが通っていた）。`nanobench` がある構成時のみ取得するようにした。
@@ -38,6 +39,9 @@
 
 ### Fixed
 
+- `test_frozen_map.cpp`: 実プロセスの `fork()` で中止を検証するテストが Emscripten（`__unix__` を定義するが `fork()` 非対応）でもビルド・実行され、`REQUIRE(pid >= 0)` の失敗後に `memory access out of bounds` で異常終了していた問題を修正。Emscripten をテスト対象から除外した。
+- `test/CMakeLists.txt` / `json` の深度テスト: JSON パーサの再帰は `max_depth`=512 段まで進むが、Emscripten の既定スタック 64 KiB では深度 300 程度で枯渇し `validate_json` の深度制限テストが `memory access out of bounds` で落ちていた問題を修正。`all_test` のスタックを 1 MiB に拡張した。
+- `.clang-format`: `Standard: c++23` は clang-format 22 以前では解釈できず設定ファイル全体が無効になっていたため `Standard: c++20` に修正。`public:` の字下げを既存コードに合わせるため `AccessModifierOffset` を -2 に修正。
 - `frozen_format`: 浮動小数点数の作業バッファが `char[128]` 固定で、`{:.124}f` 以上の精度指定でバッファ外へ書き込んでいた問題を修正。書式文字列中の最大精度に追従するサイズに変更した。
 - `frozen_format`: `{1}` のような明示的フィールドインデックスを幅指定として黙って解釈し、`std::format` と異なる結果していた（`"{1} {1}"` が `1 2` になる）問題を修正。`frozen_format: explicit field index is not supported` としてコンパイル時エラーにする。
 

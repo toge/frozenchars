@@ -88,6 +88,9 @@ if(Catch2_FOUND AND ctre_FOUND)
 
   if(EMSCRIPTEN)
     target_compile_options(all_test PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING")
+    # validate_json / parse_json は最大 max_depth(512) 段まで再帰する。
+    # Emscripten の既定スタック (64 KiB) では 300 段程度で枯渇するため拡張する。
+    target_link_options(all_test PRIVATE "-sSTACK_SIZE=1048576")
   endif()
 
   add_test(NAME all_test COMMAND all_test -r junit)
@@ -267,6 +270,9 @@ add_compile_fail_test(
   NAME frozen_map_operator_missing_key
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_map_operator_missing_key.cpp
   EXPECTED_TEXT "frozenchars: frozen_map::operator[]: key not found"
+  # MSVC は構造化診断でソース行を引用しないため、メッセージ文字列が現れない
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+                 "call to immediate function is not a constant expression"
 )
 
 add_compile_fail_test(
@@ -297,6 +303,9 @@ add_compile_fail_test(
   NAME frozen_trie_map_operator_missing_key
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_trie_map_operator_missing_key.cpp
   EXPECTED_TEXT "frozenchars: frozen_trie_map::operator[]: key not found"
+  # MSVC は構造化診断でソース行を引用しないため、メッセージ文字列が現れない
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+                 "call to immediate function is not a constant expression"
 )
 
 add_compile_fail_test(

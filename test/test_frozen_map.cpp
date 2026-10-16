@@ -14,7 +14,9 @@
 #include <unordered_map>
 #include <utility>
 
-#if defined(__unix__) || defined(__APPLE__)
+// fork()/waitpid() による中断検証は実プロセスを持つ Unix/macOS 限定。
+// Emscripten は __unix__ を定義するが fork() をサポートしないため除外する。
+#if (defined(__unix__) || defined(__APPLE__)) && !defined(__EMSCRIPTEN__)
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -97,7 +99,8 @@ TEST_CASE("frozen_map basic shape", "[frozen_map]") {
   REQUIRE_FALSE(map.contains("other"));
 }
 
-#if defined(__unix__) || defined(__APPLE__)
+// fork() が使える実プロセス環境でのみ検証する（Emscripten は fork 非対応）。
+#if (defined(__unix__) || defined(__APPLE__)) && !defined(__EMSCRIPTEN__)
 TEST_CASE("frozen_map operator[] aborts on a missing key even in release builds", "[frozen_map]") {
   auto const map = make_frozen_map<int, "timeout"_fs, "retry"_fs>(
     std::pair{"timeout", 30},

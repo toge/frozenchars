@@ -45,6 +45,7 @@
 - `include/` に `.cpp` を置かない（ヘッダオンリー維持）。
 - `docs/superpowers/` は通常ディレクトリ（シンボリックリンクではない）。
 - `_fs` リテラルの戻り値型は `FrozenString<文字数+1>`（終端 '\0' を含む）。`"abc"_fs` は `FrozenString<4>`。これに依存する変更は全利用箇所を grep。
+- リポジトリ全体を `clang-format --dry-run --Werror` で検査する前提にしない（既存コードは一括整形されていない）。CI の書式ゲート（`docs and style`）は clang-format 22.1.8 で変更された行のみを検査する。ローカル確認も同じバージョンで行う。
 
 ## 参考リソース
 
