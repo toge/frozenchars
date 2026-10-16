@@ -141,44 +141,61 @@ if(Catch2_FOUND AND ctre_FOUND)
   endif()
 endif()
 
-# wildcards ベンチマーク依存: 構成時に取得
+# wildcards ベンチマーク依存: nanobench があるときだけ構成時に取得する
 # (https://github.com/zemasoft/wildcards)
-include(FetchContent)
-if(POLICY CMP0169)
-  # CMP0169 (CMake 3.30+): 単一引数の FetchContent_Populate は非推奨。
-  # OLD を指定して既存の populate 後のパッチ処理を維持する。
-  # CMake 3.30 未満ではこのポリシーは存在しないため設定をスキップする。
-  cmake_policy(SET CMP0169 OLD)
+# リポジトリは 2019 年以降更新がないため、移動する master ではなくコミットで固定する
+if(nanobench_FOUND)
+  include(FetchContent)
+  if(POLICY CMP0169)
+    # CMP0169 (CMake 3.30+): 単一引数の FetchContent_Populate は非推奨。
+    # OLD を指定して既存の populate 後のパッチ処理を維持する。
+    # CMake 3.30 未満ではこのポリシーは存在しないため設定をスキップする。
+    cmake_policy(SET CMP0169 OLD)
+  endif()
+  FetchContent_Declare(
+    wildcards
+    GIT_REPOSITORY https://github.com/zemasoft/wildcards.git
+    GIT_TAG        5662507f01f5d0a4ec22f45749214276ed366d1b
+  )
+  FetchContent_Populate(wildcards)
+
+  set(_wc_patched "${wildcards_SOURCE_DIR}/single_include/wildcards.hpp")
+  file(READ "${_wc_patched}" _wc_content)
+
+  # 上流のヘッダに修正を適用する。string(REPLACE) は対象が無くても成功して
+  # しまうため、適用できていない場合は FATAL_ERROR にする。
+  # (取得済みのソースは構成のたびに再利用されるため、適用済みなら何もしない)
+  function(_patch_wildcards_content var old new)
+    string(FIND "${${var}}" "${new}" already)
+    if(NOT already EQUAL -1)
+      return()
+    endif()
+    string(FIND "${${var}}" "${old}" found)
+    if(found EQUAL -1)
+      message(FATAL_ERROR "wildcards: 想定したパターンを検出できないためパッチを適用できません\nGIT_TAG を見直すかパッチ処理を更新してください")
+    endif()
+    string(REPLACE "${old}" "${new}" patched "${${var}}")
+    set(${var} "${patched}" PARENT_SCOPE)
+  endfunction()
+
+  # is_alt バグ修正: cfg_HAS_CONSTEXPR14 + !cfg_HAS_FULL_FEATURED_CONSTEXPR14 分岐での
+  # 戻り値型不一致（`return throw_logic_error(p, ...)` が bool 関数から PatternIterator を返す）
+  set(_wc_escape_old "case is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nreturn throw_logic_error(\np, \"The program execution should never end up here throwing this exception\");\n#endif")
+  set(_wc_escape_new "case is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nthrow_logic_error(\np, \"The program execution should never end up here throwing this exception\");\nreturn false;\n#endif")
+  _patch_wildcards_content(_wc_content "${_wc_escape_old}" "${_wc_escape_new}")
+
+  # C++23 非推奨リテラル演算子構文の修正: `operator"" _sv` → `operator""_sv`
+  foreach(_wc_literal "operator\"\" _sv(" "operator\"\" _wc(")
+    string(REGEX REPLACE "([^ ]) ([^ ])" "\\1\\2" _wc_literal_fixed "${_wc_literal}")
+    _patch_wildcards_content(_wc_content "${_wc_literal}" "${_wc_literal_fixed}")
+  endforeach()
+
+  file(WRITE "${_wc_patched}" "${_wc_content}")
+  unset(_wc_patched)
+  unset(_wc_content)
+  add_library(wildcards INTERFACE)
+  target_include_directories(wildcards INTERFACE ${wildcards_SOURCE_DIR}/single_include)
 endif()
-FetchContent_Declare(
-  wildcards
-  GIT_REPOSITORY https://github.com/zemasoft/wildcards.git
-  GIT_TAG        master
-  GIT_SHALLOW    TRUE
-)
-FetchContent_Populate(wildcards)
-# is_alt バグ修正: cfg_HAS_CONSTEXPR14 + !cfg_HAS_FULL_FEATURED_CONSTEXPR14 分岐での
-# 戻り値型不一致（`return throw_logic_error(p, ...)` が bool 関数から PatternIterator を返す）
-set(_wc_patched "${wildcards_SOURCE_DIR}/single_include/wildcards.hpp")
-file(READ "${_wc_patched}" _wc_content)
-string(REPLACE
-  "break;\ncase is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nreturn throw_logic_error(\np, \"The program execution should never end up here throwing this exception\");\n#endif"
-  "break;\ncase is_alt_state::escape:\nstate = is_alt_state::next;\nbreak;\ndefault:\n#if cfg_HAS_FULL_FEATURED_CONSTEXPR14\nthrow std::logic_error(\n\"The program execution should never end up here throwing this exception\");\n#else\nthrow_logic_error(\np, \"The program execution should never end up here throwing this exception\");\nreturn false;\n#endif"
-  _wc_content "${_wc_content}")
-# C++23 非推奨リテラル演算子構文の修正: `operator"" _sv` → `operator""_sv`
-string(REPLACE
-  "operator\"\" _sv("
-  "operator\"\"_sv("
-  _wc_content "${_wc_content}")
-string(REPLACE
-  "operator\"\" _wc("
-  "operator\"\"_wc("
-  _wc_content "${_wc_content}")
-file(WRITE "${_wc_patched}" "${_wc_content}")
-unset(_wc_patched)
-unset(_wc_content)
-add_library(wildcards INTERFACE)
-target_include_directories(wildcards INTERFACE ${wildcards_SOURCE_DIR}/single_include)
 
 # compile-fail ケースは ctest のテストとして登録する。
 # 静的_assert のメッセージを変更したら EXPECTED_TEXT も更新すること。

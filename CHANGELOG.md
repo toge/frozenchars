@@ -8,6 +8,10 @@
 
 ### Changed
 
+- `CMakeLists.txt`: GCC に `-fconstexpr-ops-limit` / `-fconstexpr-loop-limit` を追加。`json::crush` / `json::compress` は 180 バイト程度の JSON で GCC の既定の constexpr 上限を超え、`crush` がコンパイルエラーになっていた（Clang 系は既に `-fconstexpr-steps` を指定していた）。`json::crush` を使う場合は GCC でも同じフラグが必要。
+- `test/CMakeLists.txt`: ベンチマーク用の `wildcards` 依存を `master` ではなくコミット（5662507f）で固定し再現可能にした。パッチ対象が見つからない場合は `FATAL_ERROR` で検出するようにした（従来は `string(REPLACE)` が静かに空振りし、壊れたベンチのビルドが通っていた）。`nanobench` がある構成時のみ取得するようにした。
+- `vcpkg.json`: `builtin-baseline` を追加し、ポートの解決を再現可能にした。
+
 - `wildcard_match` / `wildcard_find`: `*` の後ろに `?` / `[` / `(` / `\` が続くパターンでバックトレッキングが `*` の個数に対して指数的に増えていた（コンパイル時のステップ数超過や実行時間の爆発）問題を修正。失敗した (テキスト位置, パターン位置) をメモ化して O(テキスト長 × パターン長) に収めた。
 - `wildcard_match(FrozenString const&, std::string_view)`: コンパイルできない（一度もコンパイルが通らない）オーバーロードを削除。パターンを NTTP で渡す `wildcard_match<PAT>(text)` を使用すること。
 - `wildcard_match(char const (&)[N], std::string_view)`: 他のオーバーロードに合わせて `constexpr` を付与。

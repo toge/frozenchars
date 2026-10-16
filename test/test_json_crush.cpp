@@ -121,3 +121,13 @@ TEST_CASE("decode_utf8 rejects truncated sequences without reading past the end"
   ::munmap(base, page * 2);
 #endif
 }
+
+TEST_CASE("crush handles inputs beyond the default constexpr step budget", "[json][crush]") {
+  // 180 バイト程度の JSON は GCC の既定の constexpr 上限（ops 33554432）を超える。
+  // CMakeLists.txt の -fconstexpr-ops-limit / -fconstexpr-loop-limit が外れると
+  // このテストはコンパイルに失敗する（ビルド設定の回帰ガード）。
+  constexpr auto input = R"({"k0":"value-0","k1":"value-1","k2":"value-2","k3":"value-3","k4":"value-4","k5":"value-5","k6":"value-6","k7":"value-0","k8":"value-1","k9":"value-2","k10":"value-3","k11":"value-4"})"_fs;
+  constexpr auto crushed = frozenchars::json::crush<input>();
+  static_assert(crushed.length < input.length);
+  CHECK(crushed.sv().back() == '_');
+}

@@ -14,6 +14,11 @@ add_compile_options(
     $<$<CXX_COMPILER_ID:GNU>:-Wall>
     $<$<CXX_COMPILER_ID:GNU>:-Wextra>
     $<$<CXX_COMPILER_ID:GNU>:-pedantic>
+    # json::crush / json::compress はコンパイル時に探索を積み重ねるため、
+    # GCC の既定の上限（constexpr ops 33554432）では 200 バイト程度の JSON で
+    # コンパイルエラーになる。Clang 系と同じ程度に持ち上げる。
+    $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-ops-limit=2147483647>
+    $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-loop-limit=100000000>
     $<$<CXX_COMPILER_ID:Clang>:-Wall>
     $<$<CXX_COMPILER_ID:Clang>:-Wextra>
     $<$<CXX_COMPILER_ID:Clang>:-pedantic>
