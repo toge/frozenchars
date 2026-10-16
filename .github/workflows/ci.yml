@@ -107,7 +107,14 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Test
-        run: ctest --test-dir build -V -C Release
+        shell: cmd
+        run: |
+          rem compile-fail テストは cl.exe を直接起動する。開発者環境の INCLUDE/LIB を
+          rem 読み込まないと標準ヘッダ (cassert など) が見つからず全件失敗する。
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set "VSINSTALL=%%i"
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat" >nul
+          ctest --test-dir build -V -C Release
 
   linux-clang:
     runs-on: ubuntu-latest

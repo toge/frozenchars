@@ -9,6 +9,7 @@
 ### Changed
 
 - CI: vcpkg をキャッシュから復元した場合は `git fetch` + `git reset --hard origin/master` と再 bootstrap で最新に同期するようにした。キャッシュされた古いクローンには `vcpkg.json` の `builtin-baseline` が指すコミットやバージョン DB が無く、また未追跡ファイルとの衝突で `pull` が失敗していたため（Windows は `|| exit /b 1` で失敗を検知する）。
+- CI (windows-msvc): `ctest` を MSVC 開発者環境（`vcvars64.bat`）で実行するようにした。compile-fail テストは `cl.exe` を直接起動するため、素の環境では `INCLUDE` が無く標準ヘッダ（`cassert` など）が見つからず全件失敗する。
 - `.clang-format`: 既存コードの体裁に合わせて設定し直した（名前空間はフラット、縦位置揃えなし、行末コメント1スペース、`Standard: c++20`、`AccessModifierOffset: -2`）。リポジトリ全体は一括整形されていないため、CI の clang-format ゲートは変更された行のみを検査する。検査には clang-format 22.1.8 を使う。
 - `.clang-tidy`: `readability-identifier-naming.FunctionCase` を `camelBack` から `lower_case` に変更（既存コードの大半が snake_case）。
 - `AGENTS.md`: README の行数・サンプルパス・命名規約を現状に合わせて更新。
