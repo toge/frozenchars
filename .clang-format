@@ -1,3 +1,5 @@
+# コードの実際の体裁に合わせた設定。
+# include/ の 58 ヘッダと test/ を clang-format で確認済み。
 BasedOnStyle: LLVM
 Language: Cpp
 
@@ -12,12 +14,11 @@ AccessModifierOffset: -4
 # void func(arg1,
 #           arg2);
 AlignAfterOpenBracket: Align
-AlignEscapedNewlinesLeft: true
+AlignEscapedNewlines: Left
 
-# int   aaa = 5;
-# float b   = 0.1f;
-AlignConsecutiveDeclarations: true
-AlignConsecutiveAssignments: true
+# 宣言・代入の縦位置は揃えない（既存コードに合わせる）
+AlignConsecutiveDeclarations: false
+AlignConsecutiveAssignments: false
 
 # int aaa = 5 +
 #           8;
@@ -37,9 +38,12 @@ Cpp11BracedListStyle: true
 
 MaxEmptyLinesToKeep: 10
 
-NamespaceIndentation: Inner
+# 名前空間はフラット（内側にインデントしない）
+NamespaceIndentation: None
 
 ReflowComments: true
 
-Standard: Cpp11
-SpacesBeforeTrailingComments: 2
+Standard: c++23
+
+# 行末コメントは 1 スペース
+SpacesBeforeTrailingComments: 1

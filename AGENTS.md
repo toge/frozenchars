@@ -8,7 +8,7 @@
 - 公開ターゲットは `frozenchars::frozenchars`（CMake `INTERFACE`）。利用時は必要なモジュールのみ include（例: `#include "frozenchars/mod/core.hpp"`）も可能。`frozenchars.hpp` は glaze / json を除く全機能を含む便利ヘッダ（非推奨ではない）。
 - 現在は `cxx_std_23` 固定（`CMakeLists.txt:41`）。C++26 フォールバックは未実装（将来追加予定）。
 - CI は `.github/workflows/ci.yml` に存在（Fedora 44/43/41、GCC 16/15/14）。
-- README は 1000行超の和文ドキュメント（`README.md`、現時点で 1300 行超）。
+- README は 2500 行超の和文ドキュメント（`README.md`、現時点で 2565 行）。コード例は `tools/check_readme_examples.py`、目次は `tools/check_readme_anchors.py` で CI が検証する。
 
 ## ビルドとテスト
 
@@ -33,7 +33,7 @@
 
 ## コーディング規約
 
-- **命名** (`.clang-tidy`)：クラス・変数・パラメータ・メンバ = `lower_case`、関数 = `camelBack`、定数・constexpr 変数 = `UPPER_CASE`。
+- **命名** (`.clang-tidy`)：クラス・変数・パラメータ・メンバ・関数 = `lower_case`、定数・constexpr 変数 = `UPPER_CASE`。
 - **フォーマット** (`.clang-format`)：LLVM ベース、2 スペース、200 列、Left ポインタ、Attach ブレース。
 - **改行** (`.editorconfig`)：LF、UTF-8、ファイル末改行あり、末尾空白トリム、`[*.{hpp,cpp}]` の `indent_size = 2`。
 - コメントは日本語 Doxygen。`@brief` など統一。新規 API には同じスタイルで付ける。
@@ -50,7 +50,7 @@
 
 - README: `README.md`（和文、機能網羅）
 - アンブレラヘッダ: `include/frozenchars.hpp`
-- 最小サンプル: `example/example.cpp`、`example/example_split.cpp`、`example/example_frozen_map_use_cases.cpp`、`example/example_parse_to_tuple_use_cases.cpp`
+- 最小サンプル: `example/example.cpp`、`example/example_split.cpp`、`example/example_frozen_map_use_cases.cpp`、`example/snippets/type_parser/example_parse_to_tuple.cpp`
 - コンパイル時マップ: `include/frozenchars/map.hpp`、`test/test_frozen_map.cpp`
 - 失敗系テスト機構: `test/compile_fail/run_compile_fail.cmake`
 - 命名・スタイル: `.clang-format`、`.clang-tidy`、`.editorconfig`

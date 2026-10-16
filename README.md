@@ -2530,8 +2530,8 @@ Wandbox や Compiler Explorer で手軽に試すための単一ヘッダを `sin
 
 | ファイル | 内容 | サイズ目安 |
 |---|---|---|
-| `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 613KB / 17,636行 |
-| `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 662KB / 18,969行 |
+| `single_include/frozenchars.hpp` | `mod/all_basic.hpp` 相当（glaze / json を除く全基本機能） | 約 621KB / 17,840行 |
+| `single_include/frozenchars_json.hpp` | 上記 + `json::crush` / `compress` | 約 676KB / 19,274行 |
 
 glaze 連携 (`glaze_frozen_map.hpp`) は外部依存 `<glaze/glaze.hpp>` のため単一ヘッダには含めません。必要な場合は `single_include/frozenchars.hpp` に加えて `include/frozenchars/glaze_frozen_map.hpp` を別途配置してください。
 

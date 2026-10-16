@@ -8,6 +8,13 @@
 
 ### Changed
 
+- `.clang-format`: 既存コードの体裁に合わせて設定し直した（名前空間はフラット、縦位置揃えなし、行末コメント1スペース、`Standard: c++23`）。設定とコードが食い違っていたため 58 ヘッダ中 49 個に差分が出していたが、設定修正後は差分がゼロになった。CI で `clang-format --dry-run --Werror` を実行する。
+- `.clang-tidy`: `readability-identifier-naming.FunctionCase` を `camelBack` から `lower_case` に変更（既存コードの大半が snake_case）。
+- `AGENTS.md`: README の行数・サンプルパス・命名規約を現状に合わせて更新。
+- `CMakeLists.txt`: バージョンを最新のタグに合わせて 0.8.1 に更新。
+- `README.md`: 目次124エントリのアンカーを再生成（死んでいたリンク63件）。コード例88件がすべてコンパイルできるように修正。`vcpkg` の記述・単一ヘッダのサイズ表記・要件のコンパイラ一覧を更新。
+- CI: README の一貫性を検証する `docs and style` ジョブを追加（目次アンカー / コード例のコンパイル / clang-format）。
+
 - `CMakeLists.txt`: GCC に `-fconstexpr-ops-limit` / `-fconstexpr-loop-limit` を追加。`json::crush` / `json::compress` は 180 バイト程度の JSON で GCC の既定の constexpr 上限を超え、`crush` がコンパイルエラーになっていた（Clang 系は既に `-fconstexpr-steps` を指定していた）。`json::crush` を使う場合は GCC でも同じフラグが必要。
 - `test/CMakeLists.txt`: ベンチマーク用の `wildcards` 依存を `master` ではなくコミット（5662507f）で固定し再現可能にした。パッチ対象が見つからない場合は `FATAL_ERROR` で検出するようにした（従来は `string(REPLACE)` が静かに空振りし、壊れたベンチのビルドが通っていた）。`nanobench` がある構成時のみ取得するようにした。
 - `vcpkg.json`: `builtin-baseline` を追加し、ポートの解決を再現可能にした。
@@ -23,8 +30,7 @@
 - `test.sh`: ビルドディレクトリを第1引数で指定できるようになった（`bash build.sh static && bash test.sh build_static`）。
 - `build.sh`: 何も読み取られていなかった `-DSTATIC=ON` を廃止。`bash build.sh static` は従来どおり `build_static` に(static) トリプレットの構成を作る。
 
-- **例外なしを既定化（glaze追従、破壊的変更）**: 実行時APIは一律 `std::expected<T, std::errc>` を返すようになり、`-fno-exceptions` でビルドできるようになった。`FROZENCHARS_THROW` / `FROZENCHARS_WASI_MINIMAL` / `ENABLE_WASI_MINIMAL` / `single_include/frozenchars_wasi_minimal.hpp` / `test/smoke_wasi_minimal.cpp` を廃止。`frozen_map` 等の `at()` は `expected<reference_wrapper<T>, errc>`、`operator[]` と `FrozenString::front/back/operator[]` はチェックなし（事前条件）になった。投げるコンストラクタは `try_make` ファクトリに分離。コンパイル時（NTTP）の不正入力は従来どおりコンパイルエラー。
-- **例外なしモードを実装**: `FROZENCHARS_WASI_MINIMAL` 定義時、ライブラリ内の全ての例外送出が `FROZENCHARS_THROW` マクロ経由で `std::abort()` になり、`-fno-exceptions` でビルドできるようになった。従来は `FrozenString::front()/back()/operator[]` の 3 箇所しか無効化されていなかった。
+- **例外なしを既定化（glaze追従、破壊的変更）**: 実行時APIは一律 `std::expected<T, std::errc>` を返すようになり、`-fno-exceptions` でビルドできるようになった。例外を送出しうる API は `try_make` ファクトリに分離し、`at()` は `expected<reference_wrapper<T>, errc>` を返す。`operator[]` と `FrozenString::front/back/operator[]` はチェックなし（事前条件）。`FROZENCHARS_THROW` / `FROZENCHARS_WASI_MINIMAL` / `ENABLE_WASI_MINIMAL` / `single_include/frozenchars_wasi_minimal.hpp` / `test/smoke_wasi_minimal.cpp` は廃止。コンパイル時（NTTP）の不正入力は従来どおりコンパイルエラー。
 - `minify_html`: インライン要素（`<b>` / `<span>` / `<a>` 等）とテキストの間の空白を 1 個残すようになった（従来は削除して単語が連結していた）。`{{name}}` はインラインテキスト扱い、`{{#sec}}` / `{{/sec}}` は構造タグ扱い。
 - `minify_html`: `</p>` の省略を、直後がブロック要素・親の終了・入力終端のときに限定した（インライン要素やテキストが続くと DOM が変わるため）。
 - `tools/amalgamate.py`: 出力を決定的にした（生成時刻を削除）。単一ヘッダのリポジトリ URL を修正。
@@ -66,6 +72,10 @@
 - `json::decompress` / `json::uncrush`: コンパイル時 JSON 圧縮（`compress` / `crush`）の復元 API。
 - `json::compress` の出力を有効な JSON に変更。数値の原文（小数・指数）と型情報を保持。
 
+## [0.8.0] – [0.8.1]
+
+タグのみ付与され、本ファイルへの記載がありません。差分は各タグ間の `git log` を参照してください。
+
 ## [0.2.0] – [0.7.0]
 
 タグのみ付与され、本ファイルへの記載がありません。差分は各タグ間の `git log` を参照してください。
@@ -95,7 +105,8 @@
 
 - 一部機能に既知の不具合が残存しています（詳細は Issue を参照）。
 
-[Unreleased]: https://github.com/toge/frozenchars/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/toge/frozenchars/compare/v0.8.1...HEAD
+[0.8.0]: https://github.com/toge/frozenchars/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/toge/frozenchars/compare/v0.2.0...v0.7.0
 [0.2.0]: https://github.com/toge/frozenchars/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/toge/frozenchars/releases/tag/v0.1.0

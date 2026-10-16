@@ -308,7 +308,9 @@ constexpr bool is_space(char c) noexcept {
  *       -fno-exceptions -I include -c src.cpp -o src.o
  */
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
+#include <type_traits>
 
 /**
  * @brief consteval経路の失敗通知。
@@ -323,12 +325,52 @@ namespace frozenchars::detail {
   (void)msg;
   std::abort();
 }
+
+/**
+ * @brief 実行時に起動する前提条件違反の通知。
+ *
+ * @param msg 文字列リテラル（診断メッセージ）
+ */
+[[noreturn]] inline void precondition_failed(char const* msg) noexcept {
+  std::fputs("frozenchars: precondition failed: ", stderr);
+  std::fputs(msg, stderr);
+  std::fputc('\n', stderr);
+  std::abort();
+}
 } // namespace frozenchars::detail
 
 #ifdef __cpp_exceptions
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) throw(msg)
 #else
 #define FROZENCHARS_CONSTEVAL_FAIL(msg) ::frozenchars::detail::consteval_fail(msg)
+#endif
+
+/**
+ * @brief 実行時に必ず作動する前提条件チェック。
+ *
+ * cond が偽の場合:
+ * - 定数評価中: constexpr ではない consteval_fail() を呼ぶためコンパイルエラーになる。
+ *   診断には展開後の行（診断メッセージを含む）が出力される。
+ * - 実行時: 標準エラーにメッセージを出して std::abort()
+ *
+ * NDEBUG でも無効化されない点が FROZENCHARS_ASSERT と異なる。operator[] の
+ * 未検出キー検出のように、Release ビルドで未定義動作に落入ることを許さない
+ * 箇所で使う。
+ *
+ * @param cond 真となるべき条件式
+ * @param msg 文字列リテラル（診断メッセージ）
+ */
+#ifndef FROZENCHARS_PRECONDITION
+#define FROZENCHARS_PRECONDITION(cond, msg)                                                             \
+  do {                                                                                                  \
+    if (!static_cast<bool>(cond)) [[unlikely]] {                                                        \
+      if (std::is_constant_evaluated()) {                                                               \
+        ::frozenchars::detail::consteval_fail(msg);                                                    \
+      } else {                                                                                          \
+        ::frozenchars::detail::precondition_failed(msg);                                               \
+      }                                                                                                 \
+    }                                                                                                   \
+  } while (false)
 #endif
 
 /**
@@ -1350,35 +1392,46 @@ auto constexpr count_base64_encoded_size(size_t n) noexcept -> std::size_t {
 }
 
 /**
- * @brief Base64デコード後の最大バイト数を計算する
+ * @brief Base64デコード後のバイト数を計算する
  *
- * '=' 終端の 4 文字未満入力（"="・"=="・"AB=" 等）では
- * FROZENCHARS_CONSTEVAL_FAIL で失敗する（パディングがデータ長を超えて
- * size_t アンダーフローするため）。
+ * base64_decode 本体と同じ走査（'=' で打ち切り、Base64 以外の文字は無視）を
+ * コンパイル時に再現し、正確な出力バイト数を求める。4文字未満の入力長
+ * （"Zg"・"Zg="・"QUJDRA" 等）でもサイズ計算が破綻しない。
+ *
+ * パディング付き入力でデータ文字が2文字未満の場合は不正として診断する。
  *
  * @tparam N FrozenStringの長さ (終端文字'\0'を含む)
  * @param str 処理対象の文字列
- * @return std::size_t デコード後のバイト数（パディングを考慮）
+ * @return std::size_t デコード後のバイト数
  */
 template <size_t N>
 [[nodiscard]] auto consteval count_base64_decoded_size(FrozenString<N> const& str) noexcept -> std::size_t {
   auto const s = str.sv();
-  if (s.empty()) {
-    return 0;
-  }
-  auto count = (s.size() / 4) * 3;
-  if (s.ends_with("==")) {
-    if (count < 2) {
-      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+  auto valid = 0uz; // '=' より前に現れた有効な Base64 文字数
+  auto padded = false;
+
+  for (auto const c : s) {
+    if (c == '=') {
+      padded = true;
+      continue;
     }
-    count -= 2;
-  } else if (s.ends_with("=")) {
-    if (count < 1) {
-      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+    auto const val = base64_char_to_value(c);
+    if (val == 255) {
+      continue;
     }
-    count -= 1;
+    if (padded) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (data after padding)");
+    }
+    valid++;
   }
-  return count;
+
+  if (padded && valid < 2) {
+    FROZENCHARS_CONSTEVAL_FAIL("frozenchars: base64_decode: invalid Base64 input (padding exceeds data)");
+  }
+
+  // 末尾1文字は1バイトにすらならないため捨てる
+  auto const rest = valid % 4;
+  return (valid / 4) * 3 + (rest >= 2 ? rest - 1 : 0);
 }
 
 } // namespace frozenchars::detail
@@ -10980,6 +11033,27 @@ template<class ... Args>
 #include <ranges>
 #include <span>
 
+// ---- begin frozenchars/detail/frozen_map_entry.hpp ----
+
+#include <string_view>
+
+namespace frozenchars {
+
+/**
+ * @brief 固定長マップ系がエントリを受け取る際に使う 1 要素（キーと値のペア）
+ *
+ * frozen_map / frozen_multimap / frozen_bimap / frozen_trie_map が共通して使う。
+ *
+ * @tparam T 値の型
+ */
+template <typename T>
+struct frozen_map_entry {
+  std::string_view key;  // キー文字列（FrozenString のビュー）
+  T value;               // 対応する値
+};
+
+} // namespace frozenchars
+// ---- end frozenchars/detail/frozen_map_entry.hpp ----
 // ---- begin frozenchars/detail/indexed_iterator.hpp ----
 
 #include <compare>
@@ -11117,17 +11191,6 @@ template <FrozenString... Keys>
 #endif
 
 namespace frozenchars {
-
-/**
- * @brief frozen_map の 1 要素（キーと値のペア）を表す構造体
- *
- * @tparam T 値の型
- */
-template <typename T>
-struct frozen_map_entry {
-  std::string_view key;  // キー文字列（FrozenString のビュー）
-  T value;               // 対応する値
-};
 
 namespace detail {
 
@@ -11919,16 +11982,16 @@ public:
    * @param key 探索するキー
    * @pre contains(key)
    * @return T& / T const& 値への参照
-   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時ではメッセージを出して std::abort() する（NDEBUG でも有効）
    */
   constexpr auto operator[](std::string_view key) noexcept -> T& {
     auto const index = lookup_::find_index_raw(key);
-    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
+    FROZENCHARS_PRECONDITION(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
     return values_[index];
   }
   constexpr auto operator[](std::string_view key) const noexcept -> T const& {
     auto const index = lookup_::find_index_raw(key);
-    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
+    FROZENCHARS_PRECONDITION(index < values_.size(), "frozenchars: frozen_map::operator[]: key not found");
     return values_[index];
   }
   /**
@@ -12867,6 +12930,10 @@ struct frozen_trie_index {
                 "frozen_trie_index keys must be unique");
   static_assert(sizeof...(Keys) <= 127,
                 "frozen_trie_index supports at most 127 keys (int8_t value_index)");
+  // 内部ノードの label 長さは uint8_t で持つため 255 文字が上限。
+  // キー数の上限（127）と合わせてラベルバッファ（uint16_t）も 65535 を超えない。
+  static_assert(((Keys.length <= 256) && ...),
+                "frozen_trie_index keys must be at most 255 characters (uint8_t label_length)");
 
   /// @brief キー数
   static constexpr auto k_key_count = sizeof...(Keys);
@@ -13207,6 +13274,7 @@ public:
 #include <expected>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -13267,6 +13335,12 @@ public:
    */
   constexpr explicit frozen_trie_map(std::array<T, size()> values) noexcept(std::is_nothrow_move_constructible_v<T>)
     : values_{std::move(values)} {}
+  /**
+   * @brief キー・値エントリの配列から構築（キーの対応と重複を検証）
+   * @param entries キー・値のエントリ（並び順はキー順と一致しなくてよい）
+   */
+  constexpr explicit frozen_trie_map(std::array<frozen_map_entry<T>, size()> entries)
+    : values_{reorder_entries(std::move(entries))} {}
 
   /**
    * @brief キーに対応するイテレータを取得
@@ -13321,22 +13395,22 @@ public:
    * @brief キーに対応する値への参照を取得する（チェックなし）
    * @param key 検索キー
    * @pre contains(key)
-   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時ではメッセージを出して std::abort() する（NDEBUG でも有効）
    */
   constexpr auto operator[](std::string_view key) noexcept -> T& {
     auto const index = lookup_::find(key);
-    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
+    FROZENCHARS_PRECONDITION(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
     return values_[index];
   }
   /**
    * @brief キーに対応する値への参照を取得する（チェックなし、const 版）
    * @param key 検索キー
    * @pre contains(key)
-   * @note 未検出キーは定数評価ではコンパイルエラー、実行時では assert で失敗する
+   * @note 未検出キーは定数評価ではコンパイルエラー、実行時ではメッセージを出して std::abort() する（NDEBUG でも有効）
    */
   constexpr auto operator[](std::string_view key) const noexcept -> T const& {
     auto const index = lookup_::find(key);
-    FROZENCHARS_ASSERT(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
+    FROZENCHARS_PRECONDITION(index < values_.size(), "frozenchars: frozen_trie_map::operator[]: key not found");
     return values_[index];
   }
 
@@ -13357,6 +13431,31 @@ public:
 private:
   using lookup_ = frozen_trie_index<Keys...>;  ///< キー検索に使うトライ木インデックス
   std::array<T, size()> values_{};             ///< キー順に対応する値の配列
+
+  /**
+   * @brief エントリ配列をキー順の値配列へ並べ替え（未知キー・重複・欠落はエラー）
+   */
+  static constexpr auto reorder_entries(std::array<frozen_map_entry<T>, size()> entries) -> std::array<T, size()> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto const index = lookup_::find(entry.key);
+      if (index == size()) {
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_trie_map unknown key");
+      }
+      if (values[index].has_value()) {
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_trie_map duplicate key");
+      }
+      values[index].emplace(std::move(entry.value));
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_trie_map missing key");
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return std::array<T, size()>{ std::move(*values[I])... };
+    }(std::make_index_sequence<size()>{});
+  }
 };
 
 /**
@@ -13364,14 +13463,15 @@ private:
  * @tparam T 値の型
  * @tparam Keys キー文字列の NTTP パック
  * @tparam Entries エントリの型パック
- * @param entries キー・値のペア
+ * @param entries キー・値のペア（並び順はキー順と一致しなくてよい）
+ * @note 未知キー・重複キー・欠落キーはコンパイル時エラー
  */
 template <typename T, FrozenString... Keys, typename... Entries>
   requires((std::convertible_to<Entries, std::pair<std::string_view, T>> && ...))
 constexpr auto make_frozen_trie_map(Entries&&... entries) -> frozen_trie_map<T, Keys...> {
   static_assert(sizeof...(Keys) == sizeof...(Entries), "make_frozen_trie_map requires exactly one entry per key");
-  auto arr = std::array<T, sizeof...(Keys)>{
-    static_cast<T>(std::forward<Entries>(entries).second)...
+  auto arr = std::array<frozen_map_entry<T>, sizeof...(Keys)>{
+    frozen_map_entry<T>{std::forward<Entries>(entries).first, static_cast<T>(std::forward<Entries>(entries).second)}...
   };
   return frozen_trie_map<T, Keys...>{std::move(arr)};
 }
@@ -14302,26 +14402,58 @@ struct wildcard_to_regex_helper {
 };
 
 /**
- * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
+ * @brief バックトレッキングで「失敗した状態」を記録するメモ
  *
- * 対応構文:
- * - `*` : 任意の文字列（空文字列を含む）
- * - `?` : 任意の1文字
- * - `\\` : エスケープ（次の文字をリテラルとして扱う）
- * - `[abc]` : セット内の任意の1文字
- * - `[!abc]` : セット外の任意の1文字
- * - `(ab|cd)` : alternatives（このうちいずれかにマッチ）
+ * `*` の後ろに `?` / `[` / `(` / `\\` が続くパターンでは、素朴なバックトレッキングは
+ * `*` の個数に対して指数的に増える。このメモは (テキスト位置, パターン位置, partial) の
+ * 失敗状態を記録し、同じ状態の再計算を省略する（メモ化により O(text × pattern) に収まる）。
+ *
+ * メモリ使用量を抑えるため、記録対象はパターン全体（pi_end == PAT.size()）に
+ * 限定し、テキスト長も上限を設ける。上限を超えた状態はメモ化しない（正確性は保たれる）。
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ */
+template <FrozenString PAT>
+struct wildcard_memo {
+  /// パターン位置（+ 終端）の数
+  static constexpr size_t k_stride = PAT.size() + 1uz;
+  /// メモ化するテキスト位置の上限（使用メモリは約 5KB に収める）
+  static constexpr size_t k_text_cap = (2048uz / k_stride) > 64uz ? 2048uz / k_stride : 64uz;
+  /// 記録済みなら true
+  std::array<bool, k_stride * k_text_cap * 2uz> failed{};
+
+  /**
+   * @brief 状態に対応する記録先を取得する
+   * @param ti テキスト位置
+   * @param pi パターン位置
+   * @param pi_end パターン範囲の終端（パターン全体以外では記録しない）
+   * @param partial 途中までFuelするモードか
+   * @return 記録先のポインタ。記録対象外なら nullptr
+   */
+  [[nodiscard]] constexpr auto at(size_t ti, size_t pi, size_t pi_end, bool partial) noexcept -> bool* {
+    if (pi_end != PAT.size() || ti >= k_text_cap) {
+      return nullptr;
+    }
+    return &failed[((partial ? k_text_cap : 0uz) + ti) * k_stride + pi];
+  }
+};
+
+/**
+ * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する（メモなし）
  *
  * @tparam PAT パターン文字列（FrozenString NTTP）
  * @param text 対象テキスト
  * @param ti テキスト内の現在位置
  * @param pi パターン内の開始位置
  * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
+ * @param partial 途中までFuelするモードか
+ * @param memo 失敗状態のメモ（nullptr なら記録しない）
  * @return match_result1
  */
 template <FrozenString PAT>
 [[nodiscard]] constexpr match_result
-wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial = false) noexcept {
+wildcard_match_uncached(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial,
+                        wildcard_memo<PAT>* memo) noexcept {
   while (pi < pi_end) {
     auto c = PAT.data()[pi];
 
@@ -14362,7 +14494,7 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
         for (auto found = text.find(lit_sv, ti);
               found != std::string_view::npos;
               found = text.find(lit_sv, found + 1)) {
-          auto r = wildcard_match_impl<PAT>(text, found + lit_sv.size(), lit_end, pi_end, partial);
+          auto r = wildcard_match_impl<PAT>(text, found + lit_sv.size(), lit_end, pi_end, partial, memo);
           if (r.matched) return r;
         }
         return {false, ti};
@@ -14370,7 +14502,7 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
       // Fallback: full backtracking for complex cases (? [ ( \ after *)
       for (auto i = ti; i <= text.size(); ++i) {
-        auto r = wildcard_match_impl<PAT>(text, i, pi, pi_end, partial);
+        auto r = wildcard_match_impl<PAT>(text, i, pi, pi_end, partial, memo);
         if (r.matched) return r;
       }
       return {false, ti};
@@ -14409,12 +14541,12 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
         for (auto branch = wildcard_plan<PAT>::first_branch[pi];
              branch != wildcard_plan<PAT>::NO_BRANCH;
              branch = wildcard_plan<PAT>::next_branch[branch]) {
-          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true);
+          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true, memo);
           if (br.matched) {
             if (after_alt >= pi_end) {
               if (partial || br.pos == text.size()) return br;
             } else {
-              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial);
+              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial, memo);
               if (rr.matched) return rr;
             }
           }
@@ -14432,6 +14564,46 @@ wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, 
 
   if (partial) return {true, ti};
   return {ti == text.size(), ti};
+}
+
+/**
+ * @brief パターン範囲に対して再帰的ワイルドカードマッチングを実行する
+ *
+ * 対応構文:
+ * - `*` : 任意の文字列（空文字列を含む）
+ * - `?` : 任意の1文字
+ * - `\\` : エスケープ（次の文字をリテラルとして扱う）
+ * - `[abc]` : セット内の任意の1文字
+ * - `[!abc]` : セット外の任意の1文字
+ * - `(ab|cd)` : alternatives（このうちいずれかにマッチ）
+ *
+ * memo が渡された場合、失敗した (ti, pi) を記録して再計算を省略する。
+ *
+ * @tparam PAT パターン文字列（FrozenString NTTP）
+ * @param text 対象テキスト
+ * @param ti テキスト内の現在位置
+ * @param pi パターン内の開始位置
+ * @param pi_end パターン内の終了位置（この範囲をマッチングに使う）
+ * @param partial 途中までFuelするモードか
+ * @param memo 失敗状態のメモ（nullptr なら記録しない）
+ * @return match_result1
+ */
+template <FrozenString PAT>
+[[nodiscard]] constexpr match_result
+wildcard_match_impl(std::string_view text, size_t ti, size_t pi, size_t pi_end, bool partial = false,
+                    wildcard_memo<PAT>* memo = nullptr) noexcept {
+  if (memo != nullptr) {
+    if (auto* const slot = memo->at(ti, pi, pi_end, partial); slot != nullptr && *slot) {
+      return {false, ti};
+    }
+  }
+  auto const result = wildcard_match_uncached<PAT>(text, ti, pi, pi_end, partial, memo);
+  if (memo != nullptr && !result.matched) {
+    if (auto* const slot = memo->at(ti, pi, pi_end, partial); slot != nullptr) {
+      *slot = true;
+    }
+  }
+  return result;
 }
 
 /**
@@ -14504,7 +14676,8 @@ struct find_result {
 template <FrozenString PAT>
 [[nodiscard]] constexpr auto wildcard_find_shortest_match_from(std::string_view text, size_t start) noexcept
   -> std::optional<find_result> {
-  auto const r = wildcard_match_impl<PAT>(text, start, 0, PAT.size(), true);
+  auto memo = wildcard_memo<PAT>{};
+  auto const r = wildcard_match_impl<PAT>(text, start, 0, PAT.size(), true, &memo);
   if (r.matched && r.pos > start) {
     return find_result{start, r.pos};
   }
@@ -14750,10 +14923,12 @@ template <FrozenString PAT>
       middle = text.substr(0, text.size() - suff_len);
     }
 
-    return detail::wildcard_match_impl<PAT>(middle, pref_len, pref_len, suff_start).matched;
+    auto memo = detail::wildcard_memo<PAT>{};
+    return detail::wildcard_match_impl<PAT>(middle, pref_len, pref_len, suff_start, false, &memo).matched;
   }
 
-  return detail::wildcard_match_impl<PAT>(text, 0, 0, PAT.size()).matched;
+  auto memo = detail::wildcard_memo<PAT>{};
+  return detail::wildcard_match_impl<PAT>(text, 0, 0, PAT.size(), false, &memo).matched;
 }
 
 /**
@@ -14764,21 +14939,8 @@ template <FrozenString PAT>
  * @return auto マッチした場合 true
  */
 template <size_t N>
-[[nodiscard]] bool wildcard_match(char const (&pattern)[N], std::string_view text) noexcept {
+[[nodiscard]] constexpr bool wildcard_match(char const (&pattern)[N], std::string_view text) noexcept {
   return wildcard_match<FrozenString<N>{pattern}>(text);
-}
-
-/**
- * @brief ワイルドカードパターンでテキストがマッチするか判定する（FrozenString パターン版）
- *
- * @tparam M パターンの長さ（終端文字を含む）
- * @param pattern ワイルドカードパターン（FrozenString）
- * @param text マッチング対象のテキスト
- * @return auto マッチした場合 true
- */
-template <size_t M>
-[[nodiscard]] bool wildcard_match(FrozenString<M> const& pattern, std::string_view text) noexcept {
-  return wildcard_match<FrozenString<M>{pattern.data()}>(text);
 }
 
 /**
@@ -15109,6 +15271,14 @@ struct format_spec {
   auto i = start;
   if (i < end && data[i] == '{') ++i;
   if (i >= end) return spec;
+
+  // '{' の直後の数字は std::format ではフィールドインデックス指定だが、本実装は
+  // インデックス指定をサポートしない。幅指定として黙って解釈すると
+  // std::format と異なる結果になるため、診断して落とす。
+  if (i < end && data[i] >= '0' && data[i] <= '9') {
+    FROZENCHARS_CONSTEVAL_FAIL("frozen_format: explicit field index is not supported (use {} or {} in order)");
+  }
+
   if (data[i] == ':') ++i;
   if (i >= end) return spec;
 
@@ -15287,13 +15457,16 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
 
 /**
  * @brief 浮動小数点数を汎用形式でバッファに書き込む
+ *
+ * @tparam WorkSize 作業バッファの容量（精度 + 余裕ぶん。呼び出し側の仕様から決める）
+ * @tparam Buf 出力バッファ
  */
-template <typename Buf>
+template <size_t WorkSize, typename Buf>
 constexpr auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
   if (precision < 0) precision = 6;
 
-  char fixed_buf[128]{};  // 固定小数点表現の作業バッファ（double の最大桁数に対して十分な余裕）
-  char sci_buf[128]{};    // 科学計数法表現の作業バッファ
+  std::array<char, WorkSize> fixed_buf{};  // 固定小数点表現の作業バッファ
+  std::array<char, WorkSize> sci_buf{};    // 科学計数法表現の作業バッファ
   auto fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
   auto sci_len = format_float_scientific(sci_buf, 0, value, precision);
 
@@ -15330,15 +15503,43 @@ constexpr auto write_sign(Buf& buf, size_t pos, bool is_negative, char sign_mode
 }
 
 /**
+ * @brief フォーマット文字列に現れる最大の精度指定を返す
+ *
+ * 浮動小数点数の作業バッファを精度に追従させるために使う。
+ *
+ * @param data フォーマット文字列
+ * @param len 文字列長
+ * @return size_t 最大精度（精度指定がなければ 0）
+ */
+[[nodiscard]] consteval auto max_precision_in(char const* data, size_t len) noexcept -> size_t {
+  auto max_precision = 0uz;
+  for (auto i = 0uz; i + 1 < len; ++i) {
+    if (data[i] != '.') continue;
+    auto j = i + 1;
+    auto p = 0u;
+    while (j < len && data[j] >= '0' && data[j] <= '9') {
+      p = p * 10 + static_cast<unsigned>(data[j] - '0');
+      if (p > 9999) p = 9999;
+      ++j;
+    }
+    if (j > i + 1 && p > max_precision) max_precision = p;
+  }
+  return max_precision;
+}
+
+/**
  * @brief 1 つの引数を指定子に従ってバッファへ書き込む
  *
+ * @tparam WorkSize 浮動小数点数の作業バッファ容量（精度 + 余裕ぶん）
+ * @tparam Buf 出力バッファ
+ * @tparam T 引数の型
  * @param buf 出力バッファ
  * @param pos 書き込み開始位置
  * @param arg フォーマットする引数
  * @param spec フォーマット指定子
  * @return size_t 書き込んだ文字数
  */
-template <typename Buf, typename T>
+template <size_t WorkSize, typename Buf, typename T>
 constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec const& spec, size_t max_pos) noexcept -> size_t {
   auto start = pos;
 
@@ -15482,7 +15683,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     int prec = spec.precision;
     if (prec < 0) prec = 6;  // 精度未指定は 6
 
-    char raw[128]{};  // 変換結果の作業バッファ（十分な余裕を持たせる）
+    std::array<char, WorkSize> raw{};  // 変換結果の作業バッファ（精度 + 余裕ぶん）
     size_t raw_len;
     if (type == 'f' || type == 'F') {
       raw_len = detail::format_float_fixed(raw, 0, v, prec);
@@ -15499,7 +15700,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
         }
       }
     } else {
-      raw_len = detail::format_float_general(raw, 0, v, prec);
+      raw_len = detail::format_float_general<WorkSize>(raw, 0, v, prec);
       if (type == 'G') {
         for (auto j = 0uz; j < raw_len; ++j) {
           if (raw[j] == 'e') raw[j] = 'E';
@@ -15634,9 +15835,12 @@ template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
         ++i;
         while (i < len && Fmt.buffer[i] != '}') ++i;
         auto spec = detail::parse_spec(Fmt.buffer.data(), len, start, i);
+        // 浮動小数点数の作業バッファは書式文字列中の最大精度に追従させる
+        //（固定長にすると {:.200f} のような大きな精度でバッファ外へ書き込む）
+        constexpr size_t work_size = detail::max_precision_in(Fmt.buffer.data(), len) + 64uz;
 
         [&]<size_t... Is>(std::index_sequence<Is...>) {
-          ((field_idx == Is ? (pos += detail::format_field(result.buffer, pos, std::get<Is>(tup), spec, Capacity - 1), 0) : 0), ...);
+          ((field_idx == Is ? (pos += detail::format_field<work_size>(result.buffer, pos, std::get<Is>(tup), spec, Capacity - 1), 0) : 0), ...);
         }(std::make_index_sequence<sizeof...(Args)>{});
 
         ++field_idx;
@@ -17693,14 +17897,18 @@ inline constexpr auto replacement_characters_utf16 = [] {
  * @param input UTF-8 バイト列
  * @param index 開始位置。デコードしたバイト数だけ進める（1〜4バイト）
  * @return std::expected<char32_t, std::errc> デコードしたコードポイント。不正は invalid_argument
+ * @details 入力末尾でシーケンスが切れている場合は、入力の外を参照せずに
+ * invalid_argument を返す。
  */
 inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& index) noexcept
   -> std::expected<char32_t, std::errc> {
+  if (index >= input.size()) return std::unexpected(std::errc::invalid_argument);
   auto const lead = static_cast<uint8_t>(input[index]);
   // 1バイト（ASCII）
   if (lead < 0x80) { return static_cast<char32_t>(input[index++]); }
   // 2バイトシーケンス
   if ((lead & 0xE0) == 0xC0) {
+    if (index + 2 > input.size()) return std::unexpected(std::errc::invalid_argument);
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     if ((c1 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 2;
@@ -17708,6 +17916,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   }
   // 3バイトシーケンス
   if ((lead & 0xF0) == 0xE0) {
+    if (index + 3 > input.size()) return std::unexpected(std::errc::invalid_argument);
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
@@ -17718,6 +17927,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   }
   // 4バイトシーケンス
   if ((lead & 0xF8) == 0xF0) {
+    if (index + 4 > input.size()) return std::unexpected(std::errc::invalid_argument);
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
     auto const c3 = static_cast<uint8_t>(input[index + 3]);
@@ -18353,7 +18563,17 @@ template <FrozenString Input>
 #include <system_error>
 #include <vector>
 
-namespace frozenchars::json::detail {
+namespace frozenchars::json {
+
+/**
+ * @brief JSON の入れ子深度の上限
+ *
+ * @details parse_value / parse_array / parse_object の再帰が深くなりすぎた場合の
+ * スタック枯渇を防ぐ。この上限を超える JSON は不正として扱う。
+ */
+inline constexpr size_t max_depth = 512;
+
+namespace detail {
 
 /**
  * @brief JSON 値の種別
@@ -18376,6 +18596,36 @@ struct json_value {
 };
 
 /**
+ * @brief 16進数字1桁を数値に変換する
+ * @return 0〜15。16進数字でなければ 255
+ */
+constexpr auto hex_digit_value(char c) noexcept -> int {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return 255;
+}
+
+/**
+ * @brief `\uXXXX` の16進4桁を読み取る
+ *
+ * @param s 対象文字列
+ * @param p 4桁の先頭位置。読み取り後で次の文字を指す
+ * @return std::expected<int, std::errc> コードポイント。桁不足・非16進なら invalid_argument
+ */
+[[nodiscard]] constexpr auto read_hex4(std::string_view const s, size_t& p) noexcept -> std::expected<int, std::errc> {
+  if (p + 4 > s.size()) return std::unexpected(std::errc::invalid_argument);
+  auto value = 0;
+  for (auto i = 0uz; i < 4uz; ++i) {
+    auto const digit = hex_digit_value(s[p + i]);
+    if (digit == 255) return std::unexpected(std::errc::invalid_argument);
+    value = (value << 4) | digit;
+  }
+  p += 4;
+  return value;
+}
+
+/**
  * @brief 空白文字（スペース・タブ・改行・復帰）を読み飛ばす
  *
  * @param s 対象文字列
@@ -18391,6 +18641,8 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param s 対象文字列
  * @param p 開始位置（'"' を指す）。終端クォートの次まで進める
  * @return std::expected<std::string_view, std::errc> 前後のクォートを含む文字列ビュー。不正は invalid_argument
+ * @details RFC 8259 の string  Production に従い、エスケープ文字（`"` `\` `/` `b` `f` `n` `r` `t` `u`）と
+ * `\uXXXX` の16進4桁、サロゲートペアを検証する。生の制御文字（0x20 未満）は受け付けない。
  */
 [[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) noexcept
   -> std::expected<std::string_view, std::errc> {
@@ -18398,8 +18650,34 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
   auto const start = p;
   ++p;
   while (p < s.size() && s[p] != '"') {
-    if (s[p] == '\\') ++p;
+    auto const c = s[p];
+    // 生の制御文字は禁止（RFC 8259）
+    if (static_cast<unsigned char>(c) < 0x20) return std::unexpected(std::errc::invalid_argument);
+    if (c != '\\') { ++p; continue; }
     ++p;
+    if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
+    auto const esc = s[p++];
+    switch (esc) {
+      case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't':
+        break;
+      case 'u': {
+        auto const unit = read_hex4(s, p);
+        if (!unit) return std::unexpected(std::errc::invalid_argument);
+        auto const code = *unit;
+        // サロゲートペアを要求する（単独の高/低サロゲートは不正）
+        if (code >= 0xD800 && code <= 0xDBFF) {
+          if (p + 1 >= s.size() || s[p] != '\\' || s[p + 1] != 'u') return std::unexpected(std::errc::invalid_argument);
+          p += 2;
+          auto const low = read_hex4(s, p);
+          if (!low || *low < 0xDC00 || *low > 0xDFFF) return std::unexpected(std::errc::invalid_argument);
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
+          return std::unexpected(std::errc::invalid_argument);
+        }
+        break;
+      }
+      default:
+        return std::unexpected(std::errc::invalid_argument);
+    }
   }
   if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   ++p;
@@ -18408,8 +18686,10 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
 
 /**
  * @brief 任意の JSON 値をパースする（前方宣言）
+ *
+ * @param depth 現在の入れ子深度。max_depth を超えたら invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc>;
 
 /**
@@ -18417,21 +18697,37 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置。数値の終端まで進める
- * @return json_value number 型の値。整数部を int64_t として保持し、元文字列も str_val に残す
- * @note 符号・小数部・指数部を読み飛ばすが、値は from_chars による整数変換のみ行う
+ * @return std::expected<json_value, std::errc> number 型の値。不正は invalid_argument
+ * @details RFC 8259 の number Production（`-? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE] [+-]? [0-9]+)?`）に
+ * 厳密に従い、整数部・小数部・指数部の桁が足りないもの、先行ゼロ、符号の重複を拒否する。
+ * 数値の原文は str_val に保持し、値は変換しない（書式を保つため）。
  */
-[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept -> json_value {
+[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   auto const start = p;
   if (p < s.size() && s[p] == '-') ++p;
-  while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
-  if (p < s.size() && s[p] == '.') {
+  // 整数部: 0 単体 または [1-9][0-9]*
+  if (p >= s.size() || s[p] < '0' || s[p] > '9') return std::unexpected(std::errc::invalid_argument);
+  if (s[p] == '0') {
     ++p;
+    if (p < s.size() && s[p] >= '0' && s[p] <= '9') return std::unexpected(std::errc::invalid_argument);
+  } else {
     while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
   }
+  // 小数部: '.' [0-9]+（小数点が孤立していれば不正）
+  if (p < s.size() && s[p] == '.') {
+    ++p;
+    auto const digits = p;
+    while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
+    if (p == digits) return std::unexpected(std::errc::invalid_argument);
+  }
+  // 指数部: [eE] [+-]? [0-9]+
   if (p < s.size() && (s[p] == 'e' || s[p] == 'E')) {
     ++p;
     if (p < s.size() && (s[p] == '+' || s[p] == '-')) ++p;
+    auto const digits = p;
     while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
+    if (p == digits) return std::unexpected(std::errc::invalid_argument);
   }
   auto const num_str = std::string_view(s.data() + start, p - start);
   return json_value{json_type::number, false, num_str, {}, {}};
@@ -18444,15 +18740,16 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param p 開始位置（'[' を指す）。閉じ ']' の次まで進める
  * @return std::expected<json_value, std::errc> array 型の値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc> {
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
   std::vector<json_value> arr;
   if (p < s.size() && s[p] == ']') { ++p; return json_value{json_type::array, false, {}, std::move(arr), {}}; }
   while (true) {
     skip_ws(s, p);
-    auto elem = parse_value(s, p);
+    auto elem = parse_value(s, p, depth + 1);
     if (!elem) return std::unexpected(elem.error());
     arr.push_back(std::move(*elem));
     skip_ws(s, p);
@@ -18471,8 +18768,9 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @return std::expected<json_value, std::errc> object 型の値。不正は invalid_argument
  * @details キーは keys、値は arr に同一インデックスで格納する
  */
-[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc> {
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
   std::vector<std::string_view> keys;
@@ -18487,7 +18785,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
     ++p;
     skip_ws(s, p);
     keys.push_back(*key);
-    auto val = parse_value(s, p);
+    auto val = parse_value(s, p, depth + 1);
     if (!val) return std::unexpected(val.error());
     vals.push_back(std::move(*val));
     skip_ws(s, p);
@@ -18505,13 +18803,14 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param p 開始位置。値の終端まで進める
  * @return std::expected<json_value, std::errc> パースした値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p) noexcept
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth) noexcept
   -> std::expected<json_value, std::errc> {
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   skip_ws(s, p);
   if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   auto const c = s[p];
-  if (c == '{') return parse_object(s, p);
-  if (c == '[') return parse_array(s, p);
+  if (c == '{') return parse_object(s, p, depth);
+  if (c == '[') return parse_array(s, p, depth);
   if (c == '"') {
     auto str = parse_string(s, p);
     if (!str) return std::unexpected(str.error());
@@ -18525,7 +18824,11 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
   if (c == 't' && starts_with(p, "true"))  { p += 4; return json_value{json_type::boolean, true, {}, {}, {}}; }
   if (c == 'f' && starts_with(p, "false")) { p += 5; return json_value{json_type::boolean, false, {}, {}, {}}; }
   if (c == 'n' && starts_with(p, "null"))  { p += 4; return json_value{json_type::null, false, {}, {}, {}}; }
-  if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
+  if (c == '-' || (c >= '0' && c <= '9')) {
+    auto num = parse_number(s, p);
+    if (!num) return std::unexpected(num.error());
+    return num;
+  }
   return std::unexpected(std::errc::invalid_argument);
 }
 
@@ -18538,7 +18841,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
 [[nodiscard]] constexpr auto parse_json(std::string_view const s) noexcept
   -> std::expected<json_value, std::errc> {
   size_t p = 0;
-  auto val = parse_value(s, p);
+  auto val = parse_value(s, p, 1);
   if (!val) return std::unexpected(val.error());
   skip_ws(s, p);
   if (p != s.size()) return std::unexpected(std::errc::invalid_argument);
@@ -18550,10 +18853,11 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  *
  * @param s 検証する文字列
  * @return bool 全体を過不足なくパースできれば true、不正や余分な内容があれば false
+ * @note 入れ子深度が frozenchars::json::max_depth を超える場合も false
  */
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
   size_t p = 0;
-  auto v = parse_value(s, p);
+  auto v = parse_value(s, p, 1);
   if (!v) return false;
   skip_ws(s, p);
   return p == s.size();
@@ -18561,6 +18865,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
 
 } // namespace frozenchars::json::detail
 
+} // namespace frozenchars::json
 
 namespace frozenchars::json::detail {
 

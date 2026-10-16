@@ -629,7 +629,7 @@ TEST_CASE("frozen_map example supports find and iterator loops", "[frozen_map]")
 }
 
 TEST_CASE("frozen_map supports more than 10 keys (linear search fallback)", "[frozen_map]") {
-  frozen_map<int, 
+  frozen_map<int,
     "k1"_fs, "k2"_fs, "k3"_fs, "k4"_fs, "k5"_fs,
     "k6"_fs, "k7"_fs, "k8"_fs, "k9"_fs, "k10"_fs,
     "k11"_fs, "k12"_fs> map{

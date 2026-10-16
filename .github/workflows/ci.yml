@@ -496,14 +496,19 @@ jobs:
           python3 tools/amalgamate.py --check
 
   docs:
-    name: README consistency
+    name: docs and style
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: dnf install -y gcc-c++ || sudo apt-get update && sudo apt-get install -y g++
+        run: sudo apt-get update && sudo apt-get install -y g++
+
+      - name: Check formatting (.clang-format)
+        run: |
+          sudo apt-get install -y clang-format
+          clang-format --dry-run --Werror include/frozenchars/*.hpp include/frozenchars/**/*.hpp test/*.cpp test/compile_fail/*.cpp example/*.cpp
 
       - name: Check README table of contents anchors
         run: python3 tools/check_readme_anchors.py

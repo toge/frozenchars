@@ -46,7 +46,7 @@ TEST_CASE("postfix_lines") {
 
 TEST_CASE("surround_lines") {
   auto constexpr src = "line1\nline2\n"_fs;
-  
+
   // 2引数版
   auto constexpr res1 = surround_lines(src, "[ "_fs, " ]"_fs);
   static_assert(res1.sv() == "[ line1 ]\n[ line2 ]\n");
