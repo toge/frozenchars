@@ -1776,6 +1776,14 @@ constexpr auto msg5 = frozen_format<"{:+} {:+}"_fs>(1, -1);
 - `std::string` のような `std::string_view` 変換可能型は汎用オーバーロードで処理されますが、
   より専用のオーバーロード（例: 文字列リテラル、ポインタ系）がある場合はそちらが優先されます。
 
+- `FrozenString::front()` / `back()` / `operator[]` は、**チェックなしの事前条件アクセス**です。
+  空文字列（`length == 0`）への `front()` / `back()`、`length` 以上の添字での `operator[]`
+  は `std::abort()` にもならず、**未定義動作**になります（`NDEBUG` の有無にも依存しません）。
+  事前に `empty()` / `size()` を確認するか、`sv()` に変換して `std::string_view` の
+  `front()` / `back()` / `at()` を使ってください。
+  なお `frozen_map::operator[]` は別扱いで、キー未検出は定数評価ではコンパイルエラー、
+  実行時（assert 有効ビルド）では `abort()` します。詳細は `frozen_map` の節を参照してください。
+
 ## FrozenStringの応用例
 
 FrozenString を活用して「できるだけconstexprで処理させる」を目指した機能をいくつか用意しています。

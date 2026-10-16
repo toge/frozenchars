@@ -11,22 +11,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(
-    $<$<CXX_COMPILER_ID:GNU>:-Wall>
-    $<$<CXX_COMPILER_ID:GNU>:-Wextra>
-    $<$<CXX_COMPILER_ID:GNU>:-pedantic>
+    # 警告オプションは GCC / Clang 系 / MSVC の 3 種に集約（AppleClang は Clang に含める）
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall>
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wextra>
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-pedantic>
     # json::crush / json::compress はコンパイル時に探索を積み重ねるため、
     # GCC の既定の上限（constexpr ops 33554432）では 200 バイト程度の JSON で
     # コンパイルエラーになる。Clang 系と同じ程度に持ち上げる。
     $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-ops-limit=2147483647>
     $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-loop-limit=100000000>
-    $<$<CXX_COMPILER_ID:Clang>:-Wall>
-    $<$<CXX_COMPILER_ID:Clang>:-Wextra>
-    $<$<CXX_COMPILER_ID:Clang>:-pedantic>
-    $<$<CXX_COMPILER_ID:AppleClang>:-Wall>
-    $<$<CXX_COMPILER_ID:AppleClang>:-Wextra>
-    $<$<CXX_COMPILER_ID:AppleClang>:-pedantic>
-    $<$<CXX_COMPILER_ID:Clang>:-fconstexpr-steps=100000000>
-    $<$<CXX_COMPILER_ID:AppleClang>:-fconstexpr-steps=100000000>
+    # Clang 系（AppleClang を含む）は constexpr ステップ数の上限を引き上げる
+    $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fconstexpr-steps=100000000>
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
     $<$<CXX_COMPILER_ID:MSVC>:/constexpr:steps10000000>
 )

@@ -11,8 +11,8 @@
 - `.clang-format`: 既存コードの体裁に合わせて設定し直した（名前空間はフラット、縦位置揃えなし、行末コメント1スペース、`Standard: c++23`）。設定とコードが食い違っていたため 58 ヘッダ中 49 個に差分が出していたが、設定修正後は差分がゼロになった。CI で `clang-format --dry-run --Werror` を実行する。
 - `.clang-tidy`: `readability-identifier-naming.FunctionCase` を `camelBack` から `lower_case` に変更（既存コードの大半が snake_case）。
 - `AGENTS.md`: README の行数・サンプルパス・命名規約を現状に合わせて更新。
-- `CMakeLists.txt`: バージョンを最新のタグに合わせて 0.8.1 に更新。
-- `README.md`: 目次124エントリのアンカーを再生成（死んでいたリンク63件）。コード例88件がすべてコンパイルできるように修正。`vcpkg` の記述・単一ヘッダのサイズ表記・要件のコンパイラ一覧を更新。
+- `CMakeLists.txt`: バージョンを最新のタグに合わせて 0.8.1 に更新。警告オプションを `$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:...>` の複数ID形式に集約して重複を解消（-Wall/-Wextra/-pedantic は GCC・Clang・AppleClang 共通、-fconstexpr-steps は Clang 系共通）。
+- `README.md`: 目次124エントリのアンカーを再生成（死んでいたリンク63件）。コード例88件がすべてコンパイルできるように修正。`vcpkg` の記述・単一ヘッダのサイズ表記・要件のコンパイラ一覧を更新。「よくある落とし穴」に `FrozenString::front()` / `back()` / `operator[]` の範囲外アクセス（チェックなし・未定義動作）と回避方法を追記。
 - CI: README の一貫性を検証する `docs and style` ジョブを追加（目次アンカー / コード例のコンパイル / clang-format）。
 
 - `CMakeLists.txt`: GCC に `-fconstexpr-ops-limit` / `-fconstexpr-loop-limit` を追加。`json::crush` / `json::compress` は 180 バイト程度の JSON で GCC の既定の constexpr 上限を超え、`crush` がコンパイルエラーになっていた（Clang 系は既に `-fconstexpr-steps` を指定していた）。`json::crush` を使う場合は GCC でも同じフラグが必要。
