@@ -8,6 +8,8 @@
 
 ### Changed
 
+- `make_frozen_trie_map`: エントリをキー名で対応づけるようになり、並び順がキー順と違っても正しく格納される。`frozen_map` / `frozen_multimap` / `frozen_bimap` と同じく未知キー・重複キー・欠落キーをコンパイル時エラーにする（従来は位置で代入していたため、キーの取り違えが静かに通っていた）。
+
 - `test/CMakeLists.txt`: compile-fail ケース（33件）を CMake 設定時ではなく `ctest` のテストとして実行するようにした。静的_assert の診断メッセージを変更しても `bash test.sh` が検出する。
 - `test/CMakeLists.txt`: `test_*.cpp` の glob に `CONFIGURE_DEPENDS` を付け、テストファイルを追加・改名しただけで再 configure されるようにした（これまで追加したテストが実行されないまま緑になることがあった）。
 - `test.sh`: ビルドディレクトリを第1引数で指定できるようになった（`bash build.sh static && bash test.sh build_static`）。
@@ -21,6 +23,10 @@
 - `CMakeLists.txt` のバージョンを git タグと一致する 0.7.0 に更新。
 
 ### Fixed
+
+- `frozen_trie_index`: `label_length` が `uint8_t` のため、共通接頭辞が 255 文字を超えるキーが静かに切り詰められ探索不能になっていた問題を修正。255 文字を超えるキーをコンパイル時エラーにする。
+- `json::validate_json`: 不正な数値（`[-]` / `[1.]` / `[1e]` / `[01]` 等）と不正な文字列エスケープ（`["a\qb"]` / `["a\u12"]` / 単独サロゲート等）、文字列中の生の制御文字を `true` として受理していた問題を修正。RFC 8259 の number / string Production に厳密に従う。
+- `glaze_frozen_map`: JSON 側のキーがエスケープされている場合（`{"\u0061":10}`）に NTTP キーと一致せず既定値のまま返っていた問題を修正。キーをアンクエスケープ（`\uXXXX` とサロゲートペアを含む）してから突き合わせる。
 
 - `frozen_map::operator[]` / `frozen_trie_map::operator[]`: 未検出キーのガードが `assert` ベースだったため、`NDEBUG`（Release ビルド、既定の `windows-msvc` CI を含む）では無効化され范围外アクセスがそのまま残っていた。`FROZENCHARS_PRECONDITION` を追加し、定数評価ではコンパイルエラー、実行時は診断メッセージを出して `std::abort()` するようにした（`NDEBUG` でも有効）。
 - `json::decode_utf8`: 入力末尾でシーケンスが切れている場合、継続バイトを境界チェックせずに読んで範囲外アクセスしていた問題を修正。`index + シーケンス長 > 入力長` を先に判定するようにした。

@@ -112,3 +112,30 @@ TEST_CASE("validate_json survives deeply nested untrusted input", "[json][compre
   REQUIRE_FALSE(frozenchars::json::validate_json(std::string(100'000, '[')));
   REQUIRE_FALSE(frozenchars::json::validate_json(std::string(100'000, '{')));
 }
+
+TEST_CASE("validate_json rejects malformed numbers", "[json][compress]") {
+  // RFC 8259 の number Production: -? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE] [+-]? [0-9]+)?
+  for (auto const* bad : {"[-]", "[1.]", "[.1]", "[1e]", "[1e+]", "[1e-]", "[01]", "[--1]", "[+1]", "[1.2e]", "[1.2e+]"}) {
+    CAPTURE(bad);
+    REQUIRE_FALSE(frozenchars::json::validate_json(bad));
+  }
+  for (auto const* good : {"[0]", "[-0]", "[1]", "[-1]", "[1.5]", "[1.5e10]", "[1.5E-10]", "[0.5]", "[-1234.5678e+9]"}) {
+    CAPTURE(good);
+    REQUIRE(frozenchars::json::validate_json(good));
+  }
+}
+
+TEST_CASE("validate_json rejects malformed string escapes and raw control characters", "[json][compress]") {
+  for (auto const* bad : {R"(["a\qb"])", R"(["a\u12"])", R"(["a\uZZZZ"])", R"(["a\)", R"(["a\ud800A"])", R"(["a\udc00\ud800"])"}) {
+    CAPTURE(bad);
+    REQUIRE_FALSE(frozenchars::json::validate_json(bad));
+  }
+  // 文字列中の生の制御文字（改行・タブなど）は RFC 8259 で禁止
+  REQUIRE_FALSE(frozenchars::json::validate_json("[\"a\nb\"]"));
+  REQUIRE_FALSE(frozenchars::json::validate_json("[\"a\tb\"]"));
+  // 正当なエスケープとサロゲートペアは受理される
+  for (auto const* good : {R"(["a\nb"])", R"(["\/\t\"\\"])", R"(["\u0041\u00e9"])", R"(["\ud83d\ude00"])"}) {
+    CAPTURE(good);
+    REQUIRE(frozenchars::json::validate_json(good));
+  }
+}

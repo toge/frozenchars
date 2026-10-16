@@ -16,6 +16,7 @@
 
 #if defined(__unix__) || defined(__APPLE__)
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -47,6 +48,27 @@ TEST_CASE("frozen_map glaze read_json ignores unknown keys", "[frozen_map][glaze
   REQUIRE(!ec);
   REQUIRE(map.at("timeout")->get() == 45);
   REQUIRE(map.at("retry")->get() == 9);
+}
+
+TEST_CASE("frozen_map glaze read_json resolves escaped keys", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "a"_fs, "b"_fs>(
+    std::pair{"a", 1},
+    std::pair{"b", 2}
+  );
+
+  // JSON 側のキーがエスケープされていても、NTTP のキーと突き合わせて反映される
+  auto const ec = glz::read_json(map, R"({"\u0061":10,"b":20})");
+  REQUIRE(!ec);
+  REQUIRE(map.at("a")->get() == 10);
+  REQUIRE(map.at("b")->get() == 20);
+
+  // エスケープされていないキーも同じ経路で読める
+  auto map2 = make_frozen_map<int, "a"_fs, "b"_fs>(
+    std::pair{"a", 1},
+    std::pair{"b", 2}
+  );
+  REQUIRE(!glz::read_json(map2, R"({"a":7})"));
+  REQUIRE(map2.at("a")->get() == 7);
 }
 
 TEST_CASE("frozen_map glaze write_json emits known keys", "[frozen_map][glaze]") {
@@ -87,6 +109,10 @@ TEST_CASE("frozen_map operator[] aborts on a missing key even in release builds"
   auto const pid = fork();
   REQUIRE(pid >= 0);
   if (pid == 0) {
+    // 子プロセスの診断出力で Catch2 の結果が乱れないように stderr を捨てる
+    if (std::freopen("/dev/null", "w", stderr) == nullptr) {
+      std::_Exit(2);
+    }
     static_cast<void>(map["missing"]);
     std::_Exit(0);
   }

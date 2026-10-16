@@ -24,6 +24,7 @@
 #include <span>
 
 #include "string.hpp"
+#include "detail/frozen_map_entry.hpp"
 #include "detail/indexed_iterator.hpp"
 #include "detail/unique_keys.hpp"
 
@@ -34,17 +35,6 @@
 #endif
 
 namespace frozenchars {
-
-/**
- * @brief frozen_map の 1 要素（キーと値のペア）を表す構造体
- *
- * @tparam T 値の型
- */
-template <typename T>
-struct frozen_map_entry {
-  std::string_view key;  // キー文字列（FrozenString のビュー）
-  T value;               // 対応する値
-};
 
 namespace detail {
 

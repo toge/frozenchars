@@ -91,6 +91,10 @@ struct frozen_trie_index {
                 "frozen_trie_index keys must be unique");
   static_assert(sizeof...(Keys) <= 127,
                 "frozen_trie_index supports at most 127 keys (int8_t value_index)");
+  // 内部ノードの label 長さは uint8_t で持つため 255 文字が上限。
+  // キー数の上限（127）と合わせてラベルバッファ（uint16_t）も 65535 を超えない。
+  static_assert(((Keys.length <= 256) && ...),
+                "frozen_trie_index keys must be at most 255 characters (uint8_t label_length)");
 
   /// @brief キー数
   static constexpr auto k_key_count = sizeof...(Keys);

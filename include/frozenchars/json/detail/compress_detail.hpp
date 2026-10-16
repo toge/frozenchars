@@ -43,6 +43,36 @@ struct json_value {
 };
 
 /**
+ * @brief 16進数字1桁を数値に変換する
+ * @return 0〜15。16進数字でなければ 255
+ */
+constexpr auto hex_digit_value(char c) noexcept -> int {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return 255;
+}
+
+/**
+ * @brief `\uXXXX` の16進4桁を読み取る
+ *
+ * @param s 対象文字列
+ * @param p 4桁の先頭位置。読み取り後で次の文字を指す
+ * @return std::expected<int, std::errc> コードポイント。桁不足・非16進なら invalid_argument
+ */
+[[nodiscard]] constexpr auto read_hex4(std::string_view const s, size_t& p) noexcept -> std::expected<int, std::errc> {
+  if (p + 4 > s.size()) return std::unexpected(std::errc::invalid_argument);
+  auto value = 0;
+  for (auto i = 0uz; i < 4uz; ++i) {
+    auto const digit = hex_digit_value(s[p + i]);
+    if (digit == 255) return std::unexpected(std::errc::invalid_argument);
+    value = (value << 4) | digit;
+  }
+  p += 4;
+  return value;
+}
+
+/**
  * @brief 空白文字（スペース・タブ・改行・復帰）を読み飛ばす
  *
  * @param s 対象文字列
@@ -58,6 +88,8 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param s 対象文字列
  * @param p 開始位置（'"' を指す）。終端クォートの次まで進める
  * @return std::expected<std::string_view, std::errc> 前後のクォートを含む文字列ビュー。不正は invalid_argument
+ * @details RFC 8259 の string  Production に従い、エスケープ文字（`"` `\` `/` `b` `f` `n` `r` `t` `u`）と
+ * `\uXXXX` の16進4桁、サロゲートペアを検証する。生の制御文字（0x20 未満）は受け付けない。
  */
 [[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) noexcept
   -> std::expected<std::string_view, std::errc> {
@@ -65,8 +97,34 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
   auto const start = p;
   ++p;
   while (p < s.size() && s[p] != '"') {
-    if (s[p] == '\\') ++p;
+    auto const c = s[p];
+    // 生の制御文字は禁止（RFC 8259）
+    if (static_cast<unsigned char>(c) < 0x20) return std::unexpected(std::errc::invalid_argument);
+    if (c != '\\') { ++p; continue; }
     ++p;
+    if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
+    auto const esc = s[p++];
+    switch (esc) {
+      case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't':
+        break;
+      case 'u': {
+        auto const unit = read_hex4(s, p);
+        if (!unit) return std::unexpected(std::errc::invalid_argument);
+        auto const code = *unit;
+        // サロゲートペアを要求する（単独の高/低サロゲートは不正）
+        if (code >= 0xD800 && code <= 0xDBFF) {
+          if (p + 1 >= s.size() || s[p] != '\\' || s[p + 1] != 'u') return std::unexpected(std::errc::invalid_argument);
+          p += 2;
+          auto const low = read_hex4(s, p);
+          if (!low || *low < 0xDC00 || *low > 0xDFFF) return std::unexpected(std::errc::invalid_argument);
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
+          return std::unexpected(std::errc::invalid_argument);
+        }
+        break;
+      }
+      default:
+        return std::unexpected(std::errc::invalid_argument);
+    }
   }
   if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   ++p;
@@ -86,21 +144,37 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  *
  * @param s 対象文字列
  * @param p 開始位置。数値の終端まで進める
- * @return json_value number 型の値。整数部を int64_t として保持し、元文字列も str_val に残す
- * @note 符号・小数部・指数部を読み飛ばすが、値は from_chars による整数変換のみ行う
+ * @return std::expected<json_value, std::errc> number 型の値。不正は invalid_argument
+ * @details RFC 8259 の number Production（`-? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE] [+-]? [0-9]+)?`）に
+ * 厳密に従い、整数部・小数部・指数部の桁が足りないもの、先行ゼロ、符号の重複を拒否する。
+ * 数値の原文は str_val に保持し、値は変換しない（書式を保つため）。
  */
-[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept -> json_value {
+[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   auto const start = p;
   if (p < s.size() && s[p] == '-') ++p;
-  while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
-  if (p < s.size() && s[p] == '.') {
+  // 整数部: 0 単体 または [1-9][0-9]*
+  if (p >= s.size() || s[p] < '0' || s[p] > '9') return std::unexpected(std::errc::invalid_argument);
+  if (s[p] == '0') {
     ++p;
+    if (p < s.size() && s[p] >= '0' && s[p] <= '9') return std::unexpected(std::errc::invalid_argument);
+  } else {
     while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
   }
+  // 小数部: '.' [0-9]+（小数点が孤立していれば不正）
+  if (p < s.size() && s[p] == '.') {
+    ++p;
+    auto const digits = p;
+    while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
+    if (p == digits) return std::unexpected(std::errc::invalid_argument);
+  }
+  // 指数部: [eE] [+-]? [0-9]+
   if (p < s.size() && (s[p] == 'e' || s[p] == 'E')) {
     ++p;
     if (p < s.size() && (s[p] == '+' || s[p] == '-')) ++p;
+    auto const digits = p;
     while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
+    if (p == digits) return std::unexpected(std::errc::invalid_argument);
   }
   auto const num_str = std::string_view(s.data() + start, p - start);
   return json_value{json_type::number, false, num_str, {}, {}};
@@ -197,7 +271,11 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
   if (c == 't' && starts_with(p, "true"))  { p += 4; return json_value{json_type::boolean, true, {}, {}, {}}; }
   if (c == 'f' && starts_with(p, "false")) { p += 5; return json_value{json_type::boolean, false, {}, {}, {}}; }
   if (c == 'n' && starts_with(p, "null"))  { p += 4; return json_value{json_type::null, false, {}, {}, {}}; }
-  if (c == '-' || (c >= '0' && c <= '9')) return parse_number(s, p);
+  if (c == '-' || (c >= '0' && c <= '9')) {
+    auto num = parse_number(s, p);
+    if (!num) return std::unexpected(num.error());
+    return num;
+  }
   return std::unexpected(std::errc::invalid_argument);
 }
 

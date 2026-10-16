@@ -283,6 +283,26 @@ add_compile_fail_test(
 )
 
 add_compile_fail_test(
+  NAME trie_index_key_too_long
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/trie_index_key_too_long.cpp
+  EXPECTED_TEXT "frozen_trie_index keys must be at most 255 characters"
+)
+
+add_compile_fail_test(
+  NAME frozen_trie_map_unknown_key
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_trie_map_unknown_key.cpp
+  EXPECTED_TEXT "frozen_trie_map unknown key"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
+  NAME frozen_trie_map_duplicate_key
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_trie_map_duplicate_key.cpp
+  EXPECTED_TEXT "frozen_trie_map duplicate key"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
   NAME frozen_bimap_empty_keys
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/frozen_bimap_empty_keys.cpp
   EXPECTED_TEXT "frozen_bimap requires at least one key"

@@ -8,6 +8,7 @@
 #include <expected>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -17,6 +18,7 @@
 
 #include "string.hpp"
 #include "trie_index.hpp"
+#include "detail/frozen_map_entry.hpp"
 #include "detail/indexed_iterator.hpp"
 
 namespace frozenchars {
@@ -71,6 +73,12 @@ public:
    */
   constexpr explicit frozen_trie_map(std::array<T, size()> values) noexcept(std::is_nothrow_move_constructible_v<T>)
     : values_{std::move(values)} {}
+  /**
+   * @brief キー・値エントリの配列から構築（キーの対応と重複を検証）
+   * @param entries キー・値のエントリ（並び順はキー順と一致しなくてよい）
+   */
+  constexpr explicit frozen_trie_map(std::array<frozen_map_entry<T>, size()> entries)
+    : values_{reorder_entries(std::move(entries))} {}
 
   /**
    * @brief キーに対応するイテレータを取得
@@ -161,6 +169,31 @@ public:
 private:
   using lookup_ = frozen_trie_index<Keys...>;  ///< キー検索に使うトライ木インデックス
   std::array<T, size()> values_{};             ///< キー順に対応する値の配列
+
+  /**
+   * @brief エントリ配列をキー順の値配列へ並べ替え（未知キー・重複・欠落はエラー）
+   */
+  static constexpr auto reorder_entries(std::array<frozen_map_entry<T>, size()> entries) -> std::array<T, size()> {
+    auto values = std::array<std::optional<T>, size()>{};
+    for (auto& entry : entries) {
+      auto const index = lookup_::find(entry.key);
+      if (index == size()) {
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_trie_map unknown key");
+      }
+      if (values[index].has_value()) {
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_trie_map duplicate key");
+      }
+      values[index].emplace(std::move(entry.value));
+    }
+    for (auto const& slot : values) {
+      if (!slot.has_value()) {
+        FROZENCHARS_CONSTEVAL_FAIL("frozen_trie_map missing key");
+      }
+    }
+    return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return std::array<T, size()>{ std::move(*values[I])... };
+    }(std::make_index_sequence<size()>{});
+  }
 };
 
 /**
@@ -168,14 +201,15 @@ private:
  * @tparam T 値の型
  * @tparam Keys キー文字列の NTTP パック
  * @tparam Entries エントリの型パック
- * @param entries キー・値のペア
+ * @param entries キー・値のペア（並び順はキー順と一致しなくてよい）
+ * @note 未知キー・重複キー・欠落キーはコンパイル時エラー
  */
 template <typename T, FrozenString... Keys, typename... Entries>
   requires((std::convertible_to<Entries, std::pair<std::string_view, T>> && ...))
 constexpr auto make_frozen_trie_map(Entries&&... entries) -> frozen_trie_map<T, Keys...> {
   static_assert(sizeof...(Keys) == sizeof...(Entries), "make_frozen_trie_map requires exactly one entry per key");
-  auto arr = std::array<T, sizeof...(Keys)>{
-    static_cast<T>(std::forward<Entries>(entries).second)...
+  auto arr = std::array<frozen_map_entry<T>, sizeof...(Keys)>{
+    frozen_map_entry<T>{std::forward<Entries>(entries).first, static_cast<T>(std::forward<Entries>(entries).second)}...
   };
   return frozen_trie_map<T, Keys...>{std::move(arr)};
 }
