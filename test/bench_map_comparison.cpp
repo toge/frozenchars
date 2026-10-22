@@ -153,26 +153,6 @@ int main(int argc, char** argv) {
     {"configuration_key_nin", 9}, {"configuration_key_ten", 10}
   };
 
-  // ---- パターン7: round-robin用の中程度キー ----
-  constexpr auto p7_frozen = frozen_map<int,
-    "timeout"_fs, "retry"_fs, "backoff"_fs, "endpoint"_fs, "headers"_fs,
-    "method"_fs, "path"_fs, "query"_fs, "body"_fs, "status"_fs>{
-    std::array<int, 10>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-  };
-  constexpr auto p7_trie = frozen_trie_map<int,
-    "timeout"_fs, "retry"_fs, "backoff"_fs, "endpoint"_fs, "headers"_fs,
-    "method"_fs, "path"_fs, "query"_fs, "body"_fs, "status"_fs>{
-    std::array<int, 10>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-  };
-  auto const p7_stdmap = std::map<std::string_view, int>{
-    {"timeout", 1}, {"retry", 2}, {"backoff", 3}, {"endpoint", 4}, {"headers", 5},
-    {"method", 6}, {"path", 7}, {"query", 8}, {"body", 9}, {"status", 10}
-  };
-  auto const p7_stdunordered = std::unordered_map<std::string_view, int>{
-    {"timeout", 1}, {"retry", 2}, {"backoff", 3}, {"endpoint", 4}, {"headers", 5},
-    {"method", 6}, {"path", 7}, {"query", 8}, {"body", 9}, {"status", 10}
-  };
-
   // ---- frozen_map ----
   {
     ankerl::nanobench::Bench bench;
@@ -183,7 +163,6 @@ int main(int argc, char** argv) {
     bench.run("P4 nato(20) find", [&]{ auto r = p4_frozen.find("golf") != p4_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
     bench.run("P5 longkey(5) find", [&]{ auto r = p5_frozen.find("authentication_token_secret_key") != p5_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
     bench.run("P6 samelen(10) find", [&]{ auto r = p6_frozen.find("configuration_key_fiv") != p6_frozen.end(); ankerl::nanobench::doNotOptimizeAway(r); g_sink += r; });
-    (void)p7_frozen; (void)p7_stdmap; (void)p7_stdunordered;
   }
 
   // ---- frozen_trie_map ----

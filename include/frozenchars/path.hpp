@@ -303,6 +303,8 @@ template <typename... Args>
     auto sv = arr[i].sv();
     if (sv.empty()) continue;
     if (sv[0] == '/') {
+      // 先行要素を破棄する。length 以降のゴミは operator== を壊すためゼロクリアする
+      res = {};
       offset = 0;
       first = true;
       prev_ended_with_slash = false;

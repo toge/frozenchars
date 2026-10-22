@@ -7,12 +7,6 @@
 #include <span>
 #include <string_view>
 
-#if defined(__SSE2__)
-#include <emmintrin.h>
-#elif defined(__ARM_NEON)
-#include <arm_neon.h>
-#endif
-
 #include "string.hpp"
 #include "detail/unique_keys.hpp"
 
@@ -93,8 +87,7 @@ struct frozen_trie_index {
                 "frozen_trie_index supports at most 127 keys (int8_t value_index)");
   // 内部ノードの label 長さは uint8_t で持つため 255 文字が上限。
   // キー数の上限（127）と合わせてラベルバッファ（uint16_t）も 65535 を超えない。
-  static_assert(((Keys.length <= 256) && ...),
-                "frozen_trie_index keys must be at most 255 characters (uint8_t label_length)");
+  static_assert(((Keys.length <= 255) && ...), "frozen_trie_index keys must be at most 255 characters (uint8_t label_length)");
 
   /// @brief キー数
   static constexpr auto k_key_count = sizeof...(Keys);
@@ -306,39 +299,12 @@ private:
   [[nodiscard]] static constexpr auto
   compare_label_unchecked(std::string_view key, std::size_t pos,
                           std::uint16_t label_offset, std::uint8_t label_length) noexcept -> bool {
-#if defined(__SSE2__)
+    // 16 バイト以上のラベルは memcmp に任せる（glibc 等は SIMD で比較する）。短いラベルは
+    // 関数呼び出しより下のバイトループの方が速い。手書きの 16 バイト SIMD ロードは、GCC が
+    // 呼び出し側の長さ検査を追えずに -Warray-bounds / -Wmaybe-uninitialized の誤検知を出すため使わない。
     if (!std::is_constant_evaluated() && label_length >= 16) {
-      auto const* kp = key.data() + pos;
-      auto const* lp = k_labels.data() + label_offset;
-      auto i = 0;
-      for (; i + 16 <= static_cast<int>(label_length); i += 16) {
-        auto vk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kp + i));
-        auto vl = _mm_loadu_si128(reinterpret_cast<const __m128i*>(lp + i));
-        auto cmp = _mm_cmpeq_epi8(vk, vl);
-        if (_mm_movemask_epi8(cmp) != 0xFFFF) return false;
-      }
-      for (; i < static_cast<int>(label_length); ++i) {
-        if (kp[i] != lp[i]) return false;
-      }
-      return true;
+      return std::memcmp(key.data() + pos, k_labels.data() + label_offset, label_length) == 0;
     }
-#elif defined(__ARM_NEON)
-    if (!std::is_constant_evaluated() && label_length >= 16) {
-      auto const* kp = key.data() + pos;
-      auto const* lp = k_labels.data() + label_offset;
-      auto i = 0;
-      for (; i + 16 <= static_cast<int>(label_length); i += 16) {
-        auto vk = vld1q_u8(reinterpret_cast<const uint8_t*>(kp + i));
-        auto vl = vld1q_u8(reinterpret_cast<const uint8_t*>(lp + i));
-        auto cmp = vceqq_u8(vk, vl);
-        if (vminvq_u8(cmp) != 0xFF) return false;
-      }
-      for (; i < static_cast<int>(label_length); ++i) {
-        if (kp[i] != lp[i]) return false;
-      }
-      return true;
-    }
-#endif
     for (auto i = 0; i < static_cast<int>(label_length); ++i) {
       if (key[pos + static_cast<std::size_t>(i)] !=
           k_labels[static_cast<std::size_t>(label_offset) + static_cast<std::size_t>(i)]) {
@@ -349,7 +315,7 @@ private:
   }
 
 public:
-  /// @brief 高速ラベル比較（SIMD / バイト単位フォールバック）
+  /// @brief ラベル比較（実行時の長いラベルは memcmp / それ以外はバイト単位）
   [[nodiscard]] static constexpr auto
   compare_label(std::string_view key, std::size_t pos,
                 std::uint16_t label_offset, std::uint8_t label_length) noexcept -> bool {

@@ -113,10 +113,33 @@ consteval auto make_truncated_log() {
 
 constexpr auto g_trunc = make_truncated_log();
 
-static_assert(g_trunc.sv().size() == 16, "trunc: capacity bound");
-static_assert(g_trunc.message_count() == 4, "trunc: MaxMessages bound");
+// 1 行目 "0123456789\n"（11 文字）のみ収まり、以降の行は丸ごと拒否される
+static_assert(g_trunc.sv() == "0123456789\n", "trunc: capacity bound");
+static_assert(g_trunc.message_count() == 1, "trunc: rejected lines are not counted");
+
+consteval auto make_max_messages_log() {
+  constexpr_log<64, 2> log;
+  log.log("a");
+  log.log("b");
+  log.log("c");
+  return log;
+}
+
+static_assert(make_max_messages_log().message_count() == 2, "trunc: MaxMessages bound");
+
+consteval auto overflow_returns_false() {
+  constexpr_log<4> log;
+  auto const first = log.log("hello"); // "hello\n" は 6 文字で収まらない
+  auto const second = log.log("ab");   // "ab\n" は 3 文字で収まる
+  return !first && second && log.message_count() == 1 && log.message(0) == "ab";
+}
+
+static_assert(overflow_returns_false(), "trunc: overflowing line returns false and is not stored");
 
 TEST_CASE("constexpr_log saturates at Capacity and MaxMessages", "[constexpr_log]") {
-  REQUIRE(g_trunc.sv().size() == 16);
-  REQUIRE(g_trunc.message_count() == 4);
+  REQUIRE(g_trunc.sv() == "0123456789\n");
+  REQUIRE(g_trunc.message_count() == 1);
+  REQUIRE(g_trunc.message(0) == "0123456789");
+  REQUIRE(make_max_messages_log().message_count() == 2);
+  REQUIRE(overflow_returns_false());
 }

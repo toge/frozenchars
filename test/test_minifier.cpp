@@ -1140,3 +1140,45 @@ TEST_CASE("minify_html - </p> は次がブロック要素/親の終了のとき�
   static_assert(omit.sv() == "<div><p>a<p>b</div><p>c");
   REQUIRE(omit.sv() == "<div><p>a<p>b</div><p>c");
 }
+
+TEST_CASE("minify_js - ASI と空文を壊さない", "[minifier]") {
+  // 改行が ASI に影響する箇所では改行を残す
+  static_assert(minify_js("function f(){return\nx}").sv() == "function f(){return\nx}");
+  static_assert(minify_js("a\n++b").sv() == "a\n++b");
+  // 式が明らかに継続する箇所の改行は削除する
+  static_assert(minify_js("foo(a,\n  b);\n").sv() == "foo(a,b)");
+  static_assert(minify_js("function g() {\n  if (x) {\n    y();\n  }\n}\n").sv() == "function g(){if(x){y()}}");
+  // 制御構文・else の直後の ';' は空文なので '}' や EOF の前でも残す
+  static_assert(minify_js("while(x);}").sv() == "while(x);}");
+  static_assert(minify_js("for(;;);").sv() == "for(;;);");
+  static_assert(minify_js("if (a) b(); else;").sv() == "if(a)b();else;");
+  REQUIRE(minify_js("while (x) ;").sv() == "while(x);");
+}
+
+TEST_CASE("minify_sql - remove_as は別名の AS のみ除去する", "[minifier]") {
+  using frozenchars::minify_sql;
+  static_assert(minify_sql("SELECT CAST(x AS INT) AS y FROM t", minify_sql_opt::remove_as).sv() == "SELECT CAST(x AS INT) y FROM t");
+  static_assert(minify_sql("SELECT CAST(f(a) AS INT), g(b) AS c FROM t", minify_sql_opt::remove_as).sv() == "SELECT CAST(f(a) AS INT),g(b) c FROM t");
+  static_assert(minify_sql("CREATE VIEW v AS SELECT a AS b FROM t", minify_sql_opt::remove_as).sv() == "CREATE VIEW v AS SELECT a b FROM t");
+  REQUIRE(minify_sql("select try_cast(x as int) as y", minify_sql_opt::remove_as).sv() == "select try_cast(x as int) y");
+}
+
+TEST_CASE("minify_yaml - '#' とブロックスカラー", "[minifier]") {
+  using frozenchars::minify_yaml;
+  // 直前が空白でない '#' はコメントではない
+  static_assert(minify_yaml("url: http://x/#frag\nk: a#b # c\n# full\n").sv() == "url: http://x/#frag\nk: a#b\n");
+  // ブロックスカラー本文は '#' や空行を含めてそのまま保持する
+  static_assert(minify_yaml("s: |\n  echo # keep\n\n  x\nnext: 1 # c\n").sv() == "s: |\n  echo # keep\n\n  x\nnext: 1\n");
+  static_assert(minify_yaml("- >-\n  a # b\nc: 2\n").sv() == "- >-\n  a # b\nc: 2\n");
+  // 巻き戻した書き込みが length 以降に残らない
+  constexpr auto with_comment = minify_yaml("a: 1 # long comment\n"_fs);
+  static_assert(with_comment.sv() == "a: 1\n");
+  static_assert([&] {
+    for (auto j = with_comment.length; j < with_comment.buffer.size(); ++j) {
+      if (with_comment.buffer[j] != '\0')
+        return false;
+    }
+    return true;
+  }());
+  REQUIRE(minify_yaml("k: v # c").sv() == "k: v");
+}

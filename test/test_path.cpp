@@ -60,6 +60,19 @@ TEST_CASE("path::join", "[path]") {
   STATIC_CHECK(join(""_fs, ""_fs).sv() == "");
 }
 
+TEST_CASE("path::join leaves no garbage after an absolute element", "[path]") {
+  // 先行要素を破棄したとき length 以降が残ると operator== が壊れる
+  constexpr auto joined = join("abcdef"_fs, "/x"_fs);
+  constexpr auto expected = [] {
+    auto res = std::remove_cvref_t<decltype(joined)>{};
+    res.buffer[0] = '/';
+    res.buffer[1] = 'x';
+    res.length = 2;
+    return res;
+  }();
+  STATIC_CHECK(joined == expected);
+}
+
 TEST_CASE("path::normalize", "[path]") {
   STATIC_CHECK(normalize("/usr/./local/../bin"_fs).sv() == "/usr/bin");
   STATIC_CHECK(normalize("a/b/../c"_fs).sv() == "a/c");

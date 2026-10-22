@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -670,6 +671,28 @@ constexpr auto js_needs_space(char prev, char c) noexcept -> bool {
   return (word(prev) && word(c)) || (prev == c && (c == '+' || c == '-' || c == '/'));
 }
 
+/// @brief 改行を挟む 2 トークンの間で改行を捨てても ASI（自動セミコロン挿入）の結果が変わらないか判定する
+///
+/// 直前が式を必ず継続させる記号、または直後が閉じ括弧・区切りなら改行は意味を持たない。
+/// `+` `-` `/` は後置 `++` / `--` や正規表現リテラルの終端になり得るため改行を残す。
+constexpr auto js_newline_droppable(char prev, char c) noexcept -> bool {
+  constexpr auto continues = std::string_view{"{([,;:?=<>*%&|^!~"};
+  constexpr auto closes = std::string_view{"})],"};
+  return continues.find(prev) != std::string_view::npos || closes.find(c) != std::string_view::npos;
+}
+
+/// @brief output[0, offset) の末尾が単語 word で終わるか（直前が識別子文字でない）判定する
+constexpr auto js_output_ends_with_word(char const* output, size_t offset, std::string_view word) noexcept -> bool {
+  if (offset < word.size() || std::string_view{output + offset - word.size(), word.size()} != word) {
+    return false;
+  }
+  if (offset == word.size()) {
+    return true;
+  }
+  auto const before = output[offset - word.size() - 1];
+  return !js_needs_space(before, 'a');
+}
+
 /// @brief ';' の直後（空白・コメントを飛ばした先）が '}' か EOF なら ASI 上省略可能と判定する
 constexpr auto js_semicolon_redundant(char const* input, size_t len, size_t j) noexcept -> bool {
   while (true) {
@@ -703,6 +726,12 @@ constexpr auto minify_js(char const* input, size_t len, char* output, size_t out
   auto quote         = '\0';
   auto brace_depth   = 0uz;  // テンプレートリテラル内 ${} のネスト深度
   auto pending_space = false;
+  auto pending_newline = false; // 遅延空白に改行が含まれるか（ASI に影響する）
+  // 開き括弧が if / while / for / with の条件部か（64 段まで追跡）。
+  // 直後の ';' は空文なので、'}' の前でも省略できない
+  auto control_parens = std::array<bool, 64>{};
+  auto paren_depth = 0uz;
+  auto after_control = false;
   auto const put = [&](char ch) noexcept { if (offset < output_capacity) output[offset++] = ch; };
 
   for (auto i = 0uz; i < len;) {
@@ -741,7 +770,12 @@ constexpr auto minify_js(char const* input, size_t len, char* output, size_t out
     }
     if (c == '/' && i + 1 < len && input[i + 1] == '*') {
       i += 2;
-      while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')) ++i;
+      while (i + 1 < len && !(input[i] == '*' && input[i + 1] == '/')) {
+        // 改行を含むブロックコメントは ASI 上は改行として扱われる
+        if (input[i] == '\n')
+          pending_newline = true;
+        ++i;
+      }
       i = i + 1 < len ? i + 2 : len;
       pending_space = true;
       continue;
@@ -749,21 +783,49 @@ constexpr auto minify_js(char const* input, size_t len, char* output, size_t out
 
     if (is_any_whitespace(c)) {
       pending_space = true;
+      if (c == '\n')
+        pending_newline = true;
       ++i;
       continue;
     }
 
-    // セミコロン除去（ASI 安全な範囲）
+    // セミコロン除去（ASI 安全な範囲）。制御構文の直後・else / do の直後の ';' は空文なので残す
     if (c == ';') {
-      if (!js_semicolon_redundant(input, len, i + 1)) put(';');
+      auto const empty_statement = after_control || js_output_ends_with_word(output, offset, "else") || js_output_ends_with_word(output, offset, "do");
+      if (empty_statement || !js_semicolon_redundant(input, len, i + 1))
+        put(';');
       pending_space = false;
+      pending_newline = false;
+      after_control = false;
       ++i;
       continue;
     }
 
-    // 遅延空白はトークンの結合を防ぐ場合のみ出力する
-    if (pending_space && offset > 0 && js_needs_space(output[offset - 1], c)) put(' ');
+    // 遅延空白はトークンの結合を防ぐ場合か、改行が ASI に影響し得る場合のみ出力する
+    if (pending_space && offset > 0) {
+      auto const prev = output[offset - 1];
+      if (pending_newline && !js_newline_droppable(prev, c)) {
+        put('\n');
+      } else if (js_needs_space(prev, c)) {
+        put(' ');
+      }
+    }
     pending_space = false;
+    pending_newline = false;
+
+    auto closes_control = false;
+    if (c == '(') {
+      if (paren_depth < control_parens.size()) {
+        control_parens[paren_depth] = js_output_ends_with_word(output, offset, "if") || js_output_ends_with_word(output, offset, "while") || js_output_ends_with_word(output, offset, "for") ||
+                                      js_output_ends_with_word(output, offset, "with");
+      }
+      ++paren_depth;
+    } else if (c == ')' && paren_depth > 0) {
+      --paren_depth;
+      closes_control = paren_depth < control_parens.size() && control_parens[paren_depth];
+    }
+    after_control = closes_control;
+
     if (c == '"' || c == '\'' || c == '`') quote = c;
     put(c);
     ++i;
@@ -1143,8 +1205,9 @@ template <size_t N>
 /**
  * @brief YAML 文字列を minify する
  *
- * インデント構造を壊さない範囲で、行末空白とコメントを削除します。
- * （引用符内の `#` は保持）
+ * インデント構造を壊さない範囲で、行末空白とコメント・空行を削除します。
+ * - 引用符内の `#` と、直前が空白でない `#`（`http://x/#frag` など）はコメントとして扱いません
+ * - ブロックスカラー（`|` / `>`）の本文は空行・`#` を含めてそのまま保持します
  *
  * @tparam N 文字列長（終端文字を含む）
  * @param str 対象文字列
@@ -1152,86 +1215,109 @@ template <size_t N>
  */
 template <size_t N>
 [[nodiscard]] auto consteval minify_yaml(FrozenString<N> const& str) noexcept {
-  // 出力バッファ・行先頭位置・最終非空白位置・クォート状態の初期化
-  auto res            = FrozenString<N>{};
-  auto offset         = 0uz;
-  auto line_start     = 0uz;
-  auto last_non_space = std::string_view::npos;
-  auto in_single      = false;
-  auto in_double      = false;
-  auto escaped        = false;
+  auto res = FrozenString<N>{};
+  auto offset = 0uz;
+  auto in_block = false;          // ブロックスカラー本文の内側か
+  auto block_parent_indent = 0uz; // ブロックスカラーを開始した行のインデント
 
-  // 1行ずつ処理: コメント削除・行末空白削除・空行圧縮を行いながら出力バッファに詰める
-  for (auto i = 0uz; i < str.length; ++i) {
-    auto const c = str.buffer[i];
-    // 非クォート領域の '#' 以降を YAML コメントとして除去する
-    if (!in_single && !in_double && c == '#') {
-      while (i < str.length && str.buffer[i] != '\n') {
-        ++i;
-      }
-      if (i >= str.length) {
+  auto const is_blank = [](char ch) noexcept { return ch == ' ' || ch == '\t' || ch == '\r'; };
+
+  // 1 行ずつ処理する: [ls, le) が改行を除いた行の範囲
+  for (auto ls = 0uz; ls < str.length;) {
+    auto le = ls;
+    while (le < str.length && str.buffer[le] != '\n') {
+      ++le;
+    }
+    auto const has_newline = le < str.length;
+    auto indent = 0uz;
+    while (ls + indent < le && str.buffer[ls + indent] == ' ') {
+      ++indent;
+    }
+    auto blank_line = true;
+    for (auto j = ls; j < le; ++j) {
+      if (!is_blank(str.buffer[j])) {
+        blank_line = false;
         break;
       }
     }
 
-    // 行末空白を落としてから改行を出力する（空行は圧縮）
-    if (i < str.length && str.buffer[i] == '\n') {
-      if (last_non_space == std::string_view::npos) {
-        offset = line_start;
-      } else {
-        offset               = last_non_space + 1;
+    // ブロックスカラー本文（空行または親より深いインデントの行）は内容なのでそのまま保持する
+    if (in_block && (blank_line || indent > block_parent_indent)) {
+      for (auto j = ls; j < le; ++j) {
+        res.buffer[offset++] = str.buffer[j];
+      }
+      if (has_newline) {
         res.buffer[offset++] = '\n';
       }
-      line_start     = offset;
-      last_non_space = std::string_view::npos;
-      in_single      = false;
-      in_double      = false;
-      escaped        = false;
+      ls = le + 1;
       continue;
     }
+    in_block = false;
 
-    if (i >= str.length) {
-      break;
-    }
-
-    auto const current   = str.buffer[i];
-    res.buffer[offset++] = current;
-
-    // クォート状態を更新し、引用符内の # はコメント扱いしない
-    if (in_double) {
-      if (escaped) {
-        escaped = false;
-      } else if (current == '\\') {
-        escaped = true;
-      } else if (current == '"') {
-        in_double = false;
+    // 通常行: 引用符外のコメントを除去し、行末空白を落とす
+    auto const line_start = offset;
+    auto last_non_space = std::string_view::npos;
+    auto in_single = false;
+    auto in_double = false;
+    auto escaped = false;
+    for (auto j = ls; j < le; ++j) {
+      auto const c = str.buffer[j];
+      // YAML のコメントは行頭か空白の直後の '#' から始まる
+      if (!in_single && !in_double && c == '#' && (j == ls || is_blank(str.buffer[j - 1]))) {
+        break;
       }
-    } else if (in_single) {
-      if (current == '\'') {
-        in_single = false;
-      }
-    } else {
-      if (current == '"') {
+      res.buffer[offset++] = c;
+      if (in_double) {
+        if (escaped) {
+          escaped = false;
+        } else if (c == '\\') {
+          escaped = true;
+        } else if (c == '"') {
+          in_double = false;
+        }
+      } else if (in_single) {
+        if (c == '\'') {
+          in_single = false;
+        }
+      } else if (c == '"') {
         in_double = true;
-      } else if (current == '\'') {
+      } else if (c == '\'') {
         in_single = true;
       }
+      if (!is_blank(c)) {
+        last_non_space = offset - 1;
+      }
     }
 
-    if (current != ' ' && current != '\t' && current != '\r') {
-      last_non_space = offset - 1;
+    // 空行・コメントのみの行は出力しない
+    if (last_non_space == std::string_view::npos) {
+      offset = line_start;
+      ls = le + 1;
+      continue;
     }
-  }
-
-  // 最終行の行末空白を除去してから終端する
-  if (last_non_space == std::string_view::npos) {
-    offset = line_start;
-  } else {
     offset = last_non_space + 1;
+
+    // 行末が空白区切りのブロックスカラー指示子（| / > に chomping・インデント指示が続く）なら本文が始まる
+    auto k = offset;
+    while (k > line_start && (res.buffer[k - 1] == '+' || res.buffer[k - 1] == '-' || (res.buffer[k - 1] >= '0' && res.buffer[k - 1] <= '9'))) {
+      --k;
+    }
+    if (k > line_start && (res.buffer[k - 1] == '|' || res.buffer[k - 1] == '>') && (k - 1 == line_start || is_blank(res.buffer[k - 2]))) {
+      in_block = true;
+      block_parent_indent = indent;
+    }
+
+    if (has_newline) {
+      res.buffer[offset++] = '\n';
+    }
+    ls = le + 1;
   }
 
-  res.buffer[offset] = '\0';
-  res.length         = offset;
+  // 巻き戻した書き込みが length 以降に残ると operator== が壊れるためゼロクリアする
+  for (auto j = offset; j < N; ++j) {
+    res.buffer[j] = '\0';
+  }
+  res.length = offset;
   return res;
 }
 
@@ -1320,22 +1406,41 @@ constexpr auto sql_try_shorten(char const* input, size_t len, size_t& i, size_t 
   return true;
 }
 
+/// @brief input[start, start+len) が英大文字の word と大文字小文字を無視して一致するか判定する
+constexpr auto sql_word_equal_ci(char const* input, size_t start, size_t len, std::string_view word) noexcept -> bool {
+  if (len != word.size()) {
+    return false;
+  }
+  for (auto j = 0uz; j < len; ++j) {
+    auto const ch = input[start + j];
+    auto const upper = (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+    if (upper != word[j]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// @brief 識別子トークンから AS 除去 / INNER JOIN 簡略化を試みる
+/// @param in_cast 直近の開き括弧が CAST( / TRY_CAST( / SAFE_CAST( のものか（その AS は構文上必須）
 /// @return 最適化を適用して入力を消費したら true（呼び出し側は continue）
-constexpr auto sql_optimize_keyword(char const* input, size_t len, size_t& i, size_t word_start, size_t word_len, minify_sql_opt options) noexcept -> bool {
-  // AS キーワードの除去（次が識別子なら AS をスキップ）
-  if (has_flag(options, minify_sql_opt::remove_as) && word_len == 2) {
-    auto const u0 = (input[word_start] >= 'a' && input[word_start] <= 'z') ? static_cast<char>(input[word_start] - ('a' - 'A')) : input[word_start];
-    auto const u1 = (input[word_start + 1] >= 'a' && input[word_start + 1] <= 'z') ? static_cast<char>(input[word_start + 1] - ('a' - 'A')) : input[word_start + 1];
-    if (u0 == 'A' && u1 == 'S') {
-      auto peek = i;
-      while (peek < len && detail::is_any_whitespace(input[peek])) {
-        ++peek;
-      }
-      if (peek < len && detail::is_sql_id_start(input[peek])) {
-        i = peek;
-        return true;
-      }
+constexpr auto sql_optimize_keyword(char const* input, size_t len, size_t& i, size_t word_start, size_t word_len, minify_sql_opt options, bool in_cast) noexcept -> bool {
+  // AS キーワードの除去（別名の AS のみ。次が識別子なら AS をスキップ）
+  if (has_flag(options, minify_sql_opt::remove_as) && !in_cast && sql_word_equal_ci(input, word_start, word_len, "AS")) {
+    auto peek = i;
+    while (peek < len && detail::is_any_whitespace(input[peek])) {
+      ++peek;
+    }
+    auto next_end = peek;
+    while (next_end < len && detail::is_sql_id_char(input[next_end])) {
+      ++next_end;
+    }
+    // CREATE VIEW v AS SELECT ... のような文レベルの AS は残す
+    auto const statement_follows = sql_word_equal_ci(input, peek, next_end - peek, "SELECT") || sql_word_equal_ci(input, peek, next_end - peek, "WITH") ||
+                                   sql_word_equal_ci(input, peek, next_end - peek, "VALUES") || sql_word_equal_ci(input, peek, next_end - peek, "TABLE");
+    if (peek < len && detail::is_sql_id_start(input[peek]) && !statement_follows) {
+      i = peek;
+      return true;
     }
   }
   // INNER JOIN の簡略化（INNER をスキップして次の JOIN から処理）
@@ -1396,6 +1501,10 @@ constexpr auto minify_sql(char const* input, char* output, std::size_t output_ca
   auto in_bracket    = false;
   auto pending_space = false;
   auto const len     = std::char_traits<char>::length(input);
+  // 括弧の深さと、各深さの開き括弧が CAST 系関数のものかのビット集合（64 段まで追跡）
+  auto paren_depth = 0uz;
+  auto cast_parens = std::uint64_t{0};
+  auto last_word_cast = false;
 
   // 入力を1文字ずつ走査し、引用符内部の保持・コメント除去・空白正規化・キーワード短縮を施す
   while (i < len) {
@@ -1506,12 +1615,26 @@ constexpr auto minify_sql(char const* input, char* output, std::size_t output_ca
         ++i;
       }
       auto const word_len = i - word_start;
-      if ((has_flag(options, minify_sql_opt::remove_as) || has_flag(options, minify_sql_opt::simplify_join)) && sql_optimize_keyword(input, len, i, word_start, word_len, options)) {
+      auto const in_cast = paren_depth > 0 && paren_depth <= 64 && ((cast_parens >> (paren_depth - 1)) & 1u) != 0;
+      last_word_cast =
+          sql_word_equal_ci(input, word_start, word_len, "CAST") || sql_word_equal_ci(input, word_start, word_len, "TRY_CAST") || sql_word_equal_ci(input, word_start, word_len, "SAFE_CAST");
+      if ((has_flag(options, minify_sql_opt::remove_as) || has_flag(options, minify_sql_opt::simplify_join)) && sql_optimize_keyword(input, len, i, word_start, word_len, options, in_cast)) {
         continue;
       }
       sql_emit_identifier(input, len, i, word_start, word_len, options, output, offset, pending_space);
       continue;
     }
+
+    if (c == '(') {
+      ++paren_depth;
+      if (paren_depth <= 64) {
+        auto const bit = std::uint64_t{1} << (paren_depth - 1);
+        cast_parens = last_word_cast ? (cast_parens | bit) : (cast_parens & ~bit);
+      }
+    } else if (c == ')' && paren_depth > 0) {
+      --paren_depth;
+    }
+    last_word_cast = false;
 
     if (c == '\'') {
       in_single = true;

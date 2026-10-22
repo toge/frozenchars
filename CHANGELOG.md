@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `cmake/frozencharsConfig.cmake.in`: glaze なしでビルド・インストールした frozenchars を `find_package` すると、glaze が無い環境では失敗していた。ビルド時に glaze を検出した場合のみ `find_dependency(glaze)` するようにした。
+- `freeze(Precision(v, p))`: 小数部を 1 桁ずつ切り捨てていたため二進誤差がそのまま出ていた（`Precision(0.57, 2)` → `"0.56"`）。四捨五入するようにした（ちょうど中間の値は 0 から離れる方向に丸める。`printf` の偶数丸めとは異なる）。
+- `frozen_trie_index` / `frozen_trie_set` / `frozen_trie_map`: 長さ 256 のキーが static_assert を通り、ラベル長（`uint8_t`）が 0 に切り詰められて誤検索していた。上限を 255 文字にした。
+- `wildcard_match` / `wildcard_find`: 最後の `*` がグループ・文字集合の内側にあると `)` 以降を純リテラルのサフィックスとして早期リジェクトしていた（`"(a*)b"` が `"ab"` に不一致）。また、グループの分岐を最短一致の 1 通りしか試さず、後続が失敗しても分岐内の `*` や入れ子の分岐で後戻りしなかった（`"(a|ab)c"` が `"abc"` に不一致）。
+- `minify_js`: 改行を単なる空白として扱い ASI の意味が変わっていた（`return\nx` → `return x`）。改行が ASI に影響し得る箇所では改行を残す。また制御構文・`else` / `do` の直後の空文 `;` を削除して構文エラーにしていた（`while(x);}` → `while(x)}`）。
+- `minify_sql` の `remove_as`: `CAST(x AS INT)` の AS や `CREATE VIEW v AS SELECT` の AS まで削除していた。CAST / TRY_CAST / SAFE_CAST の括弧内と、`SELECT` / `WITH` / `VALUES` / `TABLE` が続く AS は残す。
+- `minify_yaml`: 直前が空白でない `#`（`http://x/#frag` など）をコメントとして削除していた。ブロックスカラー（`|` / `>`）本文の `#` や空行も削除していた。本文はそのまま保持する。巻き戻した書き込みが `length` 以降に残り `operator==` が壊れる問題も修正。
+- `path::join`: 途中で絶対パス要素が来たときに先行要素の文字が `length` 以降に残り、`operator==` が誤って false になっていた。
+- `frozen_trie_index`: GCC 16 で `-Warray-bounds` / `-Wmaybe-uninitialized` の誤検知が出ていた（短いキーや小さなトライで、到達しない 16 バイト SIMD ロードを GCC が範囲外と判定）。16 文字以上のラベル比較を手書きの SSE2 / NEON から `memcmp` に置き換えた。ベンチマークでは同等以上の速度。
+- `test/bench_map_comparison.cpp`: 計測に使われていなかったパターン 7 を削除（`-Wunused-but-set-variable`）。
+- `constexpr_log`: バッファが満杯で行を切り詰めても `true` を返し、件数も増やしていた。行全体が収まらない場合は何も書き込まず `false` を返すようにした（`message(i)` が途中で切れた行を返さない）。
+
 ### Changed
 
 - CI: vcpkg をキャッシュから復元した場合は `git fetch` + `git reset --hard origin/master` と再 bootstrap で最新に同期するようにした。キャッシュされた古いクローンには `vcpkg.json` の `builtin-baseline` が指すコミットやバージョン DB が無く、また未追跡ファイルとの衝突で `pull` が失敗していたため（Windows は `|| exit /b 1` で失敗を検知する）。

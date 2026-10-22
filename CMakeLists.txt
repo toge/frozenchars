@@ -36,6 +36,9 @@ target_compile_features(frozenchars INTERFACE cxx_std_23)
 find_package(glaze CONFIG QUIET)
 if(glaze_FOUND)
     target_link_libraries(frozenchars INTERFACE glaze::glaze)
+    set(FROZENCHARS_WITH_GLAZE ON)
+else()
+    set(FROZENCHARS_WITH_GLAZE OFF)
 endif()
 
 target_include_directories(frozenchars

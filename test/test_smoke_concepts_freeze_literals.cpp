@@ -26,6 +26,13 @@ TEST_CASE("Hex/Bin/Oct/Precision freeze yields expected string", "[freeze][conce
   STATIC_CHECK(freeze(Bin{5}).sv() == "101");
   STATIC_CHECK(freeze(Oct{8}).sv() == "10");
   STATIC_CHECK(freeze(Precision{3.14, 2}).sv() == "3.14");
+  // 二進誤差で切り捨てず四捨五入する
+  STATIC_CHECK(freeze(Precision{0.57, 2}).sv() == "0.57");
+  STATIC_CHECK(freeze(Precision{1.15, 2}).sv() == "1.15");
+  STATIC_CHECK(freeze(Precision{2.999, 2}).sv() == "3.00");
+  STATIC_CHECK(freeze(Precision{-0.996, 2}).sv() == "-1.00");
+  STATIC_CHECK(freeze(Precision{2.5, 0}).sv() == "3");
+  STATIC_CHECK(freeze(Precision{1.5, 20}).sv() == "1.50000000000000000000");
   STATIC_CHECK(freeze(42).sv() == "42");
   STATIC_CHECK(freeze(-42).sv() == "-42");
   STATIC_CHECK(freeze(2.5).sv() == "2.50");

@@ -173,23 +173,38 @@ template <typename T>
   }
 
   auto integral = static_cast<long long>(value);
+
+  // 小数部は 10^p 倍して四捨五入した整数として扱う（1 桁ずつ切り捨てると
+  // 0.57 → "0.56" のように二進表現の誤差が出る）。long long に収まる 18 桁までを
+  // 丸め対象とし、それより下位の桁は 0 で埋める。
+  auto const p = std::min(std::max(0, precision), static_cast<int>(buffer.size()) - 22);
+  auto const round_digits = std::min(p, 18);
+  auto scale = 1LL;
+  for (auto const _ : std::views::iota(0, round_digits)) {
+    scale *= 10;
+  }
+  auto const scaled = (value - static_cast<double>(integral)) * static_cast<double>(scale) + 0.5;
+  auto frac_digits = static_cast<long long>(scaled);
+  if (frac_digits >= scale) {
+    // 0.999.. が繰り上がって整数部に桁上がりする
+    frac_digits -= scale;
+    ++integral;
+  }
+
   auto [int_data, int_len] = to_dec_chars(integral);
   for (auto const j : std::views::iota(0uz, int_len)) {
     buffer[i++] = int_data[j];
   }
 
-  auto p = std::max(0, precision);
-  if (p > 0 && i < buffer.size()) {
+  if (p > 0) {
     buffer[i++] = '.';
-    auto const room = static_cast<int>(buffer.size() - i);
-    p = std::min(p, room);
-
-    double frac = value - static_cast<double>(integral);
-    for (auto const _ : std::views::iota(0, p)) {
-      frac *= 10.0;
-      int digit = static_cast<int>(frac);
-      buffer[i++] = static_cast<char>('0' + digit);
-      frac -= digit;
+    for (auto d = round_digits - 1; d >= 0; --d) {
+      buffer[i + static_cast<size_t>(d)] = static_cast<char>('0' + frac_digits % 10);
+      frac_digits /= 10;
+    }
+    i += static_cast<size_t>(round_digits);
+    for (auto const _ : std::views::iota(round_digits, p)) {
+      buffer[i++] = '0';
     }
   }
   return std::pair{buffer, i};

@@ -78,6 +78,7 @@ private:
     std::array<size_t, PAT.size()> first_branch{};
     std::array<size_t, PAT.size()> branch_end{};
     std::array<size_t, PAT.size()> next_branch{};
+    std::array<size_t, PAT.size()> branch_max_length{};
     size_t fixed_prefix_length = 0;
   };
 
@@ -184,11 +185,16 @@ private:
 
       auto branch_start = i + 1uz;
       auto depth = 0;
+      auto has_star = false;
 
       for (auto j = branch_start; j < close; ++j) {
         auto const bc = PAT.data()[j];
         if (bc == '\\') {
           ++j;
+          continue;
+        }
+        if (bc == '*') {
+          has_star = true;
           continue;
         }
         if (bc == '(') {
@@ -202,12 +208,16 @@ private:
         if (bc == '|' && depth == 0) {
           data.branch_end[branch_start] = j;
           data.next_branch[branch_start] = j + 1;
+          // '*' を含まない分岐ではパターン 1 文字が高々テキスト 1 文字に対応する
+          data.branch_max_length[branch_start] = has_star ? NO_LIMIT : j - branch_start;
           branch_start = j + 1;
+          has_star = false;
         }
       }
 
       data.branch_end[branch_start] = close;
       data.next_branch[branch_start] = PAT.size();
+      data.branch_max_length[branch_start] = has_star ? NO_LIMIT : close - branch_start;
     }
 
     while (data.fixed_prefix_length < PAT.size()) {
@@ -221,6 +231,9 @@ private:
     return data;
   }
 
+  /// @brief 分岐の最大マッチ長に上限がない（'*' を含む）ことを示す値
+  static constexpr auto NO_LIMIT = static_cast<size_t>(-1);
+
   static constexpr auto data = make_metadata();  // 事前計算済みメタデータ
 
 public:
@@ -232,6 +245,7 @@ public:
   static constexpr auto first_branch = data.first_branch;
   static constexpr auto branch_end = data.branch_end;
   static constexpr auto next_branch = data.next_branch;
+  static constexpr auto branch_max_length = data.branch_max_length;
   static constexpr auto fixed_prefix_length = data.fixed_prefix_length;
 };
 
@@ -455,15 +469,24 @@ wildcard_match_uncached(std::string_view text, size_t ti, size_t pi, size_t pi_e
       if (close < pi_end) {
         auto after_alt = close + 1uz;
 
+        // 分岐内の '*' や入れ子の分岐は複数の終了位置を取り得るため、
+        // 分岐が text[ti, e) に完全一致する e をすべて試してから後続を照合する。
+        // ponytail: '*' を含む分岐は終了位置ごとに分岐を照合し直すため O(n^2)。遅い場合は分岐ごとのメモ化を追加する
         for (auto branch = wildcard_plan<PAT>::first_branch[pi];
              branch != wildcard_plan<PAT>::NO_BRANCH;
              branch = wildcard_plan<PAT>::next_branch[branch]) {
-          auto const br = wildcard_match_impl<PAT>(text, ti, branch, wildcard_plan<PAT>::branch_end[branch], true, memo);
-          if (br.matched) {
+          auto const max_len = wildcard_plan<PAT>::branch_max_length[branch];
+          auto const last = (max_len >= text.size() - ti) ? text.size() : ti + max_len;
+          for (auto e = ti; e <= last; ++e) {
+            // 分岐の照合範囲は pi_end != PAT.size() のためメモには記録されず、切り詰めたテキストでも安全
+            auto const br = wildcard_match_impl<PAT>(text.substr(0, e), ti, branch, wildcard_plan<PAT>::branch_end[branch], false, memo);
+            if (!br.matched)
+              continue;
             if (after_alt >= pi_end) {
-              if (partial || br.pos == text.size()) return br;
+              if (partial || e == text.size())
+                return {true, e};
             } else {
-              auto const rr = wildcard_match_impl<PAT>(text, br.pos, after_alt, pi_end, partial, memo);
+              auto const rr = wildcard_match_impl<PAT>(text, e, after_alt, pi_end, partial, memo);
               if (rr.matched) return rr;
             }
           }
@@ -815,7 +838,9 @@ template <FrozenString PAT>
       if (last == PAT.size()) return PAT.size();
       for (auto i = last + 1; i < PAT.size(); ++i) {
         auto const c = PAT.data()[i];
-        if (c == '*' || c == '?' || c == '[' || c == '(') return PAT.size();
+        // ')' '|' ']' が続く場合、最後の '*' はグループ / 文字集合の内側にあり、後続は純リテラルではない
+        if (c == '*' || c == '?' || c == '[' || c == '(' || c == ')' || c == '|' || c == ']')
+          return PAT.size();
       }
       return last + 1;
     }();

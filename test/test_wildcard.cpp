@@ -477,3 +477,24 @@ TEST_CASE("wildcard: backtracking over many stars stays bounded") {
   REQUIRE(wildcard_match<matching>(text.sv()));
   REQUIRE(wildcard_match<matching>(std::string(200, 'a')));
 }
+
+TEST_CASE("wildcard_match - グループ内の '*' と後続の照合", "[wildcard]") {
+  // 最後の '*' がグループ内にある場合、')' 以降を純リテラルのサフィックスとみなさない
+  static_assert(wildcard_match<"(y|x*)"_fs>("y"));
+  static_assert(wildcard_match<"(a*)b"_fs>("ab"));
+  static_assert(wildcard_match<"(*)"_fs>("abc"));
+  static_assert(wildcard_match<"(x*|y)"_fs>("y"));
+  static_assert(wildcard_match<"a[*]b"_fs>("a*b"));
+  static_assert(!wildcard_match<"a[*]b"_fs>("axb"));
+
+  // 分岐内の '*' は後続が失敗したら長く伸ばして再試行する
+  static_assert(wildcard_match<"(a*)?"_fs>("aXY"));
+  static_assert(wildcard_match<"\\q(a*)b"_fs>("qaXb"));
+  static_assert(wildcard_match<"\\q(x*|y)"_fs>("qxx"));
+  static_assert(wildcard_match<"(a|ab)c"_fs>("abc"));
+  static_assert(wildcard_match<"((a|ab))c"_fs>("abc"));
+  static_assert(!wildcard_match<"(a*)b"_fs>("ac"));
+
+  REQUIRE(wildcard_match<"(a*)b"_fs>(std::string_view{"aXXb"}));
+  REQUIRE(wildcard_find<"(a*)b"_fs>(std::string_view{"zzaXbzz"}).has_value());
+}

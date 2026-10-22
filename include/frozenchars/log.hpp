@@ -148,19 +148,34 @@ struct constexpr_log {
     return out;
   }
 
-  private:
+private:
   /**
    * @brief メッセージ1行をバッファに追記する（タイムスタンプ付き対応、飽和あり）。
+   *
+   * 行全体（プレフィクス + 本文 + '\n'）が収まらない場合は何も書き込まない。
+   * 途中で切れた行を蓄積しないため、message(i) は常に完全な行を返す。
+   *
    * @param msg メッセージ本文
-   * @return bool 追記できたら true。メッセージ数上限なら false
+   * @return bool 追記できたら true。バッファ / メッセージ数が上限なら false
    */
   constexpr bool append_line(std::string_view msg) {
     if (count == MaxMessages) {
       return false;
     }
+    auto const ts = [] {
+      if constexpr (WithTimestamp) {
+        return build_timestamp();
+      } else {
+        return FrozenString<1>{};
+      }
+    }();
+    // "[" + ts + "] " のプレフィクス長（タイムスタンプなしなら 0）
+    size_t const prefix_len = WithTimestamp ? ts.length + 3 : 0;
+    if (Capacity - length < prefix_len + msg.size() + 1) {
+      return false;
+    }
     starts[count] = length;
     if constexpr (WithTimestamp) {
-      auto const ts = build_timestamp();
       append_char('[');
       for (size_t i = 0; i < ts.length; ++i) {
         append_char(ts.buffer[i]);
@@ -177,14 +192,11 @@ struct constexpr_log {
   }
 
   /**
-   * @brief 1文字をバッファに追記する。バッファが満杯なら何もしない。
+   * @brief 1文字をバッファに追記する。
    * @param c 追記する文字
+   * @pre length < Capacity（append_line が事前に容量を確認済み）
    */
-  constexpr void append_char(char c) {
-    if (length < Capacity) {
-      buffer[length++] = c;
-    }
-  }
+  constexpr void append_char(char c) { buffer[length++] = c; }
 };
 
 namespace detail {
