@@ -4,7 +4,7 @@
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に準拠し、
 バージョニングは [Semantic Versioning](https://semver.org/lang/ja/) に従います。
 
-## [Unreleased]
+## [0.8.2] - 2026-11-17
 
 ### Fixed
 
@@ -28,8 +28,9 @@
 - `unescape_c`: `\U` 表記のサロゲート（U+D800〜U+DFFF）を UTF-8 として出力し不正なバイト列になっていた。`\u` と同じく不正コードポイントとして保持（NTTP 版はコンパイルエラー）する。
 - `frozen_regex`: 文字クラス範囲の終端が `CHAR_MAX` のとき（例 `[a-\x7f]`）符号付き `char` の `++ch` がオーバーフローし、無限ループ（constexpr 操作数の上限超過）になっていた。`int` で走査する。
 - `frozen_format`: 明示精度の汎用形式（`{:.3g}` / `{:.3}`）を有効桁数ではなく固定小数点の小数桁として扱い、`std::format` と異なる結果（`1234.0` → `"1234"`）になっていた。指数が `-4 <= E < 精度` なら固定小数点、それ以外は科学計数法にする。
-- `frozen_format` / `freeze(Precision(v, p))`: 負のゼロの符号を落としていた（`{:.2f}` が `"0.00"`）。`std::signbit` で符号を判定し `"-0.00"` / `"-0"` を出力する。
-- `make_querystring`: 非 const または右辺値の `std::tuple` ではタプル版オーバーロードが選ばれずコンパイル不能だった。非 const 参照・右辺値参照のオーバーロードを追加する。
+- `frozen_format` / `freeze(Precision(v, p))`: 負のゼロの符号を落としていた（`{:.2f}` が `"0.00"`）。`std::signbit` は libstdc++ 14 で constexpr でないため符号ビットで判定し、`"-0.00"` / `"-0"` を出力する。
+- `make_querystring`: 非 const または右辺値の `std::tuple` ではタプル版オーバーロードが選ばれずコンパイル不能だった。非 const 参照・右辺値参照のオーバーロードを追加する。MSVC の consteval で `std::apply` が失敗するため `index_sequence` で展開する。
+- `frozen_map`: 256 キー超で `std::array` の CTAD と pack 展開の fold 式が Clang 19/20 の入れ子式上限（256）に達してコンパイルできなかった。配列の型を明示し、キー長の表とパディング生成をループに置き換える。
 - `format_iso_datetime`: 年が `0..9999` の範囲外でも 4 桁に切り詰めて出力していた（`year{10000}` → `":000-01-01..."`）。`format_iso_date` と同じ前提条件で診断する。
 - `pad_left` / `pad_right` / `center`: `Width == SIZE_MAX` で `Width + 1` が 0 に折り返し、範囲外書き込みになっていた。静的アサートで拒否する。
 
@@ -157,7 +158,7 @@
 
 - 一部機能に既知の不具合が残存しています（詳細は Issue を参照）。
 
-[Unreleased]: https://github.com/toge/frozenchars/compare/v0.8.1...HEAD
+[0.8.2]: https://github.com/toge/frozenchars/compare/v0.8.1...v0.8.2
 [0.8.0]: https://github.com/toge/frozenchars/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/toge/frozenchars/compare/v0.2.0...v0.7.0
 [0.2.0]: https://github.com/toge/frozenchars/compare/v0.1.0...v0.2.0
