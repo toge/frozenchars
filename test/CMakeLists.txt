@@ -506,3 +506,33 @@ add_compile_fail_test(
 )
 
 
+
+# ---- 監査指摘の回帰テスト (不正入力の拒否) ----
+
+add_compile_fail_test(
+  NAME chrono_parse_iso_date_invalid_calendar
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_invalid_calendar.cpp
+  EXPECTED_TEXT "chrono: invalid calendar date"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
+  NAME chrono_parse_iso_date_bad_digits
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_iso_date_bad_digits.cpp
+  EXPECTED_TEXT "chrono: date digits must be decimal"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
+  NAME hex_decode_odd_length
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/hex_decode_odd_length.cpp
+  EXPECTED_TEXT "hex_decode: odd-length hex string"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
+  NAME split_numbers_invalid_token
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/split_numbers_invalid_token.cpp
+  EXPECTED_TEXT "split_numbers: token is not a valid number"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)

@@ -278,11 +278,22 @@ struct wildcard_to_regex_helper {
       if (c == '[') {
         auto close = find_matching_close_bracket<PAT>(i);
         if (close >= PAT.size()) return false;
+        // 空クラスは frozen_regex ではエラー
+        if (close == i + 1)
+          return false;
         // 否定クラスは frozen_regex が DotChars (英数字+_) に対する補集合を取るため委譲不可
         if (i + 1 < PAT.size() && (PAT.data()[i + 1] == '!' || PAT.data()[i + 1] == '^')) return false;
+        // 先頭/末尾の '-' はネイティブ経路と frozen_regex で解釈が異なる
+        if (PAT.data()[i + 1] == '-' || PAT.data()[close - 1] == '-')
+          return false;
         i = close;
         continue;
       }
+      // 空の代替（() / (|a) / (a|) / (a||b)）は frozen_regex でエラーになる
+      if (c == '(' && i + 1 < PAT.size() && (PAT.data()[i + 1] == ')' || PAT.data()[i + 1] == '|'))
+        return false;
+      if (c == '|' && (i + 1 >= PAT.size() || PAT.data()[i + 1] == ')' || PAT.data()[i + 1] == '|'))
+        return false;
       // frozen_regex がメタ文字として解釈する（またはエラーにする）文字はリテラルとして委譲できない
       if (c == '.' || c == '{' || c == '}' || c == '+' || c == '^' || c == '$') return false;
       if (c == '(') ++paren_depth;

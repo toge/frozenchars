@@ -26,6 +26,12 @@ static_assert(*parse_number<double>("1e2"_fs) == 100.0);
 static_assert(*parse_number<double>("-2.5e1"_fs) == -25.0);
 static_assert(!parse_number<int>("abc"_fs).has_value());
 static_assert(parse_number<int>("abc"_fs).error() == std::errc::invalid_argument);
+// コンパイル時パスの指数処理: 大きな指数でも溢れずに扱える
+static_assert(parse_number<double>("1e300"_fs).has_value());
+static_assert(parse_number<double>("1e-320"_fs).has_value());
+static_assert(parse_number<float>("1e38"_fs).has_value());
+static_assert(parse_number<double>("1e309"_fs).error() == std::errc::result_out_of_range);
+static_assert(parse_number<float>("1e39"_fs).error() == std::errc::result_out_of_range);
 
 TEST_CASE("parse_number handles integer boundaries", "[parse_number]") {
   auto constexpr int_max = "2147483647"_fs;
@@ -73,4 +79,21 @@ TEST_CASE("parse_number reports runtime errors via expected", "[parse_number]") 
   check_invalid(parse_number<double>(invalid_exponent));
   check_range(parse_number<double>(float_overflow));
   check_range(parse_number<int>(int_overflow));
+}
+
+TEST_CASE("parse_number float exponent range", "[parse_number]") {
+  SECTION("large and small exponents are accepted") {
+    REQUIRE(*parse_number<double>("1e300"_fs) == 1e300);
+    REQUIRE(*parse_number<double>("1e-300"_fs) == 1e-300);
+    REQUIRE(*parse_number<float>("1e38"_fs) == 1e38f);
+  }
+  SECTION("overflow reports result_out_of_range") {
+    auto const d = parse_number<double>("1e309"_fs);
+    REQUIRE_FALSE(d.has_value());
+    REQUIRE(d.error() == std::errc::result_out_of_range);
+
+    auto const f = parse_number<float>("1e39"_fs);
+    REQUIRE_FALSE(f.has_value());
+    REQUIRE(f.error() == std::errc::result_out_of_range);
+  }
 }

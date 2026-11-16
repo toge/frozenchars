@@ -244,6 +244,20 @@ TEST_CASE("wildcard: runtime nested alternatives after star use metadata matcher
   REQUIRE_FALSE(wildcard_match<"*(a|(bc|de))*">(negative));
 }
 
+TEST_CASE("wildcard: empty alternatives and empty sets are not delegated") {
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"()">::can_delegate);
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"(|a)">::can_delegate);
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"(a|)">::can_delegate);
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"(a||b)">::can_delegate);
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"[]">::can_delegate);
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"[-a]">::can_delegate);
+  STATIC_REQUIRE_FALSE(detail::wildcard_to_regex_helper<"[a-]">::can_delegate);
+
+  // 通常の文字集合と代替は委譲できる
+  STATIC_REQUIRE(detail::wildcard_to_regex_helper<"[abc]">::can_delegate);
+  STATIC_REQUIRE(detail::wildcard_to_regex_helper<"(a|b)">::can_delegate);
+}
+
 TEST_CASE("wildcard: unbalanced alternatives") {
   // 対応の取れていない '(' はリテラルとして扱われる
   REQUIRE(wildcard_match<"(ab">("(ab"));

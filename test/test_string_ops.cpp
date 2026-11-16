@@ -167,6 +167,13 @@ TEST_CASE("count_substring<Sub>(str)", "[string_ops]") {
   STATIC_CHECK(("abc"_fs | ops::count_substring<"xyz">) == 0);
   STATIC_CHECK((""_fs | ops::count_substring<"a">) == 0);
   STATIC_CHECK(("aaa"_fs | ops::count_substring<"aa">) == 1);
+  // 空の検索文字列は 0 回（無限ループしない）
+  STATIC_CHECK(detail::count_occurrences<"abc"_fs, ""_fs>() == 0);
+}
+
+TEST_CASE("br_to_target: replacement longer than the tag", "[string_ops]") {
+  STATIC_CHECK(br_to_target<"<br>"_fs>("a<br>b<br>c"_fs).sv() == "a<br>b<br>c");
+  STATIC_CHECK(br_to_target<"<br class=\"x\">"_fs>("a<br>b"_fs).sv() == "a<br class=\"x\">b");
 }
 
 TEST_CASE("reverse(str)", "[string_ops]") {

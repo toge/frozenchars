@@ -356,6 +356,13 @@ TEST_CASE("word_wrap: multiple spaces compressed") {
   REQUIRE(w.sv() == "hello\nworld");
 }
 
+TEST_CASE("word_wrap: no trailing spaces before inserted newline") {
+  // 改行直前の空白はすべて除去する（1個だけ除去する実装では "aa \nb" になっていた）
+  REQUIRE(word_wrap("aa   b"_fs, 5).sv() == "aa\nb");
+  REQUIRE(word_wrap("a  \n\nb"_fs, 10).sv() == "a\n\nb");
+  REQUIRE(word_wrap("a \n"_fs, 10).sv() == "a\n");
+}
+
 TEST_CASE("word_wrap: leading and trailing spaces") {
   auto constexpr w = word_wrap("  hello world  ", 20);
   REQUIRE(w.sv() == "hello world");

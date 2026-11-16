@@ -146,27 +146,109 @@ struct format_scan_result {
 }
 
 /**
+ * @brief 浮動小数点表記の末尾 0（と小数点）を除去する
+ *
+ * 指数部 'e...' はそのまま保持する。
+ *
+ * @param buf 対象バッファ（長さを詰めた位置へ指数部を前詰めする）
+ * @param len 元の長さ
+ * @return size_t 詰めた後の長さ
+ */
+template <size_t N>
+constexpr auto trim_float_repr(std::array<char, N>& buf, size_t len) noexcept -> size_t {
+  auto epos = len;
+  for (auto i = 0uz; i < len; ++i) {
+    if (buf[i] == 'e') {
+      epos = i;
+      break;
+    }
+  }
+  auto dot = epos;
+  for (auto i = 0uz; i < epos; ++i) {
+    if (buf[i] == '.') {
+      dot = i;
+      break;
+    }
+  }
+  auto new_len = epos;
+  if (dot != epos) {
+    while (new_len > dot + 1 && buf[new_len - 1] == '0')
+      --new_len;
+    if (new_len == dot + 1)
+      --new_len;
+  }
+  for (auto i = epos; i < len; ++i) {
+    buf[new_len++] = buf[i];
+  }
+  return new_len;
+}
+
+template <typename Buf>
+constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t;
+
+/**
  * @brief 浮動小数点数を固定小数点形式でバッファに書き込む
+ *
+ * 小数部は最近接偶数丸め（std::format と同じ）。long long で正確に表せない
+ * 巨大値は科学計数法へフォールバックする。
  */
 template <typename Buf>
 constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+  auto const write_str = [&](std::string_view s) noexcept {
+    auto n = 0uz;
+    for (auto const ch : s) {
+      buf[pos + n] = ch;
+      ++n;
+    }
+    return n;
+  };
+  if (value != value)
+    return write_str("nan");
+  if (value > std::numeric_limits<double>::max())
+    return write_str("inf");
+  if (value < -std::numeric_limits<double>::max())
+    return write_str("-inf");
+
   auto written = 0uz;
   if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
 
-  auto int_part = static_cast<unsigned long long>(value);
-  auto [int_data, int_len] = to_dec_chars(static_cast<long long>(int_part));
+  // long long で正確に表せない値は科学計数法で出力する
+  if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
+    return written + format_float_scientific(buf, pos + written, value, precision);
+  }
+
+  auto const p = std::min(std::max(precision, 0), 18);
+  auto scale = 1LL;
+  for (int k = 0; k < p; ++k)
+    scale *= 10;
+  auto integral = static_cast<long long>(value);
+  auto frac_scaled = (value - static_cast<double>(integral)) * static_cast<double>(scale);
+  auto frac = static_cast<long long>(frac_scaled);
+  auto const rem = frac_scaled - static_cast<double>(frac);
+  auto const parity = (p > 0 ? frac : integral) & 1;
+  if (rem > 0.5 || (rem == 0.5 && parity != 0))
+    ++frac;
+  if (frac >= scale) {
+    frac -= scale;
+    ++integral;
+  }
+
+  auto [int_data, int_len] = to_dec_chars(integral);
   for (auto j = 0uz; j < int_len; ++j) {
-    buf[pos + written] = int_data[j]; ++written;
+    buf[pos + written] = int_data[j];
+    ++written;
   }
 
   if (precision > 0) {
     buf[pos + written] = '.'; ++written;
-    double frac = value - static_cast<double>(int_part);
-    for (int p = 0; p < precision; ++p) {
-      frac *= 10.0;
-      auto digit = static_cast<int>(frac);
-      buf[pos + written] = static_cast<char>('0' + digit); ++written;
-      frac -= static_cast<double>(digit);
+    for (int d = p - 1; d >= 0; --d) {
+      buf[pos + written + static_cast<size_t>(d)] = static_cast<char>('0' + frac % 10);
+      frac /= 10;
+    }
+    written += static_cast<size_t>(p);
+    for (int d = p; d < precision; ++d) {
+      buf[pos + written] = '0';
+      ++written;
     }
   }
   return written;
@@ -174,40 +256,73 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
 
 /**
  * @brief 浮動小数点数を科学計数法(例:1.2e+03)でバッファに書き込む
+ *
+ * 仮数部は最近接偶数丸め。繰り上がりで 9.99 -> 1.00e+01 のように指数が増える。
  */
 template <typename Buf>
 constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+  auto const write_str = [&](std::string_view s) noexcept {
+    auto n = 0uz;
+    for (auto const ch : s) {
+      buf[pos + n] = ch;
+      ++n;
+    }
+    return n;
+  };
+  if (value != value)
+    return write_str("nan");
+  if (value > std::numeric_limits<double>::max())
+    return write_str("inf");
+  if (value < -std::numeric_limits<double>::max())
+    return write_str("-inf");
+
   auto written = 0uz;
   if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
 
-  if (value == 0.0) {
-    buf[pos + written] = '0'; ++written;
-    if (precision > 0) {
-      buf[pos + written] = '.'; ++written;
-      for (int p = 0; p < precision; ++p) { buf[pos + written] = '0'; ++written; }
+  int exponent = 0;
+  if (value != 0.0) {
+    while (value >= 10.0) {
+      value /= 10.0;
+      ++exponent;
     }
-    buf[pos + written] = 'e'; ++written;
-    buf[pos + written] = '+'; ++written;
-    buf[pos + written] = '0'; ++written;
-    buf[pos + written] = '0'; ++written;
-    return written;
+    while (value < 1.0) {
+      value *= 10.0;
+      --exponent;
+    }
   }
 
-  int exponent = 0;
-  while (value >= 10.0) { value /= 10.0; ++exponent; }
-  while (value < 1.0 && value > 0.0) { value *= 10.0; --exponent; }
+  auto const p = std::min(std::max(precision, 0), 18);
+  auto scale = 1LL;
+  for (int k = 0; k < p; ++k)
+    scale *= 10;
+  auto first = static_cast<int>(value);
+  auto frac_scaled = (value - static_cast<double>(first)) * static_cast<double>(scale);
+  auto frac = static_cast<long long>(frac_scaled);
+  auto const rem = frac_scaled - static_cast<double>(frac);
+  auto const parity = (p > 0 ? frac : first) & 1;
+  if (rem > 0.5 || (rem == 0.5 && parity != 0))
+    ++frac;
+  if (frac >= scale) {
+    frac -= scale;
+    ++first;
+    if (first >= 10) {
+      first = 1;
+      ++exponent;
+    }
+  }
 
-  auto first_digit = static_cast<int>(value);
-  buf[pos + written] = static_cast<char>('0' + first_digit); ++written;
-  value -= static_cast<double>(first_digit);
-
+  buf[pos + written] = static_cast<char>('0' + first);
+  ++written;
   if (precision > 0) {
     buf[pos + written] = '.'; ++written;
-    for (int p = 0; p < precision; ++p) {
-      value *= 10.0;
-      auto digit = static_cast<int>(value);
-      buf[pos + written] = static_cast<char>('0' + digit); ++written;
-      value -= static_cast<double>(digit);
+    for (int d = p - 1; d >= 0; --d) {
+      buf[pos + written + static_cast<size_t>(d)] = static_cast<char>('0' + frac % 10);
+      frac /= 10;
+    }
+    written += static_cast<size_t>(p);
+    for (int d = p; d < precision; ++d) {
+      buf[pos + written] = '0';
+      ++written;
     }
   }
 
@@ -227,6 +342,9 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
 /**
  * @brief 浮動小数点数を汎用形式でバッファに書き込む
  *
+ * 固定小数点と科学計数法の短い方（指数が範囲外なら科学計数法）を選び、
+ * 末尾の不要な 0 を除去する。
+ *
  * @tparam WorkSize 作業バッファの容量（精度 + 余裕ぶん。呼び出し側の仕様から決める）
  * @tparam Buf 出力バッファ
  */
@@ -236,16 +354,44 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
 
   std::array<char, WorkSize> fixed_buf{};  // 固定小数点表現の作業バッファ
   std::array<char, WorkSize> sci_buf{};    // 科学計数法表現の作業バッファ
-  auto fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
-  auto sci_len = format_float_scientific(sci_buf, 0, value, precision);
+  auto const fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
+  auto const sci_len = format_float_scientific(sci_buf, 0, value, precision);
+  auto const fixed_trim = trim_float_repr(fixed_buf, fixed_len);
+  auto const sci_trim = trim_float_repr(sci_buf, sci_len);
 
-  auto trim_len = fixed_len;
-  while (trim_len > 1 && fixed_buf[trim_len - 1] == '0') --trim_len;
-  if (trim_len > 1 && fixed_buf[trim_len - 1] == '.') --trim_len;
+  // 科学計数法の 10 進指数（'e' が無ければ 0）
+  auto exp10 = 0;
+  for (auto i = 0uz; i < sci_trim; ++i) {
+    if (sci_buf[i] != 'e')
+      continue;
+    auto j = i + 1;
+    bool neg = false;
+    if (j < sci_trim && (sci_buf[j] == '+' || sci_buf[j] == '-')) {
+      neg = sci_buf[j] == '-';
+      ++j;
+    }
+    while (j < sci_trim && sci_buf[j] >= '0' && sci_buf[j] <= '9') {
+      exp10 = exp10 * 10 + (sci_buf[j] - '0');
+      ++j;
+    }
+    if (neg)
+      exp10 = -exp10;
+    break;
+  }
 
-  bool use_sci = (sci_len < trim_len) || (trim_len <= 0);
-  auto src = use_sci ? sci_buf : fixed_buf;
-  auto src_len = use_sci ? sci_len : trim_len;
+  bool use_sci = (exp10 < -4) || (exp10 >= 6 && sci_trim <= fixed_trim);
+  if (value != 0 && [&] {
+        for (auto i = 0uz; i < fixed_trim; ++i) {
+          if (fixed_buf[i] >= '1' && fixed_buf[i] <= '9')
+            return false;
+        }
+        return true;
+      }()) {
+    use_sci = true; // 固定小数点では 0 に丸まる非ゼロ値
+  }
+
+  auto const src = use_sci ? sci_buf.data() : fixed_buf.data();
+  auto const src_len = use_sci ? sci_trim : fixed_trim;
   for (auto j = 0uz; j < src_len; ++j) {
     buf[pos + j] = src[j];
   }

@@ -8,6 +8,27 @@
 
 ### Fixed
 
+- `parse_number` (コンパイル時パス): 指数部の計算で浮動小数点のオーバーフローを定数式エラーにしていた（`"1e300"` などがコンパイル不能）。乗算前に上限を判定し、範囲外は `std::errc::result_out_of_range` を返す。`float`/`double` の `max_exponent10`/`min_exponent10` を超える指数、指数桁あふれ、非ゼロ値が 0 に丸められるアンダーフローも検出する。
+- `detail::to_float_chars`: NaN/Infinity や `long long` 範囲を超える値を空文字列として黙って返していた。`FROZENCHARS_PRECONDITION` で診断する。
+- `frozen_format` の浮動小数点: 小数部を 1 桁ずつ切り捨てていたため `{:.2f}` が `0.57` を `"0.56"`、`{:.1f}` が `0.999` を `"0.9"` にしていた。最近接偶数丸め（`std::format` と同じ）に変更。`long long` を超える値で `{:.0f}` の符号が反転する問題も修正し、科学計数法で出力する。NaN/Infinity は `nan`/`inf`、汎用形式は指数と長さで固定/科学を選び末尾 0 を除去する。
+- `split_numbers`: 数値でないトークンで `std::expected` を `*` で剥がして未定義動作になっていた。コンパイルエラー（`-fno-exceptions` ビルドでは `abort`）にする。
+- `dirname`: 末尾の `/` を無視せず `dirname("foo/")` が `"foo"` になっていた。`"."` を返す。
+- `word_wrap`: 改行の直前や折り返しの直前で末尾の空白を 1 個しか除去せず、`"aa   b"` の折り返しが `"aa \nb"` になっていた。すべて除去する。
+- `detail::count_occurrences`（空の検索文字列）: `pos += 0` で無限ループしていた。0 回を返す。
+- `hex_decode`: 奇数長の 16 進文字列を前提条件違反として拒否する（従来は末尾 1 桁を読み飛ばしていた）。
+- `utf8_reverse`: 不正な UTF-8 入力で再エンコード後の長さが元バッファを超え、範囲外書き込みになっていた。`FROZENCHARS_PRECONDITION` で検出する。
+- `utf8_substr` / `utf8_reverse`（NTTP 版）: 戻り値型が文字列長（終端 `'\0'` を含まない）になっていた。バッファ長を保つ。
+- `unescape_c<...>`: `"\\\\uD800"` のようなエスケープされたバックスラッシュの後ろの `u` を `\u` エスケープと誤認してコンパイルエラーにしていた。
+- `br_to_target`: 出力バッファが `max(N*4, 2048)` 固定で、長い置換文字列と多数の `<br>` で溢れていた。入力長から上限を算出する。
+- `minify_js`: 正規表現リテラル内の `//` や `/*` をコメントとして削除していた。式の先頭に現れる `/` をリテラルとして扱い、エスケープと文字クラスを考慮して閉じ `/` まで保持する（`shortcut:` のとおり `)` 直後のリテラルは除算とみなす）。
+- `wildcard_match` / `wildcard_find`: 空の代替（`()`、`(|a)`、`(a|)`、`(a||b)`）、空の文字クラス `[]`、先頭/末尾 `-` のクラスを `frozen_regex` に委譲してコンパイルエラーにしていた。ネイティブ経路に回す。
+- `parse_iso_date` / `parse_iso_datetime`: 数字以外の文字や存在しない日付（`2023-02-30`）を受理していた。コンパイル時は `static_assert`、実行時は `std::errc::invalid_argument` で拒否する。`format_iso_date` は年が `0..9999` の範囲外なら診断する。
+- `detail::find_impl`: 実装が `detail::find_substring` と重複していた。前方参照する薄い転送関数にし、空の検索文字列で `pos > length` のとき `npos` を返す `find_substring` の規則に統一する。
+
+### Changed
+
+- README: コンパイル時パスの浮動小数点変換は正しい丸めを保証せず、実行時パスと 1〜2 ulp 差が出ることを明記。`split_numbers` の失敗はランタイムの例外ではなくコンパイルエラーであることを修正。
+
 - `cmake/frozencharsConfig.cmake.in`: glaze なしでビルド・インストールした frozenchars を `find_package` すると、glaze が無い環境では失敗していた。ビルド時に glaze を検出した場合のみ `find_dependency(glaze)` するようにした。
 - `freeze(Precision(v, p))`: 小数部を 1 桁ずつ切り捨てていたため二進誤差がそのまま出ていた（`Precision(0.57, 2)` → `"0.56"`）。四捨五入するようにした（ちょうど中間の値は 0 から離れる方向に丸める。`printf` の偶数丸めとは異なる）。
 - `frozen_trie_index` / `frozen_trie_set` / `frozen_trie_map`: 長さ 256 のキーが static_assert を通り、ラベル長（`uint8_t`）が 0 に切り詰められて誤検索していた。上限を 255 文字にした。

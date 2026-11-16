@@ -69,6 +69,15 @@ static_assert(minify_js("   \t\n  ").sv() == std::string_view(""));
 // 13. ダブルクォート内のエスケープされた quote は閉じない
 static_assert(minify_js("var s = \" \\\" \";").sv() == std::string_view("var s=\" \\\" \""));
 
+// 14. 正規表現リテラルは文字列と同様に保持する（/ の後の // をコメント扱いしない）
+static_assert(minify_js("var r = /ab+c/g;").sv() == std::string_view("var r=/ab+c/g"));
+static_assert(minify_js("s.replace(/[a\\/b]/g, '');").sv() == std::string_view("s.replace(/[a\\/b]/g,'')"));
+static_assert(minify_js("return /a\\/b/;").sv() == std::string_view("return/a\\/b/"));
+static_assert(minify_js("function f() { return /a\\/b/.test(s); }").sv() == std::string_view("function f(){return/a\\/b/.test(s)}"));
+
+// 15. 除算は正規表現と誤判定しない
+static_assert(minify_js("var x = a / b / c;").sv() == std::string_view("var x=a/b/c"));
+static_assert(minify_js("x = y / 2; // c\nz = 3;").sv() == std::string_view("x=y/2;z=3"));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

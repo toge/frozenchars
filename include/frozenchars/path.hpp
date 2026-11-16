@@ -21,7 +21,18 @@ namespace frozenchars::path {
  */
 template <size_t N>
 [[nodiscard]] auto consteval dirname(FrozenString<N> const& path_str) noexcept -> FrozenString<(N < 2) ? 2 : N> {
-  auto const slash_pos = detail::find_last_of_impl(path_str, FrozenString{"/"});
+  // 末尾連続 '/' は 1 個に正規化されたものとみなす
+  auto end = path_str.length;
+  while (end > 1 && path_str.buffer[end - 1] == '/') {
+    --end;
+  }
+  auto slash_pos = std::string_view::npos;
+  for (auto i = end; i-- > 0;) {
+    if (path_str.buffer[i] == '/') {
+      slash_pos = i;
+      break;
+    }
+  }
   // '/' が見つからない場合は "." を返す。
   if (slash_pos == std::string_view::npos) {
     return FrozenString{"."};

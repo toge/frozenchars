@@ -161,6 +161,7 @@ template <typename T>
   auto i = 0uz;
 
   if (value != value || value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max()) {
+    FROZENCHARS_PRECONDITION(false, "to_float_chars: NaN/Infinity is not supported");
     return std::pair{buffer, i};
   }
 
@@ -169,6 +170,7 @@ template <typename T>
   }
 
   if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
+    FROZENCHARS_PRECONDITION(false, "to_float_chars: value exceeds long long range");
     return std::pair{buffer, i};
   }
 

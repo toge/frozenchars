@@ -1137,6 +1137,7 @@ template <typename T>
   auto i = 0uz;
 
   if (value != value || value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max()) {
+    FROZENCHARS_PRECONDITION(false, "to_float_chars: NaN/Infinity is not supported");
     return std::pair{buffer, i};
   }
 
@@ -1145,6 +1146,7 @@ template <typename T>
   }
 
   if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
+    FROZENCHARS_PRECONDITION(false, "to_float_chars: value exceeds long long range");
     return std::pair{buffer, i};
   }
 
@@ -2037,21 +2039,22 @@ template <typename T, size_t N>
 
     // コンパイル時パス: uint64_t で整数部・小数部を蓄積して精度を向上させる。
     // float/double への変換は最後に1回だけ行う。
-    auto constexpr pow10 = [](int n) -> std::expected<T, std::errc> {
-      // コンパイル時ステップ枯渇を防ぐため、指数に上限を設ける。double の最大実用値は約 308。
-      if (n < 0 || n > 1024) {
-        return std::unexpected(std::errc::result_out_of_range);
-      }
+    auto constexpr pow10 = [](int n) -> T {
       T result = 1;
-      T base   = 10;
-      while (n > 0) {
-        if (n & 1) {
-          result *= base;
-        }
-        base *= base;
-        n >>= 1;
-      }
+      for (int k = 0; k < n; ++k)
+        result *= T(10);
       return result;
+    };
+
+    // constexpr では浮動小数点のオーバーフローが定数式エラーになるため、
+    // 乗算前に 1 桁ずつ上限を判定する。
+    auto const scale_up = [](T& v, int n) noexcept -> bool {
+      for (int k = 0; k < n; ++k) {
+        if (v > std::numeric_limits<T>::max() / T(10))
+          return false;
+        v *= T(10);
+      }
+      return true;
     };
 
     size_t i        = start;
@@ -2070,30 +2073,33 @@ template <typename T, size_t N>
       has_digits = true;
     }
     T res = static_cast<T>(int_part);
-    if (extra_exp > 0) {
-      auto const e = pow10(extra_exp);
-      if (!e) return std::unexpected(e.error());
-      res *= *e;
+    if (extra_exp > 0 && !scale_up(res, extra_exp)) {
+      return std::unexpected(std::errc::result_out_of_range);
     }
 
     // 小数部を uint64_t で蓄積し、最後に1回の除算で精度を確保する
     if (i < sv.size() && sv[i] == '.') {
       ++i;
       std::uint64_t frac_digits = 0;
-      int           frac_count  = 0;
+      int frac_count = 0; // 蓄積した桁数（最大 18）
+      int frac_scale = 0; // 小数点以下の全桁数
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
         if (frac_count < 18) {
           frac_digits = frac_digits * 10 + static_cast<std::uint64_t>(sv[i] - '0');
           ++frac_count;
         }
-        // 18桁以降は丸め誤差が小さいため切り捨て
+        // 18桁以降は下位桁として指数だけ進める
+        ++frac_scale;
         ++i;
         has_digits = true;
       }
       if (frac_count > 0) {
-        auto const e = pow10(frac_count);
-        if (!e) return std::unexpected(e.error());
-        res += static_cast<T>(frac_digits) / *e;
+        // 10^22 は T で表現できるため、長い小数部は 22 桁ずつ割る
+        T frac = static_cast<T>(frac_digits);
+        for (auto remaining = frac_scale; remaining > 0 && frac != 0; remaining -= 22) {
+          frac /= pow10(remaining > 22 ? 22 : remaining);
+        }
+        res += frac;
       }
     }
 
@@ -2108,7 +2114,9 @@ template <typename T, size_t N>
       }
       bool has_exp_digits = false;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-        exp = exp * 10 + static_cast<int>(sv[i] - '0');
+        // 指数の桁あふれを防ぐ。上限を超える値は結果的に範囲外となる
+        if (exp < 1000000)
+          exp = exp * 10 + static_cast<int>(sv[i] - '0');
         ++i;
         has_exp_digits = true;
       }
@@ -2123,16 +2131,25 @@ template <typename T, size_t N>
       return std::unexpected(std::errc::invalid_argument);
     }
     T final_res = neg ? -res : res;
-    if (exp != 0) {
+    if (exp != 0 && res != 0) {
+      constexpr int max_exp10 = std::numeric_limits<T>::max_exponent10; // double: 308, float: 38
+      constexpr int min_exp10 = std::numeric_limits<T>::min_exponent10; // double: -307, float: -37
       if (exp > 0) {
-        auto const e = pow10(exp);
-        if (!e) return std::unexpected(e.error());
-        final_res *= *e;
+        if (exp > max_exp10 || !scale_up(final_res, exp)) {
+          return std::unexpected(std::errc::result_out_of_range);
+        }
       } else {
-        auto const e = pow10(-exp);
-        if (!e) return std::unexpected(e.error());
-        final_res /= *e;
+        // サブノーマルを考慮して下限は min_exponent10 より少し下まで許す
+        if (-exp > -min_exp10 + 20) {
+          return std::unexpected(std::errc::result_out_of_range);
+        }
+        for (int k = 0; k < -exp; ++k)
+          final_res /= T(10);
       }
+    }
+    if (res != 0 && final_res == 0) {
+      // std::from_chars と同じく、非ゼロの入力が 0 に丸められたら範囲外
+      return std::unexpected(std::errc::result_out_of_range);
     }
     if (final_res == std::numeric_limits<T>::infinity() || final_res == -std::numeric_limits<T>::infinity()) {
       return std::unexpected(std::errc::result_out_of_range);
@@ -2528,7 +2545,10 @@ template <size_t N>
  */
 template <FrozenString To, size_t N>
 [[nodiscard]] consteval auto br_to_target(FrozenString<N> const& str) noexcept {
-  constexpr auto MAX_SIZE = std::max(N * 4, 2048uz);
+  constexpr auto INPUT_SIZE = (N > 0 ? N - 1 : 0);
+  // 最短の <br> は 4 文字なので、置換回数は最大 INPUT_SIZE/4 + 1
+  constexpr auto MAX_SIZE = INPUT_SIZE + (INPUT_SIZE / 4 + 1) * To.length + 1;
+
   auto           res      = FrozenString<MAX_SIZE>{};
   auto           offset   = 0uz;
   auto           pos      = 0uz;
@@ -3061,34 +3081,8 @@ namespace detail {
  */
 template <size_t N, size_t M>
 consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> const& needle, size_t pos = 0) noexcept {
-  if (needle.length == 0) {
-    return pos;
-  }
-  if (needle.length > haystack.length || pos > haystack.length - needle.length) {
-    return std::string_view::npos;
-  }
-  if (needle.length == 1) {  // Special case for char
-    for (auto i = pos; i < haystack.length; ++i) {
-      if (haystack.buffer[i] == needle.buffer[0]) {
-        return i;
-      }
-    }
-    return std::string_view::npos;
-  }
-  auto const needle_len = needle.length;
-  for (auto i = pos; i <= haystack.length - needle_len; ++i) {
-    bool match = true;
-    for (auto j = 0uz; j < needle_len; ++j) {
-      if (haystack.buffer[i + j] != needle.buffer[j]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) {
-      return i;
-    }
-  }
-  return std::string_view::npos;
+  // 実装は detail::find_substring に一本化（count_substring_impl と共通）
+  return detail::find_substring(haystack, needle.sv(), pos);
 }
 
 /**
@@ -3100,6 +3094,10 @@ consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> cons
 template <auto Str, auto From>
   requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
 [[nodiscard]] consteval auto count_occurrences() noexcept -> std::size_t {
+  // 空 needle は 0 回（count_substring_impl と同じ規則）。無限ループ防止。
+  if constexpr (From.length == 0) {
+    return 0;
+  }
   auto count = 0uz;
   auto pos   = 0uz;
   while (pos < Str.length) {
@@ -4506,7 +4504,7 @@ template <size_t N>
 
     // 改行はそのまま保持
     if (c == '\n') {
-      if (offset > 0 && col == 0 && res.buffer[offset - 1] == ' ') {
+      while (offset > 0 && res.buffer[offset - 1] == ' ') {
         --offset;
       }
       res.buffer[offset++] = '\n';
@@ -4537,9 +4535,8 @@ template <size_t N>
 
       // 幅を超える場合は改行を挿入
       if (col + 1 + word_len > width) {
-        if (offset > 0 && res.buffer[offset - 1] == ' ') {
+        while (offset > 0 && res.buffer[offset - 1] == ' ') {
           --offset;
-          --col;
         }
         res.buffer[offset++] = '\n';
         col                  = 0;
@@ -5711,7 +5708,11 @@ template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = 
   auto const token_count = split_count<IsDelimiter>(str);
   auto const tokens = split<N, IsDelimiter>(str);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
+    auto const value = frozenchars::parse_number<Result>(tokens[i]);
+    if (!value) {
+      FROZENCHARS_CONSTEVAL_FAIL("split_numbers: token is not a valid number");
+    }
+    res[i] = *value;
   }
   return res;
 }
@@ -5726,7 +5727,11 @@ template <typename Pred, ParseNumberTarget Int = int, size_t N>
   auto const token_count = split_count(str, is_delimiter);
   auto const tokens = split<N>(str, is_delimiter);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
+    auto const value = frozenchars::parse_number<Result>(tokens[i]);
+    if (!value) {
+      FROZENCHARS_CONSTEVAL_FAIL("split_numbers: token is not a valid number");
+    }
+    res[i] = *value;
   }
   return res;
 }
@@ -6653,7 +6658,18 @@ namespace frozenchars::path {
  */
 template <size_t N>
 [[nodiscard]] auto consteval dirname(FrozenString<N> const& path_str) noexcept -> FrozenString<(N < 2) ? 2 : N> {
-  auto const slash_pos = detail::find_last_of_impl(path_str, FrozenString{"/"});
+  // 末尾連続 '/' は 1 個に正規化されたものとみなす
+  auto end = path_str.length;
+  while (end > 1 && path_str.buffer[end - 1] == '/') {
+    --end;
+  }
+  auto slash_pos = std::string_view::npos;
+  for (auto i = end; i-- > 0;) {
+    if (path_str.buffer[i] == '/') {
+      slash_pos = i;
+      break;
+    }
+  }
   // '/' が見つからない場合は "." を返す。
   if (slash_pos == std::string_view::npos) {
     return FrozenString{"."};
@@ -7748,6 +7764,32 @@ constexpr auto js_output_ends_with_word(char const* output, size_t offset, std::
   return !js_needs_space(before, 'a');
 }
 
+/// @brief '/' が正規表現リテラルの開始か（除算ではないか）を直前の出力から判定する
+///
+/// shortcut: 閉じ括弧 ')' / ']' の直後の正規表現は除算とみなす（`if(x) /re/.test(s)` は非対応）。
+/// 万一誤判定しても本文はそのまま出力され、`//` を含む場合のみ取りこぼす。
+constexpr auto js_regex_can_start(char const* output, size_t offset) noexcept -> bool {
+  auto const is_word = [](char ch) noexcept { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '$'; };
+  auto start = offset;
+  while (start > 0 && is_word(output[start - 1]))
+    --start;
+  if (start == offset) {
+    // 直前が記号または先頭。閉じ括弧・文字列の直後は除算とみなす
+    if (offset == 0)
+      return true;
+    auto const prev = output[offset - 1];
+    return prev != ')' && prev != ']' && prev != '"' && prev != '\'' && prev != '`';
+  }
+  // 式の先頭に来るキーワードの直後は正規表現リテラル
+  auto const word = std::string_view{output + start, offset - start};
+  constexpr std::string_view keywords[] = {"return", "typeof", "case", "in", "of", "new", "delete", "void", "throw", "else", "do", "yield", "await"};
+  for (auto const kw : keywords) {
+    if (word == kw)
+      return true;
+  }
+  return false;
+}
+
 /// @brief ';' の直後（空白・コメントを飛ばした先）が '}' か EOF なら ASI 上省略可能と判定する
 constexpr auto js_semicolon_redundant(char const* input, size_t len, size_t j) noexcept -> bool {
   while (true) {
@@ -7867,6 +7909,35 @@ constexpr auto minify_js(char const* input, size_t len, char* output, size_t out
     }
     pending_space = false;
     pending_newline = false;
+
+    // 正規表現リテラル: 式の先頭に現れる '/' はコメントではなくリテラル。
+    // 文字列と同様に閉じ '/' までをエスケープと文字クラスを考慮してそのまま出力する。
+    if (c == '/' && js_regex_can_start(output, offset)) {
+      put('/');
+      ++i;
+      bool in_class = false;
+      while (i < len) {
+        auto const rc = input[i];
+        if (rc == '\\' && i + 1 < len) {
+          put(rc);
+          put(input[i + 1]);
+          i += 2;
+          continue;
+        }
+        if (rc == '\n')
+          break; // 未終端のリテラルは行末で打ち切る
+        put(rc);
+        ++i;
+        if (rc == '[')
+          in_class = true;
+        else if (rc == ']')
+          in_class = false;
+        else if (rc == '/' && !in_class)
+          break;
+      }
+      after_control = false;
+      continue;
+    }
 
     auto closes_control = false;
     if (c == '(') {
@@ -9607,6 +9678,11 @@ template <FrozenString Str>
       continue;
     }
     auto const esc = s[i + 1];
+    if (esc == '\\') {
+      // "\\\\" はエスケープされたバックスラッシュ。後続の u/U は文字列の一部
+      ++i;
+      continue;
+    }
     if (esc == 'u') {
       auto const r = parse_hex_digits(s, i + 2, 4);
       if (r.valid && r.count == 4 && (r.value >= 0xD800 && r.value <= 0xDFFF)) {
@@ -9666,6 +9742,7 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval hex_decode(FrozenString<N> const& str) noexcept {
   auto const s = str.sv();
+  FROZENCHARS_PRECONDITION(s.size() % 2 == 0, "hex_decode: odd-length hex string");
   auto res = FrozenString<N>{}; // 元のバッファサイズを流用（デコード後は必ず小さくなる）
   auto offset = 0uz;
 
@@ -10515,11 +10592,11 @@ template <size_t Start, size_t Count, size_t N>
  * @tparam Start 開始符号点インデックス
  * @tparam Count 切り出す符号点数
  * @tparam Str 対象文字列（FrozenString NTTP）
- * @return FrozenString<Str.length> 切り出した文字列
+ * @return auto 切り出した文字列
  */
 template <size_t Start, size_t Count, auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-[[nodiscard]] auto consteval utf8_substr() noexcept -> FrozenString<Str.length> {
+[[nodiscard]] auto consteval utf8_substr() noexcept {
   return utf8_substr<Start, Count>(Str);
 }
 
@@ -10541,6 +10618,7 @@ template <size_t N>
     size_t length = 0;
     detail::utf8_encode_codepoint(codepoints[i], bytes, length);
     for (auto j = 0uz; j < length; ++j) {
+      FROZENCHARS_PRECONDITION(offset < N - 1, "utf8_reverse: invalid UTF-8 input expands past the output buffer");
       res.buffer[offset++] = bytes[j];
     }
   }
@@ -10561,11 +10639,11 @@ template <size_t N>
  * @brief UTF-8 文字列を符号点単位で逆順にする（NTTP版）
  *
  * @tparam Str 対象文字列（FrozenString NTTP）
- * @return FrozenString<Str.length> 逆順にした文字列
+ * @return auto 逆順にした文字列
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-[[nodiscard]] auto consteval utf8_reverse() noexcept -> FrozenString<Str.length> {
+[[nodiscard]] auto consteval utf8_reverse() noexcept {
   return utf8_reverse(Str);
 }
 
@@ -14466,11 +14544,22 @@ struct wildcard_to_regex_helper {
       if (c == '[') {
         auto close = find_matching_close_bracket<PAT>(i);
         if (close >= PAT.size()) return false;
+        // 空クラスは frozen_regex ではエラー
+        if (close == i + 1)
+          return false;
         // 否定クラスは frozen_regex が DotChars (英数字+_) に対する補集合を取るため委譲不可
         if (i + 1 < PAT.size() && (PAT.data()[i + 1] == '!' || PAT.data()[i + 1] == '^')) return false;
+        // 先頭/末尾の '-' はネイティブ経路と frozen_regex で解釈が異なる
+        if (PAT.data()[i + 1] == '-' || PAT.data()[close - 1] == '-')
+          return false;
         i = close;
         continue;
       }
+      // 空の代替（() / (|a) / (a|) / (a||b)）は frozen_regex でエラーになる
+      if (c == '(' && i + 1 < PAT.size() && (PAT.data()[i + 1] == ')' || PAT.data()[i + 1] == '|'))
+        return false;
+      if (c == '|' && (i + 1 >= PAT.size() || PAT.data()[i + 1] == ')' || PAT.data()[i + 1] == '|'))
+        return false;
       // frozen_regex がメタ文字として解釈する（またはエラーにする）文字はリテラルとして委譲できない
       if (c == '.' || c == '{' || c == '}' || c == '+' || c == '^' || c == '$') return false;
       if (c == '(') ++paren_depth;
@@ -15507,27 +15596,109 @@ struct format_scan_result {
 }
 
 /**
+ * @brief 浮動小数点表記の末尾 0（と小数点）を除去する
+ *
+ * 指数部 'e...' はそのまま保持する。
+ *
+ * @param buf 対象バッファ（長さを詰めた位置へ指数部を前詰めする）
+ * @param len 元の長さ
+ * @return size_t 詰めた後の長さ
+ */
+template <size_t N>
+constexpr auto trim_float_repr(std::array<char, N>& buf, size_t len) noexcept -> size_t {
+  auto epos = len;
+  for (auto i = 0uz; i < len; ++i) {
+    if (buf[i] == 'e') {
+      epos = i;
+      break;
+    }
+  }
+  auto dot = epos;
+  for (auto i = 0uz; i < epos; ++i) {
+    if (buf[i] == '.') {
+      dot = i;
+      break;
+    }
+  }
+  auto new_len = epos;
+  if (dot != epos) {
+    while (new_len > dot + 1 && buf[new_len - 1] == '0')
+      --new_len;
+    if (new_len == dot + 1)
+      --new_len;
+  }
+  for (auto i = epos; i < len; ++i) {
+    buf[new_len++] = buf[i];
+  }
+  return new_len;
+}
+
+template <typename Buf>
+constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t;
+
+/**
  * @brief 浮動小数点数を固定小数点形式でバッファに書き込む
+ *
+ * 小数部は最近接偶数丸め（std::format と同じ）。long long で正確に表せない
+ * 巨大値は科学計数法へフォールバックする。
  */
 template <typename Buf>
 constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+  auto const write_str = [&](std::string_view s) noexcept {
+    auto n = 0uz;
+    for (auto const ch : s) {
+      buf[pos + n] = ch;
+      ++n;
+    }
+    return n;
+  };
+  if (value != value)
+    return write_str("nan");
+  if (value > std::numeric_limits<double>::max())
+    return write_str("inf");
+  if (value < -std::numeric_limits<double>::max())
+    return write_str("-inf");
+
   auto written = 0uz;
   if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
 
-  auto int_part = static_cast<unsigned long long>(value);
-  auto [int_data, int_len] = to_dec_chars(static_cast<long long>(int_part));
+  // long long で正確に表せない値は科学計数法で出力する
+  if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
+    return written + format_float_scientific(buf, pos + written, value, precision);
+  }
+
+  auto const p = std::min(std::max(precision, 0), 18);
+  auto scale = 1LL;
+  for (int k = 0; k < p; ++k)
+    scale *= 10;
+  auto integral = static_cast<long long>(value);
+  auto frac_scaled = (value - static_cast<double>(integral)) * static_cast<double>(scale);
+  auto frac = static_cast<long long>(frac_scaled);
+  auto const rem = frac_scaled - static_cast<double>(frac);
+  auto const parity = (p > 0 ? frac : integral) & 1;
+  if (rem > 0.5 || (rem == 0.5 && parity != 0))
+    ++frac;
+  if (frac >= scale) {
+    frac -= scale;
+    ++integral;
+  }
+
+  auto [int_data, int_len] = to_dec_chars(integral);
   for (auto j = 0uz; j < int_len; ++j) {
-    buf[pos + written] = int_data[j]; ++written;
+    buf[pos + written] = int_data[j];
+    ++written;
   }
 
   if (precision > 0) {
     buf[pos + written] = '.'; ++written;
-    double frac = value - static_cast<double>(int_part);
-    for (int p = 0; p < precision; ++p) {
-      frac *= 10.0;
-      auto digit = static_cast<int>(frac);
-      buf[pos + written] = static_cast<char>('0' + digit); ++written;
-      frac -= static_cast<double>(digit);
+    for (int d = p - 1; d >= 0; --d) {
+      buf[pos + written + static_cast<size_t>(d)] = static_cast<char>('0' + frac % 10);
+      frac /= 10;
+    }
+    written += static_cast<size_t>(p);
+    for (int d = p; d < precision; ++d) {
+      buf[pos + written] = '0';
+      ++written;
     }
   }
   return written;
@@ -15535,40 +15706,73 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
 
 /**
  * @brief 浮動小数点数を科学計数法(例:1.2e+03)でバッファに書き込む
+ *
+ * 仮数部は最近接偶数丸め。繰り上がりで 9.99 -> 1.00e+01 のように指数が増える。
  */
 template <typename Buf>
 constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+  auto const write_str = [&](std::string_view s) noexcept {
+    auto n = 0uz;
+    for (auto const ch : s) {
+      buf[pos + n] = ch;
+      ++n;
+    }
+    return n;
+  };
+  if (value != value)
+    return write_str("nan");
+  if (value > std::numeric_limits<double>::max())
+    return write_str("inf");
+  if (value < -std::numeric_limits<double>::max())
+    return write_str("-inf");
+
   auto written = 0uz;
   if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
 
-  if (value == 0.0) {
-    buf[pos + written] = '0'; ++written;
-    if (precision > 0) {
-      buf[pos + written] = '.'; ++written;
-      for (int p = 0; p < precision; ++p) { buf[pos + written] = '0'; ++written; }
+  int exponent = 0;
+  if (value != 0.0) {
+    while (value >= 10.0) {
+      value /= 10.0;
+      ++exponent;
     }
-    buf[pos + written] = 'e'; ++written;
-    buf[pos + written] = '+'; ++written;
-    buf[pos + written] = '0'; ++written;
-    buf[pos + written] = '0'; ++written;
-    return written;
+    while (value < 1.0) {
+      value *= 10.0;
+      --exponent;
+    }
   }
 
-  int exponent = 0;
-  while (value >= 10.0) { value /= 10.0; ++exponent; }
-  while (value < 1.0 && value > 0.0) { value *= 10.0; --exponent; }
+  auto const p = std::min(std::max(precision, 0), 18);
+  auto scale = 1LL;
+  for (int k = 0; k < p; ++k)
+    scale *= 10;
+  auto first = static_cast<int>(value);
+  auto frac_scaled = (value - static_cast<double>(first)) * static_cast<double>(scale);
+  auto frac = static_cast<long long>(frac_scaled);
+  auto const rem = frac_scaled - static_cast<double>(frac);
+  auto const parity = (p > 0 ? frac : first) & 1;
+  if (rem > 0.5 || (rem == 0.5 && parity != 0))
+    ++frac;
+  if (frac >= scale) {
+    frac -= scale;
+    ++first;
+    if (first >= 10) {
+      first = 1;
+      ++exponent;
+    }
+  }
 
-  auto first_digit = static_cast<int>(value);
-  buf[pos + written] = static_cast<char>('0' + first_digit); ++written;
-  value -= static_cast<double>(first_digit);
-
+  buf[pos + written] = static_cast<char>('0' + first);
+  ++written;
   if (precision > 0) {
     buf[pos + written] = '.'; ++written;
-    for (int p = 0; p < precision; ++p) {
-      value *= 10.0;
-      auto digit = static_cast<int>(value);
-      buf[pos + written] = static_cast<char>('0' + digit); ++written;
-      value -= static_cast<double>(digit);
+    for (int d = p - 1; d >= 0; --d) {
+      buf[pos + written + static_cast<size_t>(d)] = static_cast<char>('0' + frac % 10);
+      frac /= 10;
+    }
+    written += static_cast<size_t>(p);
+    for (int d = p; d < precision; ++d) {
+      buf[pos + written] = '0';
+      ++written;
     }
   }
 
@@ -15588,6 +15792,9 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
 /**
  * @brief 浮動小数点数を汎用形式でバッファに書き込む
  *
+ * 固定小数点と科学計数法の短い方（指数が範囲外なら科学計数法）を選び、
+ * 末尾の不要な 0 を除去する。
+ *
  * @tparam WorkSize 作業バッファの容量（精度 + 余裕ぶん。呼び出し側の仕様から決める）
  * @tparam Buf 出力バッファ
  */
@@ -15597,16 +15804,44 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
 
   std::array<char, WorkSize> fixed_buf{};  // 固定小数点表現の作業バッファ
   std::array<char, WorkSize> sci_buf{};    // 科学計数法表現の作業バッファ
-  auto fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
-  auto sci_len = format_float_scientific(sci_buf, 0, value, precision);
+  auto const fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
+  auto const sci_len = format_float_scientific(sci_buf, 0, value, precision);
+  auto const fixed_trim = trim_float_repr(fixed_buf, fixed_len);
+  auto const sci_trim = trim_float_repr(sci_buf, sci_len);
 
-  auto trim_len = fixed_len;
-  while (trim_len > 1 && fixed_buf[trim_len - 1] == '0') --trim_len;
-  if (trim_len > 1 && fixed_buf[trim_len - 1] == '.') --trim_len;
+  // 科学計数法の 10 進指数（'e' が無ければ 0）
+  auto exp10 = 0;
+  for (auto i = 0uz; i < sci_trim; ++i) {
+    if (sci_buf[i] != 'e')
+      continue;
+    auto j = i + 1;
+    bool neg = false;
+    if (j < sci_trim && (sci_buf[j] == '+' || sci_buf[j] == '-')) {
+      neg = sci_buf[j] == '-';
+      ++j;
+    }
+    while (j < sci_trim && sci_buf[j] >= '0' && sci_buf[j] <= '9') {
+      exp10 = exp10 * 10 + (sci_buf[j] - '0');
+      ++j;
+    }
+    if (neg)
+      exp10 = -exp10;
+    break;
+  }
 
-  bool use_sci = (sci_len < trim_len) || (trim_len <= 0);
-  auto src = use_sci ? sci_buf : fixed_buf;
-  auto src_len = use_sci ? sci_len : trim_len;
+  bool use_sci = (exp10 < -4) || (exp10 >= 6 && sci_trim <= fixed_trim);
+  if (value != 0 && [&] {
+        for (auto i = 0uz; i < fixed_trim; ++i) {
+          if (fixed_buf[i] >= '1' && fixed_buf[i] <= '9')
+            return false;
+        }
+        return true;
+      }()) {
+    use_sci = true; // 固定小数点では 0 に丸まる非ゼロ値
+  }
+
+  auto const src = use_sci ? sci_buf.data() : fixed_buf.data();
+  auto const src_len = use_sci ? sci_trim : fixed_trim;
   for (auto j = 0uz; j < src_len; ++j) {
     buf[pos + j] = src[j];
   }
@@ -16110,6 +16345,22 @@ namespace frozenchars::detail {
 }
 
 /**
+ * @brief 文字列がすべて 10 進数字か判定する
+ *
+ * @param s 検査対象の先頭ポインタ
+ * @param len 検査する文字数
+ * @return bool すべて '0'..'9' なら true
+ */
+[[nodiscard]] constexpr auto is_digits(char const* s, std::size_t len) noexcept -> bool {
+  for (std::size_t i = 0; i < len; ++i) {
+    if (s[i] < '0' || s[i] > '9') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * @brief ISO 8601 形式 "YYYY-MM-DD" の日付文字列を year_month_day に変換する
  *
  * @param s 日付文字列の先頭ポインタ
@@ -16227,6 +16478,7 @@ template <FrozenString S>
 [[nodiscard]] consteval auto parse_iso_date() noexcept -> std::chrono::year_month_day {
   static_assert(S.length == 10 && S.buffer[4] == '-' && S.buffer[7] == '-',
     "chrono: invalid ISO 8601 date format, expected YYYY-MM-DD");
+  static_assert(detail::is_digits(S.data(), 4) && detail::is_digits(S.data() + 5, 2) && detail::is_digits(S.data() + 8, 2), "chrono: date digits must be decimal, expected YYYY-MM-DD");
 
   auto const m = detail::decode_two_digits(S.buffer[5], S.buffer[6]);
   static_assert(m >= 1 && m <= 12, "chrono: invalid month value");
@@ -16234,7 +16486,9 @@ template <FrozenString S>
   auto const d = detail::decode_two_digits(S.buffer[8], S.buffer[9]);
   static_assert(d >= 1 && d <= 31, "chrono: invalid day value");
 
-  return detail::parse_ymd_iso(S.data(), 10);
+  auto constexpr date = detail::parse_ymd_iso(S.data(), 10);
+  static_assert(date.ok(), "chrono: invalid calendar date (e.g. 2023-02-30)");
+  return date;
 }
 
 /**
@@ -16250,11 +16504,16 @@ template <size_t N>
   if (s.length != 10) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[7] != '-') return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data(), 4) || !detail::is_digits(s.data() + 5, 2) || !detail::is_digits(s.data() + 8, 2))
+    return std::unexpected(std::errc::invalid_argument);
   auto const m = detail::decode_two_digits(s.buffer[5], s.buffer[6]);
   if (m < 1 || m > 12) return std::unexpected(std::errc::invalid_argument);
   auto const d = detail::decode_two_digits(s.buffer[8], s.buffer[9]);
   if (d < 1 || d > 31) return std::unexpected(std::errc::invalid_argument);
-  return detail::parse_ymd_iso(s.data(), 10);
+  auto const date = detail::parse_ymd_iso(s.data(), 10);
+  if (!date.ok())
+    return std::unexpected(std::errc::invalid_argument);
+  return date;
 }
 
 /**
@@ -16272,6 +16531,9 @@ template <FrozenString S>
     "chrono: invalid ISO 8601 datetime format, expected YYYY-MM-DDTHH:MM:SS");
   static_assert(S.buffer[10] == 'T' && S.buffer[13] == ':' && S.buffer[16] == ':',
     "chrono: invalid ISO 8601 datetime format, expected YYYY-MM-DDTHH:MM:SS");
+  static_assert(detail::is_digits(S.data(), 4) && detail::is_digits(S.data() + 5, 2) && detail::is_digits(S.data() + 8, 2) && detail::is_digits(S.data() + 11, 2) &&
+                    detail::is_digits(S.data() + 14, 2) && detail::is_digits(S.data() + 17, 2),
+                "chrono: datetime digits must be decimal, expected YYYY-MM-DDTHH:MM:SS");
 
   auto const h = detail::decode_two_digits(S.buffer[11], S.buffer[12]);
   auto const mi = detail::decode_two_digits(S.buffer[14], S.buffer[15]);
@@ -16287,11 +16549,13 @@ template <FrozenString S>
   if constexpr (S.length == 25) {
     static_assert(S.buffer[22] == ':',
       "chrono: invalid timezone offset format");
+    static_assert(detail::is_digits(S.data() + 20, 2) && detail::is_digits(S.data() + 23, 2), "chrono: invalid timezone offset format");
     auto const oh = detail::decode_two_digits(S.buffer[20], S.buffer[21]);
     auto const om = detail::decode_two_digits(S.buffer[23], S.buffer[24]);
     static_assert(oh <= 23 && om <= 59, "chrono: invalid timezone offset format");
   }
-  auto const date = detail::parse_ymd_iso(S.data(), 10);
+  auto constexpr date = detail::parse_ymd_iso(S.data(), 10);
+  static_assert(date.ok(), "chrono: invalid calendar date (e.g. 2023-02-30)");
   auto const time = detail::parse_hms(S.data() + 11, 8);
   auto offset = minutes{0};
   if constexpr (S.length == 25) {
@@ -16318,6 +16582,9 @@ template <size_t N>
   if (s.buffer[10] != 'T') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[13] != ':') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[16] != ':') return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data(), 4) || !detail::is_digits(s.data() + 5, 2) || !detail::is_digits(s.data() + 8, 2) || !detail::is_digits(s.data() + 11, 2) || !detail::is_digits(s.data() + 14, 2) ||
+      !detail::is_digits(s.data() + 17, 2))
+    return std::unexpected(std::errc::invalid_argument);
   auto const h = detail::decode_two_digits(s.buffer[11], s.buffer[12]);
   auto const mi = detail::decode_two_digits(s.buffer[14], s.buffer[15]);
   auto const sec = detail::decode_two_digits(s.buffer[17], s.buffer[18]);
@@ -16328,7 +16595,11 @@ template <size_t N>
     return std::unexpected(std::errc::invalid_argument);
   if (s.length == 25 && s.buffer[22] != ':')
     return std::unexpected(std::errc::invalid_argument);
+  if (s.length == 25 && (!detail::is_digits(s.data() + 20, 2) || !detail::is_digits(s.data() + 23, 2)))
+    return std::unexpected(std::errc::invalid_argument);
   auto const date = detail::parse_ymd_iso(s.data(), 10);
+  if (!date.ok())
+    return std::unexpected(std::errc::invalid_argument);
   auto const time = detail::parse_hms(s.data() + 11, 8);
   auto offset = minutes{0};
   if (s.length == 25) {
@@ -16409,6 +16680,7 @@ template <size_t N>
  */
 [[nodiscard]] constexpr auto format_iso_date(std::chrono::year_month_day ymd) noexcept -> FrozenString<11> {
   auto const y = static_cast<int>(ymd.year());
+  FROZENCHARS_PRECONDITION(y >= 0 && y <= 9999, "format_iso_date: year must be in 0..9999");
   auto const m = static_cast<unsigned>(ymd.month());
   auto const d = static_cast<unsigned>(ymd.day());
   auto const yb = detail::to_four_digits(static_cast<unsigned>(y));

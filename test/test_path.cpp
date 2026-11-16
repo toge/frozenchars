@@ -16,6 +16,11 @@ TEST_CASE("path::dirname", "[path]") {
   STATIC_CHECK(dirname("/usr/bin"_fs).sv() == "/usr");
   STATIC_CHECK(dirname("/usr/bin/gcc"_fs).sv() == "/usr/bin");
   STATIC_CHECK(dirname("usr/local/bin"_fs).sv() == "usr/local");
+  // 末尾の '/' は無視する
+  STATIC_CHECK(dirname("foo/"_fs).sv() == ".");
+  STATIC_CHECK(dirname("foo//"_fs).sv() == ".");
+  STATIC_CHECK(dirname("/usr/bin/"_fs).sv() == "/usr");
+  STATIC_CHECK(dirname("///"_fs).sv() == "/");
 }
 
 TEST_CASE("path::basename", "[path]") {

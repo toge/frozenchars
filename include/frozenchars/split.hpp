@@ -170,7 +170,11 @@ template <auto IsDelimiter = detail::is_any_whitespace, ParseNumberTarget Int = 
   auto const token_count = split_count<IsDelimiter>(str);
   auto const tokens = split<N, IsDelimiter>(str);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
+    auto const value = frozenchars::parse_number<Result>(tokens[i]);
+    if (!value) {
+      FROZENCHARS_CONSTEVAL_FAIL("split_numbers: token is not a valid number");
+    }
+    res[i] = *value;
   }
   return res;
 }
@@ -185,7 +189,11 @@ template <typename Pred, ParseNumberTarget Int = int, size_t N>
   auto const token_count = split_count(str, is_delimiter);
   auto const tokens = split<N>(str, is_delimiter);
   for (auto i = 0uz; i < token_count; ++i) {
-    res[i] = *frozenchars::parse_number<Result>(tokens[i]);
+    auto const value = frozenchars::parse_number<Result>(tokens[i]);
+    if (!value) {
+      FROZENCHARS_CONSTEVAL_FAIL("split_numbers: token is not a valid number");
+    }
+    res[i] = *value;
   }
   return res;
 }

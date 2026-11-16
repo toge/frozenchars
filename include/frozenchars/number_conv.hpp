@@ -204,21 +204,22 @@ template <typename T, size_t N>
 
     // コンパイル時パス: uint64_t で整数部・小数部を蓄積して精度を向上させる。
     // float/double への変換は最後に1回だけ行う。
-    auto constexpr pow10 = [](int n) -> std::expected<T, std::errc> {
-      // コンパイル時ステップ枯渇を防ぐため、指数に上限を設ける。double の最大実用値は約 308。
-      if (n < 0 || n > 1024) {
-        return std::unexpected(std::errc::result_out_of_range);
-      }
+    auto constexpr pow10 = [](int n) -> T {
       T result = 1;
-      T base   = 10;
-      while (n > 0) {
-        if (n & 1) {
-          result *= base;
-        }
-        base *= base;
-        n >>= 1;
-      }
+      for (int k = 0; k < n; ++k)
+        result *= T(10);
       return result;
+    };
+
+    // constexpr では浮動小数点のオーバーフローが定数式エラーになるため、
+    // 乗算前に 1 桁ずつ上限を判定する。
+    auto const scale_up = [](T& v, int n) noexcept -> bool {
+      for (int k = 0; k < n; ++k) {
+        if (v > std::numeric_limits<T>::max() / T(10))
+          return false;
+        v *= T(10);
+      }
+      return true;
     };
 
     size_t i        = start;
@@ -237,30 +238,33 @@ template <typename T, size_t N>
       has_digits = true;
     }
     T res = static_cast<T>(int_part);
-    if (extra_exp > 0) {
-      auto const e = pow10(extra_exp);
-      if (!e) return std::unexpected(e.error());
-      res *= *e;
+    if (extra_exp > 0 && !scale_up(res, extra_exp)) {
+      return std::unexpected(std::errc::result_out_of_range);
     }
 
     // 小数部を uint64_t で蓄積し、最後に1回の除算で精度を確保する
     if (i < sv.size() && sv[i] == '.') {
       ++i;
       std::uint64_t frac_digits = 0;
-      int           frac_count  = 0;
+      int frac_count = 0; // 蓄積した桁数（最大 18）
+      int frac_scale = 0; // 小数点以下の全桁数
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
         if (frac_count < 18) {
           frac_digits = frac_digits * 10 + static_cast<std::uint64_t>(sv[i] - '0');
           ++frac_count;
         }
-        // 18桁以降は丸め誤差が小さいため切り捨て
+        // 18桁以降は下位桁として指数だけ進める
+        ++frac_scale;
         ++i;
         has_digits = true;
       }
       if (frac_count > 0) {
-        auto const e = pow10(frac_count);
-        if (!e) return std::unexpected(e.error());
-        res += static_cast<T>(frac_digits) / *e;
+        // 10^22 は T で表現できるため、長い小数部は 22 桁ずつ割る
+        T frac = static_cast<T>(frac_digits);
+        for (auto remaining = frac_scale; remaining > 0 && frac != 0; remaining -= 22) {
+          frac /= pow10(remaining > 22 ? 22 : remaining);
+        }
+        res += frac;
       }
     }
 
@@ -275,7 +279,9 @@ template <typename T, size_t N>
       }
       bool has_exp_digits = false;
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
-        exp = exp * 10 + static_cast<int>(sv[i] - '0');
+        // 指数の桁あふれを防ぐ。上限を超える値は結果的に範囲外となる
+        if (exp < 1000000)
+          exp = exp * 10 + static_cast<int>(sv[i] - '0');
         ++i;
         has_exp_digits = true;
       }
@@ -290,16 +296,25 @@ template <typename T, size_t N>
       return std::unexpected(std::errc::invalid_argument);
     }
     T final_res = neg ? -res : res;
-    if (exp != 0) {
+    if (exp != 0 && res != 0) {
+      constexpr int max_exp10 = std::numeric_limits<T>::max_exponent10; // double: 308, float: 38
+      constexpr int min_exp10 = std::numeric_limits<T>::min_exponent10; // double: -307, float: -37
       if (exp > 0) {
-        auto const e = pow10(exp);
-        if (!e) return std::unexpected(e.error());
-        final_res *= *e;
+        if (exp > max_exp10 || !scale_up(final_res, exp)) {
+          return std::unexpected(std::errc::result_out_of_range);
+        }
       } else {
-        auto const e = pow10(-exp);
-        if (!e) return std::unexpected(e.error());
-        final_res /= *e;
+        // サブノーマルを考慮して下限は min_exponent10 より少し下まで許す
+        if (-exp > -min_exp10 + 20) {
+          return std::unexpected(std::errc::result_out_of_range);
+        }
+        for (int k = 0; k < -exp; ++k)
+          final_res /= T(10);
       }
+    }
+    if (res != 0 && final_res == 0) {
+      // std::from_chars と同じく、非ゼロの入力が 0 に丸められたら範囲外
+      return std::unexpected(std::errc::result_out_of_range);
     }
     if (final_res == std::numeric_limits<T>::infinity() || final_res == -std::numeric_limits<T>::infinity()) {
       return std::unexpected(std::errc::result_out_of_range);

@@ -62,6 +62,22 @@ namespace frozenchars::detail {
 }
 
 /**
+ * @brief 文字列がすべて 10 進数字か判定する
+ *
+ * @param s 検査対象の先頭ポインタ
+ * @param len 検査する文字数
+ * @return bool すべて '0'..'9' なら true
+ */
+[[nodiscard]] constexpr auto is_digits(char const* s, std::size_t len) noexcept -> bool {
+  for (std::size_t i = 0; i < len; ++i) {
+    if (s[i] < '0' || s[i] > '9') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * @brief ISO 8601 形式 "YYYY-MM-DD" の日付文字列を year_month_day に変換する
  *
  * @param s 日付文字列の先頭ポインタ

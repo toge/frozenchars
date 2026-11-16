@@ -71,6 +71,14 @@ TEST_CASE("encoding: utf8 helpers") {
   STATIC_CHECK(codepoint_to_utf8<0x3042>().sv() == "\xE3\x81\x82");
   STATIC_CHECK(escape_c("line\nvalue"_fs).sv() == "line\\nvalue");
   STATIC_CHECK(unescape_c("line\\nvalue"_fs).sv() == "line\nvalue");
+  // NTTP 版の戻り値型はバッファ長を保つ（終端 '\0' を落とさない）
+  STATIC_CHECK(utf8_substr<0, 2, "abc"_fs>().sv() == "ab");
+  STATIC_CHECK(utf8_reverse<"あい"_fs>().sv() == "いあ");
+}
+
+TEST_CASE("encoding: escaped backslash before u is not a code point escape") {
+  // ソース上の "\\\\uD800" は 1 文字の '\' + "uD800"。エスケープとして扱わない
+  STATIC_CHECK(unescape_c<"\\\\uD800"_fs>().sv() == "\\uD800");
 }
 
 TEST_CASE("encoding: escape_c extended control escapes", "[encoding]") {

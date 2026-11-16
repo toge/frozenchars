@@ -345,6 +345,8 @@ frozencharsは `<string>` / `<vector>` / `<map>` 等の hosted ヘッダを必�
 
 数値変換（`freeze(int)` / `parse_number` / `detail::to_dec_chars` 等）は `__STDC_HOSTED__ == 1 && __has_include(<charconv>)` で `<charconv>` の有無を判定し（`include/frozenchars/number_conv.hpp:8`、`detail/number_conv.hpp:6`）、無い環境では手動実装へフォールバックします。
 
+コンパイル時パス（`parse_number` を定数評価で呼ぶ場合）の浮動小数点変換は、`std::from_chars` と異なり正しい丸めを保証しません。結果は実行時パスと 1〜2 ulp 程度異なることがあります。厳密な値が必要な場合は実行時パスを使ってください。
+
 `frozen_map` / `frozen_set` / `frozen_trie_map` など `<string>` / `<vector>` を使うコンテナ系は、`wasm32-wasip1` + `wasi-sdk` ではそのままビルドできます。
 CI の `linux-wasi-minimal` ジョブ（`.github/workflows/ci.yml`）は `wasi-sdk` の `wasm32-wasip1` で wasm 生成を、`smoke_no_exceptions` テストは hosted で `-fno-exceptions` ビルドを検証しています。
 
@@ -740,7 +742,7 @@ static_assert(values[2].sv() == "gamma");
 - `split_numbers<is_delim>(str)` : 指定区切り + `int`
 - `split_numbers<is_delim, Int>(str)` : 指定区切り + 指定数値型
 
-数値でないトークンや、指定した整数型の範囲外の値は、ランタイムでは例外となり、定数評価ではエラーになります。
+数値でないトークンや、指定した数値型の範囲外の値はコンパイルエラーになります（`split_numbers` は `consteval`）。
 
 ```cpp
 #include "frozenchars.hpp"

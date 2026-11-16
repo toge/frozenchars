@@ -19,6 +19,7 @@ template <FrozenString S>
 [[nodiscard]] consteval auto parse_iso_date() noexcept -> std::chrono::year_month_day {
   static_assert(S.length == 10 && S.buffer[4] == '-' && S.buffer[7] == '-',
     "chrono: invalid ISO 8601 date format, expected YYYY-MM-DD");
+  static_assert(detail::is_digits(S.data(), 4) && detail::is_digits(S.data() + 5, 2) && detail::is_digits(S.data() + 8, 2), "chrono: date digits must be decimal, expected YYYY-MM-DD");
 
   auto const m = detail::decode_two_digits(S.buffer[5], S.buffer[6]);
   static_assert(m >= 1 && m <= 12, "chrono: invalid month value");
@@ -26,7 +27,9 @@ template <FrozenString S>
   auto const d = detail::decode_two_digits(S.buffer[8], S.buffer[9]);
   static_assert(d >= 1 && d <= 31, "chrono: invalid day value");
 
-  return detail::parse_ymd_iso(S.data(), 10);
+  auto constexpr date = detail::parse_ymd_iso(S.data(), 10);
+  static_assert(date.ok(), "chrono: invalid calendar date (e.g. 2023-02-30)");
+  return date;
 }
 
 /**
@@ -42,11 +45,16 @@ template <size_t N>
   if (s.length != 10) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[7] != '-') return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data(), 4) || !detail::is_digits(s.data() + 5, 2) || !detail::is_digits(s.data() + 8, 2))
+    return std::unexpected(std::errc::invalid_argument);
   auto const m = detail::decode_two_digits(s.buffer[5], s.buffer[6]);
   if (m < 1 || m > 12) return std::unexpected(std::errc::invalid_argument);
   auto const d = detail::decode_two_digits(s.buffer[8], s.buffer[9]);
   if (d < 1 || d > 31) return std::unexpected(std::errc::invalid_argument);
-  return detail::parse_ymd_iso(s.data(), 10);
+  auto const date = detail::parse_ymd_iso(s.data(), 10);
+  if (!date.ok())
+    return std::unexpected(std::errc::invalid_argument);
+  return date;
 }
 
 /**
@@ -64,6 +72,9 @@ template <FrozenString S>
     "chrono: invalid ISO 8601 datetime format, expected YYYY-MM-DDTHH:MM:SS");
   static_assert(S.buffer[10] == 'T' && S.buffer[13] == ':' && S.buffer[16] == ':',
     "chrono: invalid ISO 8601 datetime format, expected YYYY-MM-DDTHH:MM:SS");
+  static_assert(detail::is_digits(S.data(), 4) && detail::is_digits(S.data() + 5, 2) && detail::is_digits(S.data() + 8, 2) && detail::is_digits(S.data() + 11, 2) &&
+                    detail::is_digits(S.data() + 14, 2) && detail::is_digits(S.data() + 17, 2),
+                "chrono: datetime digits must be decimal, expected YYYY-MM-DDTHH:MM:SS");
 
   auto const h = detail::decode_two_digits(S.buffer[11], S.buffer[12]);
   auto const mi = detail::decode_two_digits(S.buffer[14], S.buffer[15]);
@@ -79,11 +90,13 @@ template <FrozenString S>
   if constexpr (S.length == 25) {
     static_assert(S.buffer[22] == ':',
       "chrono: invalid timezone offset format");
+    static_assert(detail::is_digits(S.data() + 20, 2) && detail::is_digits(S.data() + 23, 2), "chrono: invalid timezone offset format");
     auto const oh = detail::decode_two_digits(S.buffer[20], S.buffer[21]);
     auto const om = detail::decode_two_digits(S.buffer[23], S.buffer[24]);
     static_assert(oh <= 23 && om <= 59, "chrono: invalid timezone offset format");
   }
-  auto const date = detail::parse_ymd_iso(S.data(), 10);
+  auto constexpr date = detail::parse_ymd_iso(S.data(), 10);
+  static_assert(date.ok(), "chrono: invalid calendar date (e.g. 2023-02-30)");
   auto const time = detail::parse_hms(S.data() + 11, 8);
   auto offset = minutes{0};
   if constexpr (S.length == 25) {
@@ -110,6 +123,9 @@ template <size_t N>
   if (s.buffer[10] != 'T') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[13] != ':') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[16] != ':') return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data(), 4) || !detail::is_digits(s.data() + 5, 2) || !detail::is_digits(s.data() + 8, 2) || !detail::is_digits(s.data() + 11, 2) || !detail::is_digits(s.data() + 14, 2) ||
+      !detail::is_digits(s.data() + 17, 2))
+    return std::unexpected(std::errc::invalid_argument);
   auto const h = detail::decode_two_digits(s.buffer[11], s.buffer[12]);
   auto const mi = detail::decode_two_digits(s.buffer[14], s.buffer[15]);
   auto const sec = detail::decode_two_digits(s.buffer[17], s.buffer[18]);
@@ -120,7 +136,11 @@ template <size_t N>
     return std::unexpected(std::errc::invalid_argument);
   if (s.length == 25 && s.buffer[22] != ':')
     return std::unexpected(std::errc::invalid_argument);
+  if (s.length == 25 && (!detail::is_digits(s.data() + 20, 2) || !detail::is_digits(s.data() + 23, 2)))
+    return std::unexpected(std::errc::invalid_argument);
   auto const date = detail::parse_ymd_iso(s.data(), 10);
+  if (!date.ok())
+    return std::unexpected(std::errc::invalid_argument);
   auto const time = detail::parse_hms(s.data() + 11, 8);
   auto offset = minutes{0};
   if (s.length == 25) {
@@ -201,6 +221,7 @@ template <size_t N>
  */
 [[nodiscard]] constexpr auto format_iso_date(std::chrono::year_month_day ymd) noexcept -> FrozenString<11> {
   auto const y = static_cast<int>(ymd.year());
+  FROZENCHARS_PRECONDITION(y >= 0 && y <= 9999, "format_iso_date: year must be in 0..9999");
   auto const m = static_cast<unsigned>(ymd.month());
   auto const d = static_cast<unsigned>(ymd.day());
   auto const yb = detail::to_four_digits(static_cast<unsigned>(y));

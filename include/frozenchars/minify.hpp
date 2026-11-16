@@ -693,6 +693,32 @@ constexpr auto js_output_ends_with_word(char const* output, size_t offset, std::
   return !js_needs_space(before, 'a');
 }
 
+/// @brief '/' が正規表現リテラルの開始か（除算ではないか）を直前の出力から判定する
+///
+/// shortcut: 閉じ括弧 ')' / ']' の直後の正規表現は除算とみなす（`if(x) /re/.test(s)` は非対応）。
+/// 万一誤判定しても本文はそのまま出力され、`//` を含む場合のみ取りこぼす。
+constexpr auto js_regex_can_start(char const* output, size_t offset) noexcept -> bool {
+  auto const is_word = [](char ch) noexcept { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '$'; };
+  auto start = offset;
+  while (start > 0 && is_word(output[start - 1]))
+    --start;
+  if (start == offset) {
+    // 直前が記号または先頭。閉じ括弧・文字列の直後は除算とみなす
+    if (offset == 0)
+      return true;
+    auto const prev = output[offset - 1];
+    return prev != ')' && prev != ']' && prev != '"' && prev != '\'' && prev != '`';
+  }
+  // 式の先頭に来るキーワードの直後は正規表現リテラル
+  auto const word = std::string_view{output + start, offset - start};
+  constexpr std::string_view keywords[] = {"return", "typeof", "case", "in", "of", "new", "delete", "void", "throw", "else", "do", "yield", "await"};
+  for (auto const kw : keywords) {
+    if (word == kw)
+      return true;
+  }
+  return false;
+}
+
 /// @brief ';' の直後（空白・コメントを飛ばした先）が '}' か EOF なら ASI 上省略可能と判定する
 constexpr auto js_semicolon_redundant(char const* input, size_t len, size_t j) noexcept -> bool {
   while (true) {
@@ -812,6 +838,35 @@ constexpr auto minify_js(char const* input, size_t len, char* output, size_t out
     }
     pending_space = false;
     pending_newline = false;
+
+    // 正規表現リテラル: 式の先頭に現れる '/' はコメントではなくリテラル。
+    // 文字列と同様に閉じ '/' までをエスケープと文字クラスを考慮してそのまま出力する。
+    if (c == '/' && js_regex_can_start(output, offset)) {
+      put('/');
+      ++i;
+      bool in_class = false;
+      while (i < len) {
+        auto const rc = input[i];
+        if (rc == '\\' && i + 1 < len) {
+          put(rc);
+          put(input[i + 1]);
+          i += 2;
+          continue;
+        }
+        if (rc == '\n')
+          break; // 未終端のリテラルは行末で打ち切る
+        put(rc);
+        ++i;
+        if (rc == '[')
+          in_class = true;
+        else if (rc == ']')
+          in_class = false;
+        else if (rc == '/' && !in_class)
+          break;
+      }
+      after_control = false;
+      continue;
+    }
 
     auto closes_control = false;
     if (c == '(') {

@@ -1,9 +1,10 @@
-#include <catch2/catch_test_macros.hpp>
-#include <cstdio>
-#include <cstring>
 #include "frozenchars/frozen_format.hpp"
 #include "frozenchars/minify.hpp"
 #include "frozenchars/multiline.hpp"
+#include <catch2/catch_test_macros.hpp>
+#include <cstdio>
+#include <cstring>
+#include <limits>
 
 /** @brief frozen_format によるコンパイル時書式整形のテスト */
 
@@ -135,6 +136,38 @@ TEST_CASE("frozen_format float types", "[frozen_format]") {
   SECTION("fixed with precision") {
     auto r = frozen_format<"{:.2f}"_fs>(3.14159);
     REQUIRE(strcmp(r.sv().data(), "3.14") == 0);
+  }
+}
+
+TEST_CASE("frozen_format float rounding", "[frozen_format]") {
+  // 小数部は最近接偶数丸め（std::format と同じ規則）
+  SECTION("round half to even") {
+    REQUIRE(frozen_format<"{:.2f}"_fs>(0.125).sv() == "0.12");
+    REQUIRE(frozen_format<"{:.2f}"_fs>(2.675).sv() == "2.67");
+    REQUIRE(frozen_format<"{:.1f}"_fs>(0.999).sv() == "1.0");
+    REQUIRE(frozen_format<"{:.2f}"_fs>(0.57).sv() == "0.57");
+    REQUIRE(frozen_format<"{:.3f}"_fs>(0.0009999).sv() == "0.001");
+  }
+  SECTION("scientific carries into exponent") {
+    REQUIRE(frozen_format<"{:.3e}"_fs>(9.9999).sv() == "1.000e+01");
+    REQUIRE(frozen_format<"{:.2e}"_fs>(1234.5).sv() == "1.23e+03");
+  }
+  SECTION("general picks prefix and strips trailing zeros") {
+    REQUIRE(frozen_format<"{}"_fs>(3.14).sv() == "3.14");
+    REQUIRE(frozen_format<"{}"_fs>(100000.0).sv() == "100000");
+    REQUIRE(frozen_format<"{}"_fs>(1000000.0).sv() == "1e+06");
+    REQUIRE(frozen_format<"{}"_fs>(0.0001).sv() == "0.0001");
+    REQUIRE(frozen_format<"{}"_fs>(1e-5).sv() == "1e-05");
+    REQUIRE(frozen_format<"{}"_fs>(123456789.0).sv() == "123456789");
+  }
+  SECTION("values beyond long long use scientific instead of wrapping") {
+    REQUIRE(frozen_format<"{:.0f}"_fs>(1e19).sv() == "1e+19");
+    REQUIRE(frozen_format<"{}"_fs>(1e19).sv() == "1e+19");
+  }
+  SECTION("non-finite values") {
+    REQUIRE(frozen_format<"{:.2f}"_fs>(std::numeric_limits<double>::quiet_NaN()).sv() == "nan");
+    REQUIRE(frozen_format<"{}"_fs>(std::numeric_limits<double>::infinity()).sv() == "inf");
+    REQUIRE(frozen_format<"{:.2f}"_fs>(-std::numeric_limits<double>::infinity()).sv() == "-inf");
   }
 }
 

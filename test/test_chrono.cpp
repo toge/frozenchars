@@ -28,6 +28,16 @@ TEST_CASE("parse_iso_date - runtime constexpr") {
   STATIC_CHECK(*d2 == year{2001}/9/11);
 }
 
+TEST_CASE("parse_iso_date - invalid dates are rejected") {
+  auto const not_a_date = parse_iso_date("2023-02-30"_fs);
+  REQUIRE_FALSE(not_a_date.has_value());
+  REQUIRE(not_a_date.error() == std::errc::invalid_argument);
+
+  auto const bad_digits = parse_iso_date("2026-0a-01"_fs);
+  REQUIRE_FALSE(bad_digits.has_value());
+  REQUIRE(bad_digits.error() == std::errc::invalid_argument);
+}
+
 // ========== ISO 日時のパース ==========
 
 TEST_CASE("parse_iso_datetime - UTC") {
@@ -54,6 +64,12 @@ TEST_CASE("parse_iso_datetime - runtime constexpr") {
   constexpr auto dt = parse_iso_datetime("2024-01-15T09:05:01Z"_fs);
   STATIC_CHECK(dt.has_value());
   STATIC_CHECK(*dt == sys_days{year{2024}/1/15} + hours{9} + minutes{5} + seconds{1});
+}
+
+TEST_CASE("parse_iso_datetime - invalid values are rejected") {
+  REQUIRE(parse_iso_datetime("2023-02-30T00:00:00Z"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T24:00:00Z"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+0a:00"_fs).error() == std::errc::invalid_argument);
 }
 
 // ========== __DATE__ マクロのパース ==========

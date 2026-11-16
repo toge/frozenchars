@@ -60,7 +60,10 @@ template <size_t N>
  */
 template <FrozenString To, size_t N>
 [[nodiscard]] consteval auto br_to_target(FrozenString<N> const& str) noexcept {
-  constexpr auto MAX_SIZE = std::max(N * 4, 2048uz);
+  constexpr auto INPUT_SIZE = (N > 0 ? N - 1 : 0);
+  // 最短の <br> は 4 文字なので、置換回数は最大 INPUT_SIZE/4 + 1
+  constexpr auto MAX_SIZE = INPUT_SIZE + (INPUT_SIZE / 4 + 1) * To.length + 1;
+
   auto           res      = FrozenString<MAX_SIZE>{};
   auto           offset   = 0uz;
   auto           pos      = 0uz;
@@ -593,34 +596,8 @@ namespace detail {
  */
 template <size_t N, size_t M>
 consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> const& needle, size_t pos = 0) noexcept {
-  if (needle.length == 0) {
-    return pos;
-  }
-  if (needle.length > haystack.length || pos > haystack.length - needle.length) {
-    return std::string_view::npos;
-  }
-  if (needle.length == 1) {  // Special case for char
-    for (auto i = pos; i < haystack.length; ++i) {
-      if (haystack.buffer[i] == needle.buffer[0]) {
-        return i;
-      }
-    }
-    return std::string_view::npos;
-  }
-  auto const needle_len = needle.length;
-  for (auto i = pos; i <= haystack.length - needle_len; ++i) {
-    bool match = true;
-    for (auto j = 0uz; j < needle_len; ++j) {
-      if (haystack.buffer[i + j] != needle.buffer[j]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) {
-      return i;
-    }
-  }
-  return std::string_view::npos;
+  // 実装は detail::find_substring に一本化（count_substring_impl と共通）
+  return detail::find_substring(haystack, needle.sv(), pos);
 }
 
 /**
@@ -632,6 +609,10 @@ consteval size_t find_impl(FrozenString<N> const& haystack, FrozenString<M> cons
 template <auto Str, auto From>
   requires(is_frozen_string_v<decltype(Str)> && is_frozen_string_v<decltype(From)>)
 [[nodiscard]] consteval auto count_occurrences() noexcept -> std::size_t {
+  // 空 needle は 0 回（count_substring_impl と同じ規則）。無限ループ防止。
+  if constexpr (From.length == 0) {
+    return 0;
+  }
   auto count = 0uz;
   auto pos   = 0uz;
   while (pos < Str.length) {
@@ -2038,7 +2019,7 @@ template <size_t N>
 
     // 改行はそのまま保持
     if (c == '\n') {
-      if (offset > 0 && col == 0 && res.buffer[offset - 1] == ' ') {
+      while (offset > 0 && res.buffer[offset - 1] == ' ') {
         --offset;
       }
       res.buffer[offset++] = '\n';
@@ -2069,9 +2050,8 @@ template <size_t N>
 
       // 幅を超える場合は改行を挿入
       if (col + 1 + word_len > width) {
-        if (offset > 0 && res.buffer[offset - 1] == ' ') {
+        while (offset > 0 && res.buffer[offset - 1] == ' ') {
           --offset;
-          --col;
         }
         res.buffer[offset++] = '\n';
         col                  = 0;

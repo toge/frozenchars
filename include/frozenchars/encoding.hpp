@@ -260,6 +260,11 @@ template <FrozenString Str>
       continue;
     }
     auto const esc = s[i + 1];
+    if (esc == '\\') {
+      // "\\\\" はエスケープされたバックスラッシュ。後続の u/U は文字列の一部
+      ++i;
+      continue;
+    }
     if (esc == 'u') {
       auto const r = parse_hex_digits(s, i + 2, 4);
       if (r.valid && r.count == 4 && (r.value >= 0xD800 && r.value <= 0xDFFF)) {
@@ -319,6 +324,7 @@ template <size_t N>
 template <size_t N>
 [[nodiscard]] auto consteval hex_decode(FrozenString<N> const& str) noexcept {
   auto const s = str.sv();
+  FROZENCHARS_PRECONDITION(s.size() % 2 == 0, "hex_decode: odd-length hex string");
   auto res = FrozenString<N>{}; // 元のバッファサイズを流用（デコード後は必ず小さくなる）
   auto offset = 0uz;
 
@@ -1168,11 +1174,11 @@ template <size_t Start, size_t Count, size_t N>
  * @tparam Start 開始符号点インデックス
  * @tparam Count 切り出す符号点数
  * @tparam Str 対象文字列（FrozenString NTTP）
- * @return FrozenString<Str.length> 切り出した文字列
+ * @return auto 切り出した文字列
  */
 template <size_t Start, size_t Count, auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-[[nodiscard]] auto consteval utf8_substr() noexcept -> FrozenString<Str.length> {
+[[nodiscard]] auto consteval utf8_substr() noexcept {
   return utf8_substr<Start, Count>(Str);
 }
 
@@ -1194,6 +1200,7 @@ template <size_t N>
     size_t length = 0;
     detail::utf8_encode_codepoint(codepoints[i], bytes, length);
     for (auto j = 0uz; j < length; ++j) {
+      FROZENCHARS_PRECONDITION(offset < N - 1, "utf8_reverse: invalid UTF-8 input expands past the output buffer");
       res.buffer[offset++] = bytes[j];
     }
   }
@@ -1214,11 +1221,11 @@ template <size_t N>
  * @brief UTF-8 文字列を符号点単位で逆順にする（NTTP版）
  *
  * @tparam Str 対象文字列（FrozenString NTTP）
- * @return FrozenString<Str.length> 逆順にした文字列
+ * @return auto 逆順にした文字列
  */
 template <auto Str>
   requires detail::is_frozen_string_v<decltype(Str)>
-[[nodiscard]] auto consteval utf8_reverse() noexcept -> FrozenString<Str.length> {
+[[nodiscard]] auto consteval utf8_reverse() noexcept {
   return utf8_reverse(Str);
 }
 
