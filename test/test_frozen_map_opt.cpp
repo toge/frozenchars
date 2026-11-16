@@ -1,7 +1,10 @@
 #include "catch2/catch_all.hpp"
-#include "frozenchars/map.hpp"
 #include "frozenchars/literals.hpp"
+#include "frozenchars/map.hpp"
+#include <array>
+#include <cstddef>
 #include <string_view>
+#include <utility>
 
 using namespace frozenchars;
 using namespace frozenchars::literals;
@@ -148,6 +151,38 @@ TEST_CASE("frozen_map Optimization E: CHD path for more than 256 keys", "[frozen
     return m.find("k042") != m.end() && m.find("k999") == m.end();
   }();
   STATIC_CHECK(found);
+}
+
+namespace {
+
+/// @brief "k000" 形式のキーをコンパイル時に生成する
+template <std::size_t I>
+[[nodiscard]] consteval auto make_chd_key() noexcept -> FrozenString<5> {
+  auto key = FrozenString<5>{};
+  key.buffer[0] = 'k';
+  key.buffer[1] = static_cast<char>('0' + (I / 100) % 10);
+  key.buffer[2] = static_cast<char>('0' + (I / 10) % 10);
+  key.buffer[3] = static_cast<char>('0' + I % 10);
+  key.length = 4;
+  return key;
+}
+
+/// @brief 生成キーから CHD 経路の frozen_map を構築する
+template <std::size_t... Is>
+[[nodiscard]] consteval auto make_chd_map(std::index_sequence<Is...>) -> frozen_map<int, make_chd_key<Is>()...> {
+  return frozen_map<int, make_chd_key<Is>()...>{std::array<int, sizeof...(Is)>{static_cast<int>(Is)...}};
+}
+
+} // namespace
+
+TEST_CASE("frozen_map CHD path accepts generated keys", "[frozen_map][opt]") {
+  // 257 キー以上の CHD 経路を、コンパイル時に生成したキーで検証する
+  constexpr auto map = make_chd_map(std::make_index_sequence<300>{});
+  STATIC_CHECK(map.at("k000")->get() == 0);
+  STATIC_CHECK(map.at("k123")->get() == 123);
+  STATIC_CHECK(map.at("k299")->get() == 299);
+  STATIC_CHECK_FALSE(map.contains("k300"));
+  STATIC_CHECK_FALSE(map.contains("k99"));
 }
 
 TEST_CASE("frozen_map unique lengths detection", "[frozen_map][opt]") {

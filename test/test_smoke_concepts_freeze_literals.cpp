@@ -31,6 +31,7 @@ TEST_CASE("Hex/Bin/Oct/Precision freeze yields expected string", "[freeze][conce
   STATIC_CHECK(freeze(Precision{1.15, 2}).sv() == "1.15");
   STATIC_CHECK(freeze(Precision{2.999, 2}).sv() == "3.00");
   STATIC_CHECK(freeze(Precision{-0.996, 2}).sv() == "-1.00");
+  STATIC_CHECK(freeze(Precision{-0.0, 2}).sv() == "-0.00");
   STATIC_CHECK(freeze(Precision{2.5, 0}).sv() == "3");
   STATIC_CHECK(freeze(Precision{1.5, 20}).sv() == "1.50000000000000000000");
   STATIC_CHECK(freeze(42).sv() == "42");

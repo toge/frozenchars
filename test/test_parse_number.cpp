@@ -32,6 +32,10 @@ static_assert(parse_number<double>("1e-320"_fs).has_value());
 static_assert(parse_number<float>("1e38"_fs).has_value());
 static_assert(parse_number<double>("1e309"_fs).error() == std::errc::result_out_of_range);
 static_assert(parse_number<float>("1e39"_fs).error() == std::errc::result_out_of_range);
+// 小数部が 18 桁を超えても有効桁を落とさない（小数点位置のずれの回帰）
+static_assert(*parse_number<double>("3.14159265358979323846"_fs) == 3.14159265358979323846);
+static_assert(*parse_number<double>("0.1234567890123456789"_fs) == 0.1234567890123456789);
+static_assert(*parse_number<double>("0.0001234567890123456789"_fs) == 0.0001234567890123456789);
 
 TEST_CASE("parse_number handles integer boundaries", "[parse_number]") {
   auto constexpr int_max = "2147483647"_fs;

@@ -247,14 +247,20 @@ template <typename T, size_t N>
       ++i;
       std::uint64_t frac_digits = 0;
       int frac_count = 0; // 蓄積した桁数（最大 18）
-      int frac_scale = 0; // 小数点以下の全桁数
+      int frac_scale = 0; // 小数点以下の格納位置（先頭の 0 は位取りのみ）
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
+        auto const digit = static_cast<std::uint64_t>(sv[i] - '0');
         if (frac_count < 18) {
-          frac_digits = frac_digits * 10 + static_cast<std::uint64_t>(sv[i] - '0');
-          ++frac_count;
+          if (frac_digits == 0 && digit == 0) {
+            // 先頭の 0 は格納せず、位取りだけ進める（有効桁を 18 桁使うため）
+            ++frac_scale;
+          } else {
+            frac_digits = frac_digits * 10 + digit;
+            ++frac_count;
+            ++frac_scale;
+          }
         }
-        // 18桁以降は下位桁として指数だけ進める
-        ++frac_scale;
+        // 18桁以降は下位桁として無視する
         ++i;
         has_digits = true;
       }

@@ -374,6 +374,12 @@ add_compile_fail_test(
 )
 
 add_compile_fail_test(
+  NAME unescape_c_upper_surrogate
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/unescape_c_upper_surrogate.cpp
+  EXPECTED_TEXT "surrogate or out of range"
+)
+
+add_compile_fail_test(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
@@ -535,4 +541,17 @@ add_compile_fail_test(
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/split_numbers_invalid_token.cpp
   EXPECTED_TEXT "split_numbers: token is not a valid number"
   EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
+  NAME chrono_format_iso_datetime_year_out_of_range
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_format_iso_datetime_year_out_of_range.cpp
+  EXPECTED_TEXT "format_iso_datetime: year must be in 0..9999"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
+add_compile_fail_test(
+  NAME string_ops_pad_left_width_overflow
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/string_ops_pad_left_width_overflow.cpp
+  EXPECTED_TEXT "pad_left: Width must be less than SIZE_MAX"
 )

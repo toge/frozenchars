@@ -171,6 +171,22 @@ TEST_CASE("frozen_format float rounding", "[frozen_format]") {
   }
 }
 
+TEST_CASE("frozen_format general format with explicit precision", "[frozen_format]") {
+  // 明示精度は有効桁数（std::format の 'g' と同じ）
+  REQUIRE(frozen_format<"{:.3g}"_fs>(1234.0).sv() == "1.23e+03");
+  REQUIRE(frozen_format<"{:.3g}"_fs>(0.00123).sv() == "0.00123");
+  REQUIRE(frozen_format<"{:.3g}"_fs>(0.00001).sv() == "1e-05");
+  REQUIRE(frozen_format<"{:.3}"_fs>(12.3456).sv() == "12.3");
+  REQUIRE(frozen_format<"{:.1g}"_fs>(0.0).sv() == "0");
+  REQUIRE(frozen_format<"{:.3G}"_fs>(1234.0).sv() == "1.23E+03");
+}
+
+TEST_CASE("frozen_format preserves negative zero", "[frozen_format]") {
+  REQUIRE(frozen_format<"{:.2f}"_fs>(-0.0).sv() == "-0.00");
+  REQUIRE(frozen_format<"{:.2e}"_fs>(-0.0).sv() == "-0.00e+00");
+  REQUIRE(frozen_format<"{}"_fs>(-0.0).sv() == "-0");
+}
+
 TEST_CASE("frozen_format edge cases", "[frozen_format]") {
   SECTION("empty string arg") {
     auto r = frozen_format<"[{}]"_fs>("");

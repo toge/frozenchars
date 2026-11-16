@@ -172,7 +172,9 @@ struct parser {
         if (eof() || peek() == ']') FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: dangling '-' in character class");
         auto const c2 = parse_class_char();
         if (c1 > c2) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: invalid character range");
-        for (auto ch = c1; ch <= c2; ++ch) chars.push_back(ch);
+        // char は符号付きの可能性があり、c2 == CHAR_MAX で ++ch が符号オーバーフローするため int で回す
+        for (auto ch = static_cast<int>(c1); ch <= static_cast<int>(c2); ++ch)
+          chars.push_back(static_cast<char>(ch));
       } else {
         chars.push_back(c1);
       }

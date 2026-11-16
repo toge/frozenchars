@@ -108,6 +108,20 @@ TEST_CASE("URL Query String Tuples") {
   REQUIRE(query_string.sv() == "?key1=value1&key2=value2&key3=value3");
 }
 
+TEST_CASE("URL Query String accepts non-const and rvalue tuples") {
+  // 非 const のタプルでもタプル版オーバーロードが選ばれる（回帰）
+  auto constexpr query_string = [] {
+    auto t = std::tuple{"key1", "value1", "key2", "value2"};
+    return make_querystring(t);
+  }();
+  static_assert(query_string.sv() == "?key1=value1&key2=value2");
+  REQUIRE(query_string.sv() == "?key1=value1&key2=value2");
+
+  auto constexpr rvalue = make_querystring(std::tuple{"key3", "value3"});
+  static_assert(rvalue.sv() == "?key3=value3");
+  REQUIRE(rvalue.sv() == "?key3=value3");
+}
+
 TEST_CASE("URL Query String with URL encoded") {
   auto constexpr query_string = make_querystring(
     "key1", "a b:c",

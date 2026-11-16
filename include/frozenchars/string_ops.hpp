@@ -148,6 +148,7 @@ template <auto Str>
  */
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_left(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+  static_assert(Width != std::numeric_limits<size_t>::max(), "pad_left: Width must be less than SIZE_MAX");
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   auto           res      = FrozenString<NEW_SIZE>{};
 
@@ -192,6 +193,7 @@ template <size_t Width, char Fill, size_t N>
  */
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_right(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+  static_assert(Width != std::numeric_limits<size_t>::max(), "pad_right: Width must be less than SIZE_MAX");
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   auto           res      = FrozenString<NEW_SIZE>{};
 
@@ -334,6 +336,7 @@ template <size_t Width, char Fill = ' ', size_t N>
  */
 template <size_t Width, char Fill = ' ', size_t N>
 [[nodiscard]] auto consteval center(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+  static_assert(Width != std::numeric_limits<size_t>::max(), "center: Width must be less than SIZE_MAX");
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   if (str.length >= Width) {
     auto res = FrozenString<NEW_SIZE>{};

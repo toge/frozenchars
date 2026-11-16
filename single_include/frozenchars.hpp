@@ -395,7 +395,6 @@ namespace frozenchars::detail {
 
 #include <concepts>
 #include <cstddef>
-#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -471,14 +470,6 @@ template <PipeAdaptor... Adaptors>
  */
 template <size_t N, PipeAdaptor Adaptor>
 [[nodiscard]] auto consteval operator|(FrozenString<N> const& lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
-  return rhs(lhs);
-}
-
-/**
- * @brief string_view に対してアダプタを適用するパイプ演算子（実行時用）
- */
-template <PipeAdaptor Adaptor>
-[[nodiscard]] constexpr auto operator|(std::string_view lhs, Adaptor const& rhs) noexcept(noexcept(rhs(lhs))) {
   return rhs(lhs);
 }
 
@@ -979,6 +970,7 @@ namespace frozenchars::literals {
 
 
 #include <array>
+#include <cmath>
 #if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
 #define FROZENCHARS_DETAIL_HAS_CHARCONV 1
@@ -1141,7 +1133,7 @@ template <typename T>
     return std::pair{buffer, i};
   }
 
-  if (value < 0) {
+  if (std::signbit(value)) {
     buffer[i++] = '-'; value = -value;
   }
 
@@ -2082,14 +2074,20 @@ template <typename T, size_t N>
       ++i;
       std::uint64_t frac_digits = 0;
       int frac_count = 0; // 蓄積した桁数（最大 18）
-      int frac_scale = 0; // 小数点以下の全桁数
+      int frac_scale = 0; // 小数点以下の格納位置（先頭の 0 は位取りのみ）
       while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
+        auto const digit = static_cast<std::uint64_t>(sv[i] - '0');
         if (frac_count < 18) {
-          frac_digits = frac_digits * 10 + static_cast<std::uint64_t>(sv[i] - '0');
-          ++frac_count;
+          if (frac_digits == 0 && digit == 0) {
+            // 先頭の 0 は格納せず、位取りだけ進める（有効桁を 18 桁使うため）
+            ++frac_scale;
+          } else {
+            frac_digits = frac_digits * 10 + digit;
+            ++frac_count;
+            ++frac_scale;
+          }
         }
-        // 18桁以降は下位桁として指数だけ進める
-        ++frac_scale;
+        // 18桁以降は下位桁として無視する
         ++i;
         has_digits = true;
       }
@@ -2633,6 +2631,7 @@ template <auto Str>
  */
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_left(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+  static_assert(Width != std::numeric_limits<size_t>::max(), "pad_left: Width must be less than SIZE_MAX");
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   auto           res      = FrozenString<NEW_SIZE>{};
 
@@ -2677,6 +2676,7 @@ template <size_t Width, char Fill, size_t N>
  */
 template <size_t Width, char Fill, size_t N>
 [[nodiscard]] auto consteval pad_right(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+  static_assert(Width != std::numeric_limits<size_t>::max(), "pad_right: Width must be less than SIZE_MAX");
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   auto           res      = FrozenString<NEW_SIZE>{};
 
@@ -2819,6 +2819,7 @@ template <size_t Width, char Fill = ' ', size_t N>
  */
 template <size_t Width, char Fill = ' ', size_t N>
 [[nodiscard]] auto consteval center(FrozenString<N> const& str) noexcept -> FrozenString<std::max(N, Width + 1)> {
+  static_assert(Width != std::numeric_limits<size_t>::max(), "center: Width must be less than SIZE_MAX");
   constexpr auto NEW_SIZE = std::max(N, Width + 1);
   if (str.length >= Width) {
     auto res = FrozenString<NEW_SIZE>{};
@@ -9691,7 +9692,7 @@ template <FrozenString Str>
     }
     if (esc == 'U') {
       auto const r = parse_hex_digits(s, i + 2, 8);
-      if (r.valid && r.count == 8 && r.value > 0x10FFFF) {
+      if (r.valid && r.count == 8 && (r.value > 0x10FFFF || (r.value >= 0xD800 && r.value <= 0xDFFF))) {
         return true;
       }
     }
@@ -11055,7 +11056,7 @@ template <size_t N>
       }
       case 'U': {
         auto const r = detail::parse_hex_digits(str.sv(), i + 1, 8);
-        if (!r.valid || r.count != 8 || r.value > 0x10FFFF) {
+        if (!r.valid || r.count != 8 || r.value > 0x10FFFF || (r.value >= 0xD800 && r.value <= 0xDFFF)) {
           preserve('U', r.valid ? r.count : 0);
         } else {
           encode_codepoint(r.value);
@@ -11205,6 +11206,22 @@ template<class ... Args>
   return concat("?", std::apply([](auto&&... args) {
     return detail::make_querystring_impl(args...);
   }, t));
+}
+
+/**
+ * @brief クエリ文字列を生成する（非 const のタプル版）
+ */
+template <class... Args>
+[[nodiscard]] auto consteval make_querystring(std::tuple<Args...>& t) noexcept {
+  return make_querystring(static_cast<std::tuple<Args...> const&>(t));
+}
+
+/**
+ * @brief クエリ文字列を生成する（右辺値のタプル版）
+ */
+template <class... Args>
+[[nodiscard]] auto consteval make_querystring(std::tuple<Args...>&& t) noexcept {
+  return make_querystring(static_cast<std::tuple<Args...> const&>(t));
 }
 
 } // namespace frozenchars
@@ -13922,7 +13939,9 @@ struct parser {
         if (eof() || peek() == ']') FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: dangling '-' in character class");
         auto const c2 = parse_class_char();
         if (c1 > c2) FROZENCHARS_CONSTEVAL_FAIL("frozen_regex: invalid character range");
-        for (auto ch = c1; ch <= c2; ++ch) chars.push_back(ch);
+        // char は符号付きの可能性があり、c2 == CHAR_MAX で ++ch が符号オーバーフローするため int で回す
+        for (auto ch = static_cast<int>(c1); ch <= static_cast<int>(c2); ++ch)
+          chars.push_back(static_cast<char>(ch));
       } else {
         chars.push_back(c1);
       }
@@ -15454,6 +15473,7 @@ auto ctre_search_all(auto&& text) noexcept {
 // ---- begin frozenchars/frozen_format.hpp ----
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <string_view>
 #include <tuple>
@@ -15660,7 +15680,11 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
     return write_str("-inf");
 
   auto written = 0uz;
-  if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
+  if (std::signbit(value)) {
+    buf[pos + written] = '-';
+    ++written;
+    value = -value;
+  }
 
   // long long で正確に表せない値は科学計数法で出力する
   if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
@@ -15727,7 +15751,11 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
     return write_str("-inf");
 
   auto written = 0uz;
-  if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
+  if (std::signbit(value)) {
+    buf[pos + written] = '-';
+    ++written;
+    value = -value;
+  }
 
   int exponent = 0;
   if (value != 0.0) {
@@ -15800,13 +15828,15 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
  */
 template <size_t WorkSize, typename Buf>
 constexpr auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+  // 明示精度は有効桁数（std::format の 'g' と同じ規則）。未指定は従来どおり 6 桁の小数。
+  bool const explicit_precision = precision >= 0;
   if (precision < 0) precision = 6;
+  if (explicit_precision)
+    precision = std::min(std::max(precision, 1), 18) - 1; // 科学計数法の小数桁数
 
   std::array<char, WorkSize> fixed_buf{};  // 固定小数点表現の作業バッファ
   std::array<char, WorkSize> sci_buf{};    // 科学計数法表現の作業バッファ
-  auto const fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
   auto const sci_len = format_float_scientific(sci_buf, 0, value, precision);
-  auto const fixed_trim = trim_float_repr(fixed_buf, fixed_len);
   auto const sci_trim = trim_float_repr(sci_buf, sci_len);
 
   // 科学計数法の 10 進指数（'e' が無ければ 0）
@@ -15828,6 +15858,20 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
       exp10 = -exp10;
     break;
   }
+
+  // 明示精度: 指数が -4 以上かつ有効桁数未満なら固定小数点、それ以外は科学計数法
+  if (explicit_precision) {
+    bool const use_sci = exp10 < -4 || exp10 >= precision + 1;
+    auto const src_len = use_sci ? sci_trim : trim_float_repr(fixed_buf, format_float_fixed(fixed_buf, 0, value, precision - exp10));
+    auto const src = use_sci ? sci_buf.data() : fixed_buf.data();
+    for (auto j = 0uz; j < src_len; ++j) {
+      buf[pos + j] = src[j];
+    }
+    return src_len;
+  }
+
+  auto const fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
+  auto const fixed_trim = trim_float_repr(fixed_buf, fixed_len);
 
   bool use_sci = (exp10 < -4) || (exp10 >= 6 && sci_trim <= fixed_trim);
   if (value != 0 && [&] {
@@ -16065,7 +16109,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
         }
       }
     } else {
-      raw_len = detail::format_float_general<WorkSize>(raw, 0, v, prec);
+      raw_len = detail::format_float_general<WorkSize>(raw, 0, v, spec.precision);
       if (type == 'G') {
         for (auto j = 0uz; j < raw_len; ++j) {
           if (raw[j] == 'e') raw[j] = 'E';
@@ -16713,6 +16757,7 @@ template <size_t N>
   auto const ymd = year_month_day{dd};
   auto const tod = hh_mm_ss{tp - dd};
   auto const y = static_cast<int>(ymd.year());
+  FROZENCHARS_PRECONDITION(y >= 0 && y <= 9999, "format_iso_datetime: year must be in 0..9999");
   auto const m = static_cast<unsigned>(ymd.month());
   auto const d = static_cast<unsigned>(ymd.day());
   auto const h = static_cast<unsigned>(tod.hours().count());

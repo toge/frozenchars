@@ -64,6 +64,15 @@ TEST_CASE("frozen_regex char class range", "[frozen_regex]") {
   REQUIRE_FALSE(R::contains("0"));
 }
 
+TEST_CASE("frozen_regex char class range ending at signed char max", "[frozen_regex]") {
+  // char が符号付きでも範囲終端で ++ch がオーバーフローしない（回帰）
+  using R = frozen_regex<"[a-\x7f]"_fs>;
+  static_assert(R::count_v == 31);
+  REQUIRE(R::contains("a"));
+  REQUIRE(R::contains("\x7f"));
+  REQUIRE_FALSE(R::contains("`"));
+}
+
 TEST_CASE("frozen_regex char class negate", "[frozen_regex]") {
   using R = frozen_regex<"[^a]"_fs>;
   static_assert(R::count_v == 62);

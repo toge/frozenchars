@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <string_view>
 #include <tuple>
@@ -210,7 +211,11 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
     return write_str("-inf");
 
   auto written = 0uz;
-  if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
+  if (std::signbit(value)) {
+    buf[pos + written] = '-';
+    ++written;
+    value = -value;
+  }
 
   // long long で正確に表せない値は科学計数法で出力する
   if (value >= static_cast<double>(std::numeric_limits<long long>::max())) {
@@ -277,7 +282,11 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
     return write_str("-inf");
 
   auto written = 0uz;
-  if (value < 0) { buf[pos + written] = '-'; ++written; value = -value; }
+  if (std::signbit(value)) {
+    buf[pos + written] = '-';
+    ++written;
+    value = -value;
+  }
 
   int exponent = 0;
   if (value != 0.0) {
@@ -350,13 +359,15 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
  */
 template <size_t WorkSize, typename Buf>
 constexpr auto format_float_general(Buf& buf, size_t pos, double value, int precision) noexcept -> size_t {
+  // 明示精度は有効桁数（std::format の 'g' と同じ規則）。未指定は従来どおり 6 桁の小数。
+  bool const explicit_precision = precision >= 0;
   if (precision < 0) precision = 6;
+  if (explicit_precision)
+    precision = std::min(std::max(precision, 1), 18) - 1; // 科学計数法の小数桁数
 
   std::array<char, WorkSize> fixed_buf{};  // 固定小数点表現の作業バッファ
   std::array<char, WorkSize> sci_buf{};    // 科学計数法表現の作業バッファ
-  auto const fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
   auto const sci_len = format_float_scientific(sci_buf, 0, value, precision);
-  auto const fixed_trim = trim_float_repr(fixed_buf, fixed_len);
   auto const sci_trim = trim_float_repr(sci_buf, sci_len);
 
   // 科学計数法の 10 進指数（'e' が無ければ 0）
@@ -378,6 +389,20 @@ constexpr auto format_float_general(Buf& buf, size_t pos, double value, int prec
       exp10 = -exp10;
     break;
   }
+
+  // 明示精度: 指数が -4 以上かつ有効桁数未満なら固定小数点、それ以外は科学計数法
+  if (explicit_precision) {
+    bool const use_sci = exp10 < -4 || exp10 >= precision + 1;
+    auto const src_len = use_sci ? sci_trim : trim_float_repr(fixed_buf, format_float_fixed(fixed_buf, 0, value, precision - exp10));
+    auto const src = use_sci ? sci_buf.data() : fixed_buf.data();
+    for (auto j = 0uz; j < src_len; ++j) {
+      buf[pos + j] = src[j];
+    }
+    return src_len;
+  }
+
+  auto const fixed_len = format_float_fixed(fixed_buf, 0, value, precision);
+  auto const fixed_trim = trim_float_repr(fixed_buf, fixed_len);
 
   bool use_sci = (exp10 < -4) || (exp10 >= 6 && sci_trim <= fixed_trim);
   if (value != 0 && [&] {
@@ -615,7 +640,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
         }
       }
     } else {
-      raw_len = detail::format_float_general<WorkSize>(raw, 0, v, prec);
+      raw_len = detail::format_float_general<WorkSize>(raw, 0, v, spec.precision);
       if (type == 'G') {
         for (auto j = 0uz; j < raw_len; ++j) {
           if (raw[j] == 'e') raw[j] = 'E';

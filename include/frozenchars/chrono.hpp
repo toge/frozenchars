@@ -254,6 +254,7 @@ template <size_t N>
   auto const ymd = year_month_day{dd};
   auto const tod = hh_mm_ss{tp - dd};
   auto const y = static_cast<int>(ymd.year());
+  FROZENCHARS_PRECONDITION(y >= 0 && y <= 9999, "format_iso_datetime: year must be in 0..9999");
   auto const m = static_cast<unsigned>(ymd.month());
   auto const d = static_cast<unsigned>(ymd.day());
   auto const h = static_cast<unsigned>(tod.hours().count());

@@ -111,6 +111,8 @@ TEST_CASE("encoding: unescape_c extended escapes", "[encoding]") {
   STATIC_CHECK(unescape_c("\\xZZ"_fs).sv() == "\\xZZ");
   STATIC_CHECK(unescape_c("\\uD800"_fs).sv() == "\\uD800");
   STATIC_CHECK(unescape_c("\\U00110000"_fs).sv() == "\\U00110000");
+  // \U 表記のサロゲートも不正な UTF-8 を生成せず保持する
+  STATIC_CHECK(unescape_c("\\U0000D800"_fs).sv() == "\\U0000D800");
   STATIC_CHECK(unescape_c("\\u12"_fs).sv() == "\\u12");
 }
 

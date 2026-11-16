@@ -3,6 +3,7 @@
 #include "frozenchars/config.hpp"
 
 #include <array>
+#include <cmath>
 #if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
 #define FROZENCHARS_DETAIL_HAS_CHARCONV 1
@@ -165,7 +166,7 @@ template <typename T>
     return std::pair{buffer, i};
   }
 
-  if (value < 0) {
+  if (std::signbit(value)) {
     buffer[i++] = '-'; value = -value;
   }
 

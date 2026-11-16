@@ -273,7 +273,7 @@ template <FrozenString Str>
     }
     if (esc == 'U') {
       auto const r = parse_hex_digits(s, i + 2, 8);
-      if (r.valid && r.count == 8 && r.value > 0x10FFFF) {
+      if (r.valid && r.count == 8 && (r.value > 0x10FFFF || (r.value >= 0xD800 && r.value <= 0xDFFF))) {
         return true;
       }
     }
@@ -1637,7 +1637,7 @@ template <size_t N>
       }
       case 'U': {
         auto const r = detail::parse_hex_digits(str.sv(), i + 1, 8);
-        if (!r.valid || r.count != 8 || r.value > 0x10FFFF) {
+        if (!r.valid || r.count != 8 || r.value > 0x10FFFF || (r.value >= 0xD800 && r.value <= 0xDFFF)) {
           preserve('U', r.valid ? r.count : 0);
         } else {
           encode_codepoint(r.value);

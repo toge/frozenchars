@@ -103,4 +103,20 @@ template<class ... Args>
   }, t));
 }
 
+/**
+ * @brief クエリ文字列を生成する（非 const のタプル版）
+ */
+template <class... Args>
+[[nodiscard]] auto consteval make_querystring(std::tuple<Args...>& t) noexcept {
+  return make_querystring(static_cast<std::tuple<Args...> const&>(t));
+}
+
+/**
+ * @brief クエリ文字列を生成する（右辺値のタプル版）
+ */
+template <class... Args>
+[[nodiscard]] auto consteval make_querystring(std::tuple<Args...>&& t) noexcept {
+  return make_querystring(static_cast<std::tuple<Args...> const&>(t));
+}
+
 } // namespace frozenchars
