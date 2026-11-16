@@ -1,5 +1,5 @@
-#include "frozenchars/literals.hpp"
 #include "frozenchars/encoding.hpp"
+#include "frozenchars/literals.hpp"
 using namespace frozenchars::literals;
 
 // 16 進文字列の長さが奇数

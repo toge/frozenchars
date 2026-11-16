@@ -1,5 +1,5 @@
-#include "frozenchars/literals.hpp"
 #include "frozenchars/chrono.hpp"
+#include "frozenchars/literals.hpp"
 using namespace frozenchars::literals;
 
 // 数字以外を含む日付
