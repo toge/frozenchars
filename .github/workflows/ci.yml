@@ -104,7 +104,18 @@ jobs:
         run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 
       - name: Build
-        run: cmake --build build --config Release
+        shell: pwsh
+        run: |
+          $log = cmake --build build --config Release 2>&1 | Out-String
+          Write-Output $log
+          if ($LASTEXITCODE -ne 0) {
+            $log -split "`n" | Select-String -Pattern "error" | Select-Object -First 40 | ForEach-Object {
+              $line = $_.Line.Trim()
+              if ($line.Length -gt 800) { $line = $line.Substring(0, 800) }
+              Write-Output "::error title=MSVC::$line"
+            }
+            exit 1
+          }
 
       - name: Test
         shell: cmd
