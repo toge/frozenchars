@@ -11176,6 +11176,15 @@ requires (sizeof...(Tail) % 2 == 0 && Freezable<Key> && Freezable<Value>)
 }
 
 /**
+ * @brief std::tuple かどうか（make_querystring のオーバーロード解決用）
+ */
+template <typename T>
+inline constexpr bool is_std_tuple_v = false;
+
+template <typename... Ts>
+inline constexpr bool is_std_tuple_v<std::tuple<Ts...>> = true;
+
+/**
  * @brief キー・バリューをまとめたタプルからクエリ文字列を生成する
  * @param args キーと値を交互に並べたタプル
  * @return "key1=val1&key2=val2" 形式の文字列
@@ -11220,7 +11229,8 @@ template <typename... Args, std::size_t... Is>
  * @param args クエリパラメータのキーと値のペア 2つセットの引数か、std::tuple にまとめた引数を受け取る
  * @return クエリ文字列（先頭に '?' が付く）
  */
-template<class ... Args>
+template <class... Args>
+  requires((!detail::is_std_tuple_v<std::remove_cvref_t<Args>>) && ...)
 [[nodiscard]] auto consteval make_querystring(Args&&... args) noexcept {
   return concat("?", detail::make_querystring_impl(args...));
 }
