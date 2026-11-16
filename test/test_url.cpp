@@ -108,12 +108,18 @@ TEST_CASE("URL Query String Tuples") {
   REQUIRE(query_string.sv() == "?key1=value1&key2=value2&key3=value3");
 }
 
+namespace {
+// MSVC は constexpr ラムダ内の非 const 変数を consteval 関数へ渡せないため、
+// 非 const タプルの検証は consteval 関数内で行う
+consteval auto make_nonconst_tuple_query() {
+  auto t = std::tuple{"key1", "value1", "key2", "value2"};
+  return make_querystring(t);
+}
+} // namespace
+
 TEST_CASE("URL Query String accepts non-const and rvalue tuples") {
   // 非 const のタプルでもタプル版オーバーロードが選ばれる（回帰）
-  auto constexpr query_string = [] {
-    auto t = std::tuple{"key1", "value1", "key2", "value2"};
-    return make_querystring(t);
-  }();
+  auto constexpr query_string = make_nonconst_tuple_query();
   static_assert(query_string.sv() == "?key1=value1&key2=value2");
   REQUIRE(query_string.sv() == "?key1=value1&key2=value2");
 
