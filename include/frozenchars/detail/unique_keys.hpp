@@ -19,7 +19,8 @@ template <FrozenString... Keys>
   if constexpr (sizeof...(Keys) <= 1) {
     return false;
   } else {
-    constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
+    // CTAD は要素数が 256 を超えると古い Clang の入れ子式上限に当たるため型を明示する
+    constexpr std::array<std::string_view, sizeof...(Keys)> key_views{std::string_view{Keys.buffer.data(), Keys.length}...};
     auto sorted = key_views;
     std::ranges::sort(sorted);
     for (auto i = 1uz; i < sorted.size(); ++i) {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <string_view>
 #include <tuple>
@@ -211,7 +210,7 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
     return write_str("-inf");
 
   auto written = 0uz;
-  if (std::signbit(value)) {
+  if (detail::is_negative(value)) {
     buf[pos + written] = '-';
     ++written;
     value = -value;
@@ -282,7 +281,7 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
     return write_str("-inf");
 
   auto written = 0uz;
-  if (std::signbit(value)) {
+  if (detail::is_negative(value)) {
     buf[pos + written] = '-';
     ++written;
     value = -value;

@@ -3,7 +3,8 @@
 #include "frozenchars/config.hpp"
 
 #include <array>
-#include <cmath>
+#include <bit>
+#include <cstdint>
 #if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
 #define FROZENCHARS_DETAIL_HAS_CHARCONV 1
@@ -16,6 +17,18 @@
 #include <algorithm>
 
 namespace frozenchars::detail {
+
+/**
+ * @brief 値が負の符号を持つか（-0.0 を含む）を判定する
+ *
+ * @details std::signbit は libstdc++ 14 以前では constexpr ではないため、
+ *          符号ビットを直接調べて定数評価でも使えるようにする。
+ * @param value 判定する値
+ * @return bool 負の符号を持てば true
+ */
+[[nodiscard]] constexpr auto is_negative(double value) noexcept -> bool {
+  return value < 0.0 || (value == 0.0 && (std::bit_cast<std::uint64_t>(value) >> 63) != 0);
+}
 
 /**
  * @brief 10進数整数を文字列に変換する
@@ -166,7 +179,7 @@ template <typename T>
     return std::pair{buffer, i};
   }
 
-  if (std::signbit(value)) {
+  if (is_negative(value)) {
     buffer[i++] = '-'; value = -value;
   }
 

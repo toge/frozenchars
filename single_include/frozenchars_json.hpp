@@ -971,7 +971,8 @@ namespace frozenchars::literals {
 
 
 #include <array>
-#include <cmath>
+#include <bit>
+#include <cstdint>
 #if __STDC_HOSTED__ == 1 && defined(__has_include) && __has_include(<charconv>)
 #include <charconv>
 #define FROZENCHARS_DETAIL_HAS_CHARCONV 1
@@ -984,6 +985,18 @@ namespace frozenchars::literals {
 #include <algorithm>
 
 namespace frozenchars::detail {
+
+/**
+ * @brief 値が負の符号を持つか（-0.0 を含む）を判定する
+ *
+ * @details std::signbit は libstdc++ 14 以前では constexpr ではないため、
+ *          符号ビットを直接調べて定数評価でも使えるようにする。
+ * @param value 判定する値
+ * @return bool 負の符号を持てば true
+ */
+[[nodiscard]] constexpr auto is_negative(double value) noexcept -> bool {
+  return value < 0.0 || (value == 0.0 && (std::bit_cast<std::uint64_t>(value) >> 63) != 0);
+}
 
 /**
  * @brief 10進数整数を文字列に変換する
@@ -1134,7 +1147,7 @@ template <typename T>
     return std::pair{buffer, i};
   }
 
-  if (std::signbit(value)) {
+  if (is_negative(value)) {
     buffer[i++] = '-'; value = -value;
   }
 
@@ -11404,7 +11417,8 @@ template <FrozenString... Keys>
   if constexpr (sizeof...(Keys) <= 1) {
     return false;
   } else {
-    constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
+    // CTAD は要素数が 256 を超えると古い Clang の入れ子式上限に当たるため型を明示する
+    constexpr std::array<std::string_view, sizeof...(Keys)> key_views{std::string_view{Keys.buffer.data(), Keys.length}...};
     auto sorted = key_views;
     std::ranges::sort(sorted);
     for (auto i = 1uz; i < sorted.size(); ++i) {
@@ -11584,7 +11598,8 @@ template <std::size_t TableSize, FrozenString... Keys>
 [[nodiscard]] consteval auto find_lookup_seed() noexcept {
   using result_t = lookup_seed_result<TableSize, sizeof...(Keys)>;
   using index_t = typename result_t::index_t;
-  constexpr std::array key_views{ std::string_view{Keys.buffer.data(), Keys.length}... };
+  // CTAD は要素数が 256 を超えると古い Clang の入れ子式上限に当たるため型を明示する
+  constexpr std::array<std::string_view, sizeof...(Keys)> key_views{std::string_view{Keys.buffer.data(), Keys.length}...};
   constexpr auto mask = TableSize - 1;
   // シードは衝突が見つかった周辺だけ 1 刻みで再探索する 2 段階戦略で
   // 100 万線形より高速に収束する。上限は 100 万を維持しつつ無駄走査を抑える。
@@ -11770,7 +11785,8 @@ struct lookup_index {
   // 存在するキー長の集合（長さによる迅速な除外用）
   static constexpr auto valid_lengths_ = []() noexcept {
     std::array<bool, k_max_key_len_ + 1> table{};
-    ((table[Keys.length] = true), ...);
+    for (auto const key : key_views_)
+      table[key.length()] = true;
     return table;
   }();
 
@@ -11785,8 +11801,9 @@ struct lookup_index {
   static constexpr auto length_to_index_ = []() noexcept {
     std::array<index_t, k_max_key_len_ + 1> table{};
     table.fill(static_cast<index_t>(-1));
-    std::size_t idx = 0;
-    ((table[Keys.length] = static_cast<index_t>(idx++)), ...);
+    auto idx = 0uz;
+    for (auto const key : key_views_)
+      table[key.length()] = static_cast<index_t>(idx++);
     return table;
   }();
 
@@ -11841,27 +11858,25 @@ struct lookup_index {
       return detail::build_chd<chd_bucket_count_, chd_table_size_>(key_views_);
     }
   }
-  static constexpr auto chd_ = make_chd_metadata();  // CHD 方式のメタデータ（バケットシード + テーブル）
+  static constexpr auto chd_ = make_chd_metadata(); // CHD 方式のメタデータ（バケットシード + テーブル）
 
-  static constexpr bool all_keys_short = ((Keys.length <= 16) && ...);  // 全キーが 16 バイト以下（128bit 比較可能）
+  static constexpr bool all_keys_short = k_max_key_len_ <= 16; // 全キーが 16 バイト以下（128bit 比較可能）
 
   // 16 バイト以下のキーを 128bit（2×uint64）にパックして一括比較可能にする
   struct alignas(16) padded_key {
-    std::uint64_t data[2]{0, 0};  // キー文字列をバイト列として詰めた 16 バイト
-    std::uint8_t len = 0;         // 実際のキー長
+    std::uint64_t data[2]{0, 0}; // キー文字列をバイト列として詰めた 16 バイト
+    std::uint8_t len = 0;        // 実際のキー長
   };
 
   // 全キーを padded_key 配列に変換する（短いキーの高速比較用）
   static consteval auto make_padded_keys() noexcept {
     std::array<padded_key, size()> res{};
-    std::size_t idx = 0;
-    ([&] {
-      res[idx].len = static_cast<std::uint8_t>(Keys.length);
-      for (std::size_t i = 0; i < Keys.length; ++i)
-        res[idx].data[i / 8] |=
-          (static_cast<std::uint64_t>(static_cast<unsigned char>(Keys.buffer[i])) << ((i % 8) * 8));
-      ++idx;
-    }(), ...);
+    for (auto idx = 0uz; idx < size(); ++idx) {
+      auto const key = key_views_[idx];
+      res[idx].len = static_cast<std::uint8_t>(key.length());
+      for (std::size_t i = 0; i < key.length(); ++i)
+        res[idx].data[i / 8] |= (static_cast<std::uint64_t>(static_cast<unsigned char>(key[i])) << ((i % 8) * 8));
+    }
     return res;
   }
 
@@ -15474,7 +15489,6 @@ auto ctre_search_all(auto&& text) noexcept {
 // ---- begin frozenchars/frozen_format.hpp ----
 
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <string_view>
 #include <tuple>
@@ -15681,7 +15695,7 @@ constexpr auto format_float_fixed(Buf& buf, size_t pos, double value, int precis
     return write_str("-inf");
 
   auto written = 0uz;
-  if (std::signbit(value)) {
+  if (detail::is_negative(value)) {
     buf[pos + written] = '-';
     ++written;
     value = -value;
@@ -15752,7 +15766,7 @@ constexpr auto format_float_scientific(Buf& buf, size_t pos, double value, int p
     return write_str("-inf");
 
   auto written = 0uz;
-  if (std::signbit(value)) {
+  if (detail::is_negative(value)) {
     buf[pos + written] = '-';
     ++written;
     value = -value;
