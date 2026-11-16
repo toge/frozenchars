@@ -3,6 +3,9 @@
 #include "freeze.hpp"
 #include "encoding.hpp"
 
+#include <tuple>
+#include <utility>
+
 namespace frozenchars {
 
 namespace detail {
@@ -77,6 +80,19 @@ template <FreezablePair Head, class... Tail>
   );
 }
 
+/**
+ * @brief タプルを index_sequence で展開してクエリ文字列を生成する
+ *
+ * @details std::apply は MSVC の定数評価で invoke に失敗するため使わない。
+ * @param t キーと値を交互に並べたタプル
+ * @param Is タプルのインデックス列
+ * @return "?key1=val1&key2=val2" 形式の文字列
+ */
+template <typename... Args, std::size_t... Is>
+[[nodiscard]] auto consteval make_querystring_tuple(std::tuple<Args...> const& t, std::index_sequence<Is...>) noexcept {
+  return concat("?", make_querystring_impl(std::get<Is>(t)...));
+}
+
 } // namespace detail
 
 /**
@@ -98,9 +114,7 @@ template<class ... Args>
  */
 template<class ... Args>
 [[nodiscard]] auto consteval make_querystring(std::tuple<Args...> const& t) noexcept {
-  return concat("?", std::apply([](auto&&... args) {
-    return detail::make_querystring_impl(args...);
-  }, t));
+  return detail::make_querystring_tuple(t, std::index_sequence_for<Args...>{});
 }
 
 /**
