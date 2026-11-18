@@ -1,6 +1,7 @@
 #pragma once
 
 #include "frozenchars/config.hpp"
+#include "frozenchars/detail/utf8.hpp"
 
 #include <algorithm>
 #include <array>
@@ -62,42 +63,33 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   -> std::expected<char32_t, std::errc> {
   if (index >= input.size()) return std::unexpected(std::errc::invalid_argument);
   auto const lead = static_cast<uint8_t>(input[index]);
-  // 1バイト（ASCII）
-  if (lead < 0x80) { return static_cast<char32_t>(input[index++]); }
-  // 2バイトシーケンス
-  if ((lead & 0xE0) == 0xC0) {
-    if (index + 2 > input.size()) return std::unexpected(std::errc::invalid_argument);
+  auto const length = frozenchars::detail::utf8_sequence_length(input, index);
+  if (length == 0) return std::unexpected(std::errc::invalid_argument);
+  if (length == 1) {
+    ++index;
+    return static_cast<char32_t>(lead);
+  }
+  if (length == 2) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
-    if ((c1 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 2;
     return (static_cast<char32_t>(lead & 0x1F) << 6) | static_cast<char32_t>(c1 & 0x3F);
   }
-  // 3バイトシーケンス
-  if ((lead & 0xF0) == 0xE0) {
-    if (index + 3 > input.size()) return std::unexpected(std::errc::invalid_argument);
+  if (length == 3) {
     auto const c1 = static_cast<uint8_t>(input[index + 1]);
     auto const c2 = static_cast<uint8_t>(input[index + 2]);
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return std::unexpected(std::errc::invalid_argument);
     index += 3;
     return (static_cast<char32_t>(lead & 0x0F) << 12) |
            (static_cast<char32_t>(c1 & 0x3F) << 6) |
            static_cast<char32_t>(c2 & 0x3F);
   }
-  // 4バイトシーケンス
-  if ((lead & 0xF8) == 0xF0) {
-    if (index + 4 > input.size()) return std::unexpected(std::errc::invalid_argument);
-    auto const c1 = static_cast<uint8_t>(input[index + 1]);
-    auto const c2 = static_cast<uint8_t>(input[index + 2]);
-    auto const c3 = static_cast<uint8_t>(input[index + 3]);
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
-      return std::unexpected(std::errc::invalid_argument);
-    index += 4;
-    return (static_cast<char32_t>(lead & 0x07) << 18) |
-           (static_cast<char32_t>(c1 & 0x3F) << 12) |
-           (static_cast<char32_t>(c2 & 0x3F) << 6) |
-           static_cast<char32_t>(c3 & 0x3F);
-  }
-  return std::unexpected(std::errc::invalid_argument);
+  auto const c1 = static_cast<uint8_t>(input[index + 1]);
+  auto const c2 = static_cast<uint8_t>(input[index + 2]);
+  auto const c3 = static_cast<uint8_t>(input[index + 3]);
+  index += 4;
+  return (static_cast<char32_t>(lead & 0x07) << 18) |
+         (static_cast<char32_t>(c1 & 0x3F) << 12) |
+         (static_cast<char32_t>(c2 & 0x3F) << 6) |
+         static_cast<char32_t>(c3 & 0x3F);
 };
 
 /**
@@ -165,6 +157,7 @@ inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) noexce
       append_utf8(cp);
       ++i;
     } else {
+      if (v >= 0xDC00 && v <= 0xDFFF) return std::unexpected(std::errc::invalid_argument);
       append_utf8(static_cast<char32_t>(v));
     }
   }

@@ -139,3 +139,22 @@ TEST_CASE("validate_json rejects malformed string escapes and raw control charac
     REQUIRE(frozenchars::json::validate_json(good));
   }
 }
+
+TEST_CASE("validate_json rejects malformed raw UTF-8 inside strings", "[json][compress]") {
+  for (auto const bytes : {std::string_view{"\xC0\x80", 2}, std::string_view{"\xE0\x80\x80", 3},
+                           std::string_view{"\xED\xA0\x80", 3}, std::string_view{"\xF0\x80\x80\x80", 4},
+                           std::string_view{"\xF4\x90\x80\x80", 4}, std::string_view{"\xC2", 1},
+                           std::string_view{"\x80", 1}}) {
+    auto input = std::string{"[\""} + std::string{bytes} + "\"]";
+    REQUIRE_FALSE(frozenchars::json::validate_json(input));
+  }
+}
+
+TEST_CASE("compress preserves malformed string bytes while validation rejects them", "[json][compress]") {
+  constexpr auto input = "[\"\xC0\x80\"]"_fs;
+  constexpr auto compressed = frozenchars::json::compress<input>();
+  CHECK(compressed.sv().contains(std::string_view{"\xC0\x80", 2}));
+  CHECK_FALSE(frozenchars::json::validate_json(compressed.sv()));
+  STATIC_CHECK(frozenchars::json::decompress<frozenchars::json::compress<input>()>().sv() ==
+               std::string_view{"[\"\xC0\x80\"]", 6});
+}

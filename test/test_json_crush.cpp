@@ -93,6 +93,20 @@ TEST_CASE("json detail utf conversion reports errors via expected", "[json][crus
   REQUIRE(*ok == u"abc");
 }
 
+TEST_CASE("json detail UTF conversions reject non-RFC-3629 data", "[json][crush]") {
+  for (auto const bytes : {std::string_view{"\xC0\x80", 2}, std::string_view{"\xE0\x80\x80", 3},
+                           std::string_view{"\xED\xA0\x80", 3}, std::string_view{"\xF0\x80\x80\x80", 4},
+                           std::string_view{"\xF4\x90\x80\x80", 4}, std::string_view{"\xC2", 1},
+                           std::string_view{"\x80", 1}}) {
+    auto index = std::size_t{0};
+    CHECK_FALSE(frozenchars::json::detail::decode_utf8(bytes, index).has_value());
+    CHECK(index == 0);
+    CHECK_FALSE(frozenchars::json::detail::utf8_to_utf16(bytes).has_value());
+  }
+  CHECK_FALSE(frozenchars::json::detail::utf16_to_utf8(u"\xD800").has_value());
+  CHECK_FALSE(frozenchars::json::detail::utf16_to_utf8(u"\xDC00").has_value());
+}
+
 TEST_CASE("decode_utf8 rejects truncated sequences without reading past the end", "[json][crush]") {
   auto const decode_at_end_of_buffer = [](char lead) {
     auto index = std::size_t{0};

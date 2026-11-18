@@ -143,6 +143,48 @@ TEST_CASE("encoding: is_valid_utf8", "[encoding]") {
   STATIC_CHECK(!is_valid_utf8<"\xC0\x80"_fs>());
 }
 
+TEST_CASE("encoding: RFC 3629 validation and fail-soft decoding", "[encoding][utf8]") {
+  STATIC_CHECK(!is_valid_utf8("\xC0\x80"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xE0\x80\x80"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xED\xA0\x80"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xF0\x80\x80\x80"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xF4\x90\x80\x80"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xC2"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xE3\x81"_fs));
+  STATIC_CHECK(!is_valid_utf8("\xF0\x9F\x98"_fs));
+  STATIC_CHECK(!is_valid_utf8("\x80"_fs));
+
+  constexpr auto decoded = [] {
+    constexpr std::array invalid{
+        std::string_view{"\xC0\x80", 2},
+        std::string_view{"\xE0\x80\x80", 3},
+        std::string_view{"\xED\xA0\x80", 3},
+        std::string_view{"\xF0\x80\x80\x80", 4},
+        std::string_view{"\xF4\x90\x80\x80", 4},
+        std::string_view{"\xC2", 1},
+        std::string_view{"\xE3\x81", 2},
+        std::string_view{"\xF0\x9F\x98", 3},
+        std::string_view{"\x80", 1},
+    };
+    for (auto const input : invalid) {
+      for (std::size_t pos = 0; pos < input.size();) {
+        std::size_t consumed = 0;
+        std::uint32_t codepoint = 0;
+        if (!detail::utf8_decode_at(input, pos, consumed, codepoint) || consumed != 1 ||
+            codepoint != static_cast<unsigned char>(input[pos])) {
+          return false;
+        }
+        pos += consumed;
+      }
+    }
+    return true;
+  }();
+  STATIC_CHECK(decoded);
+  STATIC_CHECK(utf8_length("\xC0\x80"_fs) == 2);
+  STATIC_CHECK(utf8_substr<0, 2>("\xC0\x80"_fs).sv() == std::string_view{"\xC0\x80", 2});
+  STATIC_CHECK(utf8_reverse("\xC0\x80"_fs).sv() == std::string_view{"\x80\xC0", 2});
+}
+
 TEST_CASE("encoding: utf8_to_codepoints", "[encoding]") {
   // 空
   {

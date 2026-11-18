@@ -8,6 +8,7 @@
 #include "string.hpp"
 #include "string_ops.hpp"
 #include "detail/char_utils.hpp"
+#include "detail/utf8.hpp"
 
 namespace frozenchars::detail {
 
@@ -51,53 +52,29 @@ constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed
   }
 
   auto const first = static_cast<unsigned char>(str[pos]);
-  if (first < 0x80) {
+  auto const length = utf8_sequence_length(str, pos);
+  if (length == 1) {
     codepoint = first;
     consumed = 1;
-    return true;
-  }
-
-  if ((first & 0xE0) == 0xC0 && pos + 1 < str.size()) {
+  } else if (length == 2) {
     auto const second = static_cast<unsigned char>(str[pos + 1]);
-    if ((second & 0xC0) != 0x80) {
-      codepoint = first;
-      consumed = 1;
-      return true;
-    }
     codepoint = ((first & 0x1F) << 6) | (second & 0x3F);
     consumed = 2;
-    return true;
-  }
-
-  if ((first & 0xF0) == 0xE0 && pos + 2 < str.size()) {
+  } else if (length == 3) {
     auto const second = static_cast<unsigned char>(str[pos + 1]);
     auto const third = static_cast<unsigned char>(str[pos + 2]);
-    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80) {
-      codepoint = first;
-      consumed = 1;
-      return true;
-    }
     codepoint = ((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F);
     consumed = 3;
-    return true;
-  }
-
-  if ((first & 0xF8) == 0xF0 && pos + 3 < str.size()) {
+  } else if (length == 4) {
     auto const second = static_cast<unsigned char>(str[pos + 1]);
     auto const third = static_cast<unsigned char>(str[pos + 2]);
     auto const fourth = static_cast<unsigned char>(str[pos + 3]);
-    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80 || (fourth & 0xC0) != 0x80) {
-      codepoint = first;
-      consumed = 1;
-      return true;
-    }
     codepoint = ((first & 0x07) << 18) | ((second & 0x3F) << 12) | ((third & 0x3F) << 6) | (fourth & 0x3F);
     consumed = 4;
-    return true;
+  } else {
+    codepoint = first;
+    consumed = 1;
   }
-
-  codepoint = first;
-  consumed = 1;
   return true;
 }
 
@@ -180,43 +157,8 @@ constexpr auto utf8_encode_codepoint(std::uint32_t codepoint, std::array<char, 4
  * @return size_t 有効なら長さ（2〜4）、不正・ASCII・孤立バイトなら 0
  */
 [[nodiscard]] constexpr auto valid_utf8_seq_length(std::string_view const str, size_t const pos) noexcept -> size_t {
-  if (pos >= str.size()) {
-    return 0;
-  }
-  auto const first = static_cast<unsigned char>(str[pos]);
-  auto const is_cont = [&](size_t const at) noexcept {
-    return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80;
-  };
-  if (first >= 0xC2 && first <= 0xDF) {
-    return is_cont(pos + 1) ? 2 : 0;
-  }
-  if (first >= 0xE0 && first <= 0xEF) {
-    if (!is_cont(pos + 1)) {
-      return 0;
-    }
-    auto const second = static_cast<unsigned char>(str[pos + 1]);
-    if (first == 0xE0 && second < 0xA0) {
-      return 0;  // オーバーロング
-    }
-    if (first == 0xED && second > 0x9F) {
-      return 0;  // サロゲート
-    }
-    return is_cont(pos + 2) ? 3 : 0;
-  }
-  if (first >= 0xF0 && first <= 0xF4) {
-    if (!is_cont(pos + 1)) {
-      return 0;
-    }
-    auto const second = static_cast<unsigned char>(str[pos + 1]);
-    if (first == 0xF0 && second < 0x90) {
-      return 0;  // オーバーロング
-    }
-    if (first == 0xF4 && second > 0x8F) {
-      return 0;  // U+10FFFF 超え
-    }
-    return (is_cont(pos + 2) && is_cont(pos + 3)) ? 4 : 0;
-  }
-  return 0;
+  auto const length = utf8_sequence_length(str, pos);
+  return length == 1 ? 0 : length;
 }
 
 /**
@@ -1082,22 +1024,10 @@ template <size_t N>
   auto i = 0uz;
 
   while (i < str.length) {
-    auto const c = static_cast<unsigned char>(str.buffer[i]);
-    if (c < 0x80) {
-      i += 1;
-    } else if (c < 0xC0) {
-      // Continuation byte without leading byte - invalid, skip
-      i += 1;
-    } else if (c < 0xE0) {
-      i += 2;
-    } else if (c < 0xF0) {
-      i += 3;
-    } else if (c < 0xF8) {
-      i += 4;
-    } else {
-      // Invalid byte, skip
-      i += 1;
-    }
+    auto consumed = 0uz;
+    std::uint32_t codepoint = 0;
+    (void)detail::utf8_decode_at(str.sv(), i, consumed, codepoint);
+    i += consumed;
     ++count;
   }
 
@@ -1191,17 +1121,21 @@ template <size_t Start, size_t Count, auto Str>
  */
 template <size_t N>
 [[nodiscard]] auto consteval utf8_reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  std::array<size_t, N> starts{};
+  std::array<size_t, N> lengths{};
   auto count = 0uz;
-  auto const codepoints = detail::utf8_codepoints(str, count);
+  for (auto i = 0uz; i < str.length;) {
+    std::uint32_t codepoint = 0;
+    starts[count] = i;
+    (void)detail::utf8_decode_at(str.sv(), i, lengths[count], codepoint);
+    i += lengths[count++];
+  }
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   for (auto i = count; i-- > 0;) {
-    auto bytes = std::array<char, 4>{};
-    size_t length = 0;
-    detail::utf8_encode_codepoint(codepoints[i], bytes, length);
-    for (auto j = 0uz; j < length; ++j) {
+    for (auto j = 0uz; j < lengths[i]; ++j) {
       FROZENCHARS_PRECONDITION(offset < N - 1, "utf8_reverse: invalid UTF-8 input expands past the output buffer");
-      res.buffer[offset++] = bytes[j];
+      res.buffer[offset++] = str.buffer[starts[i] + j];
     }
   }
   res.buffer[offset] = '\0';
@@ -1241,21 +1175,7 @@ template <auto Str>
  */
 template <size_t N>
 [[nodiscard]] constexpr auto is_valid_utf8(FrozenString<N> const& str) noexcept -> bool {
-  auto const sv = str.sv();
-  auto i = 0uz;
-  while (i < sv.size()) {
-    auto const c = static_cast<unsigned char>(sv[i]);
-    if (c < 0x80) {
-      ++i;
-      continue;
-    }
-    auto const len = detail::valid_utf8_seq_length(sv, i);
-    if (len == 0) {
-      return false;
-    }
-    i += len;
-  }
-  return true;
+  return detail::is_valid_utf8_string(str.sv());
 }
 
 /**

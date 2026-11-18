@@ -19,6 +19,7 @@ namespace detail {
  */
 template <FrozenString Input>
 [[nodiscard]] consteval auto crushed_size() -> size_t {
+  static_assert(frozenchars::detail::is_valid_utf8_string(Input.sv()), "frozenchars: json::crush: invalid UTF-8");
   auto const input_sv = Input.sv();
   auto u16 = *frozenchars::json::detail::utf8_to_utf16(input_sv);
   {
@@ -95,6 +96,7 @@ template <FrozenString Input>
  */
 template <FrozenString Input>
 [[nodiscard]] consteval auto uncrushed_size() -> size_t {
+  static_assert(frozenchars::detail::is_valid_utf8_string(Input.sv()), "frozenchars: json::uncrush: invalid UTF-8");
   return uncrush_to_string(Input.sv()).size() + 1;
 }
 
