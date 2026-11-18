@@ -679,7 +679,8 @@ public:
    *          値型 T に operator== が定義されている必要がある。
    */
   [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs)
-    noexcept(noexcept(std::declval<T const&>() == std::declval<T const&>())) -> bool {
+     noexcept(noexcept(static_cast<bool>(std::declval<T const&>() == std::declval<T const&>()))) -> bool
+     requires requires(T const& a, T const& b) { static_cast<bool>(a == b); } {
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});

@@ -1,6 +1,7 @@
 #include "catch2/catch_all.hpp"
 
 #include <array>
+#include <concepts>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -35,8 +36,20 @@ struct throwing_mapped_value {
   int value_{};
 };
 
+struct non_comparable_mapped_value {};
+
+struct throwing_bool_proxy {
+  constexpr explicit operator bool() const { throw throwing_mapped_value_error{"boolean conversion"}; }
+};
+
+struct proxy_mapped_value {
+  friend constexpr auto operator==(proxy_mapped_value const&, proxy_mapped_value const&) noexcept -> throwing_bool_proxy { return {}; }
+};
+
 using IntMap = frozen_map<int, "key"_fs>;
 using ThrowingMap = frozen_map<throwing_mapped_value, "key"_fs>;
+using NonComparableMap = frozen_map<non_comparable_mapped_value, "key"_fs>;
+using ProxyMap = frozen_map<proxy_mapped_value, "key"_fs>;
 using IntMultimap = frozen_multimap<int, "key"_fs>;
 using ThrowingMultimap = frozen_multimap<throwing_mapped_value, "key"_fs>;
 using IntTrieMap = frozen_trie_map<int, "key"_fs>;
@@ -48,6 +61,9 @@ static_assert(noexcept(std::declval<IntMap const&>().get_value_or("key", std::de
 static_assert(!noexcept(std::declval<ThrowingMap const&>().get_value_or("key", std::declval<throwing_mapped_value const&>())));
 static_assert(noexcept(std::declval<IntMap const&>() == std::declval<IntMap const&>()));
 static_assert(!noexcept(std::declval<ThrowingMap const&>() == std::declval<ThrowingMap const&>()));
+static_assert(!std::equality_comparable<NonComparableMap>);
+static_assert(noexcept(std::declval<proxy_mapped_value const&>() == std::declval<proxy_mapped_value const&>()));
+static_assert(!noexcept(std::declval<ProxyMap const&>() == std::declval<ProxyMap const&>()));
 static_assert(noexcept(IntMultimap{}));
 static_assert(!noexcept(ThrowingMultimap{}));
 static_assert(noexcept(IntTrieMap{}));
@@ -67,4 +83,8 @@ TEST_CASE("mapped value exceptions propagate from conditional noexcept map opera
   auto const lhs = ThrowingMap{std::array<throwing_mapped_value, 1>{throwing_mapped_value{3}}};
   auto const rhs = ThrowingMap{std::array<throwing_mapped_value, 1>{throwing_mapped_value{3}}};
   REQUIRE_THROWS_AS(lhs == rhs, throwing_mapped_value_error);
+
+  auto const proxy_lhs = ProxyMap{};
+  auto const proxy_rhs = ProxyMap{};
+  REQUIRE_THROWS_AS(proxy_lhs == proxy_rhs, throwing_mapped_value_error);
 }
