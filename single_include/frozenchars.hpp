@@ -9440,6 +9440,72 @@ template <size_t N>
 #include <cstdint>
 #include <string_view>
 
+// ---- begin frozenchars/detail/utf8.hpp ----
+
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+namespace frozenchars::detail {
+
+/**
+ * @brief RFC 3629 に従う UTF-8 シーケンスの長さを検証して返す
+ */
+[[nodiscard]] constexpr auto utf8_sequence_length(std::string_view str, std::size_t pos) noexcept -> std::size_t {
+  if (pos >= str.size()) {
+    return 0;
+  }
+
+  auto const first = static_cast<unsigned char>(str[pos]);
+  if (first < 0x80) {
+    return 1;
+  }
+  auto const continuation = [&](std::size_t at) noexcept {
+    return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80;
+  };
+
+  if (first >= 0xC2 && first <= 0xDF) {
+    return continuation(pos + 1) ? 2 : 0;
+  }
+  if (first >= 0xE0 && first <= 0xEF) {
+    if (!continuation(pos + 1)) {
+      return 0;
+    }
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    if ((first == 0xE0 && second < 0xA0) || (first == 0xED && second > 0x9F)) {
+      return 0;
+    }
+    return continuation(pos + 2) ? 3 : 0;
+  }
+  if (first >= 0xF0 && first <= 0xF4) {
+    if (!continuation(pos + 1)) {
+      return 0;
+    }
+    auto const second = static_cast<unsigned char>(str[pos + 1]);
+    if ((first == 0xF0 && second < 0x90) || (first == 0xF4 && second > 0x8F)) {
+      return 0;
+    }
+    return continuation(pos + 2) && continuation(pos + 3) ? 4 : 0;
+  }
+  return 0;
+}
+
+/**
+ * @brief 文字列全体が RFC 3629 UTF-8 として妥当か判定する
+ */
+[[nodiscard]] constexpr auto is_valid_utf8_string(std::string_view str) noexcept -> bool {
+  for (std::size_t pos = 0; pos < str.size();) {
+    auto const length = utf8_sequence_length(str, pos);
+    if (length == 0) {
+      return false;
+    }
+    pos += length;
+  }
+  return true;
+}
+
+}  // namespace frozenchars::detail
+// ---- end frozenchars/detail/utf8.hpp ----
 
 namespace frozenchars::detail {
 
@@ -9483,53 +9549,29 @@ constexpr auto utf8_decode_at(std::string_view str, size_t pos, size_t& consumed
   }
 
   auto const first = static_cast<unsigned char>(str[pos]);
-  if (first < 0x80) {
+  auto const length = utf8_sequence_length(str, pos);
+  if (length == 1) {
     codepoint = first;
     consumed = 1;
-    return true;
-  }
-
-  if ((first & 0xE0) == 0xC0 && pos + 1 < str.size()) {
+  } else if (length == 2) {
     auto const second = static_cast<unsigned char>(str[pos + 1]);
-    if ((second & 0xC0) != 0x80) {
-      codepoint = first;
-      consumed = 1;
-      return true;
-    }
     codepoint = ((first & 0x1F) << 6) | (second & 0x3F);
     consumed = 2;
-    return true;
-  }
-
-  if ((first & 0xF0) == 0xE0 && pos + 2 < str.size()) {
+  } else if (length == 3) {
     auto const second = static_cast<unsigned char>(str[pos + 1]);
     auto const third = static_cast<unsigned char>(str[pos + 2]);
-    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80) {
-      codepoint = first;
-      consumed = 1;
-      return true;
-    }
     codepoint = ((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F);
     consumed = 3;
-    return true;
-  }
-
-  if ((first & 0xF8) == 0xF0 && pos + 3 < str.size()) {
+  } else if (length == 4) {
     auto const second = static_cast<unsigned char>(str[pos + 1]);
     auto const third = static_cast<unsigned char>(str[pos + 2]);
     auto const fourth = static_cast<unsigned char>(str[pos + 3]);
-    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80 || (fourth & 0xC0) != 0x80) {
-      codepoint = first;
-      consumed = 1;
-      return true;
-    }
     codepoint = ((first & 0x07) << 18) | ((second & 0x3F) << 12) | ((third & 0x3F) << 6) | (fourth & 0x3F);
     consumed = 4;
-    return true;
+  } else {
+    codepoint = first;
+    consumed = 1;
   }
-
-  codepoint = first;
-  consumed = 1;
   return true;
 }
 
@@ -9612,43 +9654,8 @@ constexpr auto utf8_encode_codepoint(std::uint32_t codepoint, std::array<char, 4
  * @return size_t 有効なら長さ（2〜4）、不正・ASCII・孤立バイトなら 0
  */
 [[nodiscard]] constexpr auto valid_utf8_seq_length(std::string_view const str, size_t const pos) noexcept -> size_t {
-  if (pos >= str.size()) {
-    return 0;
-  }
-  auto const first = static_cast<unsigned char>(str[pos]);
-  auto const is_cont = [&](size_t const at) noexcept {
-    return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80;
-  };
-  if (first >= 0xC2 && first <= 0xDF) {
-    return is_cont(pos + 1) ? 2 : 0;
-  }
-  if (first >= 0xE0 && first <= 0xEF) {
-    if (!is_cont(pos + 1)) {
-      return 0;
-    }
-    auto const second = static_cast<unsigned char>(str[pos + 1]);
-    if (first == 0xE0 && second < 0xA0) {
-      return 0;  // オーバーロング
-    }
-    if (first == 0xED && second > 0x9F) {
-      return 0;  // サロゲート
-    }
-    return is_cont(pos + 2) ? 3 : 0;
-  }
-  if (first >= 0xF0 && first <= 0xF4) {
-    if (!is_cont(pos + 1)) {
-      return 0;
-    }
-    auto const second = static_cast<unsigned char>(str[pos + 1]);
-    if (first == 0xF0 && second < 0x90) {
-      return 0;  // オーバーロング
-    }
-    if (first == 0xF4 && second > 0x8F) {
-      return 0;  // U+10FFFF 超え
-    }
-    return (is_cont(pos + 2) && is_cont(pos + 3)) ? 4 : 0;
-  }
-  return 0;
+  auto const length = utf8_sequence_length(str, pos);
+  return length == 1 ? 0 : length;
 }
 
 /**
@@ -10514,22 +10521,10 @@ template <size_t N>
   auto i = 0uz;
 
   while (i < str.length) {
-    auto const c = static_cast<unsigned char>(str.buffer[i]);
-    if (c < 0x80) {
-      i += 1;
-    } else if (c < 0xC0) {
-      // Continuation byte without leading byte - invalid, skip
-      i += 1;
-    } else if (c < 0xE0) {
-      i += 2;
-    } else if (c < 0xF0) {
-      i += 3;
-    } else if (c < 0xF8) {
-      i += 4;
-    } else {
-      // Invalid byte, skip
-      i += 1;
-    }
+    auto consumed = 0uz;
+    std::uint32_t codepoint = 0;
+    (void)detail::utf8_decode_at(str.sv(), i, consumed, codepoint);
+    i += consumed;
     ++count;
   }
 
@@ -10623,17 +10618,21 @@ template <size_t Start, size_t Count, auto Str>
  */
 template <size_t N>
 [[nodiscard]] auto consteval utf8_reverse(FrozenString<N> const& str) noexcept -> FrozenString<N> {
+  std::array<size_t, N> starts{};
+  std::array<size_t, N> lengths{};
   auto count = 0uz;
-  auto const codepoints = detail::utf8_codepoints(str, count);
+  for (auto i = 0uz; i < str.length;) {
+    std::uint32_t codepoint = 0;
+    starts[count] = i;
+    (void)detail::utf8_decode_at(str.sv(), i, lengths[count], codepoint);
+    i += lengths[count++];
+  }
   auto res = FrozenString<N>{};
   auto offset = 0uz;
   for (auto i = count; i-- > 0;) {
-    auto bytes = std::array<char, 4>{};
-    size_t length = 0;
-    detail::utf8_encode_codepoint(codepoints[i], bytes, length);
-    for (auto j = 0uz; j < length; ++j) {
+    for (auto j = 0uz; j < lengths[i]; ++j) {
       FROZENCHARS_PRECONDITION(offset < N - 1, "utf8_reverse: invalid UTF-8 input expands past the output buffer");
-      res.buffer[offset++] = bytes[j];
+      res.buffer[offset++] = str.buffer[starts[i] + j];
     }
   }
   res.buffer[offset] = '\0';
@@ -10673,21 +10672,7 @@ template <auto Str>
  */
 template <size_t N>
 [[nodiscard]] constexpr auto is_valid_utf8(FrozenString<N> const& str) noexcept -> bool {
-  auto const sv = str.sv();
-  auto i = 0uz;
-  while (i < sv.size()) {
-    auto const c = static_cast<unsigned char>(sv[i]);
-    if (c < 0x80) {
-      ++i;
-      continue;
-    }
-    auto const len = detail::valid_utf8_seq_length(sv, i);
-    if (len == 0) {
-      return false;
-    }
-    i += len;
-  }
-  return true;
+  return detail::is_valid_utf8_string(str.sv());
 }
 
 /**
@@ -12106,7 +12091,9 @@ public:
    * @details キー集合（Keys...）が一致する場合にのみ ADL で見つかる hidden friend として定義される。
    *          値型 T に operator== が定義されている必要がある。
    */
-  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
+  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs)
+     noexcept(noexcept(static_cast<bool>(std::declval<T const&>() == std::declval<T const&>()))) -> bool
+     requires requires(T const& a, T const& b) { static_cast<bool>(a == b); } {
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});
@@ -12168,7 +12155,7 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_map() noexcept requires std::default_initializable<T> = default;
+  constexpr frozen_map() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
   /**
    * @brief 値配列から構築する（キー順に対応）
    * @param values キー順に対応する値の配列
@@ -12246,7 +12233,8 @@ public:
    * @param default_value 未検出時に返す値
    * @return T 取得した値またはデフォルト値
    */
-  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const noexcept -> T {
+  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const
+    noexcept(std::is_nothrow_copy_constructible_v<T>) -> T {
     if (auto const slot = find_index_opt(key); slot) [[likely]] return values_[*slot];
     return default_value;
   }
@@ -12836,7 +12824,7 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_multimap() noexcept requires std::default_initializable<T> = default;
+  constexpr frozen_multimap() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
   /**
    * @brief 値配列から構築する（宣言順に対応）
    * @param values 宣言順に対応する値の配列
@@ -13567,7 +13555,7 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_trie_map() noexcept requires std::default_initializable<T> = default;
+  constexpr frozen_trie_map() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
   /**
    * @brief 値の配列から構築
    * @param values キー順に対応する値の配列
@@ -16583,6 +16571,7 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_date(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
+  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 10) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[7] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -16623,12 +16612,13 @@ template <FrozenString S>
 
   static_assert(h <= 23 && mi <= 59 && sec <= 59, "chrono: invalid time component");
 
-  if constexpr (S.length >= 20) {
-    static_assert(S.buffer[19] == 'Z' || S.buffer[19] == 'z'
-      || S.buffer[19] == '+' || S.buffer[19] == '-',
+  if constexpr (S.length == 20) {
+    static_assert(S.buffer[19] == 'Z' || S.buffer[19] == 'z',
       "chrono: invalid timezone offset format");
   }
   if constexpr (S.length == 25) {
+    static_assert(S.buffer[19] == '+' || S.buffer[19] == '-',
+      "chrono: invalid timezone offset format");
     static_assert(S.buffer[22] == ':',
       "chrono: invalid timezone offset format");
     static_assert(detail::is_digits(S.data() + 20, 2) && detail::is_digits(S.data() + 23, 2), "chrono: invalid timezone offset format");
@@ -16657,6 +16647,7 @@ template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_datetime(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::sys_seconds, std::errc> {
   using namespace std::chrono;
+  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
   if (s.length < 19) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 19 && s.length != 20 && s.length != 25) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -16673,12 +16664,19 @@ template <size_t N>
   if (h > 23) return std::unexpected(std::errc::invalid_argument);
   if (mi > 59) return std::unexpected(std::errc::invalid_argument);
   if (sec > 59) return std::unexpected(std::errc::invalid_argument);
-  if (s.length >= 20 && s.buffer[19] != 'Z' && s.buffer[19] != 'z' && s.buffer[19] != '+' && s.buffer[19] != '-')
+  if (s.length == 20 && s.buffer[19] != 'Z' && s.buffer[19] != 'z')
+    return std::unexpected(std::errc::invalid_argument);
+  if (s.length == 25 && s.buffer[19] != '+' && s.buffer[19] != '-')
     return std::unexpected(std::errc::invalid_argument);
   if (s.length == 25 && s.buffer[22] != ':')
     return std::unexpected(std::errc::invalid_argument);
   if (s.length == 25 && (!detail::is_digits(s.data() + 20, 2) || !detail::is_digits(s.data() + 23, 2)))
     return std::unexpected(std::errc::invalid_argument);
+  if (s.length == 25) {
+    auto const oh = detail::decode_two_digits(s.buffer[20], s.buffer[21]);
+    auto const om = detail::decode_two_digits(s.buffer[23], s.buffer[24]);
+    if (oh > 23 || om > 59) return std::unexpected(std::errc::invalid_argument);
+  }
   auto const date = detail::parse_ymd_iso(s.data(), 10);
   if (!date.ok())
     return std::unexpected(std::errc::invalid_argument);
@@ -16698,16 +16696,22 @@ template <size_t N>
  */
 template <FrozenString S>
 [[nodiscard]] consteval auto parse_date_macro() noexcept -> std::chrono::year_month_day {
-  static_assert(S.length == 11 && S.buffer[6] == ' ', "chrono: invalid __DATE__ format");
+  static_assert(S.length == 11 && S.buffer[3] == ' ' && S.buffer[6] == ' ', "chrono: invalid __DATE__ format");
   auto const mon = detail::month_name_to_number(S.data(), 3);
   static_assert(mon >= 1 && mon <= 12, "chrono: invalid __DATE__ format");
+  static_assert((S.buffer[4] == ' ' && detail::is_digits(S.data() + 5, 1)) ||
+                  (S.buffer[4] != ' ' && detail::is_digits(S.data() + 4, 2)),
+                "chrono: invalid __DATE__ format");
   auto const day_val = (S.buffer[4] == ' ')
     ? static_cast<unsigned>(S.buffer[5] - '0')
     : detail::decode_two_digits(S.buffer[4], S.buffer[5]);
   static_assert(day_val >= 1 && day_val <= 31, "chrono: invalid __DATE__ format");
+  static_assert(detail::is_digits(S.data() + 7, 4), "chrono: invalid __DATE__ format");
   auto const year_val = detail::decode_four_digits(S.buffer[7], S.buffer[8], S.buffer[9], S.buffer[10]);
   static_assert(year_val >= 1970, "chrono: invalid __DATE__ format");
-  return detail::parse_ymd_macro(S.data(), 11);
+  auto constexpr date = detail::parse_ymd_macro(S.data(), 11);
+  static_assert(date.ok(), "chrono: invalid calendar date (e.g. 2024-02-30)");
+  return date;
 }
 
 /**
@@ -16720,17 +16724,26 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_date_macro(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
+  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 11) return std::unexpected(std::errc::invalid_argument);
-  if (s.buffer[6] != ' ') return std::unexpected(std::errc::invalid_argument);
+  if (s.buffer[3] != ' ' || s.buffer[6] != ' ') return std::unexpected(std::errc::invalid_argument);
   auto const mon = detail::month_name_to_number(s.data(), 3);
   if (mon < 1 || mon > 12) return std::unexpected(std::errc::invalid_argument);
+  if (s.buffer[4] == ' ') {
+    if (!detail::is_digits(s.data() + 5, 1)) return std::unexpected(std::errc::invalid_argument);
+  } else if (!detail::is_digits(s.data() + 4, 2)) {
+    return std::unexpected(std::errc::invalid_argument);
+  }
   auto const day_val = (s.buffer[4] == ' ')
     ? static_cast<unsigned>(s.buffer[5] - '0')
     : detail::decode_two_digits(s.buffer[4], s.buffer[5]);
   if (day_val < 1 || day_val > 31) return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data() + 7, 4)) return std::unexpected(std::errc::invalid_argument);
   auto const year_val = detail::decode_four_digits(s.buffer[7], s.buffer[8], s.buffer[9], s.buffer[10]);
   if (year_val < 1970) return std::unexpected(std::errc::invalid_argument);
-  return detail::parse_ymd_macro(s.data(), 11);
+  auto const date = detail::parse_ymd_macro(s.data(), 11);
+  if (!date.ok()) return std::unexpected(std::errc::invalid_argument);
+  return date;
 }
 
 /**
