@@ -115,6 +115,10 @@ if(Catch2_FOUND AND ctre_FOUND)
     # validate_json / parse_json は最大 max_depth(512) 段まで再帰する。
     # Emscripten の既定スタック (64 KiB) では 300 段程度で枯渇するため拡張する。
     target_link_options(all_test PRIVATE "-sSTACK_SIZE=1048576")
+  elseif(MSVC)
+    # MSVC の既定スタック (1 MiB) では max_depth の境界テストが枯渇するため、
+    # Unix 系ランナーと同程度の余裕を確保する。
+    target_link_options(all_test PRIVATE "/STACK:8388608")
   endif()
 
   add_test(NAME all_test COMMAND all_test -r junit)
