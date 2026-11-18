@@ -66,7 +66,7 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_trie_map() noexcept requires std::default_initializable<T> = default;
+  constexpr frozen_trie_map() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
   /**
    * @brief 値の配列から構築
    * @param values キー順に対応する値の配列

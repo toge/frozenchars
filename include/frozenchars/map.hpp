@@ -678,7 +678,8 @@ public:
    * @details キー集合（Keys...）が一致する場合にのみ ADL で見つかる hidden friend として定義される。
    *          値型 T に operator== が定義されている必要がある。
    */
-  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs) noexcept -> bool {
+  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs)
+    noexcept(noexcept(std::declval<T const&>() == std::declval<T const&>())) -> bool {
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});
@@ -740,7 +741,7 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_map() noexcept requires std::default_initializable<T> = default;
+  constexpr frozen_map() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
   /**
    * @brief 値配列から構築する（キー順に対応）
    * @param values キー順に対応する値の配列
@@ -818,7 +819,8 @@ public:
    * @param default_value 未検出時に返す値
    * @return T 取得した値またはデフォルト値
    */
-  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const noexcept -> T {
+  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const
+    noexcept(std::is_nothrow_copy_constructible_v<T>) -> T {
     if (auto const slot = find_index_opt(key); slot) [[likely]] return values_[*slot];
     return default_value;
   }
