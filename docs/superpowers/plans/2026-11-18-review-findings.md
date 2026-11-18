@@ -40,7 +40,7 @@ Run:
 
 ```bash
 cmake --build build --target all_test --parallel
-build/test/all_test "[encoding],[json][compress],[json][crush]"
+ctest --test-dir build --output-on-failure -R '^all_test$'
 ctest --test-dir build --output-on-failure -R 'compile_fail_json_(crush|uncrush)_invalid_utf8'
 ```
 
@@ -121,6 +121,7 @@ Add runtime rejection cases for:
 - non-digits in day/year fields, including `Jan  : 2026`.
 
 Add a compile-fail case for an invalid `parse_date_macro` calendar date.
+Register it through `add_compile_fail_test()` in `test/CMakeLists.txt` and pin the new calendar-date diagnostic with `EXPECTED_TEXT`.
 
 - [ ] **Step 2: Run focused tests to verify failure**
 
@@ -128,7 +129,8 @@ Run:
 
 ```bash
 cmake --build build --target all_test --parallel
-build/test/all_test "[chrono]"
+ctest --test-dir build --output-on-failure -R '^all_test$'
+ctest --test-dir build --output-on-failure -R 'compile_fail_chrono_parse_date_macro_invalid_calendar'
 ```
 
 Expected: malformed inputs currently produce values and at least one new assertion fails.
@@ -185,7 +187,7 @@ Run:
 
 ```bash
 cmake --build build --target all_test --parallel
-build/test/all_test "[frozen_map]"
+ctest --test-dir build --output-on-failure -R '^all_test$'
 ```
 
 Expected: the new static assertions fail because the current APIs are unconditionally `noexcept`.
@@ -232,9 +234,11 @@ The Glaze consumer calls `find_package(frozenchars CONFIG REQUIRED COMPONENTS gl
 
 The script must configure/install the project twice into disposable prefixes: once with a poisoned or absent Glaze path for core, once with the normal manifest setup for Glaze. It must also compile a `json::crush` NTTP case that exceeds the unmodified GCC/Clang constexpr default.
 
+Register `verify_package.cmake` as a `package_consumer` CTest on host platforms, passing the source directory, binary directory, generator, configuration, and compiler explicitly. Do not register this external-process test for WASI or Emscripten.
+
 - [ ] **Step 2: Run fixture to verify failure**
 
-Run the package consumer script with the same compiler as `build/CMakeCache.txt`. Expected: current exported target either requires Glaze for core or fails to export the required constexpr limits.
+Run `ctest --test-dir build --output-on-failure -R '^package_consumer$'` with the same compiler as `build/CMakeCache.txt`. Expected: FAIL because the current exported target either requires Glaze for core or fails to export the required constexpr limits.
 
 - [ ] **Step 3: Implement target split**
 
@@ -262,7 +266,6 @@ Run:
 ```bash
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
-cmake -P test/package_consumer/verify_package.cmake
 ```
 
 Expected: 53+ tests and both package scenarios pass. Inspect the installed `frozencharsConfig.cmake` and exported target to confirm core does not contain `glaze::glaze`.
