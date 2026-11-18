@@ -15,15 +15,7 @@ add_compile_options(
     $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall>
     $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wextra>
     $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-pedantic>
-    # json::crush / json::compress はコンパイル時に探索を積み重ねるため、
-    # GCC の既定の上限（constexpr ops 33554432）では 200 バイト程度の JSON で
-    # コンパイルエラーになる。Clang 系と同じ程度に持ち上げる。
-    $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-ops-limit=2147483647>
-    $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-loop-limit=100000000>
-    # Clang 系（AppleClang を含む）は constexpr ステップ数の上限を引き上げる
-    $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fconstexpr-steps=100000000>
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<CXX_COMPILER_ID:MSVC>:/constexpr:steps10000000>
 )
 
 include(GNUInstallDirs)
@@ -32,14 +24,12 @@ include(CMakePackageConfigHelpers)
 add_library(frozenchars INTERFACE)
 add_library(frozenchars::frozenchars ALIAS frozenchars)
 target_compile_features(frozenchars INTERFACE cxx_std_23)
-
-find_package(glaze CONFIG QUIET)
-if(glaze_FOUND)
-    target_link_libraries(frozenchars INTERFACE glaze::glaze)
-    set(FROZENCHARS_WITH_GLAZE ON)
-else()
-    set(FROZENCHARS_WITH_GLAZE OFF)
-endif()
+target_compile_options(frozenchars INTERFACE
+    $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-ops-limit=2147483647>
+    $<$<CXX_COMPILER_ID:GNU>:-fconstexpr-loop-limit=100000000>
+    $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fconstexpr-steps=100000000>
+    $<$<CXX_COMPILER_ID:MSVC>:/constexpr:steps10000000>
+)
 
 target_include_directories(frozenchars
     INTERFACE
@@ -47,9 +37,22 @@ target_include_directories(frozenchars
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+find_package(glaze CONFIG QUIET)
+if(glaze_FOUND)
+    add_library(frozenchars_glaze INTERFACE)
+    add_library(frozenchars::glaze ALIAS frozenchars_glaze)
+    set_target_properties(frozenchars_glaze PROPERTIES EXPORT_NAME glaze)
+    target_link_libraries(frozenchars_glaze INTERFACE frozenchars glaze::glaze)
+endif()
+
 install(TARGETS frozenchars
     EXPORT frozencharsTargets
 )
+if(TARGET frozenchars_glaze)
+    install(TARGETS frozenchars_glaze
+        EXPORT frozencharsGlazeTargets
+    )
+endif()
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/frozenchars.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -82,6 +85,13 @@ install(EXPORT frozencharsTargets
     NAMESPACE frozenchars::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
 )
+if(TARGET frozenchars_glaze)
+    install(EXPORT frozencharsGlazeTargets
+        FILE frozencharsGlazeTargets.cmake
+        NAMESPACE frozenchars::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/frozenchars"
+    )
+endif()
 
 if(BUILD_TEST)
     enable_testing()

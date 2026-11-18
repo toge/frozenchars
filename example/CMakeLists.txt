@@ -10,7 +10,11 @@ add_test(NAME example_split COMMAND example_split)
 
 add_executable(example_frozen_map_use_cases example_frozen_map_use_cases.cpp)
 target_compile_features(example_frozen_map_use_cases PRIVATE cxx_std_23)
-target_link_libraries(example_frozen_map_use_cases PRIVATE frozenchars::frozenchars)
+if(TARGET frozenchars::glaze)
+  target_link_libraries(example_frozen_map_use_cases PRIVATE frozenchars::glaze)
+else()
+  target_link_libraries(example_frozen_map_use_cases PRIVATE frozenchars::frozenchars)
+endif()
 add_test(NAME example_frozen_map_use_cases COMMAND example_frozen_map_use_cases)
 
 add_executable(example_frozen_format example_frozen_format.cpp)

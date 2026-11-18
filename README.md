@@ -2525,6 +2525,16 @@ find_package(frozenchars CONFIG REQUIRED)
 target_link_libraries(myapp PRIVATE frozenchars::frozenchars)
 ```
 
+Glaze 連携を利用する場合は `glaze` コンポーネントを要求し、`frozenchars::glaze` にリンクします。
+
+```cmake
+find_package(frozenchars CONFIG REQUIRED COMPONENTS glaze)
+target_link_libraries(myapp PRIVATE frozenchars::glaze)
+```
+
+`frozenchars::frozenchars` はコア機能だけを提供し、Glaze へ依存しません。Glaze がインストール環境で見つかった場合にのみ、
+`frozenchars::glaze` ターゲットが同梱されます。
+
 ### インストール
 
 ```bash

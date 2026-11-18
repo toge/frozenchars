@@ -23,6 +23,25 @@ else()
   add_test(NAME smoke_no_exceptions COMMAND smoke_no_exceptions)
 endif()
 
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "WASI" AND NOT EMSCRIPTEN)
+  add_test(
+    NAME package_consumer
+    COMMAND ${CMAKE_COMMAND}
+            "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+            "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/package_consumer"
+            "-DCONSUMER_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/package_consumer"
+            "-DCMAKE_GENERATOR=${CMAKE_GENERATOR}"
+            "-DCMAKE_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+            "-DCMAKE_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+            "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+            "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DGLAZE_AVAILABLE=${glaze_FOUND}"
+            "-DGLAZE_DIR=${glaze_DIR}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/package_consumer/run.cmake
+  )
+  set_tests_properties(package_consumer PROPERTIES TIMEOUT 1200)
+endif()
+
 # Catch2/ctre/nanobench は wasm32-wasip1/wasip2 ではビルドできないため
 # find_package 自体をスキップする（vcpkg も platform フィルターでインストールしない）。
 if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
@@ -79,8 +98,13 @@ if(Catch2_FOUND AND ctre_FOUND)
 
   add_executable(all_test ${test_src})
 
+  set(_frozenchars_test_target frozenchars::frozenchars)
+  if(TARGET frozenchars::glaze)
+    set(_frozenchars_test_target frozenchars::glaze)
+  endif()
+
   target_link_libraries(all_test PRIVATE
-    frozenchars::frozenchars
+    ${_frozenchars_test_target}
     ${_catch2_targets}
     ctre::ctre
   )
@@ -222,8 +246,10 @@ function(add_compile_fail_test)
 
   string(TOUPPER "${CMAKE_BUILD_TYPE}" _config)
   set(_flags "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${_config}} ${_std_flag}")
-  # 本体のビルドと同じコンパイル時評価ステップ数を指定する（CMakeLists.txt の add_compile_options 相当）
-  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  # 本体の frozenchars ターゲットと同じコンパイル時評価ステップ数を指定する。
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    string(APPEND _flags " -fconstexpr-ops-limit=2147483647 -fconstexpr-loop-limit=100000000")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     string(APPEND _flags " -fconstexpr-steps=100000000")
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     string(APPEND _flags " /constexpr:steps10000000")
