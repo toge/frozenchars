@@ -38,6 +38,15 @@ TEST_CASE("parse_iso_date - invalid dates are rejected") {
   REQUIRE(bad_digits.error() == std::errc::invalid_argument);
 }
 
+TEST_CASE("parse_iso_date - malformed capacity is rejected before access") {
+  constexpr auto forged = [] {
+    FrozenString<2> s;
+    s.length = 10;
+    return s;
+  }();
+  STATIC_CHECK_FALSE(parse_iso_date(forged).has_value());
+}
+
 // ========== ISO 日時のパース ==========
 
 TEST_CASE("parse_iso_datetime - UTC") {
@@ -99,6 +108,15 @@ TEST_CASE("parse_iso_datetime - invalid values are rejected") {
   REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+0:000"_fs).error() == std::errc::invalid_argument);
 }
 
+TEST_CASE("parse_iso_datetime - malformed capacity is rejected before access") {
+  constexpr auto forged = [] {
+    FrozenString<2> s;
+    s.length = 19;
+    return s;
+  }();
+  STATIC_CHECK_FALSE(parse_iso_datetime(forged).has_value());
+}
+
 // ========== __DATE__ マクロのパース ==========
 
 TEST_CASE("parse_date_macro - known formats") {
@@ -123,6 +141,15 @@ TEST_CASE("parse_date_macro - invalid runtime values are rejected") {
   REQUIRE(parse_date_macro("Jan 32 2024"_fs).error() == std::errc::invalid_argument);
   REQUIRE(parse_date_macro("Jan  : 2026"_fs).error() == std::errc::invalid_argument);
   REQUIRE(parse_date_macro("Jan  1 20a6"_fs).error() == std::errc::invalid_argument);
+}
+
+TEST_CASE("parse_date_macro - malformed capacity is rejected before access") {
+  constexpr auto forged = [] {
+    FrozenString<2> s;
+    s.length = 11;
+    return s;
+  }();
+  STATIC_CHECK_FALSE(parse_date_macro(forged).has_value());
 }
 
 // ========== コンパイルタイムスタンプ ==========

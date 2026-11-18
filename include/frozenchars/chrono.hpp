@@ -42,6 +42,7 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_date(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
+  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 10) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[7] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -117,6 +118,7 @@ template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_datetime(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::sys_seconds, std::errc> {
   using namespace std::chrono;
+  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
   if (s.length < 19) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 19 && s.length != 20 && s.length != 25) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -193,6 +195,7 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_date_macro(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
+  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 11) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[3] != ' ' || s.buffer[6] != ' ') return std::unexpected(std::errc::invalid_argument);
   auto const mon = detail::month_name_to_number(s.data(), 3);
