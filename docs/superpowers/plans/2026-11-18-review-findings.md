@@ -16,7 +16,7 @@
 - Modify: `test/test_encoding.cpp`
 - Modify: `test/test_json_compress.cpp`
 - Modify: `test/test_json_crush.cpp`
-- Modify: `test/compile_fail/CMakeLists.txt`
+- Modify: `test/CMakeLists.txt`
 - Create: `test/compile_fail/json_crush_invalid_utf8.cpp`
 - Create: `test/compile_fail/json_uncrush_invalid_utf8.cpp`
 
@@ -32,7 +32,7 @@ For compile-fail Crush cases, instantiate `crush<Invalid>()` and `uncrush<Invali
 
 - [ ] **Step 3: Register compile-fail cases**
 
-Add both new files through `add_compile_fail_test()` in `test/compile_fail/CMakeLists.txt`. Keep the existing `EXPECTED_TEXT` mechanism.
+Add both new files through `add_compile_fail_test()` in `test/CMakeLists.txt`. Keep the existing `EXPECTED_TEXT` mechanism.
 
 - [ ] **Step 4: Run focused tests to verify failure**
 
@@ -41,7 +41,7 @@ Run:
 ```bash
 cmake --build build --target all_test --parallel
 build/test/all_test "[encoding],[json][compress],[json][crush]"
-cmake --build build --target compile_fail_json_crush_invalid_utf8
+ctest --test-dir build --output-on-failure -R 'compile_fail_json_(crush|uncrush)_invalid_utf8'
 ```
 
 Expected: the regression assertions fail and/or the compile-fail target unexpectedly compiles. Record the exact baseline failures.
@@ -87,7 +87,7 @@ Use the shared primitive in `decode_utf8`. Reject lone low/high surrogates in `u
 Run:
 
 ```bash
-cmake --build build --target all_test compile_fail_json_crush_invalid_utf8 compile_fail_json_uncrush_invalid_utf8 --parallel
+cmake --build build --target all_test --parallel
 ctest --test-dir build --output-on-failure -R 'all_test|compile_fail_json_(crush|uncrush)_invalid_utf8'
 ```
 
@@ -238,7 +238,7 @@ Run the package consumer script with the same compiler as `build/CMakeCache.txt`
 
 - [ ] **Step 3: Implement target split**
 
-Keep `frozenchars` as the only unconditional target. If Glaze is found, add an INTERFACE target named `frozenchars_glaze`, alias `frozenchars::glaze`, link it to `frozenchars` and `glaze::glaze`, and include it in the install export.
+Keep `frozenchars` as the only unconditional target. If Glaze is found, add an INTERFACE target named `frozenchars_glaze`, give it `EXPORT_NAME glaze`, add alias `frozenchars::glaze`, link it to `frozenchars` and `glaze::glaze`, and include it in the install export. Verify that the installed target is `frozenchars::glaze`, not `frozenchars::frozenchars_glaze`.
 
 Move GCC/Clang/MSVC constexpr limits from directory-wide `add_compile_options()` to `target_compile_options(frozenchars INTERFACE ...)`. Keep `-Wall/-Wextra/-pedantic/-W4` local to the project build. Preserve CMake 3.25 generator-expression support and do not rely on newer export-name rewriting.
 
@@ -280,6 +280,7 @@ git commit -m "fix: make glaze CMake integration optional"
 
 **Files:**
 - Modify: `single_include/frozenchars.hpp` (generated)
+- Modify: `single_include/frozenchars_json.hpp` (generated)
 - Modify: `README.md` (only if implementation docs require)
 - Test: entire repository
 
@@ -291,7 +292,7 @@ Run:
 python3 tools/amalgamate.py
 ```
 
-Expected: tracked single-header output includes the UTF-8/chrono/container fixes and no unrelated generated churn.
+Expected: tracked single-header outputs include the UTF-8/chrono/container fixes in `single_include/frozenchars.hpp` and the JSON/Crush fixes in `single_include/frozenchars_json.hpp`, with no unrelated generated churn.
 
 - [ ] **Step 2: Validate all surfaces**
 
@@ -314,6 +315,6 @@ Run the repository's code-review subagent over `bf01aec..HEAD`. Confirm every ac
 - [ ] **Step 4: Commit generated output**
 
 ```bash
-git add single_include README.md
+git add single_include/frozenchars.hpp single_include/frozenchars_json.hpp README.md
 git commit -m "build: refresh frozenchars single header"
 ```
