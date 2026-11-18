@@ -9461,9 +9461,7 @@ namespace frozenchars::detail {
   if (first < 0x80) {
     return 1;
   }
-  auto const continuation = [&](std::size_t at) noexcept {
-    return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80;
-  };
+  auto const continuation = [&](std::size_t at) noexcept { return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80; };
 
   if (first >= 0xC2 && first <= 0xDF) {
     return continuation(pos + 1) ? 2 : 0;
@@ -9505,7 +9503,7 @@ namespace frozenchars::detail {
   return true;
 }
 
-}  // namespace frozenchars::detail
+} // namespace frozenchars::detail
 // ---- end frozenchars/detail/utf8.hpp ----
 
 namespace frozenchars::detail {
@@ -12092,9 +12090,9 @@ public:
    * @details キー集合（Keys...）が一致する場合にのみ ADL で見つかる hidden friend として定義される。
    *          値型 T に operator== が定義されている必要がある。
    */
-  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs)
-     noexcept(noexcept(static_cast<bool>(std::declval<T const&>() == std::declval<T const&>()))) -> bool
-     requires requires(T const& a, T const& b) { static_cast<bool>(a == b); } {
+  [[nodiscard]] friend constexpr auto operator==(frozen_map const& lhs, frozen_map const& rhs) noexcept(noexcept(static_cast<bool>(std::declval<T const&>() == std::declval<T const&>()))) -> bool
+    requires requires(T const& a, T const& b) { static_cast<bool>(a == b); }
+  {
     return [&]<std::size_t... I>(std::index_sequence<I...>) {
       return ((lhs.values_[I] == rhs.values_[I]) && ... && true);
     }(std::make_index_sequence<size()>{});
@@ -12156,7 +12154,9 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_map() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
+  constexpr frozen_map() noexcept(std::is_nothrow_default_constructible_v<T>)
+    requires std::default_initializable<T>
+  = default;
   /**
    * @brief 値配列から構築する（キー順に対応）
    * @param values キー順に対応する値の配列
@@ -12234,8 +12234,7 @@ public:
    * @param default_value 未検出時に返す値
    * @return T 取得した値またはデフォルト値
    */
-  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const
-    noexcept(std::is_nothrow_copy_constructible_v<T>) -> T {
+  [[nodiscard]] constexpr auto get_value_or(std::string_view key, T const& default_value) const noexcept(std::is_nothrow_copy_constructible_v<T>) -> T {
     if (auto const slot = find_index_opt(key); slot) [[likely]] return values_[*slot];
     return default_value;
   }
@@ -12825,7 +12824,9 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_multimap() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
+  constexpr frozen_multimap() noexcept(std::is_nothrow_default_constructible_v<T>)
+    requires std::default_initializable<T>
+  = default;
   /**
    * @brief 値配列から構築する（宣言順に対応）
    * @param values 宣言順に対応する値の配列
@@ -13556,7 +13557,9 @@ public:
   /**
    * @brief デフォルトコンストラクタ（値型がデフォルト構築可能な場合のみ）
    */
-  constexpr frozen_trie_map() noexcept(std::is_nothrow_default_constructible_v<T>) requires std::default_initializable<T> = default;
+  constexpr frozen_trie_map() noexcept(std::is_nothrow_default_constructible_v<T>)
+    requires std::default_initializable<T>
+  = default;
   /**
    * @brief 値の配列から構築
    * @param values キー順に対応する値の配列
@@ -16572,7 +16575,8 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_date(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
-  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
+  if (s.length >= N)
+    return std::unexpected(std::errc::invalid_argument);
   if (s.length != 10) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[7] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -16614,12 +16618,10 @@ template <FrozenString S>
   static_assert(h <= 23 && mi <= 59 && sec <= 59, "chrono: invalid time component");
 
   if constexpr (S.length == 20) {
-    static_assert(S.buffer[19] == 'Z' || S.buffer[19] == 'z',
-      "chrono: invalid timezone offset format");
+    static_assert(S.buffer[19] == 'Z' || S.buffer[19] == 'z', "chrono: invalid timezone offset format");
   }
   if constexpr (S.length == 25) {
-    static_assert(S.buffer[19] == '+' || S.buffer[19] == '-',
-      "chrono: invalid timezone offset format");
+    static_assert(S.buffer[19] == '+' || S.buffer[19] == '-', "chrono: invalid timezone offset format");
     static_assert(S.buffer[22] == ':',
       "chrono: invalid timezone offset format");
     static_assert(detail::is_digits(S.data() + 20, 2) && detail::is_digits(S.data() + 23, 2), "chrono: invalid timezone offset format");
@@ -16648,7 +16650,8 @@ template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_datetime(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::sys_seconds, std::errc> {
   using namespace std::chrono;
-  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
+  if (s.length >= N)
+    return std::unexpected(std::errc::invalid_argument);
   if (s.length < 19) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 19 && s.length != 20 && s.length != 25) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -16676,7 +16679,8 @@ template <size_t N>
   if (s.length == 25) {
     auto const oh = detail::decode_two_digits(s.buffer[20], s.buffer[21]);
     auto const om = detail::decode_two_digits(s.buffer[23], s.buffer[24]);
-    if (oh > 23 || om > 59) return std::unexpected(std::errc::invalid_argument);
+    if (oh > 23 || om > 59)
+      return std::unexpected(std::errc::invalid_argument);
   }
   auto const date = detail::parse_ymd_iso(s.data(), 10);
   if (!date.ok())
@@ -16700,9 +16704,7 @@ template <FrozenString S>
   static_assert(S.length == 11 && S.buffer[3] == ' ' && S.buffer[6] == ' ', "chrono: invalid __DATE__ format");
   auto const mon = detail::month_name_to_number(S.data(), 3);
   static_assert(mon >= 1 && mon <= 12, "chrono: invalid __DATE__ format");
-  static_assert((S.buffer[4] == ' ' && detail::is_digits(S.data() + 5, 1)) ||
-                  (S.buffer[4] != ' ' && detail::is_digits(S.data() + 4, 2)),
-                "chrono: invalid __DATE__ format");
+  static_assert((S.buffer[4] == ' ' && detail::is_digits(S.data() + 5, 1)) || (S.buffer[4] != ' ' && detail::is_digits(S.data() + 4, 2)), "chrono: invalid __DATE__ format");
   auto const day_val = (S.buffer[4] == ' ')
     ? static_cast<unsigned>(S.buffer[5] - '0')
     : detail::decode_two_digits(S.buffer[4], S.buffer[5]);
@@ -16725,13 +16727,16 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_date_macro(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
-  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
+  if (s.length >= N)
+    return std::unexpected(std::errc::invalid_argument);
   if (s.length != 11) return std::unexpected(std::errc::invalid_argument);
-  if (s.buffer[3] != ' ' || s.buffer[6] != ' ') return std::unexpected(std::errc::invalid_argument);
+  if (s.buffer[3] != ' ' || s.buffer[6] != ' ')
+    return std::unexpected(std::errc::invalid_argument);
   auto const mon = detail::month_name_to_number(s.data(), 3);
   if (mon < 1 || mon > 12) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] == ' ') {
-    if (!detail::is_digits(s.data() + 5, 1)) return std::unexpected(std::errc::invalid_argument);
+    if (!detail::is_digits(s.data() + 5, 1))
+      return std::unexpected(std::errc::invalid_argument);
   } else if (!detail::is_digits(s.data() + 4, 2)) {
     return std::unexpected(std::errc::invalid_argument);
   }
@@ -16739,11 +16744,13 @@ template <size_t N>
     ? static_cast<unsigned>(s.buffer[5] - '0')
     : detail::decode_two_digits(s.buffer[4], s.buffer[5]);
   if (day_val < 1 || day_val > 31) return std::unexpected(std::errc::invalid_argument);
-  if (!detail::is_digits(s.data() + 7, 4)) return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data() + 7, 4))
+    return std::unexpected(std::errc::invalid_argument);
   auto const year_val = detail::decode_four_digits(s.buffer[7], s.buffer[8], s.buffer[9], s.buffer[10]);
   if (year_val < 1970) return std::unexpected(std::errc::invalid_argument);
   auto const date = detail::parse_ymd_macro(s.data(), 11);
-  if (!date.ok()) return std::unexpected(std::errc::invalid_argument);
+  if (!date.ok())
+    return std::unexpected(std::errc::invalid_argument);
   return date;
 }
 
@@ -18416,7 +18423,8 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   if (index >= input.size()) return std::unexpected(std::errc::invalid_argument);
   auto const lead = static_cast<uint8_t>(input[index]);
   auto const length = frozenchars::detail::utf8_sequence_length(input, index);
-  if (length == 0) return std::unexpected(std::errc::invalid_argument);
+  if (length == 0)
+    return std::unexpected(std::errc::invalid_argument);
   if (length == 1) {
     ++index;
     return static_cast<char32_t>(lead);
@@ -18438,10 +18446,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   auto const c2 = static_cast<uint8_t>(input[index + 2]);
   auto const c3 = static_cast<uint8_t>(input[index + 3]);
   index += 4;
-  return (static_cast<char32_t>(lead & 0x07) << 18) |
-         (static_cast<char32_t>(c1 & 0x3F) << 12) |
-         (static_cast<char32_t>(c2 & 0x3F) << 6) |
-         static_cast<char32_t>(c3 & 0x3F);
+  return (static_cast<char32_t>(lead & 0x07) << 18) | (static_cast<char32_t>(c1 & 0x3F) << 12) | (static_cast<char32_t>(c2 & 0x3F) << 6) | static_cast<char32_t>(c3 & 0x3F);
 };
 
 /**
@@ -18509,7 +18514,8 @@ inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) noexce
       append_utf8(cp);
       ++i;
     } else {
-      if (v >= 0xDC00 && v <= 0xDFFF) return std::unexpected(std::errc::invalid_argument);
+      if (v >= 0xDC00 && v <= 0xDFFF)
+        return std::unexpected(std::errc::invalid_argument);
       append_utf8(static_cast<char32_t>(v));
     }
   }
@@ -19149,8 +19155,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @details RFC 8259 の string  Production に従い、エスケープ文字（`"` `\` `/` `b` `f` `n` `r` `t` `u`）と
  * `\uXXXX` の16進4桁、サロゲートペアを検証する。生の制御文字（0x20 未満）は受け付けない。
  */
-[[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p, bool validate_utf8 = true) noexcept
-  -> std::expected<std::string_view, std::errc> {
+[[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p, bool validate_utf8 = true) noexcept -> std::expected<std::string_view, std::errc> {
   if (p >= s.size() || s[p] != '"') return std::unexpected(std::errc::invalid_argument);
   auto const start = p;
   ++p;
@@ -19161,7 +19166,8 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
     if (c != '\\') {
       if (validate_utf8 && static_cast<unsigned char>(c) >= 0x80) {
         auto const length = frozenchars::detail::utf8_sequence_length(s, p);
-        if (length == 0) return std::unexpected(std::errc::invalid_argument);
+        if (length == 0)
+          return std::unexpected(std::errc::invalid_argument);
         p += length;
       } else {
         ++p;
@@ -19203,8 +19209,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  *
  * @param depth 現在の入れ子深度。max_depth を超えたら invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth, bool validate_utf8 = true) noexcept
-  -> std::expected<json_value, std::errc>;
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth, bool validate_utf8 = true) noexcept -> std::expected<json_value, std::errc>;
 
 /**
  * @brief JSON 数値をパースする
@@ -19254,8 +19259,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param p 開始位置（'[' を指す）。閉じ ']' の次まで進める
  * @return std::expected<json_value, std::errc> array 型の値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p, size_t depth, bool validate_utf8 = true) noexcept
-  -> std::expected<json_value, std::errc> {
+[[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p, size_t depth, bool validate_utf8 = true) noexcept -> std::expected<json_value, std::errc> {
   if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
@@ -19282,8 +19286,7 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @return std::expected<json_value, std::errc> object 型の値。不正は invalid_argument
  * @details キーは keys、値は arr に同一インデックスで格納する
  */
-[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p, size_t depth, bool validate_utf8 = true) noexcept
-  -> std::expected<json_value, std::errc> {
+[[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p, size_t depth, bool validate_utf8 = true) noexcept -> std::expected<json_value, std::errc> {
   if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
@@ -19317,14 +19320,15 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @param p 開始位置。値の終端まで進める
  * @return std::expected<json_value, std::errc> パースした値。不正は invalid_argument
  */
-[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth, bool validate_utf8) noexcept
-  -> std::expected<json_value, std::errc> {
+[[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth, bool validate_utf8) noexcept -> std::expected<json_value, std::errc> {
   if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   skip_ws(s, p);
   if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   auto const c = s[p];
-  if (c == '{') return parse_object(s, p, depth, validate_utf8);
-  if (c == '[') return parse_array(s, p, depth, validate_utf8);
+  if (c == '{')
+    return parse_object(s, p, depth, validate_utf8);
+  if (c == '[')
+    return parse_array(s, p, depth, validate_utf8);
   if (c == '"') {
     auto str = parse_string(s, p, validate_utf8);
     if (!str) return std::unexpected(str.error());
@@ -19752,8 +19756,7 @@ template <FrozenString Input>
 template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto crush_compress() {
-  static_assert(frozenchars::detail::is_valid_utf8_string(Input.sv()),
-                "frozenchars: json::crush_compress: invalid UTF-8");
+  static_assert(frozenchars::detail::is_valid_utf8_string(Input.sv()), "frozenchars: json::crush_compress: invalid UTF-8");
 
   // まず構造圧縮（重複値をテーブル参照へ）
   auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());

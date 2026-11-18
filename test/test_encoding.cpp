@@ -156,22 +156,15 @@ TEST_CASE("encoding: RFC 3629 validation and fail-soft decoding", "[encoding][ut
 
   constexpr auto decoded = [] {
     constexpr std::array invalid{
-        std::string_view{"\xC0\x80", 2},
-        std::string_view{"\xE0\x80\x80", 3},
-        std::string_view{"\xED\xA0\x80", 3},
-        std::string_view{"\xF0\x80\x80\x80", 4},
-        std::string_view{"\xF4\x90\x80\x80", 4},
-        std::string_view{"\xC2", 1},
-        std::string_view{"\xE3\x81", 2},
-        std::string_view{"\xF0\x9F\x98", 3},
-        std::string_view{"\x80", 1},
+        std::string_view{"\xC0\x80", 2},         std::string_view{"\xE0\x80\x80", 3},     std::string_view{"\xED\xA0\x80", 3},
+        std::string_view{"\xF0\x80\x80\x80", 4}, std::string_view{"\xF4\x90\x80\x80", 4}, std::string_view{"\xC2", 1},
+        std::string_view{"\xE3\x81", 2},         std::string_view{"\xF0\x9F\x98", 3},     std::string_view{"\x80", 1},
     };
     for (auto const input : invalid) {
       for (std::size_t pos = 0; pos < input.size();) {
         std::size_t consumed = 0;
         std::uint32_t codepoint = 0;
-        if (!detail::utf8_decode_at(input, pos, consumed, codepoint) || consumed != 1 ||
-            codepoint != static_cast<unsigned char>(input[pos])) {
+        if (!detail::utf8_decode_at(input, pos, consumed, codepoint) || consumed != 1 || codepoint != static_cast<unsigned char>(input[pos])) {
           return false;
         }
         pos += consumed;

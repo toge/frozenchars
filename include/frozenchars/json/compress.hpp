@@ -182,8 +182,7 @@ template <FrozenString Input>
 template <FrozenString Input>
   requires(Input.length > 0)
 [[nodiscard]] consteval auto crush_compress() {
-  static_assert(frozenchars::detail::is_valid_utf8_string(Input.sv()),
-                "frozenchars: json::crush_compress: invalid UTF-8");
+  static_assert(frozenchars::detail::is_valid_utf8_string(Input.sv()), "frozenchars: json::crush_compress: invalid UTF-8");
 
   // まず構造圧縮（重複値をテーブル参照へ）
   auto const parsed = *frozenchars::json::detail::parse_json(Input.sv());

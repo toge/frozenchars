@@ -64,7 +64,8 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   if (index >= input.size()) return std::unexpected(std::errc::invalid_argument);
   auto const lead = static_cast<uint8_t>(input[index]);
   auto const length = frozenchars::detail::utf8_sequence_length(input, index);
-  if (length == 0) return std::unexpected(std::errc::invalid_argument);
+  if (length == 0)
+    return std::unexpected(std::errc::invalid_argument);
   if (length == 1) {
     ++index;
     return static_cast<char32_t>(lead);
@@ -86,10 +87,7 @@ inline constexpr auto decode_utf8 = [](std::string_view const input, size_t& ind
   auto const c2 = static_cast<uint8_t>(input[index + 2]);
   auto const c3 = static_cast<uint8_t>(input[index + 3]);
   index += 4;
-  return (static_cast<char32_t>(lead & 0x07) << 18) |
-         (static_cast<char32_t>(c1 & 0x3F) << 12) |
-         (static_cast<char32_t>(c2 & 0x3F) << 6) |
-         static_cast<char32_t>(c3 & 0x3F);
+  return (static_cast<char32_t>(lead & 0x07) << 18) | (static_cast<char32_t>(c1 & 0x3F) << 12) | (static_cast<char32_t>(c2 & 0x3F) << 6) | static_cast<char32_t>(c3 & 0x3F);
 };
 
 /**
@@ -157,7 +155,8 @@ inline constexpr auto utf16_to_utf8 = [](std::u16string_view const input) noexce
       append_utf8(cp);
       ++i;
     } else {
-      if (v >= 0xDC00 && v <= 0xDFFF) return std::unexpected(std::errc::invalid_argument);
+      if (v >= 0xDC00 && v <= 0xDFFF)
+        return std::unexpected(std::errc::invalid_argument);
       append_utf8(static_cast<char32_t>(v));
     }
   }

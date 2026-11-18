@@ -18,9 +18,7 @@ namespace frozenchars::detail {
   if (first < 0x80) {
     return 1;
   }
-  auto const continuation = [&](std::size_t at) noexcept {
-    return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80;
-  };
+  auto const continuation = [&](std::size_t at) noexcept { return at < str.size() && (static_cast<unsigned char>(str[at]) & 0xC0) == 0x80; };
 
   if (first >= 0xC2 && first <= 0xDF) {
     return continuation(pos + 1) ? 2 : 0;
@@ -62,4 +60,4 @@ namespace frozenchars::detail {
   return true;
 }
 
-}  // namespace frozenchars::detail
+} // namespace frozenchars::detail

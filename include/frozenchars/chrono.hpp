@@ -42,7 +42,8 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_date(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
-  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
+  if (s.length >= N)
+    return std::unexpected(std::errc::invalid_argument);
   if (s.length != 10) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[7] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -84,12 +85,10 @@ template <FrozenString S>
   static_assert(h <= 23 && mi <= 59 && sec <= 59, "chrono: invalid time component");
 
   if constexpr (S.length == 20) {
-    static_assert(S.buffer[19] == 'Z' || S.buffer[19] == 'z',
-      "chrono: invalid timezone offset format");
+    static_assert(S.buffer[19] == 'Z' || S.buffer[19] == 'z', "chrono: invalid timezone offset format");
   }
   if constexpr (S.length == 25) {
-    static_assert(S.buffer[19] == '+' || S.buffer[19] == '-',
-      "chrono: invalid timezone offset format");
+    static_assert(S.buffer[19] == '+' || S.buffer[19] == '-', "chrono: invalid timezone offset format");
     static_assert(S.buffer[22] == ':',
       "chrono: invalid timezone offset format");
     static_assert(detail::is_digits(S.data() + 20, 2) && detail::is_digits(S.data() + 23, 2), "chrono: invalid timezone offset format");
@@ -118,7 +117,8 @@ template <size_t N>
 [[nodiscard]] constexpr auto parse_iso_datetime(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::sys_seconds, std::errc> {
   using namespace std::chrono;
-  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
+  if (s.length >= N)
+    return std::unexpected(std::errc::invalid_argument);
   if (s.length < 19) return std::unexpected(std::errc::invalid_argument);
   if (s.length != 19 && s.length != 20 && s.length != 25) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] != '-') return std::unexpected(std::errc::invalid_argument);
@@ -146,7 +146,8 @@ template <size_t N>
   if (s.length == 25) {
     auto const oh = detail::decode_two_digits(s.buffer[20], s.buffer[21]);
     auto const om = detail::decode_two_digits(s.buffer[23], s.buffer[24]);
-    if (oh > 23 || om > 59) return std::unexpected(std::errc::invalid_argument);
+    if (oh > 23 || om > 59)
+      return std::unexpected(std::errc::invalid_argument);
   }
   auto const date = detail::parse_ymd_iso(s.data(), 10);
   if (!date.ok())
@@ -170,9 +171,7 @@ template <FrozenString S>
   static_assert(S.length == 11 && S.buffer[3] == ' ' && S.buffer[6] == ' ', "chrono: invalid __DATE__ format");
   auto const mon = detail::month_name_to_number(S.data(), 3);
   static_assert(mon >= 1 && mon <= 12, "chrono: invalid __DATE__ format");
-  static_assert((S.buffer[4] == ' ' && detail::is_digits(S.data() + 5, 1)) ||
-                  (S.buffer[4] != ' ' && detail::is_digits(S.data() + 4, 2)),
-                "chrono: invalid __DATE__ format");
+  static_assert((S.buffer[4] == ' ' && detail::is_digits(S.data() + 5, 1)) || (S.buffer[4] != ' ' && detail::is_digits(S.data() + 4, 2)), "chrono: invalid __DATE__ format");
   auto const day_val = (S.buffer[4] == ' ')
     ? static_cast<unsigned>(S.buffer[5] - '0')
     : detail::decode_two_digits(S.buffer[4], S.buffer[5]);
@@ -195,13 +194,16 @@ template <FrozenString S>
 template <size_t N>
 [[nodiscard]] constexpr auto parse_date_macro(FrozenString<N> const& s) noexcept
   -> std::expected<std::chrono::year_month_day, std::errc> {
-  if (s.length >= N) return std::unexpected(std::errc::invalid_argument);
+  if (s.length >= N)
+    return std::unexpected(std::errc::invalid_argument);
   if (s.length != 11) return std::unexpected(std::errc::invalid_argument);
-  if (s.buffer[3] != ' ' || s.buffer[6] != ' ') return std::unexpected(std::errc::invalid_argument);
+  if (s.buffer[3] != ' ' || s.buffer[6] != ' ')
+    return std::unexpected(std::errc::invalid_argument);
   auto const mon = detail::month_name_to_number(s.data(), 3);
   if (mon < 1 || mon > 12) return std::unexpected(std::errc::invalid_argument);
   if (s.buffer[4] == ' ') {
-    if (!detail::is_digits(s.data() + 5, 1)) return std::unexpected(std::errc::invalid_argument);
+    if (!detail::is_digits(s.data() + 5, 1))
+      return std::unexpected(std::errc::invalid_argument);
   } else if (!detail::is_digits(s.data() + 4, 2)) {
     return std::unexpected(std::errc::invalid_argument);
   }
@@ -209,11 +211,13 @@ template <size_t N>
     ? static_cast<unsigned>(s.buffer[5] - '0')
     : detail::decode_two_digits(s.buffer[4], s.buffer[5]);
   if (day_val < 1 || day_val > 31) return std::unexpected(std::errc::invalid_argument);
-  if (!detail::is_digits(s.data() + 7, 4)) return std::unexpected(std::errc::invalid_argument);
+  if (!detail::is_digits(s.data() + 7, 4))
+    return std::unexpected(std::errc::invalid_argument);
   auto const year_val = detail::decode_four_digits(s.buffer[7], s.buffer[8], s.buffer[9], s.buffer[10]);
   if (year_val < 1970) return std::unexpected(std::errc::invalid_argument);
   auto const date = detail::parse_ymd_macro(s.data(), 11);
-  if (!date.ok()) return std::unexpected(std::errc::invalid_argument);
+  if (!date.ok())
+    return std::unexpected(std::errc::invalid_argument);
   return date;
 }
 

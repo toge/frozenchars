@@ -84,11 +84,11 @@ TEST_CASE("parse_iso_datetime - runtime constexpr") {
 
   constexpr auto positive_offset = parse_iso_datetime("2024-01-15T09:05:01+01:30"_fs);
   STATIC_CHECK(positive_offset.has_value());
-  STATIC_CHECK(*positive_offset == sys_days{year{2024}/1/15} + hours{7} + minutes{35} + seconds{1});
+  STATIC_CHECK(*positive_offset == sys_days{year{2024} / 1 / 15} + hours{7} + minutes{35} + seconds{1});
 
   constexpr auto negative_offset = parse_iso_datetime("2024-01-15T09:05:01-01:30"_fs);
   STATIC_CHECK(negative_offset.has_value());
-  STATIC_CHECK(*negative_offset == sys_days{year{2024}/1/15} + hours{10} + minutes{35} + seconds{1});
+  STATIC_CHECK(*negative_offset == sys_days{year{2024} / 1 / 15} + hours{10} + minutes{35} + seconds{1});
 }
 
 TEST_CASE("parse_iso_datetime - invalid values are rejected") {

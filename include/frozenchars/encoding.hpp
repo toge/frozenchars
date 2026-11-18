@@ -5,10 +5,10 @@
 #include <cstdint>
 #include <string_view>
 
-#include "string.hpp"
-#include "string_ops.hpp"
 #include "detail/char_utils.hpp"
 #include "detail/utf8.hpp"
+#include "string.hpp"
+#include "string_ops.hpp"
 
 namespace frozenchars::detail {
 
