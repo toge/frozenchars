@@ -517,6 +517,13 @@ add_compile_fail_test(
   EXPECTED_TEXTS "expression did not evaluate to a constant"
 )
 
+add_compile_fail_test(
+  NAME chrono_parse_date_macro_invalid_calendar
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/chrono_parse_date_macro_invalid_calendar.cpp
+  EXPECTED_TEXT "chrono: invalid calendar date"
+  EXPECTED_TEXTS "expression did not evaluate to a constant"
+)
+
 # ---- constexpr_log compile-fail tests ----
 
 add_compile_fail_test(

@@ -64,12 +64,39 @@ TEST_CASE("parse_iso_datetime - runtime constexpr") {
   constexpr auto dt = parse_iso_datetime("2024-01-15T09:05:01Z"_fs);
   STATIC_CHECK(dt.has_value());
   STATIC_CHECK(*dt == sys_days{year{2024}/1/15} + hours{9} + minutes{5} + seconds{1});
+
+  constexpr auto lowercase_z = parse_iso_datetime("2024-01-15T09:05:01z"_fs);
+  STATIC_CHECK(lowercase_z.has_value());
+  STATIC_CHECK(*lowercase_z == *dt);
+
+  constexpr auto no_suffix = parse_iso_datetime("2024-01-15T09:05:01"_fs);
+  STATIC_CHECK(no_suffix.has_value());
+  STATIC_CHECK(*no_suffix == *dt);
+
+  constexpr auto positive_offset = parse_iso_datetime("2024-01-15T09:05:01+01:30"_fs);
+  STATIC_CHECK(positive_offset.has_value());
+  STATIC_CHECK(*positive_offset == sys_days{year{2024}/1/15} + hours{7} + minutes{35} + seconds{1});
+
+  constexpr auto negative_offset = parse_iso_datetime("2024-01-15T09:05:01-01:30"_fs);
+  STATIC_CHECK(negative_offset.has_value());
+  STATIC_CHECK(*negative_offset == sys_days{year{2024}/1/15} + hours{10} + minutes{35} + seconds{1});
 }
 
 TEST_CASE("parse_iso_datetime - invalid values are rejected") {
   REQUIRE(parse_iso_datetime("2023-02-30T00:00:00Z"_fs).error() == std::errc::invalid_argument);
   REQUIRE(parse_iso_datetime("2026-07-04T24:00:00Z"_fs).error() == std::errc::invalid_argument);
   REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+0a:00"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00-"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+24:00"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+23:60"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00-99:99"_fs).error() == std::errc::invalid_argument);
+
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00Z00:00"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00z00:00"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00 00:00"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+00-00"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_iso_datetime("2026-07-04T14:30:00+0:000"_fs).error() == std::errc::invalid_argument);
 }
 
 // ========== __DATE__ マクロのパース ==========
@@ -87,6 +114,15 @@ TEST_CASE("parse_date_macro - runtime constexpr") {
   constexpr auto d = parse_date_macro("Jan 15 2024"_fs);
   STATIC_CHECK(d.has_value());
   STATIC_CHECK(*d == year{2024}/1/15);
+}
+
+TEST_CASE("parse_date_macro - invalid runtime values are rejected") {
+  REQUIRE(parse_date_macro("Feb 30 2024"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_date_macro("Apr 31 2024"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_date_macro("Jan 00 2024"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_date_macro("Jan 32 2024"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_date_macro("Jan  : 2026"_fs).error() == std::errc::invalid_argument);
+  REQUIRE(parse_date_macro("Jan  1 20a6"_fs).error() == std::errc::invalid_argument);
 }
 
 // ========== コンパイルタイムスタンプ ==========
