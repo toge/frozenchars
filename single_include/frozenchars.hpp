@@ -10629,7 +10629,6 @@ template <size_t N>
   auto offset = 0uz;
   for (auto i = count; i-- > 0;) {
     for (auto j = 0uz; j < lengths[i]; ++j) {
-      FROZENCHARS_PRECONDITION(offset < N - 1, "utf8_reverse: invalid UTF-8 input expands past the output buffer");
       res.buffer[offset++] = str.buffer[starts[i] + j];
     }
   }

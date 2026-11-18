@@ -10630,7 +10630,6 @@ template <size_t N>
   auto offset = 0uz;
   for (auto i = count; i-- > 0;) {
     for (auto j = 0uz; j < lengths[i]; ++j) {
-      FROZENCHARS_PRECONDITION(offset < N - 1, "utf8_reverse: invalid UTF-8 input expands past the output buffer");
       res.buffer[offset++] = str.buffer[starts[i] + j];
     }
   }
@@ -19157,15 +19156,13 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  */
 template <bool ValidateUtf8 = true>
 [[nodiscard]] constexpr auto parse_string(std::string_view const s, size_t& p) noexcept -> std::expected<std::string_view, std::errc> {
-  if (p >= s.size() || s[p] != '"')
-    return std::unexpected(std::errc::invalid_argument);
+  if (p >= s.size() || s[p] != '"') return std::unexpected(std::errc::invalid_argument);
   auto const start = p;
   ++p;
   while (p < s.size() && s[p] != '"') {
     auto const c = s[p];
     // 生の制御文字は禁止（RFC 8259）
-    if (static_cast<unsigned char>(c) < 0x20)
-      return std::unexpected(std::errc::invalid_argument);
+    if (static_cast<unsigned char>(c) < 0x20) return std::unexpected(std::errc::invalid_argument);
     if (c != '\\') {
       if constexpr (ValidateUtf8) {
         if (static_cast<unsigned char>(c) < 0x80) {
@@ -19182,39 +19179,28 @@ template <bool ValidateUtf8 = true>
       continue;
     }
     ++p;
-    if (p >= s.size())
-      return std::unexpected(std::errc::invalid_argument);
+    if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
     auto const esc = s[p++];
     switch (esc) {
-    case '"':
-    case '\\':
-    case '/':
-    case 'b':
-    case 'f':
-    case 'n':
-    case 'r':
-    case 't':
-      break;
-    case 'u': {
-      auto const unit = read_hex4(s, p);
-      if (!unit)
-        return std::unexpected(std::errc::invalid_argument);
-      auto const code = *unit;
-      // サロゲートペアを要求する（単独の高/低サロゲートは不正）
-      if (code >= 0xD800 && code <= 0xDBFF) {
-        if (p + 1 >= s.size() || s[p] != '\\' || s[p + 1] != 'u')
+      case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't':
+        break;
+      case 'u': {
+        auto const unit = read_hex4(s, p);
+        if (!unit) return std::unexpected(std::errc::invalid_argument);
+        auto const code = *unit;
+        // サロゲートペアを要求する（単独の高/低サロゲートは不正）
+        if (code >= 0xD800 && code <= 0xDBFF) {
+          if (p + 1 >= s.size() || s[p] != '\\' || s[p + 1] != 'u') return std::unexpected(std::errc::invalid_argument);
+          p += 2;
+          auto const low = read_hex4(s, p);
+          if (!low || *low < 0xDC00 || *low > 0xDFFF) return std::unexpected(std::errc::invalid_argument);
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
           return std::unexpected(std::errc::invalid_argument);
-        p += 2;
-        auto const low = read_hex4(s, p);
-        if (!low || *low < 0xDC00 || *low > 0xDFFF)
-          return std::unexpected(std::errc::invalid_argument);
-      } else if (code >= 0xDC00 && code <= 0xDFFF) {
-        return std::unexpected(std::errc::invalid_argument);
+        }
+        break;
       }
-      break;
-    }
-    default:
-      return std::unexpected(std::errc::invalid_argument);
+      default:
+        return std::unexpected(std::errc::invalid_argument);
     }
   }
   if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
@@ -19240,40 +19226,32 @@ template <bool ValidateUtf8 = true>
  * 厳密に従い、整数部・小数部・指数部の桁が足りないもの、先行ゼロ、符号の重複を拒否する。
  * 数値の原文は str_val に保持し、値は変換しない（書式を保つため）。
  */
-[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept -> std::expected<json_value, std::errc> {
+[[nodiscard]] constexpr auto parse_number(std::string_view const s, size_t& p) noexcept
+  -> std::expected<json_value, std::errc> {
   auto const start = p;
-  if (p < s.size() && s[p] == '-')
-    ++p;
+  if (p < s.size() && s[p] == '-') ++p;
   // 整数部: 0 単体 または [1-9][0-9]*
-  if (p >= s.size() || s[p] < '0' || s[p] > '9')
-    return std::unexpected(std::errc::invalid_argument);
+  if (p >= s.size() || s[p] < '0' || s[p] > '9') return std::unexpected(std::errc::invalid_argument);
   if (s[p] == '0') {
     ++p;
-    if (p < s.size() && s[p] >= '0' && s[p] <= '9')
-      return std::unexpected(std::errc::invalid_argument);
+    if (p < s.size() && s[p] >= '0' && s[p] <= '9') return std::unexpected(std::errc::invalid_argument);
   } else {
-    while (p < s.size() && s[p] >= '0' && s[p] <= '9')
-      ++p;
+    while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
   }
   // 小数部: '.' [0-9]+（小数点が孤立していれば不正）
   if (p < s.size() && s[p] == '.') {
     ++p;
     auto const digits = p;
-    while (p < s.size() && s[p] >= '0' && s[p] <= '9')
-      ++p;
-    if (p == digits)
-      return std::unexpected(std::errc::invalid_argument);
+    while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
+    if (p == digits) return std::unexpected(std::errc::invalid_argument);
   }
   // 指数部: [eE] [+-]? [0-9]+
   if (p < s.size() && (s[p] == 'e' || s[p] == 'E')) {
     ++p;
-    if (p < s.size() && (s[p] == '+' || s[p] == '-'))
-      ++p;
+    if (p < s.size() && (s[p] == '+' || s[p] == '-')) ++p;
     auto const digits = p;
-    while (p < s.size() && s[p] >= '0' && s[p] <= '9')
-      ++p;
-    if (p == digits)
-      return std::unexpected(std::errc::invalid_argument);
+    while (p < s.size() && s[p] >= '0' && s[p] <= '9') ++p;
+    if (p == digits) return std::unexpected(std::errc::invalid_argument);
   }
   auto const num_str = std::string_view(s.data() + start, p - start);
   return json_value{json_type::number, false, num_str, {}, {}};
@@ -19288,30 +19266,19 @@ template <bool ValidateUtf8 = true>
  */
 template <bool ValidateUtf8 = true>
 [[nodiscard]] constexpr auto parse_array(std::string_view const s, size_t& p, size_t depth) noexcept -> std::expected<json_value, std::errc> {
-  if (depth > max_depth)
-    return std::unexpected(std::errc::invalid_argument);
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
   std::vector<json_value> arr;
-  if (p < s.size() && s[p] == ']') {
-    ++p;
-    return json_value{json_type::array, false, {}, std::move(arr), {}};
-  }
+  if (p < s.size() && s[p] == ']') { ++p; return json_value{json_type::array, false, {}, std::move(arr), {}}; }
   while (true) {
     skip_ws(s, p);
     auto elem = parse_value<ValidateUtf8>(s, p, depth + 1);
-    if (!elem)
-      return std::unexpected(elem.error());
+    if (!elem) return std::unexpected(elem.error());
     arr.push_back(std::move(*elem));
     skip_ws(s, p);
-    if (p < s.size() && s[p] == ',') {
-      ++p;
-      continue;
-    }
-    if (p < s.size() && s[p] == ']') {
-      ++p;
-      break;
-    }
+    if (p < s.size() && s[p] == ',') { ++p; continue; }
+    if (p < s.size() && s[p] == ']') { ++p; break; }
     return std::unexpected(std::errc::invalid_argument);
   }
   return json_value{json_type::array, false, {}, std::move(arr), {}};
@@ -19327,40 +19294,27 @@ template <bool ValidateUtf8 = true>
  */
 template <bool ValidateUtf8 = true>
 [[nodiscard]] constexpr auto parse_object(std::string_view const s, size_t& p, size_t depth) noexcept -> std::expected<json_value, std::errc> {
-  if (depth > max_depth)
-    return std::unexpected(std::errc::invalid_argument);
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   ++p;
   skip_ws(s, p);
   std::vector<std::string_view> keys;
   std::vector<json_value> vals;
-  if (p < s.size() && s[p] == '}') {
-    ++p;
-    return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)};
-  }
+  if (p < s.size() && s[p] == '}') { ++p; return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)}; }
   while (true) {
     skip_ws(s, p);
     auto key = parse_string<ValidateUtf8>(s, p);
-    if (!key)
-      return std::unexpected(key.error());
+    if (!key) return std::unexpected(key.error());
     skip_ws(s, p);
-    if (p >= s.size() || s[p] != ':')
-      return std::unexpected(std::errc::invalid_argument);
+    if (p >= s.size() || s[p] != ':') return std::unexpected(std::errc::invalid_argument);
     ++p;
     skip_ws(s, p);
     keys.push_back(*key);
     auto val = parse_value<ValidateUtf8>(s, p, depth + 1);
-    if (!val)
-      return std::unexpected(val.error());
+    if (!val) return std::unexpected(val.error());
     vals.push_back(std::move(*val));
     skip_ws(s, p);
-    if (p < s.size() && s[p] == ',') {
-      ++p;
-      continue;
-    }
-    if (p < s.size() && s[p] == '}') {
-      ++p;
-      break;
-    }
+    if (p < s.size() && s[p] == ',') { ++p; continue; }
+    if (p < s.size() && s[p] == '}') { ++p; break; }
     return std::unexpected(std::errc::invalid_argument);
   }
   return json_value{json_type::object, false, {}, std::move(vals), std::move(keys)};
@@ -19375,11 +19329,9 @@ template <bool ValidateUtf8 = true>
  */
 template <bool ValidateUtf8>
 [[nodiscard]] constexpr auto parse_value(std::string_view const s, size_t& p, size_t depth) noexcept -> std::expected<json_value, std::errc> {
-  if (depth > max_depth)
-    return std::unexpected(std::errc::invalid_argument);
+  if (depth > max_depth) return std::unexpected(std::errc::invalid_argument);
   skip_ws(s, p);
-  if (p >= s.size())
-    return std::unexpected(std::errc::invalid_argument);
+  if (p >= s.size()) return std::unexpected(std::errc::invalid_argument);
   auto const c = s[p];
   if (c == '{')
     return parse_object<ValidateUtf8>(s, p, depth);
@@ -19387,8 +19339,7 @@ template <bool ValidateUtf8>
     return parse_array<ValidateUtf8>(s, p, depth);
   if (c == '"') {
     auto str = parse_string<ValidateUtf8>(s, p);
-    if (!str)
-      return std::unexpected(str.error());
+    if (!str) return std::unexpected(str.error());
     return json_value{json_type::string, false, *str, {}, {}};
   }
   auto starts_with = [&](size_t pos, std::string_view pat) -> bool {

@@ -4,6 +4,23 @@
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に準拠し、
 バージョニングは [Semantic Versioning](https://semver.org/lang/ja/) に従います。
 
+## [Unreleased]
+
+### Changed
+
+- ビルド設定 (`CMakeLists.txt`, `cmake/frozencharsConfig.cmake.in`): **ソース非互換**。`frozenchars::frozenchars` が `glaze::glaze` を自動でリンクしなくなった。Glaze 連携（`glaze_frozen_map.hpp` など）を使う場合は `find_package(frozenchars COMPONENTS glaze)` とし、`frozenchars::glaze` をリンクする。`find_package(frozenchars)` だけの既存プロジェクトはリンクを追加するまでビルドできない。
+- ビルド設定 (`CMakeLists.txt`): constexpr の上限緩和オプション（`-fconstexpr-ops-limit`、`-fconstexpr-steps`、`/constexpr:steps`）を `add_compile_options` から `target_compile_options(INTERFACE)` に移動した。`find_package` 経由の利用側にも上限が伝わる。
+- `frozen_map` / `frozen_multimap` / `frozen_trie_map`: デフォルトコンストラクタ、`frozen_map::get_value_or`、`frozen_map::operator==` の `noexcept` を値型の性質（`is_nothrow_default_constructible` など）に合わせて条件付きにした。値型が `noexcept` でない場合に `noexcept` 関数から例外が送出されていた。
+- `utf8_length` / `utf8_substr` / `utf8_reverse`: 不正な UTF-8 バイト列を先頭バイトのパターンで読み飛ばすのをやめ、1 バイトずつ消費するようにした。有効な UTF-8 の結果は変わらない。不正バイトを含む文字列では符号点数が変わる。
+
+### Fixed
+
+- `json::validate_json`: 文字列リテラル内の生の UTF-8 を検証するようになった。不正な UTF-8 を含む JSON は `true` ではなく `false` を返す（`json::compress` は従来どおり不正バイトを保持する）。
+- `json::crush` / `json::uncrush` / `json::crush_compress`: 不正な UTF-8 の入力を `static_assert` で拒否する。Crush 内部の UTF-8→UTF-16 変換は孤立した低位サロゲートも拒否する。
+- `parse_iso_datetime`: タイムゾーンオフセットの `hh:mm` を範囲検証する（`hh <= 23 && mm <= 59`）。`Z`/`z` は 20 文字のとき、`±hh:mm` は 25 文字のときだけ受け付ける。
+- `parse_date_macro`: 月名 3 文字の直後と、日にち・年の数字位置を検証し、存在しない日付（`"Feb 30 2024"`）も拒否する。コンパイル時は `static_assert`、実行時は `std::errc::invalid_argument`。
+- `parse_iso_date` / `parse_iso_datetime` / `parse_date_macro`: `FrozenString` の `length` がバッファ長以上（終端 `'\0'` なし）のとき範囲外読み出しになり得た。`std::errc::invalid_argument` で拒否する。
+
 ## [0.8.2] - 2026-11-17
 
 ### Fixed
@@ -158,6 +175,7 @@
 
 - 一部機能に既知の不具合が残存しています（詳細は Issue を参照）。
 
+[Unreleased]: https://github.com/toge/frozenchars/compare/v0.8.2...HEAD
 [0.8.2]: https://github.com/toge/frozenchars/compare/v0.8.1...v0.8.2
 [0.8.0]: https://github.com/toge/frozenchars/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/toge/frozenchars/compare/v0.2.0...v0.7.0

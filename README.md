@@ -1521,7 +1521,7 @@ constexpr auto rt = [] {
 static_assert(rt.sv() == "aあ😀");
 ```
 
-`is_valid_utf8` は `detail::valid_utf8_seq_length` を用いた厳密検証で、既存の `utf8_length` のフェイルソフトとは異なり不正を検出できます（`utf8_length` は不正バイトを 1 符号点として数えます）。
+`is_valid_utf8` は `detail::is_valid_utf8_string` を用いた厳密検証で、既存の `utf8_length` のフェイルソフトとは異なり不正を検出できます（`utf8_length` は不正バイトを 1 符号点として数えます）。
 
 ## `make_querystring`（クエリ文字列生成）
 
