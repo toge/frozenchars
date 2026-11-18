@@ -314,7 +314,6 @@ constexpr auto skip_ws(std::string_view const s, size_t& p) noexcept -> void {
  * @note 入れ子深度が frozenchars::json::max_depth を超える場合も false
  */
 [[nodiscard]] constexpr auto validate_json(std::string_view const s) noexcept -> bool {
-  if (!frozenchars::detail::is_valid_utf8_string(s)) return false;
   size_t p = 0;
   auto v = parse_value(s, p, 1);
   if (!v) return false;
