@@ -2532,8 +2532,8 @@ find_package(frozenchars CONFIG REQUIRED COMPONENTS glaze)
 target_link_libraries(myapp PRIVATE frozenchars::glaze)
 ```
 
-`frozenchars::frozenchars` はコア機能だけを提供し、Glaze へ依存しません。Glaze がインストール環境で見つかった場合にのみ、
-`frozenchars::glaze` ターゲットが同梱されます。
+`frozenchars::frozenchars` はコア機能だけを提供し、Glaze へ依存しません。`frozenchars::glaze` が同梱されるかは
+frozenchars の構成・ビルド時に Glaze を検出できたかで決まり、下流の利用時に検出をやり直してターゲットを追加することはありません。
 
 ### インストール
 

@@ -90,6 +90,7 @@ configure_project(
 run_build("build no-glaze library" "${_no_glaze_build}")
 run_install("install no-glaze library" "${_no_glaze_build}")
 configure_and_build_consumer(core "${_no_glaze_prefix}" FALSE)
+configure_and_build_consumer(optional-glaze "${_no_glaze_prefix}" FALSE)
 
 if(GLAZE_AVAILABLE)
   configure_and_build_consumer(missing-glaze "${_no_glaze_prefix}" TRUE)
