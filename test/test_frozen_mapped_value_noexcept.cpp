@@ -55,8 +55,8 @@ using ThrowingTrieMap = frozen_trie_map<throwing_mapped_value, "key"_fs>;
 
 static_assert(noexcept(IntMap{}));
 static_assert(!noexcept(ThrowingMap{}));
-static_assert(noexcept(std::declval<IntMap const&>().get_value_or(std::string_view{"key"}, std::declval<int const&>())));
-static_assert(!noexcept(std::declval<ThrowingMap const&>().get_value_or(std::string_view{"key"}, std::declval<throwing_mapped_value const&>())));
+static_assert(noexcept(std::declval<IntMap const&>().get_value_or(std::declval<std::string_view const&>(), std::declval<int const&>())));
+static_assert(!noexcept(std::declval<ThrowingMap const&>().get_value_or(std::declval<std::string_view const&>(), std::declval<throwing_mapped_value const&>())));
 static_assert(noexcept(std::declval<IntMap const&>() == std::declval<IntMap const&>()));
 static_assert(!noexcept(std::declval<ThrowingMap const&>() == std::declval<ThrowingMap const&>()));
 static_assert(!std::equality_comparable<NonComparableMap>);
