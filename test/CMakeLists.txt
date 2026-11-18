@@ -392,6 +392,12 @@ add_compile_fail_test(
 )
 
 add_compile_fail_test(
+  NAME json_crush_compress_invalid_utf8
+  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/json_crush_compress_invalid_utf8.cpp
+  EXPECTED_TEXT "frozenchars: json::crush_compress: invalid UTF-8"
+)
+
+add_compile_fail_test(
   NAME join_lines_sep_too_long
   SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/join_lines_sep_too_long.cpp
   EXPECTED_TEXT "join_lines: separator exceeds MAX_SEP_LEN"
