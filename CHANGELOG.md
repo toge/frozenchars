@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-19
+
 ### Changed
 
 - ビルド設定 (`CMakeLists.txt`, `cmake/frozencharsConfig.cmake.in`): **ソース非互換**。`frozenchars::frozenchars` が `glaze::glaze` を自動でリンクしなくなった。Glaze 連携（`glaze_frozen_map.hpp` など）を使う場合は `find_package(frozenchars COMPONENTS glaze)` とし、`frozenchars::glaze` をリンクする。`find_package(frozenchars)` だけの既存プロジェクトはリンクを追加するまでビルドできない。
@@ -175,7 +177,8 @@
 
 - 一部機能に既知の不具合が残存しています（詳細は Issue を参照）。
 
-[Unreleased]: https://github.com/toge/frozenchars/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/toge/frozenchars/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/toge/frozenchars/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/toge/frozenchars/compare/v0.8.1...v0.8.2
 [0.8.0]: https://github.com/toge/frozenchars/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/toge/frozenchars/compare/v0.2.0...v0.7.0
