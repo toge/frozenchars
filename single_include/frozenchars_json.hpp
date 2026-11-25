@@ -923,8 +923,15 @@ struct constexpr_hash {
  * @return std::size_t 結合後のハッシュ値
  */
 [[nodiscard]] constexpr auto hash_combine(std::size_t const h1, std::size_t const h2) noexcept -> std::size_t {
-  // Boost 流の結合（黄金比由来の定数を加えて撹拌する）
-  return h1 ^ (h2 + 0x9e3779b9uz + (h1 << 6) + (h1 >> 2));
+  // Boost 流の結合（黄金比由来の定数を加えて撹拌する。64bit 環境では 64bit 定数を使用）
+  constexpr std::size_t golden_ratio = [] {
+    if constexpr (sizeof(std::size_t) >= 8) {
+      return static_cast<std::size_t>(0x9e3779b97f4a7c15ull);
+    } else {
+      return static_cast<std::size_t>(0x9e3779b9u);
+    }
+  }();
+  return h1 ^ (h2 + golden_ratio + (h1 << 6) + (h1 >> 2));
 }
 
 /**
@@ -11598,7 +11605,6 @@ struct lookup_seed_result {
 /**
  * @brief 完全衝突ゼロのルックアップテーブルを構築するためのシード値を探索する
  * キー数が多い場合、コンパイル時の計算量制限を回避するためにこの関数の呼び出しはスキップされる必要がある。
- * シードは 16 刻みの粗探索で当たりをつけた後、密探索に切り替える 2 段階戦略で収束を速める。
  */
 template <std::size_t TableSize, FrozenString... Keys>
 [[nodiscard]] consteval auto find_lookup_seed() noexcept {
@@ -11607,35 +11613,24 @@ template <std::size_t TableSize, FrozenString... Keys>
   // CTAD は要素数が 256 を超えると古い Clang の入れ子式上限に当たるため型を明示する
   constexpr std::array<std::string_view, sizeof...(Keys)> key_views{std::string_view{Keys.buffer.data(), Keys.length}...};
   constexpr auto mask = TableSize - 1;
-  // シードは衝突が見つかった周辺だけ 1 刻みで再探索する 2 段階戦略で
-  // 100 万線形より高速に収束する。上限は 100 万を維持しつつ無駄走査を抑える。
-  constexpr auto kCoarseStep = 16u;
   constexpr auto kSeedLimit = 1'000'000u;
-  auto best_seed = 0u;
-  for (auto seed = 0u; seed < kSeedLimit; seed += kCoarseStep) {
-    std::array<index_t, TableSize> table; table.fill(static_cast<index_t>(-1));
+  for (auto seed = 0u; seed < kSeedLimit; ++seed) {
+    std::array<index_t, TableSize> table;
+    table.fill(static_cast<index_t>(-1));
     auto collision = false;
     for (auto i = 0uz; i < sizeof...(Keys); ++i) {
       auto const slot = static_cast<std::size_t>(hash_impl(key_views[i], seed) & mask);
-      if (table[slot] != static_cast<index_t>(-1)) { collision = true; break; }
+      if (table[slot] != static_cast<index_t>(-1)) {
+        collision = true;
+        break;
+      }
       table[slot] = static_cast<index_t>(i);
     }
-    if (!collision) { return result_t{seed, table}; }
-    best_seed = seed;
-  }
-  // 粗探索で衝突が見つかった最後のシードの前後を密探索
-  for (auto delta = 1u; delta < kCoarseStep && best_seed + delta < kSeedLimit; ++delta) {
-    auto const seed = best_seed + delta;
-    std::array<index_t, TableSize> table; table.fill(static_cast<index_t>(-1));
-    auto collision = false;
-    for (auto i = 0uz; i < sizeof...(Keys); ++i) {
-      auto const slot = static_cast<std::size_t>(hash_impl(key_views[i], seed) & mask);
-      if (table[slot] != static_cast<index_t>(-1)) { collision = true; break; }
-      table[slot] = static_cast<index_t>(i);
+    if (!collision) {
+      return result_t{seed, table};
     }
-    if (!collision) { return result_t{seed, table}; }
   }
-  std::unreachable();
+  FROZENCHARS_CONSTEVAL_FAIL("frozen_map: failed to find collision-free hash seed");
 }
 
 /**
@@ -11702,45 +11697,27 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
     auto const last = starts[b + 1];
     if (first == last) break;  // サイズ降順なので以降はすべて空バケット
     auto found = false;
-    // 2 段階シード探索: 16 刻みの粗探索で見つけた候補の前後を密探索する。
-    // バケット内のキーが衝突しない候補 d を総当たりで探す。
-    constexpr auto kCoarseStep = 16u;
+    // バケット内のキーが衝突しないシード d を探索する。
     constexpr auto kSeedLimit = 1'000'000u;
-    auto best_d = 1u;
-    for (auto d = 1u; d < kSeedLimit && !found; d += kCoarseStep) {
+    for (auto d = 1u; d < kSeedLimit; ++d) {
       auto ok = true;
       for (auto m = first; m < last; ++m) {
         auto const slot = static_cast<std::size_t>(hash_impl(key_views[keys_by_bucket[m]], d) & slot_mask);
-        if (result.table[slot] != static_cast<index_t>(-1)) { ok = false; break; }
+        if (result.table[slot] != static_cast<index_t>(-1)) {
+          ok = false;
+          break;
+        }
         auto dup = false;
         for (auto p = first; p < m; ++p) {
-          if (cand[p - first] == slot) { dup = true; break; }
+          if (cand[p - first] == slot) {
+            dup = true;
+            break;
+          }
         }
-        if (dup) { ok = false; break; }
-        cand[m - first] = slot;
-      }
-      if (ok) {
-        for (auto m = first; m < last; ++m) {
-          result.table[cand[m - first]] = static_cast<index_t>(keys_by_bucket[m]);
+        if (dup) {
+          ok = false;
+          break;
         }
-        result.bucket_seeds[b] = d;
-        found = true;
-        break;
-      }
-      best_d = d;
-    }
-    // 粗探索で衝突した候補の前後 1..15 を密探索
-    for (auto delta = 1u; delta < kCoarseStep && best_d + delta < kSeedLimit && !found; ++delta) {
-      auto const d = best_d + delta;
-      auto ok = true;
-      for (auto m = first; m < last; ++m) {
-        auto const slot = static_cast<std::size_t>(hash_impl(key_views[keys_by_bucket[m]], d) & slot_mask);
-        if (result.table[slot] != static_cast<index_t>(-1)) { ok = false; break; }
-        auto dup = false;
-        for (auto p = first; p < m; ++p) {
-          if (cand[p - first] == slot) { dup = true; break; }
-        }
-        if (dup) { ok = false; break; }
         cand[m - first] = slot;
       }
       if (ok) {
@@ -11752,7 +11729,9 @@ template <std::size_t BucketCount, std::size_t TableSize, std::size_t KeyCount>
         break;
       }
     }
-    if (!found) std::unreachable();
+    if (!found) {
+      FROZENCHARS_CONSTEVAL_FAIL("frozen_map: failed to find CHD bucket seed");
+    }
   }
   return result;
 }
@@ -11839,12 +11818,14 @@ struct lookup_index {
   static constexpr auto use_lookup_table_ = (size() <= k_lookup_threshold);  // ルックアップテーブル方式か
   static constexpr auto use_binary_search_ = (size() > k_lookup_threshold && size() <= k_chd_threshold);  // 中規模: ソート済みキーへの二分探索
   static constexpr auto use_chd_ = (size() > k_chd_threshold);  // 大規模: CHD 2 段ハッシュ
-  static constexpr auto table_size_ = use_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz;  // 負荷率 1/4 を見込んだ 2 冪サイズ
+  static constexpr auto need_lookup_table_ = !all_lengths_unique_ && use_lookup_table_;         // 実際にルックアップテーブルを構築するか
+  static constexpr auto need_chd_ = !all_lengths_unique_ && use_chd_;                           // 実際に CHD テーブルを構築するか
+  static constexpr auto table_size_ = need_lookup_table_ ? detail::next_pow2(size() * 4) : 1uz; // 負荷率 1/4 を見込んだ 2 冪サイズ
   static constexpr auto mask_ = table_size_ - 1;  // ビットマスク（table_size_ は 2 冪）
 
   // ルックアップテーブル方式なら衝突ゼロのシードを探索、それ以外は空メタデータ
   static consteval auto make_lookup_metadata() noexcept {
-    if constexpr (use_lookup_table_) {
+    if constexpr (need_lookup_table_) {
       return detail::find_lookup_seed<table_size_, Keys...>();
     } else {
       return detail::lookup_seed_result<table_size_, size()>{0, {static_cast<index_t>(-1)}};
@@ -11854,14 +11835,14 @@ struct lookup_index {
   static constexpr auto k_seed = metadata_.seed;        // ハッシュシード
   static constexpr auto lookup_table_ = metadata_.table;  // スロット → 要素インデックス
 
-  // 大規模（k_lookup_threshold 超）: CHD 2 段ハッシュで O(1) を維持する
-  static constexpr auto chd_bucket_count_ = use_lookup_table_ ? 1uz : detail::next_pow2(size());
-  static constexpr auto chd_table_size_ = use_lookup_table_ ? 1uz : detail::next_pow2(size() * 2);  // 負荷率 1/2
+  // 大規模（k_chd_threshold 超）: CHD 2 段ハッシュで O(1) を維持する
+  static constexpr auto chd_bucket_count_ = need_chd_ ? detail::next_pow2(size()) : 1uz;
+  static constexpr auto chd_table_size_ = need_chd_ ? detail::next_pow2(size() * 2) : 1uz; // 負荷率 1/2
   static consteval auto make_chd_metadata() {
-    if constexpr (use_lookup_table_) {
-      return detail::chd_result<1, 1, size()>{};  // 未使用のダミー
-    } else {
+    if constexpr (need_chd_) {
       return detail::build_chd<chd_bucket_count_, chd_table_size_>(key_views_);
+    } else {
+      return detail::chd_result<1, 1, size()>{}; // 未使用のダミー
     }
   }
   static constexpr auto chd_ = make_chd_metadata(); // CHD 方式のメタデータ（バケットシード + テーブル）
@@ -11886,12 +11867,12 @@ struct lookup_index {
     return res;
   }
 
-  // 短いキーのみパディング版を保持、さもなければ空配列（key_equals で通常比較にフォールバック）
+  // 短いキーのみパディング版を保持、さもなければダミー配列（key_equals で通常比較にフォールバック）
   static constexpr auto padded_keys_ = []() noexcept {
     if constexpr (all_keys_short) {
       return make_padded_keys();
     } else {
-      return std::array<padded_key, size()>{};
+      return std::array<padded_key, 1>{};
     }
   }();
 
@@ -15509,6 +15490,10 @@ auto ctre_search_all(auto&& text) noexcept {
 #include <type_traits>
 #include <utility>
 
+#if defined(__cpp_lib_constexpr_format)
+#include <format>
+#endif
+
 
 namespace frozenchars::detail {
 
@@ -16033,8 +16018,8 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if constexpr (std::is_signed_v<T>) {
       auto const v = static_cast<long long>(arg);
       is_neg = v < 0;
-      // 負数を符号なしへ変換（INT_MIN でも正しく扱うため -(v+1)+1 とする）
-      uv = static_cast<unsigned long long>(v < 0 ? -(v + 1) + 1 : v);
+      // 負数を符号なしへ変換（LLONG_MIN の符号付きオーバーフローを避けるため加算前に unsigned へキャスト）
+      uv = v < 0 ? static_cast<unsigned long long>(-(v + 1)) + 1ull : static_cast<unsigned long long>(v);
     } else {
       is_neg = false;
       uv = static_cast<unsigned long long>(arg);
@@ -16187,11 +16172,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
   } else {
     // その他（文字列・ FrozenString 等）: sv() または string_view 変換で取得し配置する
     std::string_view sv;
-    if constexpr (std::same_as<std::remove_cvref_t<T>, bool>) {
-      sv = arg ? "true" : "false";
-    } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
-      sv = std::string_view(&arg, 1);
-    } else if constexpr (requires { arg.sv(); }) {
+    if constexpr (requires { arg.sv(); }) {
       sv = arg.sv();
     } else if constexpr (requires { std::string_view(arg); }) {
       sv = std::string_view(arg);
@@ -16201,7 +16182,8 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if (spec.precision >= 0 && static_cast<size_t>(spec.precision) < sv_len) {
       sv_len = spec.precision;
     }
-    if (spec.type == 'c') sv_len = 1;
+    if (spec.type == 'c' && sv_len > 1)
+      sv_len = 1;
 
     size_t field_size = static_cast<size_t>(std::max(spec.width, static_cast<int>(sv_len)));
     size_t pad = field_size - sv_len;
@@ -16237,7 +16219,7 @@ namespace frozenchars {
  * @details 戻り値は FrozenString<Capacity>。実際の内容は .sv() で取得。
  * Capacity を省略した場合は 4096 となり、4096 文字を超える出力も明示的に Capacity を
  * 指定すれば扱える（例: frozen_format<"big {}"_fs, 9000>(huge_string)）。
- * 内部バッファは既存の 4096 固定を維持し、最後に Capacity へ切り詰めてコピーする。
+ * 出力が Capacity - 1 文字を超える場合は末尾を切り詰める。
  *
  * 呼び出し例: frozen_format<"value={}"_fs>(42)
  *            frozen_format<"big {}"_fs, 9000>(huge_string)
@@ -16324,8 +16306,6 @@ template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
  * @return FrozenString<Capacity> フォーマット済み文字列（.length に格納）
  */
 #if defined(__cpp_lib_constexpr_format)
-#include <format>
-
 template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
 [[nodiscard]] consteval auto frozen_std_format(Args const&... args) noexcept {
   constexpr std::string_view fmt = Fmt.sv();

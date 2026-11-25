@@ -7,10 +7,9 @@
 #include <glaze/json.hpp>
 
 #include <array>
-#include <map>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <string_view>
 #include <utility>
 
 namespace glz {
@@ -24,20 +23,30 @@ struct meta<frozenchars::frozen_map<T, Keys...>> {
   static constexpr auto custom_write = true;
 };
 
+enum class unescape_json_key_status {
+  ok,
+  invalid_escape,
+  buffer_too_small,
+};
+
+struct unescape_json_key_result {
+  unescape_json_key_status status{unescape_json_key_status::ok};
+  std::string_view value{};
+};
+
 /**
  * @brief JSON のキー文字列（ダブルクォートを除いたエスケープ済みバイト列）を解除する
  *
  * `"\u0061"` のようなエスケープされたキーも frozen_map の NTTP キーと
- * 突き合わせられるようにする。解除結果がバッファを超える場合は
- * 凍結キーに一致する可能性があるため一致 testimなし（nullopt）として扱う。
+ * 突き合わせられるようにする。不正なエスケープは invalid_escape、
+ * 解除結果がバッファを超える場合は buffer_too_small を返す。
  *
  * @param raw エスケープされたままのキー
  * @param out 解除結果を書き込むバッファ
- * @return std::optional<std::string_view> 解除後のキー_views。範囲外なら nullopt
+ * @return unescape_json_key_result 解除結果とステータス
  */
 template <std::size_t Capacity>
-[[nodiscard]] constexpr auto unescape_json_key(std::string_view raw, std::array<char, Capacity>& out)
-  -> std::optional<std::string_view> {
+[[nodiscard]] constexpr auto unescape_json_key(std::string_view raw, std::array<char, Capacity>& out) -> unescape_json_key_result {
   auto const hex = [](char c) -> int {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -69,47 +78,78 @@ template <std::size_t Capacity>
   for (std::size_t i = 0; i < raw.size(); ++i) {
     auto const c = raw[i];
     if (c != '\\') {
-      if (!emit(c)) return std::nullopt;
+      if (!emit(c))
+        return {unescape_json_key_status::buffer_too_small, {}};
       continue;
     }
-    if (++i >= raw.size()) return std::nullopt;
+    if (++i >= raw.size())
+      return {unescape_json_key_status::invalid_escape, {}};
     switch (raw[i]) {
-      case '"': case '\\': case '/': if (!emit(raw[i])) return std::nullopt; break;
-      case 'b': if (!emit('\b')) return std::nullopt; break;
-      case 'f': if (!emit('\f')) return std::nullopt; break;
-      case 'n': if (!emit('\n')) return std::nullopt; break;
-      case 'r': if (!emit('\r')) return std::nullopt; break;
-      case 't': if (!emit('\t')) return std::nullopt; break;
-      case 'u': {
-        auto const read_unit = [&]() -> int {
-          if (i + 4 >= raw.size()) return -1;
-          auto value = 0;
-          for (auto k = 1uz; k <= 4uz; ++k) {
-            auto const digit = hex(raw[i + k]);
-            if (digit < 0) return -1;
-            value = (value << 4) | digit;
-          }
-          i += 4;
-          return value;
-        };
-        auto unit = read_unit();
-        if (unit < 0) return std::nullopt;
-        if (unit >= 0xD800 && unit <= 0xDBFF) { // サロゲートペア
-          if (i + 6 >= raw.size() || raw[i + 1] != '\\' || raw[i + 2] != 'u') return std::nullopt;
-          i += 2;
-          auto const low = read_unit();
-          if (low < 0xDC00 || low > 0xDFFF) return std::nullopt;
-          unit = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00);
-        } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
-          return std::nullopt;
+    case '"':
+    case '\\':
+    case '/':
+      if (!emit(raw[i]))
+        return {unescape_json_key_status::buffer_too_small, {}};
+      break;
+    case 'b':
+      if (!emit('\b'))
+        return {unescape_json_key_status::buffer_too_small, {}};
+      break;
+    case 'f':
+      if (!emit('\f'))
+        return {unescape_json_key_status::buffer_too_small, {}};
+      break;
+    case 'n':
+      if (!emit('\n'))
+        return {unescape_json_key_status::buffer_too_small, {}};
+      break;
+    case 'r':
+      if (!emit('\r'))
+        return {unescape_json_key_status::buffer_too_small, {}};
+      break;
+    case 't':
+      if (!emit('\t'))
+        return {unescape_json_key_status::buffer_too_small, {}};
+      break;
+    case 'u': {
+      auto const read_unit = [&]() -> int {
+        if (i + 4 >= raw.size())
+          return -1;
+        auto value = 0;
+        for (auto k = 1uz; k <= 4uz; ++k) {
+          auto const digit = hex(raw[i + k]);
+          if (digit < 0)
+            return -1;
+          value = (value << 4) | digit;
         }
-        if (!emit_codepoint(static_cast<unsigned int>(unit))) return std::nullopt;
-        break;
+        i += 4;
+        return value;
+      };
+      auto unit = read_unit();
+      if (unit < 0)
+        return {unescape_json_key_status::invalid_escape, {}};
+      if (unit >= 0xD800 && unit <= 0xDBFF) { // サロゲートペア
+        if (i + 6 >= raw.size() || raw[i + 1] != '\\' || raw[i + 2] != 'u') {
+          return {unescape_json_key_status::invalid_escape, {}};
+        }
+        i += 2;
+        auto const low = read_unit();
+        if (low < 0xDC00 || low > 0xDFFF)
+          return {unescape_json_key_status::invalid_escape, {}};
+        unit = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00);
+      } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
+        return {unescape_json_key_status::invalid_escape, {}};
       }
-      default: return std::nullopt;
+      if (!emit_codepoint(static_cast<unsigned int>(unit))) {
+        return {unescape_json_key_status::buffer_too_small, {}};
+      }
+      break;
+    }
+    default:
+      return {unescape_json_key_status::invalid_escape, {}};
     }
   }
-  return std::string_view{out.data(), length};
+  return {unescape_json_key_status::ok, std::string_view{out.data(), length}};
 }
 
 /**
@@ -169,10 +209,22 @@ struct from<JSON, frozenchars::frozen_map<T, Keys...>> {
       if (parse_ws_colon<Opts>(ctx, it, end)) {
         return;
       }
-      // エスケープを含むキーは解除したうえで凍結キーと突き合わせる
+      // エスケープを含むキーのみ解除したうえで凍結キーと突き合わせる
       auto unescaped = std::array<char, 512>{};
-      auto const key = unescape_json_key(raw_key, unescaped).value_or(raw_key);
-      if (auto const slot = value.get(key); slot) {
+      auto key = std::optional<std::string_view>{raw_key};
+      if (raw_key.find('\\') != std::string_view::npos) {
+        auto const decoded = unescape_json_key(raw_key, unescaped);
+        if (decoded.status == unescape_json_key_status::invalid_escape) {
+          ctx.error = error_code::syntax_error;
+          return;
+        }
+        if (decoded.status == unescape_json_key_status::ok) {
+          key = decoded.value;
+        } else {
+          key = std::nullopt;
+        }
+      }
+      if (auto const slot = key ? value.get(*key) : std::nullopt; slot) {
         parse<JSON>::op<Opts>(slot->get(), ctx, it, end);
       } else {
         skip_value<JSON>::op<Opts>(ctx, it, end);
@@ -208,20 +260,46 @@ struct from<JSON, frozenchars::frozen_map<T, Keys...>> {
 };
 
 /**
- * @brief frozen_map を JSON オブジェクトへ書き出す
+ * @brief frozen_map を JSON オブジェクトへ直接書き出す（ヒープ確保・値コピーなし）
  */
 template <typename T, frozenchars::FrozenString... Keys>
 struct to<JSON, frozenchars::frozen_map<T, Keys...>> {
   template <auto Opts>
-  static auto op(frozenchars::frozen_map<T, Keys...> const& value,
-                 is_context auto&& ctx,
-                 auto&& b,
-                 auto& ix) {
-    auto encoded = std::map<std::string, T>{};
-    for (auto const& [key, mapped] : value) {
-      encoded.emplace(std::string{key}, mapped);
+  static auto op(frozenchars::frozen_map<T, Keys...> const& value, is_context auto&& ctx, auto&& b, auto& ix) -> void {
+    dump('{', b, ix);
+    if constexpr (Opts.prettify) {
+      ctx.depth += check_indentation_width(Opts);
+      dump('\n', b, ix);
+      dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
     }
-    serialize<JSON>::op<Opts>(encoded, ctx, b, ix);
+    auto first = true;
+    for (auto const& [key, mapped] : value) {
+      if (!first) {
+        if constexpr (Opts.prettify) {
+          dump(",\n", b, ix);
+          dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+        } else {
+          dump(',', b, ix);
+        }
+      }
+      first = false;
+      serialize<JSON>::op<Opts>(key, ctx, b, ix);
+      if constexpr (Opts.prettify) {
+        dump(": ", b, ix);
+      } else {
+        dump(':', b, ix);
+      }
+      serialize<JSON>::op<Opts>(mapped, ctx, b, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+        return;
+      }
+    }
+    if constexpr (Opts.prettify) {
+      ctx.depth -= check_indentation_width(Opts);
+      dump('\n', b, ix);
+      dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+    }
+    dump('}', b, ix);
   }
 };
 

@@ -88,6 +88,25 @@ TEST_CASE("frozen_map glaze write_json emits known keys", "[frozen_map][glaze]")
   REQUIRE(!decode_ec);
   REQUIRE(decoded == std::unordered_map<std::string, int>{{"timeout", 45}, {"retry", 9}});
 }
+
+TEST_CASE("frozen_map glaze read_json rejects invalid escaped key", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "a"_fs, "b"_fs>(std::pair{"a", 1}, std::pair{"b", 2});
+  auto const ec = glz::read_json(map, R"({"\x61":10})");
+  REQUIRE(ec);
+}
+
+TEST_CASE("frozen_map glaze write_json supports move-only values", "[frozen_map][glaze]") {
+  auto values = std::array<std::unique_ptr<int>, 2>{std::make_unique<int>(10), std::make_unique<int>(20)};
+  auto map = frozen_map<std::unique_ptr<int>, "first"_fs, "second"_fs>{std::move(values)};
+  auto json = std::string{};
+  auto const ec = glz::write_json(map, json);
+  REQUIRE(!ec);
+
+  auto decoded = std::unordered_map<std::string, int>{};
+  auto const decode_ec = glz::read_json(decoded, json);
+  REQUIRE(!decode_ec);
+  REQUIRE(decoded == std::unordered_map<std::string, int>{{"first", 10}, {"second", 20}});
+}
 #endif
 
 TEST_CASE("frozen_map basic shape", "[frozen_map]") {
