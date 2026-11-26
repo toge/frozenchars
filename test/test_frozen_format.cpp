@@ -192,6 +192,16 @@ TEST_CASE("frozen_format edge cases", "[frozen_format]") {
     auto r = frozen_format<"[{}]"_fs>("");
     REQUIRE(strcmp(r.sv().data(), "[]") == 0);
   }
+  SECTION("empty string with :c does not read out of bounds") {
+    auto constexpr r = frozen_format<"[{:c}]"_fs>("");
+    static_assert(r.sv() == "[]");
+    REQUIRE(r.sv() == "[]");
+  }
+  SECTION("long long min formats without signed overflow") {
+    auto constexpr r = frozen_format<"{}"_fs>(std::numeric_limits<long long>::min());
+    static_assert(r.sv() == "-9223372036854775808");
+    REQUIRE(r.sv() == "-9223372036854775808");
+  }
   SECTION("long literal") {
     auto r = frozen_format<"Hello, {}! Welcome to {}."_fs>("world", "frozenchars");
     REQUIRE(strcmp(r.sv().data(), "Hello, world! Welcome to frozenchars.") == 0);

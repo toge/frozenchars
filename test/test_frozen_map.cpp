@@ -7,6 +7,8 @@
 #include <functional>
 #include <iterator>
 #include <map>
+#include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <system_error>
@@ -87,6 +89,55 @@ TEST_CASE("frozen_map glaze write_json emits known keys", "[frozen_map][glaze]")
   auto const decode_ec = glz::read_json(decoded, json);
   REQUIRE(!decode_ec);
   REQUIRE(decoded == std::unordered_map<std::string, int>{{"timeout", 45}, {"retry", 9}});
+}
+
+TEST_CASE("frozen_map glaze read_json rejects invalid escaped key", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "a"_fs, "b"_fs>(std::pair{"a", 1}, std::pair{"b", 2});
+  auto const ec = glz::read_json(map, R"({"\x61":10})");
+  REQUIRE(ec);
+}
+
+TEST_CASE("frozen_map glaze write_json supports move-only values", "[frozen_map][glaze]") {
+  auto values = std::array<std::unique_ptr<int>, 2>{std::make_unique<int>(10), std::make_unique<int>(20)};
+  auto map = frozen_map<std::unique_ptr<int>, "first"_fs, "second"_fs>{std::move(values)};
+  auto json = std::string{};
+  auto const ec = glz::write_json(map, json);
+  REQUIRE(!ec);
+
+  auto decoded = std::unordered_map<std::string, int>{};
+  auto const decode_ec = glz::read_json(decoded, json);
+  REQUIRE(!decode_ec);
+  REQUIRE(decoded == std::unordered_map<std::string, int>{{"first", 10}, {"second", 20}});
+}
+
+TEST_CASE("frozen_map glaze write_json escapes keys", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "he\"llo"_fs>(std::pair{"he\"llo", 1});
+  auto json = std::string{};
+  auto const ec = glz::write_json(map, json);
+  REQUIRE(!ec);
+  REQUIRE(json == R"({"he\"llo":1})");
+}
+
+TEST_CASE("frozen_map glaze write_json prettifies", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "a"_fs, "b"_fs>(std::pair{"a", 1}, std::pair{"b", 2});
+  auto json = std::string{};
+  auto const ec = glz::write<glz::opts{.prettify = true}>(map, json);
+  REQUIRE(!ec);
+  REQUIRE(json == "{\n   \"a\": 1,\n   \"b\": 2\n}");
+}
+
+TEST_CASE("frozen_map glaze write_json honors skip_null_members", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<std::optional<int>, "a"_fs, "b"_fs>(std::pair{"a", std::optional<int>{1}}, std::pair{"b", std::optional<int>{}});
+
+  auto skipped = std::string{};
+  auto const ec = glz::write<glz::opts{.skip_null_members = true}>(map, skipped);
+  REQUIRE(!ec);
+  REQUIRE(skipped == R"({"a":1})");
+
+  auto kept = std::string{};
+  auto const ec2 = glz::write<glz::opts{.skip_null_members = false}>(map, kept);
+  REQUIRE(!ec2);
+  REQUIRE(kept == R"({"a":1,"b":null})");
 }
 #endif
 

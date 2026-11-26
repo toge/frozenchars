@@ -4,19 +4,21 @@ set(FROZENCHARS_VERSION "0.9.0")
 
 project(frozenchars VERSION ${FROZENCHARS_VERSION} LANGUAGES CXX)
 
-option(BUILD_TEST "Enable tests" ON)
+option(BUILD_TEST "Enable tests" ${PROJECT_IS_TOP_LEVEL})
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options(
-    # 警告オプションは GCC / Clang 系 / MSVC の 3 種に集約（AppleClang は Clang に含める）
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall>
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wextra>
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-pedantic>
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-)
+if(PROJECT_IS_TOP_LEVEL)
+    add_compile_options(
+        # 警告オプションは GCC / Clang 系 / MSVC の 3 種に集約（AppleClang は Clang に含める）
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall>
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wextra>
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-pedantic>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    )
+endif()
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)

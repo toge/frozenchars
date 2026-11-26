@@ -6,6 +6,11 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <version>
+
+#if defined(__cpp_lib_constexpr_format)
+#include <format>
+#endif
 
 #include "concepts.hpp"
 #include "detail/number_conv.hpp"
@@ -534,8 +539,8 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if constexpr (std::is_signed_v<T>) {
       auto const v = static_cast<long long>(arg);
       is_neg = v < 0;
-      // 負数を符号なしへ変換（INT_MIN でも正しく扱うため -(v+1)+1 とする）
-      uv = static_cast<unsigned long long>(v < 0 ? -(v + 1) + 1 : v);
+      // 負数を符号なしへ変換（LLONG_MIN の符号付きオーバーフローを避けるため加算前に unsigned へキャスト）
+      uv = v < 0 ? static_cast<unsigned long long>(-(v + 1)) + 1ull : static_cast<unsigned long long>(v);
     } else {
       is_neg = false;
       uv = static_cast<unsigned long long>(arg);
@@ -688,11 +693,7 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
   } else {
     // その他（文字列・ FrozenString 等）: sv() または string_view 変換で取得し配置する
     std::string_view sv;
-    if constexpr (std::same_as<std::remove_cvref_t<T>, bool>) {
-      sv = arg ? "true" : "false";
-    } else if constexpr (std::same_as<std::remove_cvref_t<T>, char>) {
-      sv = std::string_view(&arg, 1);
-    } else if constexpr (requires { arg.sv(); }) {
+    if constexpr (requires { arg.sv(); }) {
       sv = arg.sv();
     } else if constexpr (requires { std::string_view(arg); }) {
       sv = std::string_view(arg);
@@ -702,7 +703,8 @@ constexpr auto format_field(Buf& buf, size_t pos, T const& arg, format_spec cons
     if (spec.precision >= 0 && static_cast<size_t>(spec.precision) < sv_len) {
       sv_len = spec.precision;
     }
-    if (spec.type == 'c') sv_len = 1;
+    if (spec.type == 'c' && sv_len > 1)
+      sv_len = 1;
 
     size_t field_size = static_cast<size_t>(std::max(spec.width, static_cast<int>(sv_len)));
     size_t pad = field_size - sv_len;
@@ -738,7 +740,7 @@ namespace frozenchars {
  * @details 戻り値は FrozenString<Capacity>。実際の内容は .sv() で取得。
  * Capacity を省略した場合は 4096 となり、4096 文字を超える出力も明示的に Capacity を
  * 指定すれば扱える（例: frozen_format<"big {}"_fs, 9000>(huge_string)）。
- * 内部バッファは既存の 4096 固定を維持し、最後に Capacity へ切り詰めてコピーする。
+ * 出力が Capacity - 1 文字を超える場合は末尾を切り詰める。
  *
  * 呼び出し例: frozen_format<"value={}"_fs>(42)
  *            frozen_format<"big {}"_fs, 9000>(huge_string)
@@ -825,8 +827,6 @@ template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
  * @return FrozenString<Capacity> フォーマット済み文字列（.length に格納）
  */
 #if defined(__cpp_lib_constexpr_format)
-#include <format>
-
 template <FrozenString Fmt, size_t Capacity = 4096, typename... Args>
 [[nodiscard]] consteval auto frozen_std_format(Args const&... args) noexcept {
   constexpr std::string_view fmt = Fmt.sv();

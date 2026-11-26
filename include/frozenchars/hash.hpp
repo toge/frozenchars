@@ -113,8 +113,15 @@ struct constexpr_hash {
  * @return std::size_t 結合後のハッシュ値
  */
 [[nodiscard]] constexpr auto hash_combine(std::size_t const h1, std::size_t const h2) noexcept -> std::size_t {
-  // Boost 流の結合（黄金比由来の定数を加えて撹拌する）
-  return h1 ^ (h2 + 0x9e3779b9uz + (h1 << 6) + (h1 >> 2));
+  // Boost 流の結合（黄金比由来の定数を加えて撹拌する。64bit 環境では 64bit 定数を使用）
+  constexpr std::size_t golden_ratio = [] {
+    if constexpr (sizeof(std::size_t) >= 8) {
+      return static_cast<std::size_t>(0x9e3779b97f4a7c15ull);
+    } else {
+      return static_cast<std::size_t>(0x9e3779b9u);
+    }
+  }();
+  return h1 ^ (h2 + golden_ratio + (h1 << 6) + (h1 >> 2));
 }
 
 /**
