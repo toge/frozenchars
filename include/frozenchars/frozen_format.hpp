@@ -6,6 +6,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <version>
 
 #if defined(__cpp_lib_constexpr_format)
 #include <format>

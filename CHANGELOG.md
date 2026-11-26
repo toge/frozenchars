@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Glaze 連携 (`glaze_frozen_map.hpp`): `frozen_map` の JSON 書き出しが一時 `std::map` を確保しなくなった。キーは宣言順で出力され（0.9.0 はアルファベット順）、`glz::opts::skip_null_members`（既定 `true`）に従って null 値のキーを省略する。ムーブオンリーの値型も書き出せる。
+- ビルド設定 (`CMakeLists.txt`): `BUILD_TEST` の既定値はトップレベルビルド時のみ `ON`。警告オプション（`-Wall` など）はトップレベルビルド時のみ追加し、`add_subdirectory` で取り込む利用側には伝播しない。
+
+### Fixed
+
+- `frozen_format`: `long long` の最小値を `{}` でフォーマットすると符号付き整数オーバーフロー（未定義動作）になっていた。空文字列に `:c` を指定すると範囲外読み出しになっていた。`__cpp_lib_constexpr_format` の判定前に `<version>` を include する。
+- `frozen_map`: ルックアップテーブル／CHD のシード探索が 16 刻みで候補を飛ばしていたため、衝突ゼロのシードが存在しても見つからずコンパイルに失敗することがあった。キー長がすべて一意な場合はテーブル構築を省略する。
+- Glaze 連携 (`glaze_frozen_map.hpp`): JSON キーの不正なエスケープ（`"\x61"` など）を `syntax_error` として拒否する。書き出し時にキーの書き込みが失敗すると区切り文字を範囲外へ書いていた。
+- `hash_combine`: 64bit 環境では 64bit の黄金比定数を使用する（ハッシュ値は変わる）。
+
 ## [0.9.0] - 2026-11-19
 
 ### Changed

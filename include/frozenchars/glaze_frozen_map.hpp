@@ -269,11 +269,17 @@ struct to<JSON, frozenchars::frozen_map<T, Keys...>> {
     dump('{', b, ix);
     if constexpr (Opts.prettify) {
       ctx.depth += check_indentation_width(Opts);
+      if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+        return;
+      }
       dump('\n', b, ix);
       dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
     }
     auto first = true;
     for (auto const& [key, mapped] : value) {
+      // glz::opts::skip_null_members（既定 true）に従い null 値のキーを省略する
+      if (skip_member<Opts>(mapped))
+        continue;
       if (!first) {
         if constexpr (Opts.prettify) {
           dump(",\n", b, ix);
@@ -284,6 +290,10 @@ struct to<JSON, frozenchars::frozen_map<T, Keys...>> {
       }
       first = false;
       serialize<JSON>::op<Opts>(key, ctx, b, ix);
+      // キー書き込みがバッファ不足などで失敗したら、以降の区切り文字を書かない
+      if (bool(ctx.error)) [[unlikely]] {
+        return;
+      }
       if constexpr (Opts.prettify) {
         dump(": ", b, ix);
       } else {
@@ -296,6 +306,9 @@ struct to<JSON, frozenchars::frozen_map<T, Keys...>> {
     }
     if constexpr (Opts.prettify) {
       ctx.depth -= check_indentation_width(Opts);
+      if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+        return;
+      }
       dump('\n', b, ix);
       dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
     }

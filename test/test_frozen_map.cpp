@@ -7,6 +7,8 @@
 #include <functional>
 #include <iterator>
 #include <map>
+#include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <system_error>
@@ -106,6 +108,36 @@ TEST_CASE("frozen_map glaze write_json supports move-only values", "[frozen_map]
   auto const decode_ec = glz::read_json(decoded, json);
   REQUIRE(!decode_ec);
   REQUIRE(decoded == std::unordered_map<std::string, int>{{"first", 10}, {"second", 20}});
+}
+
+TEST_CASE("frozen_map glaze write_json escapes keys", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "he\"llo"_fs>(std::pair{"he\"llo", 1});
+  auto json = std::string{};
+  auto const ec = glz::write_json(map, json);
+  REQUIRE(!ec);
+  REQUIRE(json == R"({"he\"llo":1})");
+}
+
+TEST_CASE("frozen_map glaze write_json prettifies", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<int, "a"_fs, "b"_fs>(std::pair{"a", 1}, std::pair{"b", 2});
+  auto json = std::string{};
+  auto const ec = glz::write<glz::opts{.prettify = true}>(map, json);
+  REQUIRE(!ec);
+  REQUIRE(json == "{\n   \"a\": 1,\n   \"b\": 2\n}");
+}
+
+TEST_CASE("frozen_map glaze write_json honors skip_null_members", "[frozen_map][glaze]") {
+  auto map = make_frozen_map<std::optional<int>, "a"_fs, "b"_fs>(std::pair{"a", std::optional<int>{1}}, std::pair{"b", std::optional<int>{}});
+
+  auto skipped = std::string{};
+  auto const ec = glz::write<glz::opts{.skip_null_members = true}>(map, skipped);
+  REQUIRE(!ec);
+  REQUIRE(skipped == R"({"a":1})");
+
+  auto kept = std::string{};
+  auto const ec2 = glz::write<glz::opts{.skip_null_members = false}>(map, kept);
+  REQUIRE(!ec2);
+  REQUIRE(kept == R"({"a":1,"b":null})");
 }
 #endif
 
